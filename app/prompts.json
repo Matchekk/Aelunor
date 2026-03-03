@@ -1,0 +1,947 @@
+{
+  "system_prompt": "Du bist ein deutschsprachiger Erzähler und Spielleiter für eine fortlaufende Isekai-Geschichte (Portal-Fantasy) mit hohem Schwierigkeitsgrad. Du beschreibst Szenen filmisch wie eine Kamera in einem Dark-Fantasy-Anime: neutral, beobachtend, dynamisch, mit natürlichen Schnitten zwischen Blickwinkeln – ohne eine feste Hauptperspektive.\n\nKanon: Der JSON-STATE ist die einzige Wahrheit. Du darfst nur Änderungen vorschlagen, die als PATCH im vorgegebenen Schema geliefert werden und später in den STATE gemergt werden.\n\nSpielerfiguren sind dynamische Slots. Aktive Spielerfiguren kommen nur aus `active_party`. Nutze für die Erzählung die Anzeigenamen aus `display_party` oder `state.characters[slot_id].bio.name`, aber halte technische Änderungen strikt auf den realen Slot-IDs im PATCH. Unfertige oder ungeclaimte Slots dürfen nicht in Szenen auftauchen.\n\nWICHTIG:\n- Schreibe ausschließlich auf Deutsch.\n- Nie die vierte Wand brechen. Nie erwähnen, dass du eine KI/Assistent bist.\n- Keine inneren Monologe. Keine Aussagen über Gedanken/Gefühle der Spielerfiguren. Nur Beobachtbares.\n- Theme, Härte, Regeln, Ton, Ressourcenknappheit, Weltgesetze und Grenzen kommen aus Setup, rules_profile und Boards.\n- Geschlecht/Gender einer Figur ist kanonisch und steht in `state.characters[slot_id].bio.gender`. Du darfst es nicht erfinden oder ignorieren.\n- Alter, Corruption, Appearance, Klassen- und Fraktionsspuren sind kanonisch im State gespeichert. Lies sie immer aus und vergiss sie nie.\n- Fairness: Große Gefahren werden durch klare Warnsignale in der Szene telegraphiert, bevor sie zuschlagen.\n- Derived Stats sind read-only und werden serverseitig berechnet. Du darfst niemals Defense, Carry, Initiative, Attack Ratings, Resistances, Combat Flags, Appearance-Summaries oder Age-Stages direkt setzen.\n- Wenn du Charaktere veränderst, patche nur Basiswerte, Ressourcen, Skills, Effekte, Gear, Progression, Journal, Klassen, Fraktionen, Narben oder andere kanonische Auslöser.\n- Skills leben dauerhaft im Backend-State. Lies vorhandene Skills immer aus `state.characters[slot_id].skills` und vergiss sie nie.\n- Skill-Fortschritt wird über `patch.events_add` gemeldet, nicht direkt über frei erfundene Ränge. Nutze dafür bevorzugt das Format `SKILLXP:slot_x:skill_name:success|partial|fail`.\n\nHARTE REGELN GEGEN VERWECHSLUNGEN:\n1) Actor-Regel: Im aktuellen Turn handelt aktiv nur der Actor-Slot. Andere Figuren dürfen nur reagieren, wo sie sind.\n2) Pronomen-Regel: Wenn der Spieltext in der ersten Person formuliert ist wie \"ich\", \"mich\", \"mir\", \"mein\" oder \"meine\", beziehen sich diese Pronomen immer auf den Actor-Slot dieses Turns und niemals auf eine andere Figur.\n3) Scene-Regel: Niemand wechselt scene_id ohne explizite Patch-Änderung.\n4) Ability-Regel: Abilities gehören immer ihrem owner-Slot. owner darf niemals geändert werden.\n5) Party-Split: Wenn Figuren unterschiedliche scene_id haben, dürfen sie nicht in derselben Szene erscheinen.\n6) Active-Party-Regel: Nutze nur Charaktere aus `active_party` als aktuelle Spielerfiguren.\n\nWÜRFEL:\n- Die Spieler würfeln physisch.\n- Wenn ein Ergebnis unsicher ist, fordere einen Wurf an: Check + DC + Stakes Erfolg/Misserfolg.\n- Würfe werden im UI als Request ausgegeben (requests[]).\n\nFORMAT:\n- Du MUSST exakt das JSON-Schema einhalten (Structured Output). Keine zusätzlichen Felder.\n- story: Reine Prosa, keine Markdown-Formatierung.\n- patch: Nur Änderungen, niemals den kompletten State neu erfinden.\n- requests: Wenn du einen Wurf brauchst oder eine Klarstellung, nutze requests.\n\nVOR JEDEM TURN:\n- Lies den aktuellen STATE, das Setup, rules_profile und alle Boards im Context Packet vollständig.\n- Triff keine Entscheidungen, die dem STATE widersprechen.\n- Wenn wichtige Info fehlt, frage über requests (type=\"clarify\") nach.\n\nPHASEN:\n- Erzähle nur dann reguläre Story weiter, wenn state.meta.phase == \"adventure\".\n- In der ersten Adventure-Szene nutzt du ausschließlich Setup, rules_profile, Boards, Charakterdaten und vorhandene World-Informationen als Grundlage.\n",
+  "response_schema": {
+    "type": "object",
+    "properties": {
+      "story": {
+        "type": "string"
+      },
+      "patch": {
+        "type": "object",
+        "properties": {
+          "meta": {
+            "type": "object",
+            "properties": {
+              "phase": {
+                "type": "string",
+                "enum": [
+                  "world_setup",
+                  "character_setup",
+                  "adventure"
+                ]
+              },
+              "time_advance": {
+                "type": "object",
+                "properties": {
+                  "days": {
+                    "type": "integer"
+                  },
+                  "time_of_day": {
+                    "type": "string"
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "days",
+                  "time_of_day",
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "phase"
+            ],
+            "additionalProperties": false
+          },
+          "characters": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/char_patch"
+            }
+          },
+          "items_new": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/item"
+            }
+          },
+          "plotpoints_add": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/plotpoint"
+            }
+          },
+          "plotpoints_update": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "done",
+                    "failed"
+                  ]
+                },
+                "notes": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "map_add_nodes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "danger": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10
+                },
+                "discovered": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "type",
+                "danger",
+                "discovered"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "map_add_edges": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "from": {
+                  "type": "string"
+                },
+                "to": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "from",
+                "to",
+                "kind"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "events_add": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "meta",
+          "characters",
+          "items_new",
+          "plotpoints_add",
+          "plotpoints_update",
+          "map_add_nodes",
+          "map_add_edges",
+          "events_add"
+        ],
+        "additionalProperties": false
+      },
+      "requests": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": [
+                "roll",
+                "clarify",
+                "choice",
+                "none"
+              ]
+            },
+            "actor": {
+              "type": "string"
+            },
+            "check": {
+              "type": "string"
+            },
+            "dc": {
+              "type": "integer"
+            },
+            "stakes_success": {
+              "type": "string"
+            },
+            "stakes_fail": {
+              "type": "string"
+            },
+            "question": {
+              "type": "string"
+            },
+            "options": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "type",
+            "actor"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "story",
+      "patch",
+      "requests"
+    ],
+    "additionalProperties": false,
+    "$defs": {
+      "char_patch": {
+        "type": "object",
+        "properties": {
+          "scene_id": {
+            "type": "string"
+          },
+          "bio_set": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "gender": {
+                "type": "string"
+              },
+              "age": {
+                "type": "string"
+              },
+              "earth_life": {
+                "type": "string"
+              },
+              "personality": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "strength": {
+                "type": "string"
+              },
+              "weakness": {
+                "type": "string"
+              },
+              "focus": {
+                "type": "string"
+              },
+              "goal": {
+                "type": "string"
+              },
+              "party_role": {
+                "type": "string"
+              },
+              "isekai_price": {
+                "type": "string"
+              },
+              "earth_items": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "signature_item": {
+                "type": "string"
+              },
+              "background_tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "name",
+              "age",
+              "earth_life",
+              "personality",
+              "strength",
+              "weakness",
+              "focus",
+              "goal",
+              "party_role",
+              "isekai_price",
+              "earth_items",
+              "signature_item"
+            ],
+            "additionalProperties": false
+          },
+          "resources_set": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "current": {
+                  "type": "integer"
+                },
+                "max": {
+                  "type": "integer"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "resources_delta": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "attributes_set": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "attributes_delta": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "skills_set": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "skills_delta": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "hp_delta": {
+            "type": "integer"
+          },
+          "stamina_delta": {
+            "type": "integer"
+          },
+          "conditions_add": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "conditions_remove": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "inventory_add": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "inventory_remove": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "equip_set": {
+            "type": "object",
+            "properties": {
+              "weapon": {
+                "type": "string"
+              },
+              "armor": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "weapon",
+              "armor"
+            ],
+            "additionalProperties": false
+          },
+          "equipment_set": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "inventory_set": {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "item_id": {
+                      "type": "string"
+                    },
+                    "stack": {
+                      "type": "integer",
+                      "minimum": 1
+                    }
+                  },
+                  "required": [
+                    "item_id",
+                    "stack"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "quick_slots": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "abilities_add": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "owner": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string"
+                },
+                "cost": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer"
+                  }
+                },
+                "charges": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "max_charges": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cooldown_turns": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "scaling": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "requirements": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "integer",
+                        "boolean"
+                      ]
+                    }
+                  }
+                },
+                "source": {
+                  "type": "string"
+                },
+                "active": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "owner",
+                "description",
+                "charges",
+                "cooldown_turns"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "abilities_update": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "charges": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cooldown_turns": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "effects_add": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": "string"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "description": {
+                  "type": "string"
+                },
+                "duration_turns": {
+                  "type": "integer"
+                },
+                "intensity": {
+                  "type": "integer"
+                },
+                "modifiers": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "integer",
+                        "boolean"
+                      ]
+                    }
+                  }
+                },
+                "source": {
+                  "type": "string"
+                },
+                "visible": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "category",
+                "tags",
+                "description",
+                "duration_turns",
+                "intensity",
+                "modifiers",
+                "source",
+                "visible"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "effects_remove": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "class_set": {
+            "type": "object",
+            "properties": {
+              "class_id": {
+                "type": "string"
+              },
+              "class_name": {
+                "type": "string"
+              },
+              "unlocked_at_turn": {
+                "type": "integer"
+              },
+              "visual_modifiers": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": [
+                      "string",
+                      "integer",
+                      "boolean"
+                    ]
+                  }
+                }
+              }
+            },
+            "required": [
+              "class_id",
+              "class_name",
+              "unlocked_at_turn",
+              "visual_modifiers"
+            ],
+            "additionalProperties": false
+          },
+          "factions_add": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "faction_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "rank": {
+                  "type": "string"
+                },
+                "joined_at_turn": {
+                  "type": "integer"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "visual_modifiers": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "integer",
+                        "boolean"
+                      ]
+                    }
+                  }
+                }
+              },
+              "required": [
+                "faction_id",
+                "name",
+                "rank",
+                "joined_at_turn",
+                "active",
+                "visual_modifiers"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "factions_update": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "faction_id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "rank": {
+                  "type": "string"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "visual_modifiers": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": [
+                        "string",
+                        "integer",
+                        "boolean"
+                      ]
+                    }
+                  }
+                }
+              },
+              "required": [
+                "faction_id"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "scars_add": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "turn_number": {
+                  "type": "integer"
+                },
+                "visible": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "label",
+                "source",
+                "turn_number",
+                "visible"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "appearance_flags_add": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "journal_add": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "integer",
+                    "boolean"
+                  ]
+                }
+              }
+            }
+          },
+          "progression_set": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "potential_add": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "scene_id",
+          "hp_delta",
+          "stamina_delta",
+          "conditions_add",
+          "conditions_remove",
+          "inventory_add",
+          "inventory_remove",
+          "equip_set",
+          "abilities_add",
+          "abilities_update",
+          "potential_add"
+        ],
+        "additionalProperties": false
+      },
+      "item": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "rarity": {
+            "type": "string"
+          },
+          "slot": {
+            "type": "string"
+          },
+          "weight": {
+            "type": "integer"
+          },
+          "stackable": {
+            "type": "boolean"
+          },
+          "max_stack": {
+            "type": "integer"
+          },
+          "weapon_profile": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "modifiers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "effects": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              ]
+            }
+          },
+          "durability": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "cursed": {
+            "type": "boolean"
+          },
+          "curse_text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "rarity",
+          "slot",
+          "weight",
+          "stackable",
+          "max_stack",
+          "weapon_profile",
+          "modifiers",
+          "tags",
+          "effects",
+          "durability",
+          "cursed",
+          "curse_text"
+        ],
+        "additionalProperties": false
+      },
+      "plotpoint": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "done",
+              "failed"
+            ]
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "notes"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "initial_state": {
+    "meta": {
+      "campaign": "Dark Isekai MVP",
+      "turn": 0,
+      "phase": "world_setup",
+      "world_time": {
+        "day": 1,
+        "month": 1,
+        "year": 1,
+        "time_of_day": "night",
+        "weather": "",
+        "absolute_day": 1
+      }
+    },
+    "world": {
+      "day": 0,
+      "time": "",
+      "weather": "",
+      "factions": [],
+      "notes": ""
+    },
+    "map": {
+      "nodes": {},
+      "edges": []
+    },
+    "plotpoints": [],
+    "scenes": {},
+    "items": {},
+    "characters": {},
+    "recent_story": [],
+    "events": []
+  }
+}

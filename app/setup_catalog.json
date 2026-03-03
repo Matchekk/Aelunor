@@ -1,0 +1,334 @@
+{
+  "version": "v1",
+  "world_form_catalog": [
+    {
+      "id": "theme",
+      "label": "Was soll das Theme sein?",
+      "type": "select",
+      "required": true,
+      "allow_other": true,
+      "options": [
+        "Dark Isekai (Survival/Horror)",
+        "Grimdark Fantasy (Krieg/Fraktionen)",
+        "Monster-Hunt (Jagd/Beute/Upgrade)",
+        "Mystery/Occult (Geheimnisse/Kulte)",
+        "Dungeon-Crawl (Fallen/Loot/Progress)",
+        "Sandbox (freie Erkundung)"
+      ],
+      "prompt_template": "Bevor ich diese Welt aufziehe: Welches Grundthema soll den Run tragen?"
+    },
+    {
+      "id": "player_count",
+      "label": "Wie viele Spielerfiguren soll dieser Run haben?",
+      "type": "select",
+      "required": true,
+      "options": ["1", "2", "3", "4", "5", "6"],
+      "prompt_template": "Wie viele Spielerfiguren soll ich für diesen Run wirklich einplanen?"
+    },
+    {
+      "id": "tone",
+      "label": "Welchen Ton soll die Geschichte haben?",
+      "type": "select",
+      "required": true,
+      "options": [
+        "Düster-realistisch",
+        "Anime-dark (stilisiert, brutal wenn nötig)",
+        "Brutal/gnadenlos",
+        "Melancholisch/hoffnungslos",
+        "Zynisch/dreckig",
+        "Mystisch/bedrohlich"
+      ],
+      "prompt_template": "Welcher Ton soll in jeder Szene spürbar sein?"
+    },
+    {
+      "id": "difficulty",
+      "label": "Wie schwer soll der Run sein?",
+      "type": "select",
+      "required": true,
+      "options": ["Gritty", "Brutal", "Hardcore"],
+      "prompt_template": "Wie hart soll diese Welt zuschlagen?"
+    },
+    {
+      "id": "death_possible",
+      "label": "Kann der Tod von Spielerfiguren passieren?",
+      "type": "boolean",
+      "required": true,
+      "options": ["Ja", "Nein"],
+      "prompt_template": "Soll echter Charaktertod als Konsequenz möglich sein?"
+    },
+    {
+      "id": "monsters_density",
+      "label": "Wie häufig sind Monster-Begegnungen?",
+      "type": "select",
+      "required": true,
+      "options": ["Selten", "Regelmäßig", "Überall", "Situativ (nur in bestimmten Zonen)"],
+      "prompt_template": "Wie dicht liegt die Welt voller Monster und aktiver Bedrohungen?"
+    },
+    {
+      "id": "resource_scarcity",
+      "label": "Wie knapp sind Ressourcen (Essen/Wasser/Licht/Tools)?",
+      "type": "select",
+      "required": true,
+      "options": ["Niedrig", "Mittel", "Hoch", "Extrem"],
+      "prompt_template": "Wie sehr soll Knappheit den Run bestimmen?"
+    },
+    {
+      "id": "healing_frequency",
+      "label": "Wie leicht ist Regeneration/Heilung?",
+      "type": "select",
+      "required": true,
+      "options": ["Selten", "Normal", "Häufig"],
+      "prompt_template": "Wie leicht kommen Verletzte in dieser Welt wieder auf die Beine?"
+    },
+    {
+      "id": "ruleset",
+      "label": "Welches Würfel-/Regelsystem nutzen wir?",
+      "type": "select",
+      "required": true,
+      "options": ["1W20", "2W6", "Ohne Würfel (nur Entscheidungen)"],
+      "prompt_template": "Welches Regel- oder Würfelgerüst soll den Run tragen?"
+    },
+    {
+      "id": "outcome_model",
+      "label": "Wie sollen Ergebnisse bewertet werden?",
+      "type": "select",
+      "required": true,
+      "options": [
+        "Erfolg / Misserfolg",
+        "Erfolg / Teilerfolg / Misserfolg-mit-Preis",
+        "Cinematic (weniger Würfe, harte Konsequenzen)"
+      ],
+      "prompt_template": "Wie schätzen wir Folgen und Konsequenzen am Tisch ein?"
+    },
+    {
+      "id": "world_structure",
+      "label": "Wie ist die Welt aufgebaut?",
+      "type": "select",
+      "required": true,
+      "options": [
+        "Hub + Dungeons",
+        "Zonen/Regionen (mit Grenzen/Fog of War)",
+        "Offene Welt (Sandbox)",
+        "Reise-Kampagne (Road-Movie)",
+        "Stadtzentriert (Intrigen/Fraktionen)"
+      ],
+      "prompt_template": "Welche Form hat diese Welt, damit ich Bewegung, Reise und Gefahren sauber anlegen kann?"
+    },
+    {
+      "id": "world_laws",
+      "label": "Welche Weltgesetze gelten? (wähle 1-3)",
+      "type": "multiselect",
+      "required": true,
+      "min_selected": 1,
+      "max_selected": 3,
+      "allow_other": true,
+      "options": [
+        "Nacht ist tödlich (Jagdgebiet der Schatten)",
+        "Magie hat einen Preis (Blut/Erinnerung/Zeit)",
+        "Wahrheit ist selten (Lügen/Propaganda überall)",
+        "Schutz gibt es nur gegen Bezahlung (Korruption)",
+        "Tote bleiben nicht tot (Risiko der Rückkehr)",
+        "Heilige Orte sind verflucht (Paradox)"
+      ],
+      "prompt_template": "Welche harten Gesetze oder Flüche formen diese Welt?"
+    },
+    {
+      "id": "central_conflict",
+      "label": "Was ist der zentrale Konflikt? (1-2 Sätze)",
+      "type": "textarea",
+      "required": true,
+      "prompt_template": "Welcher Konflikt treibt die Welt aktuell an und zwingt die Figuren zum Handeln?"
+    },
+    {
+      "id": "factions",
+      "label": "Welche bösen Gruppen/Fraktionen gibt es? (2-3 Namen + Ziel/Methoden kurz)",
+      "type": "textarea",
+      "required": true,
+      "prompt_template": "Welche Fraktionen oder Machtblöcke werden den Run aktiv verschieben?"
+    },
+    {
+      "id": "taboos",
+      "label": "Gibt es Zusatzwünsche, Tabus oder feste Notizen für den Run?",
+      "type": "textarea",
+      "required": false,
+      "prompt_template": "Gibt es Grenzen, Tabus oder feste Leitplanken, die ich strikt respektieren soll?"
+    }
+  ],
+  "character_form_catalog": [
+    {
+      "id": "char_name",
+      "label": "Wie heißt deine Figur? (Name/Spitzname)",
+      "type": "text",
+      "required": true,
+      "prompt_template": "Mit welchem Namen tritt diese Figur in die Welt?"
+    },
+    {
+      "id": "char_gender",
+      "label": "Welches Geschlecht oder welche Gender-Identität hat die Figur?",
+      "type": "select",
+      "required": true,
+      "allow_other": true,
+      "options": [
+        "Männlich",
+        "Weiblich",
+        "Nichtbinär"
+      ],
+      "prompt_template": "Welches Geschlecht oder welche Gender-Identität ist für diese Figur kanonisch?"
+    },
+    {
+      "id": "char_age",
+      "label": "Wie alt ist sie oder in welcher Lebensphase ist sie?",
+      "type": "select",
+      "required": true,
+      "allow_other": true,
+      "options": [
+        "Teen (16-19)",
+        "Jung (20-25)",
+        "Erwachsen (26-35)",
+        "Älter (36+)"
+      ],
+      "prompt_template": "In welcher Lebensphase steht diese Figur, als sie in den Run stürzt?"
+    },
+    {
+      "id": "earth_life",
+      "label": "Wer war sie auf der Erde? (1-2 Sätze)",
+      "type": "textarea",
+      "required": true,
+      "prompt_template": "Wer war diese Person vor der Ankunft in dieser Welt?"
+    },
+    {
+      "id": "personality_tags",
+      "label": "Welche Persönlichkeit/Prägungen/Widersprüche hat sie? (2-4 auswählen)",
+      "type": "multiselect",
+      "required": true,
+      "min_selected": 2,
+      "max_selected": 4,
+      "allow_other": true,
+      "options": [
+        "Mutig",
+        "Vorsichtig",
+        "Impulsiv",
+        "Analytisch",
+        "Loyal",
+        "Misstrauisch",
+        "Ehrlich",
+        "Manipulativ",
+        "Jähzornig",
+        "Geduldig",
+        "Zynisch",
+        "Idealistisch",
+        "Humor als Schutz",
+        "Kontrollzwang"
+      ],
+      "prompt_template": "Welche Eigenschaften und inneren Bruchlinien treiben diese Figur an?"
+    },
+    {
+      "id": "strength",
+      "label": "Was ist ihre größte Stärke? (konkret/praktisch)",
+      "type": "select",
+      "required": true,
+      "allow_other": true,
+      "options": [
+        "Körperkraft/Athletik",
+        "Ausdauer/Schmerzresistenz",
+        "Scharfe Sinne/Spurenlesen",
+        "Sozial/Überzeugen",
+        "Einschüchtern/Dominanz",
+        "Schleichen/Unauffälligkeit",
+        "Improvisation/Handwerk",
+        "Taktik/Planung",
+        "Okkultes Wissen",
+        "Technik/Tüfteln"
+      ],
+      "prompt_template": "Welche konkrete Stärke macht diese Figur im Run wertvoll?"
+    },
+    {
+      "id": "weakness",
+      "label": "Was ist ihre größte Schwäche? (real/ausnutzbar)",
+      "type": "select",
+      "required": true,
+      "allow_other": true,
+      "options": [
+        "Ungeduld/Übermut",
+        "Angst/Fluchtreflex",
+        "Stolz/Ego",
+        "Sucht/Abhängigkeit",
+        "Wut/Jähzorn",
+        "Naivität/Vertrauensseligkeit",
+        "Paranoia",
+        "Mangelnde Ausdauer",
+        "Schlechte Orientierung",
+        "Konfliktscheu"
+      ],
+      "prompt_template": "Welche Schwachstelle kann diese Welt gegen die Figur verwenden?"
+    },
+    {
+      "id": "party_role",
+      "label": "Welche Rolle übernimmt die Figur in der Gruppe?",
+      "type": "select",
+      "required": true,
+      "options": [
+        "Frontline (nah dran, Risiko)",
+        "Scout (Späher/Info)",
+        "Face (Reden/Deals)",
+        "Support (Schutz/Utility)",
+        "Tüftler (Tools/Tricks)",
+        "Occult (Flüche/Geheimnisse)"
+      ],
+      "prompt_template": "Welche Rolle nimmt diese Figur innerhalb der Gruppe instinktiv ein?"
+    },
+    {
+      "id": "current_focus",
+      "label": "Worauf liegt ihr aktueller Fokus?",
+      "type": "select",
+      "required": true,
+      "options": [
+        "Überleben/Flucht",
+        "Macht/Skills erlangen",
+        "Wahrheit/Geheimnis finden",
+        "Rache/Schuld begleichen",
+        "Beschützen/Retten",
+        "Reichtum/Loot",
+        "Rückweg nach Hause"
+      ],
+      "prompt_template": "Was treibt diese Figur im Moment am stärksten an?"
+    },
+    {
+      "id": "first_goal",
+      "label": "Was ist ihr erstes Ziel in dieser Welt? (1 Satz)",
+      "type": "text",
+      "required": true,
+      "prompt_template": "Welches erste Ziel setzt sich diese Figur sofort?"
+    },
+    {
+      "id": "isekai_price",
+      "label": "Welchen Preis zahlt sie für die Ankunft? (wähle 1)",
+      "type": "select",
+      "required": true,
+      "allow_other": true,
+      "options": [
+        "Leichte Verletzung",
+        "Schwere Erschöpfung",
+        "Verlust eines wichtigen Gegenstands",
+        "Fluchspur (Wesen können sie riechen)",
+        "Schuldmarke (Fraktion beansprucht sie)",
+        "Gedächtnislücke (ein Detail fehlt)"
+      ],
+      "prompt_template": "Was kostet die Ankunft dieser Figur vom ersten Moment an?"
+    },
+    {
+      "id": "earth_items",
+      "label": "Welche 3 Gegenstände von der Erde hat sie dabei?",
+      "type": "textarea",
+      "required": true,
+      "prompt_template": "Welche Dinge aus dem alten Leben sind noch physisch bei ihr?"
+    },
+    {
+      "id": "signature_item",
+      "label": "Was ist ihr Signature-Item? (1 Gegenstand, kurz)",
+      "type": "text",
+      "required": true,
+      "prompt_template": "Welcher eine Gegenstand steht symbolisch für diese Figur?"
+    }
+  ]
+}

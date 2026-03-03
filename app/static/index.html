@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Isekai GM MVP</title>
+  <link rel="stylesheet" href="/static/style.css?v=20260303p" />
+</head>
+<body>
+  <div class="app-shell">
+    <div id="flash" class="flash hidden"></div>
+    <div id="loading-overlay" class="loading-overlay hidden" aria-live="polite" aria-busy="true">
+      <div class="loading-card">
+        <div class="loading-fire" aria-hidden="true">
+          <div class="loading-ember ember-left"></div>
+          <div class="loading-ember ember-right"></div>
+          <div class="loading-flame flame-back"></div>
+          <div class="loading-flame flame-front"></div>
+          <div class="loading-log log-left"></div>
+          <div class="loading-log log-right"></div>
+          <div class="loading-coals"></div>
+        </div>
+        <div class="loading-title">Lädt</div>
+        <div id="loading-text" class="loading-text">Einen Moment bitte.</div>
+      </div>
+    </div>
+
+    <section id="landing-view" class="view landing-view">
+      <div class="landing-stage">
+        <div class="hero">
+          <p class="eyebrow">Isekai GM</p>
+          <h1>Mehrspieler-Story mit kanonischem State</h1>
+          <p class="hero-copy">Baue eine Kampagne, teile einen Join-Code und lass den GM erst die Welt und dann jede Spielerfigur Schritt für Schritt definieren, bevor die erste Szene beginnt.</p>
+
+          <div class="hero-points">
+            <div class="hero-point">
+              <strong>Geschichtsfluss</strong>
+              <span>Jeder Zug bleibt als spielbarer Story-Block erhalten.</span>
+            </div>
+            <div class="hero-point">
+              <strong>Boards & Memory</strong>
+              <span>Plot, Author's Note, World Info und Summary sind direkt erreichbar.</span>
+            </div>
+            <div class="hero-point">
+              <strong>Beitreten & Claimen</strong>
+              <span>Mehrere Spieler, neutrale Slots und danach echter Charakterbau pro Person.</span>
+            </div>
+          </div>
+          <div class="hero-actions">
+            <button class="btn ghost" id="openLandingSettingsBtn" type="button">Main-Einstellungen</button>
+          </div>
+        </div>
+
+        <div class="landing-grid">
+          <div class="panel landing-panel">
+            <div class="panelTitle">Neue Kampagne</div>
+            <p class="section-copy">Erzeuge einen frischen Raum und werde automatisch Host mit Edit-, Undo- und Board-Rechten.</p>
+            <label class="field">
+              <span>Titel</span>
+              <input id="create-title" type="text" placeholder="z.B. Totenwald Run" />
+            </label>
+            <label class="field">
+              <span>Dein Name</span>
+              <input id="create-name" type="text" placeholder="Host-Name" />
+            </label>
+            <button class="btn primary landing-btn" id="createCampaignBtn" type="button">Kampagne erstellen</button>
+          </div>
+
+          <div class="panel landing-panel">
+            <div class="panelTitle">Bestehender Raum</div>
+            <p class="section-copy">Nutze den Join-Code des Hosts und claime danach einen freien Slot in der laufenden Kampagne.</p>
+            <label class="field">
+              <span>Join-Code</span>
+              <input id="join-code" type="text" placeholder="ABC123" />
+            </label>
+            <label class="field">
+              <span>Dein Name</span>
+              <input id="join-name" type="text" placeholder="Spielername" />
+            </label>
+            <button class="btn ghost landing-btn" id="joinCampaignBtn" type="button">Beitreten</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel session-library">
+        <div class="library-head">
+          <div>
+            <div class="panelTitle">Deine Sessions</div>
+            <p class="section-copy">Verlasse eine Session jederzeit und steige später über diese Liste wieder ein.</p>
+          </div>
+        </div>
+        <div id="session-library-list" class="session-library-list"></div>
+      </div>
+    </section>
+
+    <section id="claim-view" class="view hidden">
+      <header class="topbar">
+        <div>
+          <div class="title" id="claim-campaign-title">Kampagne</div>
+          <div class="meta" id="claim-meta"></div>
+        </div>
+        <button class="btn ghost" id="claimBackBtn" type="button">Zurück zur Startseite</button>
+      </header>
+
+      <main class="claim-layout">
+        <div class="panel claim-panel">
+          <div class="panelTitle">Slot claimen</div>
+          <p class="small">Jeder Spieler übernimmt genau einen freien Slot und baut daraus seine Figur.</p>
+          <div id="claim-cards" class="claim-cards"></div>
+        </div>
+      </main>
+    </section>
+
+    <section id="campaign-view" class="view hidden">
+      <header class="topbar">
+        <div>
+          <div class="title" id="campaign-title">Kampagne</div>
+          <div class="meta" id="campaign-meta"></div>
+        </div>
+        <div class="topbar-actions">
+          <div class="join-chip" id="join-code-chip">Code: -</div>
+          <button class="btn ghost" id="unclaimBtn" type="button">Claim lösen</button>
+          <button class="btn ghost" id="leaveBtn" type="button">Session verlassen</button>
+          <button class="menu-btn" id="openSettingsBtn" type="button" aria-label="Boards und Einstellungen öffnen">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="timeline-column">
+          <div class="panel timeline-panel">
+            <div class="timeline-head">
+              <div>
+                <div class="panelTitle">Geschichte</div>
+                <div class="small" id="viewer-summary"></div>
+              </div>
+            </div>
+            <div id="intro-banner" class="intro-banner hidden">
+              <div>
+                <div class="intro-banner-title" id="intro-banner-title">Auftakt ausstehend</div>
+                <div class="small" id="intro-banner-text"></div>
+              </div>
+              <button class="btn primary hidden" id="retryIntroBtn" type="button">Auftakt erneut versuchen</button>
+            </div>
+            <div id="live-activity-bar" class="live-activity-bar hidden"></div>
+            <div id="turns" class="turns"></div>
+          </div>
+
+          <div class="panel composer-panel">
+            <div class="panelTitle">Dein Beitrag</div>
+            <div class="composer-meta">
+              <div id="claimed-actor-badge" class="badge">Kein Claim</div>
+              <div class="action-switch" id="action-switch">
+                <button class="action-mode active" data-mode="do" type="button">Tun</button>
+                <button class="action-mode" data-mode="say" type="button">Sagen</button>
+                <button class="action-mode" data-mode="story" type="button">Story</button>
+              </div>
+            </div>
+            <textarea id="turn-input" placeholder="Was passiert in deinem Zug?"></textarea>
+            <div class="composer-actions">
+              <div class="small" id="composer-hint">Dein Beitrag fließt direkt in die laufende Geschichte ein.</div>
+              <button class="btn primary" id="submitTurnBtn" type="button">Zug senden</button>
+            </div>
+          </div>
+        </section>
+
+        <aside class="sidebar-column">
+          <div class="panel party-panel">
+            <div class="panelTitle">Party</div>
+            <div id="party-overview" class="party-overview"></div>
+          </div>
+          <div class="sidebar-tabs">
+            <button class="tab active" data-tab="chars" type="button">Charaktere</button>
+            <button class="tab" data-tab="map" type="button">Karte</button>
+            <button class="tab" data-tab="events" type="button">Events</button>
+          </div>
+
+          <div class="panel tabPanel" id="tab-chars"></div>
+          <div class="panel tabPanel hidden" id="tab-map"></div>
+          <div class="panel tabPanel hidden" id="tab-events"></div>
+        </aside>
+      </main>
+    </section>
+  </div>
+
+  <div id="character-drawer" class="drawer hidden">
+    <div class="drawer-shell">
+      <div class="drawer-head">
+        <div>
+          <div class="panelTitle">Charakterbogen</div>
+          <div class="title" id="drawer-title">Charakter</div>
+          <div class="small" id="drawer-subtitle"></div>
+        </div>
+        <button class="btn ghost" id="closeCharacterDrawerBtn" type="button">Schließen</button>
+      </div>
+      <div class="drawer-tabs">
+        <button class="drawer-tab active" data-drawer-tab="overview" type="button">Überblick</button>
+        <button class="drawer-tab" data-drawer-tab="stats" type="button">Werte</button>
+        <button class="drawer-tab" data-drawer-tab="skills" type="button">Fertigkeiten</button>
+        <button class="drawer-tab" data-drawer-tab="abilities" type="button">Fähigkeiten</button>
+        <button class="drawer-tab" data-drawer-tab="gear" type="button">Ausrüstung & Inventar</button>
+        <button class="drawer-tab" data-drawer-tab="effects" type="button">Effekte</button>
+        <button class="drawer-tab" data-drawer-tab="journal" type="button">Journal</button>
+      </div>
+      <div class="drawer-content">
+        <div class="drawer-panel" id="drawer-panel-overview"></div>
+        <div class="drawer-panel hidden" id="drawer-panel-stats"></div>
+        <div class="drawer-panel hidden" id="drawer-panel-skills"></div>
+        <div class="drawer-panel hidden" id="drawer-panel-abilities"></div>
+        <div class="drawer-panel hidden" id="drawer-panel-gear"></div>
+        <div class="drawer-panel hidden" id="drawer-panel-effects"></div>
+        <div class="drawer-panel hidden" id="drawer-panel-journal"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="edit-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="panelTitle">Turn editieren</div>
+          <div class="small">Du kannst Spielertext oder GM-Text frei kürzen, löschen oder umschreiben.</div>
+        </div>
+        <button class="btn ghost" id="closeEditModalBtn" type="button">Schließen</button>
+      </div>
+      <label class="field">
+        <span>Spielertext</span>
+        <textarea id="edit-player-text"></textarea>
+      </label>
+      <label class="field">
+        <span>GM-Text</span>
+        <textarea id="edit-gm-text"></textarea>
+      </label>
+      <div class="modal-actions">
+        <button class="btn ghost" id="cancelEditBtn" type="button">Abbrechen</button>
+        <button class="btn primary" id="saveEditBtn" type="button">Edit speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="session-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="panelTitle">Session Editor</div>
+          <div class="small">Name bearbeiten, exportieren oder die Kampagne löschen.</div>
+        </div>
+        <button class="btn ghost" id="closeSessionModalBtn" type="button">Schließen</button>
+      </div>
+      <label class="field">
+        <span>Session-Name</span>
+        <input id="session-modal-title" type="text" />
+      </label>
+      <div class="small" id="session-modal-meta"></div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="exportSessionBtn" type="button">Exportieren</button>
+        <button class="btn ghost" id="deleteSessionBtn" type="button">Löschen</button>
+        <button class="btn primary" id="saveSessionMetaBtn" type="button">Name speichern</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="settings-modal" class="modal hidden">
+    <div class="modal-card settings-card">
+      <div class="modal-head">
+        <div>
+          <div class="panelTitle">Boards & Einstellungen</div>
+          <div class="small">Weniger Dauer-UI, aber alle Systeminformationen bleiben hier erreichbar.</div>
+        </div>
+        <button class="btn ghost" id="closeSettingsModalBtn" type="button">Schließen</button>
+      </div>
+      <div class="settings-layout">
+        <div class="settings-nav">
+          <button class="settings-tab" data-tab="style" type="button">Style</button>
+          <button class="settings-tab active" data-tab="plot" type="button">Plot</button>
+          <button class="settings-tab" data-tab="note" type="button">Author's Note</button>
+          <button class="settings-tab" data-tab="cards" type="button">Story-Karten</button>
+          <button class="settings-tab" data-tab="world" type="button">World Info</button>
+          <button class="settings-tab" data-tab="memory" type="button">Memory</button>
+          <button class="settings-tab" data-tab="session" type="button">Session</button>
+        </div>
+        <div class="settings-content">
+          <div class="panel tabPanel hidden" id="tab-style"></div>
+          <div class="panel tabPanel" id="tab-plot"></div>
+          <div class="panel tabPanel hidden" id="tab-note"></div>
+          <div class="panel tabPanel hidden" id="tab-cards"></div>
+          <div class="panel tabPanel hidden" id="tab-world"></div>
+          <div class="panel tabPanel hidden" id="tab-memory"></div>
+          <div class="panel tabPanel hidden" id="tab-session"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="setup-modal" class="modal hidden">
+    <div class="modal-card setup-card">
+      <div class="modal-head">
+        <div>
+          <div class="panelTitle" id="setup-modal-title">Setup</div>
+          <div class="small" id="setup-modal-subtitle"></div>
+        </div>
+      </div>
+      <div id="setup-progress" class="setup-progress hidden"></div>
+      <div id="setup-ai-copy" class="setup-ai-copy hidden"></div>
+      <div id="setup-question-root" class="setup-question-root hidden"></div>
+      <div id="setup-other-root" class="setup-other-root hidden"></div>
+
+      <div id="setup-waiting" class="hidden">
+        <div class="readonly-note">Der Host definiert gerade die Welt. Sobald das abgeschlossen ist, kannst du einen freien Slot claimen und deine Figur bauen.</div>
+      </div>
+
+      <div id="setup-modal-actions" class="modal-actions hidden">
+        <button class="btn ghost" id="setupPrevBtn" type="button">Zurück</button>
+        <button class="btn ghost" id="setupSkipBtn" type="button">Überspringen</button>
+        <button class="btn ghost dice-btn" id="setupRandomBtn" type="button" aria-label="Zufällige Antwort vom GM wählen">
+          <span class="dice-icon" aria-hidden="true">🎲</span>
+        </button>
+        <button class="btn primary" id="setupSubmitBtn" type="button">Antwort senden</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="setup-random-modal" class="modal hidden">
+    <div class="modal-card random-card">
+      <div class="modal-head">
+        <div>
+          <div class="panelTitle">GM-Würfel</div>
+          <div class="small">Wähle zuerst, was randomisiert werden soll. Danach kannst du neu würfeln, bis der Vorschlag passt, und ihn dann übernehmen.</div>
+        </div>
+        <button class="btn ghost" id="closeSetupRandomModalBtn" type="button">Schließen</button>
+      </div>
+      <div class="random-mode-list">
+        <label class="setup-choice">
+          <input type="radio" name="setup-random-mode" value="single" checked />
+          <span><strong>Nur diese Frage</strong><br/>Der GM würfelt nur die aktuelle Frage aus.</span>
+        </label>
+        <label class="setup-choice">
+          <input type="radio" name="setup-random-mode" value="all" />
+          <span><strong>Alles ab hier</strong><br/>Der GM würfelt alle restlichen Fragen dieses Setup-Flows aus.</span>
+        </label>
+      </div>
+      <div id="setup-random-preview" class="random-preview"></div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="setupRandomRerollBtn" type="button">Nochmal würfeln</button>
+        <button class="btn primary" id="setupRandomApplyBtn" type="button">Übernehmen</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=20260303p"></script>
+</body>
+</html>
