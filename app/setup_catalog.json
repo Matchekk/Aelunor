@@ -9,6 +9,7 @@
       "allow_other": true,
       "options": [
         "Dark Isekai (Survival/Horror)",
+        "Klassische Fantasy (Mittelalter/Abenteuer)",
         "Grimdark Fantasy (Krieg/Fraktionen)",
         "Monster-Hunt (Jagd/Beute/Upgrade)",
         "Mystery/Occult (Geheimnisse/Kulte)",
@@ -24,6 +25,14 @@
       "required": true,
       "options": ["1", "2", "3", "4", "5", "6"],
       "prompt_template": "Wie viele Spielerfiguren soll ich für diesen Run wirklich einplanen?"
+    },
+    {
+      "id": "campaign_length",
+      "label": "Wie lange wollt ihr die Kampagne ungefähr spielen?",
+      "type": "select",
+      "required": true,
+      "options": ["Kurz", "Mittel", "Unbestimmt"],
+      "prompt_template": "Welche Kampagnenlänge soll ich fürs Pacing einplanen: Kurz, Mittel oder Unbestimmt?"
     },
     {
       "id": "tone",
@@ -73,6 +82,15 @@
       "prompt_template": "Wie sehr soll Knappheit den Run bestimmen?"
     },
     {
+      "id": "resource_name",
+      "label": "Wie heißt die Hauptkraft in dieser Welt?",
+      "type": "select",
+      "required": true,
+      "allow_other": true,
+      "options": ["Aether", "Mana", "Ki", "Chakra", "Prana", "Flux", "Essenz"],
+      "prompt_template": "Welche Hauptkraft nutzen Figuren in dieser Welt (z. B. Mana, Ki, Aether)?"
+    },
+    {
       "id": "healing_frequency",
       "label": "Wie leicht ist Regeneration/Heilung?",
       "type": "select",
@@ -82,11 +100,19 @@
     },
     {
       "id": "ruleset",
-      "label": "Welches Würfel-/Regelsystem nutzen wir?",
+      "label": "Welchen Erzählrahmen nutzen wir?",
       "type": "select",
       "required": true,
-      "options": ["1W20", "2W6", "Ohne Würfel (nur Entscheidungen)"],
-      "prompt_template": "Welches Regel- oder Würfelgerüst soll den Run tragen?"
+      "options": ["Konsequent", "Dramatisch", "Erbarmungslos"],
+      "prompt_template": "Wie hart und direkt soll die Erzählung Konsequenzen ausspielen?"
+    },
+    {
+      "id": "attribute_range",
+      "label": "Was ist der Wertebereich dieser Welt?",
+      "type": "select",
+      "required": true,
+      "options": ["1-10", "1-20", "1-100"],
+      "prompt_template": "In welchem Zahlenrahmen bewegen sich Attribute und Grundwerte in dieser Welt?"
     },
     {
       "id": "outcome_model",
@@ -263,19 +289,44 @@
       "prompt_template": "Welche Schwachstelle kann diese Welt gegen die Figur verwenden?"
     },
     {
-      "id": "party_role",
-      "label": "Welche Rolle übernimmt die Figur in der Gruppe?",
+      "id": "class_start_mode",
+      "label": "Wie soll die Klasse dieser Figur entstehen?",
       "type": "select",
       "required": true,
       "options": [
-        "Frontline (nah dran, Risiko)",
-        "Scout (Späher/Info)",
-        "Face (Reden/Deals)",
-        "Support (Schutz/Utility)",
-        "Tüftler (Tools/Tricks)",
-        "Occult (Flüche/Geheimnisse)"
+        "KI jetzt",
+        "Ich definiere selbst",
+        "Erst in der Story"
       ],
-      "prompt_template": "Welche Rolle nimmt diese Figur innerhalb der Gruppe instinktiv ein?"
+      "prompt_template": "Soll die Klasse sofort entstehen, von dir selbst festgelegt werden oder erst später in der Story auftauchen?"
+    },
+    {
+      "id": "class_seed",
+      "label": "Falls die KI die Klasse jetzt setzen soll: Welche Richtung oder welches Motiv soll sie aufgreifen?",
+      "type": "text",
+      "required": false,
+      "prompt_template": "Welches Motiv, welches Bild oder welche Richtung soll die KI für die Anfangsklasse aufgreifen?"
+    },
+    {
+      "id": "class_custom_name",
+      "label": "Falls du die Klasse selbst definierst: Wie heißt sie?",
+      "type": "text",
+      "required": false,
+      "prompt_template": "Wie lautet der Name der selbst definierten Startklasse?"
+    },
+    {
+      "id": "class_custom_description",
+      "label": "Falls du die Klasse selbst definierst: Was macht sie aus? (1-2 Sätze)",
+      "type": "textarea",
+      "required": false,
+      "prompt_template": "Beschreibe kurz, wofür diese selbst definierte Klasse steht."
+    },
+    {
+      "id": "class_custom_tags",
+      "label": "Falls du die Klasse selbst definierst: Welche Affinitäten hat sie? (eine pro Zeile)",
+      "type": "textarea",
+      "required": false,
+      "prompt_template": "Welche Affinitäts-Tags beschreiben diese Klasse am besten? Jeweils kurz, eine pro Zeile."
     },
     {
       "id": "current_focus",

@@ -1,5 +1,5 @@
 {
-  "system_prompt": "Du bist ein deutschsprachiger Erzähler und Spielleiter für eine fortlaufende Isekai-Geschichte (Portal-Fantasy) mit hohem Schwierigkeitsgrad. Du beschreibst Szenen filmisch wie eine Kamera in einem Dark-Fantasy-Anime: neutral, beobachtend, dynamisch, mit natürlichen Schnitten zwischen Blickwinkeln – ohne eine feste Hauptperspektive.\n\nKanon: Der JSON-STATE ist die einzige Wahrheit. Du darfst nur Änderungen vorschlagen, die als PATCH im vorgegebenen Schema geliefert werden und später in den STATE gemergt werden.\n\nSpielerfiguren sind dynamische Slots. Aktive Spielerfiguren kommen nur aus `active_party`. Nutze für die Erzählung die Anzeigenamen aus `display_party` oder `state.characters[slot_id].bio.name`, aber halte technische Änderungen strikt auf den realen Slot-IDs im PATCH. Unfertige oder ungeclaimte Slots dürfen nicht in Szenen auftauchen.\n\nWICHTIG:\n- Schreibe ausschließlich auf Deutsch.\n- Nie die vierte Wand brechen. Nie erwähnen, dass du eine KI/Assistent bist.\n- Keine inneren Monologe. Keine Aussagen über Gedanken/Gefühle der Spielerfiguren. Nur Beobachtbares.\n- Theme, Härte, Regeln, Ton, Ressourcenknappheit, Weltgesetze und Grenzen kommen aus Setup, rules_profile und Boards.\n- Geschlecht/Gender einer Figur ist kanonisch und steht in `state.characters[slot_id].bio.gender`. Du darfst es nicht erfinden oder ignorieren.\n- Alter, Corruption, Appearance, Klassen- und Fraktionsspuren sind kanonisch im State gespeichert. Lies sie immer aus und vergiss sie nie.\n- Fairness: Große Gefahren werden durch klare Warnsignale in der Szene telegraphiert, bevor sie zuschlagen.\n- Derived Stats sind read-only und werden serverseitig berechnet. Du darfst niemals Defense, Carry, Initiative, Attack Ratings, Resistances, Combat Flags, Appearance-Summaries oder Age-Stages direkt setzen.\n- Wenn du Charaktere veränderst, patche nur Basiswerte, Ressourcen, Skills, Effekte, Gear, Progression, Journal, Klassen, Fraktionen, Narben oder andere kanonische Auslöser.\n- Skills leben dauerhaft im Backend-State. Lies vorhandene Skills immer aus `state.characters[slot_id].skills` und vergiss sie nie.\n- Skill-Fortschritt wird über `patch.events_add` gemeldet, nicht direkt über frei erfundene Ränge. Nutze dafür bevorzugt das Format `SKILLXP:slot_x:skill_name:success|partial|fail`.\n\nHARTE REGELN GEGEN VERWECHSLUNGEN:\n1) Actor-Regel: Im aktuellen Turn handelt aktiv nur der Actor-Slot. Andere Figuren dürfen nur reagieren, wo sie sind.\n2) Pronomen-Regel: Wenn der Spieltext in der ersten Person formuliert ist wie \"ich\", \"mich\", \"mir\", \"mein\" oder \"meine\", beziehen sich diese Pronomen immer auf den Actor-Slot dieses Turns und niemals auf eine andere Figur.\n3) Scene-Regel: Niemand wechselt scene_id ohne explizite Patch-Änderung.\n4) Ability-Regel: Abilities gehören immer ihrem owner-Slot. owner darf niemals geändert werden.\n5) Party-Split: Wenn Figuren unterschiedliche scene_id haben, dürfen sie nicht in derselben Szene erscheinen.\n6) Active-Party-Regel: Nutze nur Charaktere aus `active_party` als aktuelle Spielerfiguren.\n\nWÜRFEL:\n- Die Spieler würfeln physisch.\n- Wenn ein Ergebnis unsicher ist, fordere einen Wurf an: Check + DC + Stakes Erfolg/Misserfolg.\n- Würfe werden im UI als Request ausgegeben (requests[]).\n\nFORMAT:\n- Du MUSST exakt das JSON-Schema einhalten (Structured Output). Keine zusätzlichen Felder.\n- story: Reine Prosa, keine Markdown-Formatierung.\n- patch: Nur Änderungen, niemals den kompletten State neu erfinden.\n- requests: Wenn du einen Wurf brauchst oder eine Klarstellung, nutze requests.\n\nVOR JEDEM TURN:\n- Lies den aktuellen STATE, das Setup, rules_profile und alle Boards im Context Packet vollständig.\n- Triff keine Entscheidungen, die dem STATE widersprechen.\n- Wenn wichtige Info fehlt, frage über requests (type=\"clarify\") nach.\n\nPHASEN:\n- Erzähle nur dann reguläre Story weiter, wenn state.meta.phase == \"adventure\".\n- In der ersten Adventure-Szene nutzt du ausschließlich Setup, rules_profile, Boards, Charakterdaten und vorhandene World-Informationen als Grundlage.\n",
+  "system_prompt": "Du bist ein deutschsprachiger Erzähler und Spielleiter für eine fortlaufende düstere Isekai-Geschichte. Du beschreibst Szenen filmisch, präzise und ohne Wiederholungen. Der JSON-STATE ist die einzige Wahrheit. Änderungen am kanonischen Zustand dürfen nur über PATCH erfolgen.\n\nSPIELMODI:\n- TUN: Die Spielerfigur versucht etwas Konkretes. Du entscheidest Ergebnis, Scheitern und Konsequenzen.\n- SAGEN: Die Spielerfigur spricht. Du entscheidest Reaktionen, Eskalation und Folgen.\n- STORY: Die Eingabe ist ein erzählerischer Vorschlag. Du darfst ihn plausibel einbauen, verändern oder abschwächen.\n- CANON: Der angegebene Fakt ist bindend. Er muss vollständig im PATCH landen und im weiteren Erzählen als Wahrheit gelten.\n\nWICHTIG:\n- Schreibe ausschließlich auf Deutsch.\n- Keine vierte Wand, keine Erwähnung von KI oder Systemen.\n- Keine Würfelmechanik. Nie nach Wurf, Check, DC oder Skillprobe fragen.\n- requests darf nur clarify, choice oder none enthalten.\n- Erzähle hart, gefährlich und konsequent. Falsche Entscheidungen dürfen Verletzung, Verlust, Alarm, Verderbnis oder Fraktionsdruck auslösen.\n- Keine Plot Armor und keine bequemen Fluchten.\n- Nutze nur aktive Figuren aus active_party.\n- Im Patch dürfen nur echte Slot-IDs verwendet werden.\n- scene_id ändert sich nie implizit; Ortswechsel müssen im Patch explizit stehen.\n- Der sichtbare Zustand der Figuren liegt in characters[slot_id].\n- Skills sind dynamisch. Du darfst neue Skills erfinden, wenn sie plausibel sind. Skills enthalten Name, Rank, Level, Tags, Beschreibung, optionale Kosten, optionalen Preis und optionale Abklingzeit.\n- Rank ist Seltenheit und wird nicht aus Level abgeleitet.\n- Wenn eine Figur sichtbar etwas lernt, findet, einsteckt, verliert, einen Ort erreicht oder einen klaren Zustand erleidet, muss das im Patch stehen.\n- Wenn eine Figur sichtbar Schaden nimmt, erschöpft wird oder ihre Hauptressource verbraucht, muss das im Patch als Ressourcenänderung stehen.\n- Nutze für die Hauptressource immer exakt den Namen aus world.settings.resource_name.\n- CANON darf nie bestritten werden. Wenn CANON alten Annahmen widerspricht, gilt sofort die neue Wahrheit.\n- Wiederhole keine Einleitung, keinen Absatz und kein Schlussbild aus den letzten Antworten fast wörtlich.\n- Beginne neue Antworten nicht mit einer bloßen Zustandszusammenfassung. Beginne mit Folge, Reaktion, Eskalation oder neuem Detail.\n- Jede Antwort muss mindestens ein neues konkretes Element enthalten, das die Szene sichtbar weiterbewegt.\n- Eine dynamische Mindestlänge für story wird pro Turn vorgegeben und muss strikt eingehalten werden.\n\nFORMAT:\n- Antworte ausschließlich im vorgegebenen JSON-Schema.\n- story: reine Prosa ohne Markdown.\n- patch: nur Änderungen.\n- requests: nur clarify/choice/none.\n\nVOR JEDEM TURN:\n- Lies STATE, Setup, rules_profile und Boards vollständig.\n- Reagiere direkt auf die letzte Eingabe.\n- Wiederhole frühere Absätze nicht.\n- Wenn eine Information wirklich fehlt, nutze requests vom Typ clarify.\n",
   "response_schema": {
     "type": "object",
     "properties": {
@@ -173,25 +173,12 @@
             "type": {
               "type": "string",
               "enum": [
-                "roll",
                 "clarify",
                 "choice",
                 "none"
               ]
             },
             "actor": {
-              "type": "string"
-            },
-            "check": {
-              "type": "string"
-            },
-            "dc": {
-              "type": "integer"
-            },
-            "stakes_success": {
-              "type": "string"
-            },
-            "stakes_fail": {
               "type": "string"
             },
             "question": {
@@ -258,9 +245,6 @@
               "goal": {
                 "type": "string"
               },
-              "party_role": {
-                "type": "string"
-              },
               "isekai_price": {
                 "type": "string"
               },
@@ -289,7 +273,6 @@
               "weakness",
               "focus",
               "goal",
-              "party_role",
               "isekai_price",
               "earth_items",
               "signature_item"
@@ -332,7 +315,101 @@
           "skills_set": {
             "type": "object",
             "additionalProperties": {
-              "type": "integer"
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "rank": {
+                      "type": "string",
+                      "enum": [
+                        "F",
+                        "E",
+                        "D",
+                        "C",
+                        "B",
+                        "A",
+                        "S"
+                      ]
+                    },
+                    "level": {
+                      "type": "integer"
+                    },
+                    "level_max": {
+                      "type": "integer"
+                    },
+                    "tags": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "cost": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "resource": {
+                          "type": "string"
+                        },
+                        "amount": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "resource",
+                        "amount"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "price": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "cooldown_turns": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "unlocked_from": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "synergy_notes": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "rank",
+                    "level",
+                    "level_max",
+                    "tags",
+                    "description"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
             }
           },
           "skills_delta": {
@@ -602,36 +679,69 @@
           "class_set": {
             "type": "object",
             "properties": {
-              "class_id": {
+              "id": {
                 "type": "string"
               },
-              "class_name": {
+              "name": {
                 "type": "string"
               },
-              "unlocked_at_turn": {
+              "rank": {
+                "type": "string",
+                "enum": ["F", "E", "D", "C", "B", "A", "S"]
+              },
+              "level": {
                 "type": "integer"
               },
-              "visual_modifiers": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "type": [
-                      "string",
-                      "integer",
-                      "boolean"
-                    ]
-                  }
-                }
-              }
+              "level_max": { "type": "integer" },
+              "xp": { "type": "integer" },
+              "xp_next": { "type": "integer" },
+              "affinity_tags": { "type": "array", "items": { "type": "string" } },
+              "description": { "type": "string" },
+              "ascension": { "type": "object" }
             },
             "required": [
-              "class_id",
-              "class_name",
-              "unlocked_at_turn",
-              "visual_modifiers"
+              "id",
+              "name",
+              "rank",
+              "level",
+              "level_max",
+              "xp",
+              "xp_next",
+              "affinity_tags",
+              "description",
+              "ascension"
             ],
             "additionalProperties": false
+          },
+          "class_update": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "injuries_add": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "title": { "type": "string" },
+                "severity": { "type": "string", "enum": ["leicht", "mittel", "schwer"] },
+                "effects": { "type": "array", "items": { "type": "string" } },
+                "healing_stage": { "type": "string", "enum": ["frisch", "heilend", "fast_heil", "geheilt"] },
+                "will_scar": { "type": "boolean" },
+                "created_turn": { "type": "integer" },
+                "notes": { "type": "string" }
+              },
+              "required": ["title", "severity", "effects", "healing_stage", "will_scar", "created_turn", "notes"],
+              "additionalProperties": false
+            }
+          },
+          "injuries_update": {
+            "type": "array",
+            "items": { "type": "object", "required": ["id"], "additionalProperties": true }
+          },
+          "injuries_heal": {
+            "type": "array",
+            "items": { "type": "string" }
           },
           "factions_add": {
             "type": "array",
@@ -723,24 +833,23 @@
                 "id": {
                   "type": "string"
                 },
-                "label": {
+                "title": {
                   "type": "string"
                 },
-                "source": {
+                "origin_injury_id": {
+                  "type": ["string", "null"]
+                },
+                "description": {
                   "type": "string"
                 },
-                "turn_number": {
+                "created_turn": {
                   "type": "integer"
-                },
-                "visible": {
-                  "type": "boolean"
                 }
               },
               "required": [
-                "label",
-                "source",
-                "turn_number",
-                "visible"
+                "title",
+                "description",
+                "created_turn"
               ],
               "additionalProperties": false
             }
@@ -795,8 +904,6 @@
           "inventory_add",
           "inventory_remove",
           "equip_set",
-          "abilities_add",
-          "abilities_update",
           "potential_add"
         ],
         "additionalProperties": false

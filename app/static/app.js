@@ -11,10 +11,15 @@ let SETUP_FLOW = { mode: null, slotId: null, stack: [], index: -1 };
 let PENDING_REQUESTS = 0;
 let LOADING_TIMER = null;
 let CHARACTER_SHEET = null;
+let NPC_SHEET = null;
+let DRAWER_MODE = "pc";
 let ACTIVE_DRAWER_TAB = "overview";
 let ACTIVE_SIDEBAR_TAB = "chars";
 let ACTIVE_SETTINGS_TAB = "session";
 let CURRENT_THEME = loadTheme();
+let CURRENT_FONT_PRESET = loadFontPreset();
+let CURRENT_FONT_SIZE = loadFontSize();
+let LAST_STORY_SCROLL_CAMPAIGN_ID = null;
 let SETUP_RANDOM_STATE = { mode: "single", previewAnswers: [], previewTexts: [], questionId: null };
 let LIVE_STATE = {
   activitiesByPlayer: {},
@@ -30,20 +35,55 @@ let LIVE_STATE = {
   typingTimer: null,
   setupTimer: null,
   editTimer: null,
+  highlightTurnId: null,
+  highlightTimer: null,
 };
+let PARTY_HUD_PREV = {};
+const CONTINUE_STORY_MARKER = "__CONTINUE_STORY__";
 
 const ACTION_MODE_CONFIG = {
-  do: { placeholder: "Was tut deine Figur konkret?" },
-  say: { placeholder: "Was sagt deine Figur?" },
-  story: { placeholder: "Welche Story-Richtung oder welchen Fokus willst du setzen?" }
+  do: { label: "TUN", placeholder: "Was tut deine Figur konkret?" },
+  say: { label: "SAGEN", placeholder: "Was sagt deine Figur?" },
+  story: { label: "STORY", placeholder: "Welche Story-Richtung oder welchen Fokus willst du setzen?" },
+  canon: { label: "CANON", placeholder: "Welcher Fakt soll direkt kanonisch in den Zustand übernommen werden?" }
 };
 
-const SIDEBAR_TAB_IDS = ["chars", "map", "events"];
+const SIDEBAR_TAB_IDS = ["chars", "diary", "map", "events"];
 const SETTINGS_TAB_IDS = ["style", "plot", "note", "cards", "world", "memory", "session"];
 const TAB_IDS = [...SETTINGS_TAB_IDS, ...SIDEBAR_TAB_IDS];
+const DRAWER_PANEL_IDS = ["overview", "class", "attributes", "skills", "injuries", "gear"];
+const PC_DRAWER_TABS = [
+  { id: "overview", label: "Übersicht" },
+  { id: "class", label: "Klasse" },
+  { id: "attributes", label: "Attribute" },
+  { id: "skills", label: "Skills" },
+  { id: "injuries", label: "Injuries & Scars" },
+  { id: "gear", label: "Inventar" }
+];
+const NPC_DRAWER_TABS = [
+  { id: "overview", label: "Profil" },
+  { id: "class", label: "Motiv & Ziel" },
+  { id: "attributes", label: "Historie" },
+  { id: "skills", label: "Bezüge" }
+];
+const VALID_THEMES = ["arcane", "tavern", "glade", "hybrid"];
 const THEME_LABELS = {
   arcane: "Nachtblau",
-  tavern: "Taverne"
+  tavern: "Taverne",
+  glade: "Waldlichtung",
+  hybrid: "Isekai (Hybrid)"
+};
+
+const FONT_PRESET_LABELS = {
+  classic: "Standard",
+  clean: "Klar",
+  literary: "Roman"
+};
+
+const FONT_SIZE_LABELS = {
+  small: "Klein",
+  medium: "Mittel",
+  large: "Groß"
 };
 
 const AGE_STAGE_LABELS = {
@@ -154,16 +194,44 @@ function libraryEntry(campaignId) {
 
 function loadTheme() {
   const stored = localStorage.getItem("isekaiTheme");
-  return stored === "tavern" ? "tavern" : "arcane";
+  return ["arcane", "tavern", "glade", "hybrid"].includes(stored) ? stored : "arcane";
+}
+
+function loadFontPreset() {
+  const stored = localStorage.getItem("isekaiFontPreset");
+  return ["classic", "clean", "literary"].includes(stored) ? stored : "classic";
+}
+
+function loadFontSize() {
+  const stored = localStorage.getItem("isekaiFontSize");
+  return ["small", "medium", "large"].includes(stored) ? stored : "medium";
 }
 
 function saveTheme(themeId) {
   localStorage.setItem("isekaiTheme", themeId);
 }
 
+function saveFontPreset(fontPreset) {
+  localStorage.setItem("isekaiFontPreset", fontPreset);
+}
+
+function saveFontSize(fontSize) {
+  localStorage.setItem("isekaiFontSize", fontSize);
+}
+
 function applyTheme(themeId) {
-  CURRENT_THEME = themeId === "tavern" ? "tavern" : "arcane";
+  CURRENT_THEME = VALID_THEMES.includes(themeId) ? themeId : "arcane";
   document.documentElement.dataset.theme = CURRENT_THEME;
+}
+
+function applyFontPreset(fontPreset) {
+  CURRENT_FONT_PRESET = ["classic", "clean", "literary"].includes(fontPreset) ? fontPreset : "classic";
+  document.documentElement.dataset.fontPreset = CURRENT_FONT_PRESET;
+}
+
+function applyFontSize(fontSize) {
+  CURRENT_FONT_SIZE = ["small", "medium", "large"].includes(fontSize) ? fontSize : "medium";
+  document.documentElement.dataset.fontSize = CURRENT_FONT_SIZE;
 }
 
 function setTheme(themeId) {
@@ -171,6 +239,20 @@ function setTheme(themeId) {
   saveTheme(CURRENT_THEME);
   renderBoards();
   showFlash(`Style gewechselt: ${THEME_LABELS[CURRENT_THEME] || "Style"}`);
+}
+
+function setFontPreset(fontPreset) {
+  applyFontPreset(fontPreset);
+  saveFontPreset(CURRENT_FONT_PRESET);
+  renderBoards();
+  showFlash(`Schriftart gewechselt: ${FONT_PRESET_LABELS[CURRENT_FONT_PRESET] || "Schrift"}`);
+}
+
+function setFontSize(fontSize) {
+  applyFontSize(fontSize);
+  saveFontSize(CURRENT_FONT_SIZE);
+  renderBoards();
+  showFlash(`Schriftgröße gewechselt: ${FONT_SIZE_LABELS[CURRENT_FONT_SIZE] || "Größe"}`);
 }
 
 function authHeaders(extraHeaders = {}) {
@@ -196,10 +278,14 @@ function resetLiveState() {
   window.clearTimeout(LIVE_STATE.typingTimer);
   window.clearTimeout(LIVE_STATE.setupTimer);
   window.clearTimeout(LIVE_STATE.editTimer);
+  window.clearTimeout(LIVE_STATE.highlightTimer);
   LIVE_STATE.reloadTimer = null;
   LIVE_STATE.typingTimer = null;
   LIVE_STATE.setupTimer = null;
   LIVE_STATE.editTimer = null;
+  LIVE_STATE.highlightTimer = null;
+  LIVE_STATE.highlightTurnId = null;
+  LAST_STORY_SCROLL_CAMPAIGN_ID = null;
   renderLoadingOverlay();
 }
 
@@ -227,11 +313,11 @@ function loadingMessageFor(path, options = {}) {
     return method === "PATCH" ? "Turn wird überarbeitet..." : "Der GM denkt gerade nach...";
   }
   if (path.includes("/setup/world")) {
-    if (path.includes("/random")) return "Der GM würfelt die Welt gerade aus...";
+    if (path.includes("/random")) return "Der GM erzeugt gerade einen Weltvorschlag...";
     return "Die Welt wird gerade definiert...";
   }
   if (path.includes("/slots/") && path.includes("/setup/")) {
-    if (path.includes("/random")) return "Der GM würfelt die Figur gerade aus...";
+    if (path.includes("/random")) return "Der GM erzeugt gerade einen Figurenvorschlag...";
     return "Die Figur wird gerade ausgearbeitet...";
   }
   if (path.includes("/slots/") && path.includes("/claim")) {
@@ -276,6 +362,10 @@ function renderLoadingOverlay() {
   }
   el("loading-text").textContent = message;
   el("loading-overlay").classList.remove("hidden");
+}
+
+function isSharedBlocking() {
+  return Boolean(LIVE_STATE.blockingAction);
 }
 
 function beginLoading(message) {
@@ -524,7 +614,7 @@ function renderActivityBar() {
     return;
   }
   const status = blocking ? "Gemeinsame Aktion" : "Live";
-  bar.className = `live-activity-bar${blocking ? " blocking" : ""}`;
+  bar.className = `live-activity-bar live-activity-chip${blocking ? " blocking" : ""}`;
   bar.innerHTML = `
     <div class="live-activity-icon" aria-hidden="true"></div>
     <div class="live-activity-copy">
@@ -535,26 +625,89 @@ function renderActivityBar() {
   `;
 }
 
+function syncSharedBlockingControls() {
+  const sharedBlocking = isSharedBlocking();
+  const claimed = claimedSlot();
+  const isAdventure = CAMPAIGN?.state?.meta?.phase === "adventure";
+  const hasIntro = campaignHasIntro();
+  const intro = introState();
+
+  const unclaimBtn = el("unclaimBtn");
+  if (unclaimBtn) unclaimBtn.disabled = !claimed || sharedBlocking;
+
+  const turnInput = el("turn-input");
+  if (turnInput) turnInput.disabled = !claimed || !isAdventure || !hasIntro || sharedBlocking;
+
+  const submitTurnBtn = el("submitTurnBtn");
+  if (submitTurnBtn) submitTurnBtn.disabled = !claimed || !isAdventure || !hasIntro || sharedBlocking;
+
+  const composerHint = el("composer-hint");
+  if (composerHint) {
+    composerHint.textContent = sharedBlocking
+      ? "Während gerade ein Zug oder Setup verarbeitet wird, kannst du weiterlesen und dich umsehen, aber nichts Neues absenden."
+      : !isAdventure
+      ? "Vor dem Abenteuer müssen Welt und alle benötigten Figuren abgeschlossen sein."
+      : !hasIntro && intro.status === "failed"
+      ? "Der Auftakt muss zuerst erfolgreich erzeugt werden, bevor du neue Beiträge senden kannst."
+      : !hasIntro
+      ? "Der GM bereitet gerade noch den ersten Szenenauftakt vor."
+      : claimed
+      ? CURRENT_ACTION_TYPE === "canon"
+        ? "Dieser Beitrag wird direkt als kanonischer Zustand übernommen und ab dem nächsten Turn als Wahrheit behandelt."
+        : `Der GM baut deinen ${actionTypeLabel(CURRENT_ACTION_TYPE)}-Beitrag direkt in die laufende Szene ein.`
+      : "Ohne Claim kannst du lesen, aber keinen Turn senden.";
+  }
+
+  document.querySelectorAll('[data-action="edit-turn"], [data-action="undo-turn"], [data-action="retry-turn"], [data-action="continue-turn"], [data-action="claim-slot"], [data-action="take-slot"]').forEach((node) => {
+    node.disabled = sharedBlocking;
+  });
+
+  const setupIds = ["setupPrevBtn", "setupSkipBtn", "setupSubmitBtn", "setupRandomBtn", "setupRandomRerollBtn", "setupRandomApplyBtn"];
+  setupIds.forEach((id) => {
+    const node = el(id);
+    if (node) node.disabled = sharedBlocking;
+  });
+  ["setup-question-root", "setup-other-root"].forEach((id) => {
+    const root = el(id);
+    if (!root) return;
+    root.querySelectorAll("input, textarea, select, button").forEach((node) => {
+      node.disabled = sharedBlocking;
+    });
+  });
+
+  const diaryInput = el("player-diary-input");
+  if (diaryInput) diaryInput.disabled = sharedBlocking;
+  const diarySaveBtn = el("savePlayerDiaryBtn");
+  if (diarySaveBtn) diarySaveBtn.disabled = sharedBlocking;
+  const saveEditBtn = el("saveEditBtn");
+  if (saveEditBtn) saveEditBtn.disabled = sharedBlocking;
+  const retryIntroBtn = el("retryIntroBtn");
+  if (retryIntroBtn) retryIntroBtn.disabled = sharedBlocking;
+}
+
 function renderLiveDecorations() {
   renderLoadingOverlay();
   renderActivityBar();
+  syncSharedBlockingControls();
   if (CAMPAIGN && !el("claim-view").classList.contains("hidden")) renderClaimView();
-  if (CAMPAIGN && !el("campaign-view").classList.contains("hidden")) {
-    renderPartyOverview();
-    const claimed = claimedSlot();
-    el("claimed-actor-badge").textContent = claimed ? `Du spielst ${claimed.display_name || claimed.slot_id}` : "Kein Claim";
-  }
+  if (CAMPAIGN && !el("campaign-view").classList.contains("hidden")) renderPartyOverview();
 }
 
 function titleizeToken(value) {
   const lowered = (value || "").toString().toLowerCase();
   const map = {
+    str: "Stärke (STR)",
+    dex: "Geschicklichkeit (DEX)",
+    con: "Konstitution (CON)",
+    int: "Intelligenz (INT)",
+    wis: "Weisheit (WIS)",
+    cha: "Charisma (CHA)",
+    luck: "Glück (LUCK)",
     hp: "HP",
     stamina: "Ausdauer",
-    aether: "Aether",
+    aether: "Ressource",
     stress: "Stress",
     corruption: "Verderbnis",
-    wounds: "Wunden",
     physical: "Physisch",
     fire: "Feuer",
     cold: "Kälte",
@@ -656,9 +809,10 @@ function contributionLabel(turn) {
 
 function actionTypeLabel(actionType) {
   return {
-    do: "Tun",
-    say: "Sagen",
-    story: "Story"
+    do: "TUN",
+    say: "SAGEN",
+    story: "STORY",
+    canon: "CANON"
   }[actionType] || actionType || "";
 }
 
@@ -677,10 +831,84 @@ function contributionText(turn) {
   return text;
 }
 
+function normalizedTurnText(value) {
+  return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function storyResponseMarkup(turn) {
+  const gmText = String(turn.gm_text_display || "").trim();
+  const playerText = String(turn.input_text_display || "").trim();
+  if (turn.action_type !== "story" || !playerText) {
+    return escapeHtml(gmText);
+  }
+  const normalizedGm = normalizedTurnText(gmText);
+  const normalizedPlayer = normalizedTurnText(playerText);
+  if (!normalizedPlayer) return escapeHtml(gmText);
+  const playerIsAlreadyInGm = normalizedGm.startsWith(normalizedPlayer) || normalizedGm.includes(normalizedPlayer.slice(0, Math.min(36, normalizedPlayer.length)));
+  if (playerIsAlreadyInGm) {
+    return escapeHtml(gmText);
+  }
+  return `<span class="story-inline-impulse">${escapeHtml(playerText)}</span>${gmText ? ` ${escapeHtml(gmText)}` : ""}`;
+}
+
+function isContinueDisplayTurn(turn) {
+  return turn?.action_type === "story" && !String(turn?.input_text_display || "").trim();
+}
+
+function buildDisplayTurns(turns) {
+  const displayTurns = [];
+  for (const rawTurn of turns || []) {
+    const turn = { ...rawTurn };
+    if (isContinueDisplayTurn(turn) && displayTurns.length) {
+      const previous = displayTurns[displayTurns.length - 1];
+      const previousText = String(previous.gm_text_display || "").trim();
+      const continueText = String(turn.gm_text_display || "").trim();
+      previous.gm_text_display = [previousText, continueText].filter(Boolean).join("\n\n");
+      previous.turn_id = turn.turn_id;
+      previous.status = turn.status;
+      previous.updated_at = turn.updated_at;
+      previous.edited_at = turn.edited_at;
+      previous.edit_count = turn.edit_count;
+      previous.can_edit = turn.can_edit;
+      previous.can_undo = turn.can_undo;
+      previous.can_retry = turn.can_retry;
+      previous.patch_summary = turn.patch_summary;
+      previous.requests = turn.requests;
+      previous.retry_of_turn_id = turn.retry_of_turn_id;
+      previous.merged_continue = true;
+      previous.merged_turn_count = (previous.merged_turn_count || 1) + 1;
+      continue;
+    }
+    displayTurns.push({ ...turn, merged_continue: false, merged_turn_count: 1 });
+  }
+  return displayTurns;
+}
+
+function setRecentTurnHighlight(turnId) {
+  window.clearTimeout(LIVE_STATE.highlightTimer);
+  LIVE_STATE.highlightTurnId = turnId || null;
+  if (!turnId) return;
+  LIVE_STATE.highlightTimer = window.setTimeout(() => {
+    LIVE_STATE.highlightTurnId = null;
+    LIVE_STATE.highlightTimer = null;
+    if (CAMPAIGN && !el("campaign-view").classList.contains("hidden")) {
+      renderTurns();
+    }
+  }, 4200);
+}
+
+function scheduleStoryScrollLatest() {
+  window.requestAnimationFrame(() => {
+    const turns = el("turns");
+    if (turns) turns.scrollTop = turns.scrollHeight;
+  });
+}
+
 function renderTurns() {
   const root = el("turns");
   const turns = CAMPAIGN?.active_turns || [];
-  if (!turns.length) {
+  const displayTurns = buildDisplayTurns(turns);
+  if (!displayTurns.length) {
     const intro = introState();
     const message = CAMPAIGN?.state?.meta?.phase === "adventure"
       ? intro.status === "failed"
@@ -690,28 +918,32 @@ function renderTurns() {
     root.innerHTML = `<div class="empty-state small">${message}</div>`;
     return;
   }
-  const latestTurnId = turns[turns.length - 1]?.turn_id;
-  root.innerHTML = turns.map((turn) => `
+  const latestTurnId = displayTurns[displayTurns.length - 1]?.turn_id;
+  const sharedBlocking = isSharedBlocking();
+  const highlightTurnId = LIVE_STATE.highlightTurnId;
+  root.innerHTML = displayTurns.map((turn) => `
     <article class="turn-card">
       <div class="story-meta">
         <span>${formatDate(turn.created_at)}</span>
         ${turn.edit_count ? `<span>${turn.edit_count} Edit${turn.edit_count > 1 ? "s" : ""}</span>` : ""}
       </div>
-      <div class="story-input">
-        <div class="story-input-labels">
-          <span class="story-speaker">${escapeHtml(contributionLabel(turn))}</span>
-          <span class="type-badge type-${escapeHtml(turn.action_type)}">${escapeHtml(actionTypeLabel(turn.action_type))}</span>
+      ${contributionText(turn) && turn.action_type !== "story" ? `
+        <div class="story-input">
+          <div class="story-input-labels">
+            <span class="story-speaker">${escapeHtml(contributionLabel(turn))}</span>
+            <span class="type-badge type-${escapeHtml(turn.action_type)}">${escapeHtml(actionTypeLabel(turn.action_type))}</span>
+          </div>
+          <div class="story-input-text">${escapeHtml(contributionText(turn))}</div>
         </div>
-        <div class="story-input-text">${escapeHtml(contributionText(turn))}</div>
-      </div>
-      <div class="story-response">
-        ${escapeHtml(turn.gm_text_display)}
+      ` : ""}
+      <div class="story-response ${turn.turn_id === highlightTurnId ? "turn-highlight" : ""}">
+        ${storyResponseMarkup(turn)}
       </div>
       <div class="turn-actions">
-        ${turn.can_edit ? `<button class="btn ghost" data-action="edit-turn" data-turn-id="${turn.turn_id}" type="button">Edit</button>` : ""}
-        ${turn.can_undo ? `<button class="btn ghost" data-action="undo-turn" data-turn-id="${turn.turn_id}" type="button">Undo</button>` : ""}
-        ${turn.can_retry ? `<button class="btn ghost" data-action="retry-turn" data-turn-id="${turn.turn_id}" type="button">Retry</button>` : ""}
-        ${(turn.turn_id === latestTurnId && claimedSlotId()) ? `<button class="btn primary" data-action="continue-turn" type="button">Weiter</button>` : ""}
+        ${(turn.turn_id === latestTurnId && turn.can_edit) ? `<button class="btn ghost" data-action="edit-turn" data-turn-id="${turn.turn_id}" type="button" ${sharedBlocking ? "disabled" : ""}>Bearbeiten</button>` : ""}
+        ${(turn.turn_id === latestTurnId && turn.can_undo) ? `<button class="btn ghost" data-action="undo-turn" data-turn-id="${turn.turn_id}" type="button" ${sharedBlocking ? "disabled" : ""}>Zurücknehmen</button>` : ""}
+        ${(turn.turn_id === latestTurnId && turn.can_retry) ? `<button class="btn ghost" data-action="retry-turn" data-turn-id="${turn.turn_id}" type="button" ${sharedBlocking ? "disabled" : ""}>Erneut versuchen</button>` : ""}
+        ${(turn.turn_id === latestTurnId && claimedSlotId()) ? `<button class="btn primary" data-action="continue-turn" type="button" ${sharedBlocking ? "disabled" : ""}>Weiter</button>` : ""}
       </div>
     </article>
   `).join("");
@@ -756,12 +988,13 @@ function renderClaimView() {
   root.innerHTML = (CAMPAIGN.available_slots || []).map((slot) => {
     const mineSlot = mine === slot.slot_id;
     const locked = slot.claimed_by && !mineSlot;
-    const buttonDisabled = locked || Boolean(mine && !mineSlot);
+    const canTakeOver = !mineSlot && Boolean(slot.claimed_by || mine);
+    const buttonDisabled = isSharedBlocking();
     const activity = slot.claimed_by ? LIVE_STATE.activitiesByPlayer[slot.claimed_by] : null;
     const status = slot.claimed_by ? (mineSlot ? "Du" : `Von ${slot.claimed_by_name || "jemandem"} gespielt`) : "Frei";
     const label = slot.completed ? slot.display_name : `Slot ${slot.slot_id.split("_")[1]}`;
     const summary = slot.completed
-      ? `${slot.summary.party_role || "Ohne Rolle"} • ${slot.summary.current_focus || "Ohne Fokus"}`
+      ? `${slot.class_name || "Noch ohne Klasse"}${slot.class_rank ? ` (${slot.class_rank})` : ""} • ${slot.summary.current_focus || "Ohne Fokus"}`
       : "Noch keine fertige Figur in diesem Slot.";
     return `
       <div class="claim-card ${locked ? "locked" : ""} ${mineSlot ? "is-self" : ""}">
@@ -772,8 +1005,8 @@ function renderClaimView() {
         <div class="small claim-card-meta-line">${escapeHtml(slot.slot_id.toUpperCase())}${slot.claimed_by_name ? ` • ${escapeHtml(slot.claimed_by_name)}` : ""}</div>
         <div class="small">${escapeHtml(summary)}</div>
         <div class="claim-activity ${activity ? "" : "is-idle"}">${escapeHtml(activity?.label || (slot.claimed_by ? "Gerade ruhig." : "Wartet auf einen Spieler."))}</div>
-        <button class="btn ${mineSlot ? "primary" : "ghost"}" data-action="claim-slot" data-slot-id="${slot.slot_id}" type="button" ${buttonDisabled ? "disabled" : ""}>
-          ${mineSlot ? "Weiter mit diesem Slot" : mine && !mineSlot ? "Bereits anderer Claim" : "Slot claimen"}
+        <button class="btn ${(mineSlot || canTakeOver) ? "primary" : "ghost"}" data-action="${canTakeOver ? "take-slot" : "claim-slot"}" data-slot-id="${slot.slot_id}" type="button" ${buttonDisabled ? "disabled" : ""}>
+          ${mineSlot ? "Slot übernehmen" : canTakeOver ? "Slot übernehmen" : "Slot claimen"}
         </button>
       </div>
     `;
@@ -787,24 +1020,35 @@ function renderPartyOverview() {
     root.innerHTML = `<div class="empty-state small">Noch keine Party-Slots sichtbar.</div>`;
     return;
   }
+  const claimBadge = (card) => {
+    if (card.slot_id === claimedSlotId()) return "DU";
+    if (card.claimed_by_name) return String(card.claimed_by_name).toUpperCase();
+    return "FREI";
+  };
+  const nextSnapshot = {};
   root.innerHTML = cards.map((card) => `
-    <button class="party-card ${card.slot_id === claimedSlotId() ? "is-self" : ""}" data-action="open-character-sheet" data-slot-id="${card.slot_id}" type="button">
+    <div class="party-card ${card.slot_id === claimedSlotId() ? "is-self" : ""}" data-action="open-character-sheet" data-slot-id="${card.slot_id}" role="button" tabindex="0">
       <div class="party-card-head">
         <div>
           <div class="party-card-name">${escapeHtml(card.display_name || card.slot_id)}</div>
-          <div class="small party-card-subline">${escapeHtml(card.scene_name || "Kein Ort")}</div>
+          <div class="small party-card-subline">Ort: ${escapeHtml(card.scene_name || "???")}</div>
         </div>
-        <span class="badge">${card.slot_id === claimedSlotId() ? "Du" : (card.claimed_by ? `Von ${card.claimed_by_name || "jemandem"}` : "Frei")}</span>
+        <span class="badge">${escapeHtml(claimBadge(card))}</span>
+      </div>
+      <div class="party-card-classline">
+        <span class="party-class-badge">${escapeHtml(card.class_name || "Keine Klasse")} ${card.class_rank ? `(${escapeHtml(card.class_rank)})` : ""}</span>
+        ${card.class_level ? `<span class="small">Lv ${card.class_level}/${card.class_level_max || 10}</span>` : `<span class="small">Noch keine Klasse</span>`}
       </div>
       <div class="party-activity ${cardActivity(card) ? "" : "is-idle"}">${escapeHtml(cardActivity(card)?.label || (card.claimed_by ? "Gerade ruhig." : "Wartet auf einen Spieler."))}</div>
-      <div class="resource-row">
-        <span>HP ${escapeHtml(card.hp)}</span>
-        <span>STA ${escapeHtml(card.stamina)}</span>
-        <span>Aether ${escapeHtml(card.aether)}</span>
+      <div class="party-hud-bars">
+        ${partyHudBarMarkup("HP", card.hp_current, card.hp_max, "hp", PARTY_HUD_PREV[`${card.slot_id}:hp`] ?? card.hp_pct)}
+        ${partyHudBarMarkup("STA", card.sta_current, card.sta_max, "sta", PARTY_HUD_PREV[`${card.slot_id}:sta`] ?? card.sta_pct)}
+        ${partyHudBarMarkup(card.resource_name || "Ressource", card.res_current, card.res_max, "res", PARTY_HUD_PREV[`${card.slot_id}:res`] ?? card.res_pct)}
       </div>
-      <div class="resource-row">
-        <span>Wunden ${escapeHtml(card.wounds)}</span>
-        <span>Traglast ${escapeHtml(card.carry)}</span>
+      <div class="party-chip-row">
+        <button class="mini-pill clickable-pill" data-action="open-character-sheet" data-slot-id="${card.slot_id}" data-open-tab="injuries" type="button">INJ ${card.injury_count ?? 0}</button>
+        <button class="mini-pill clickable-pill" data-action="open-character-sheet" data-slot-id="${card.slot_id}" data-open-tab="injuries" type="button">SCAR ${card.scar_count ?? 0}</button>
+        <span class="mini-pill">CARRY ${card.carry_current ?? 0}/${card.carry_max ?? 0}</span>
       </div>
       <div class="small">${escapeHtml(card.age ? `${card.age} • ${ageStageLabel(card.age_stage)}` : ageStageLabel(card.age_stage))}</div>
       <div class="small">${escapeHtml(card.appearance_short || "Unauffällig")}</div>
@@ -812,15 +1056,81 @@ function renderPartyOverview() {
         ${(card.conditions || []).slice(0, 3).map((condition) => `<span class="mini-pill">${escapeHtml(condition)}</span>`).join("")}
         ${card.in_combat ? `<span class="mini-pill">Im Kampf</span>` : ""}
       </div>
-    </button>
+    </div>
   `).join("");
+  for (const card of cards) {
+    nextSnapshot[`${card.slot_id}:hp`] = Number(card.hp_pct ?? 0);
+    nextSnapshot[`${card.slot_id}:sta`] = Number(card.sta_pct ?? 0);
+    nextSnapshot[`${card.slot_id}:res`] = Number(card.res_pct ?? 0);
+  }
+  animatePartyHudBars(root);
+  PARTY_HUD_PREV = nextSnapshot;
+}
+
+function partyHudBarMarkup(label, current, max, tone, previousPct = null) {
+  const safeMax = Math.max(Number(max || 0), 1);
+  const safeCurrent = Math.max(0, Number(current || 0));
+  const width = Math.max(0, Math.min(100, Math.round((safeCurrent / safeMax) * 100)));
+  const startWidth = previousPct == null ? width : Math.max(0, Math.min(100, Math.round(Number(previousPct || 0))));
+  const deltaClass = width < startWidth ? "delta-down" : width > startWidth ? "delta-up" : "";
+  return `
+    <div class="hud-bar ${tone} ${deltaClass}">
+      <div class="hud-bar-top"><span>${escapeHtml(label)}</span><span>${width}%</span></div>
+      <div class="hud-bar-track"><div class="hud-bar-fill" style="width:${startWidth}%" data-target-width="${width}"></div></div>
+    </div>
+  `;
+}
+
+function animatePartyHudBars(root) {
+  if (!root) return;
+  const bars = root.querySelectorAll(".hud-bar-fill[data-target-width]");
+  if (!bars.length) return;
+  requestAnimationFrame(() => {
+    bars.forEach((bar) => {
+      const target = Number(bar.dataset.targetWidth || 0);
+      bar.style.width = `${Math.max(0, Math.min(100, target))}%`;
+      bar.removeAttribute("data-target-width");
+    });
+  });
+}
+
+function currentDrawerTabs() {
+  return DRAWER_MODE === "npc" ? NPC_DRAWER_TABS : PC_DRAWER_TABS;
+}
+
+function applyDrawerTabLayout(mode) {
+  DRAWER_MODE = mode === "npc" ? "npc" : "pc";
+  const configs = currentDrawerTabs();
+  const buttons = Array.from(document.querySelectorAll(".drawer-tab"));
+  buttons.forEach((button, index) => {
+    const config = configs[index];
+    if (!config) {
+      button.classList.add("hidden");
+      button.classList.remove("active");
+      return;
+    }
+    button.classList.remove("hidden");
+    button.dataset.drawerTab = config.id;
+    button.textContent = config.label;
+  });
 }
 
 function setDrawerTab(tabId) {
+  const available = currentDrawerTabs();
+  const allowedIds = available.map((entry) => entry.id);
+  if (!allowedIds.includes(tabId)) {
+    tabId = available[0]?.id || "overview";
+  }
   ACTIVE_DRAWER_TAB = tabId;
-  document.querySelectorAll(".drawer-tab").forEach((button) => button.classList.toggle("active", button.dataset.drawerTab === tabId));
-  ["overview", "stats", "skills", "abilities", "gear", "effects", "journal"].forEach((id) => {
-    el(`drawer-panel-${id}`).classList.toggle("hidden", id !== tabId);
+  document.querySelectorAll(".drawer-tab").forEach((button) => {
+    const isVisible = allowedIds.includes(button.dataset.drawerTab);
+    if (!isVisible) return;
+    button.classList.toggle("active", button.dataset.drawerTab === tabId);
+  });
+  DRAWER_PANEL_IDS.forEach((id) => {
+    const panel = el(`drawer-panel-${id}`);
+    if (!panel) return;
+    panel.classList.toggle("hidden", id !== tabId || !allowedIds.includes(id));
   });
 }
 
@@ -845,8 +1155,253 @@ function meterMarkup(label, current, max) {
   `;
 }
 
+function abilityTypeLabel(type) {
+  const normalized = String(type || "active").toLowerCase();
+  if (normalized === "passive") return "Passiv";
+  if (normalized === "utility") return "Utility";
+  if (normalized === "ultimate") return "Ultimativ";
+  return "Aktiv";
+}
+
+function formatAbilityCost(cost) {
+  const entries = Object.entries(cost || {}).filter(([, value]) => Number(value || 0) > 0);
+  if (!entries.length) return "-";
+  return entries.map(([key, value]) => `${titleizeToken(key)} ${value}`).join(" • ");
+}
+
+function formatAbilityScaling(scaling) {
+  const entries = Object.entries(scaling || {}).filter(([, value]) => value);
+  if (!entries.length) return "-";
+  return entries.map(([key, value]) => `${titleizeToken(key)}: ${value}`).join(" • ");
+}
+
+function formatAbilityRequirements(requirements) {
+  const list = (requirements || []).map((entry) => {
+    if (typeof entry === "string") return entry;
+    if (!entry || typeof entry !== "object") return "";
+    return Object.entries(entry)
+      .filter(([, value]) => value !== undefined && value !== null && value !== "")
+      .map(([key, value]) => `${titleizeToken(key)}: ${value}`)
+      .join(", ");
+  }).filter(Boolean);
+  return list.length ? list.join(" • ") : "-";
+}
+
+const ATTRIBUTE_CHART_ORDER = ["str", "dex", "con", "int", "wis", "cha", "luck"];
+
+function attributeScaleMeta(stats) {
+  const scale = stats?.attribute_scale || {};
+  const min = Math.max(0, Number(scale.min || 1));
+  const max = Math.max(1, Number(scale.max || 10));
+  return {
+    label: scale.label || `${min || 1}-${max}`,
+    min,
+    max
+  };
+}
+
+function polarPoint(cx, cy, radius, angleRadians) {
+  return {
+    x: cx + Math.cos(angleRadians) * radius,
+    y: cy + Math.sin(angleRadians) * radius
+  };
+}
+
+function pointsToSvg(points) {
+  return points.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" ");
+}
+
+function attributeRadarSvgMarkup(attributes, scaleMeta, size = 420) {
+  const cx = size / 2;
+  const cy = size / 2;
+  const radius = size * 0.28;
+  const labelRadius = radius + 44;
+  const svgStyle = `
+    .attribute-radar-grid{fill:none;stroke:rgba(255,255,255,.1);stroke-width:1}
+    .attribute-radar-axis{stroke:rgba(255,255,255,.12);stroke-width:1}
+    .attribute-radar-area{fill:url(#attributeRadarFill);stroke:rgba(244,194,108,.9);stroke-width:2}
+    .attribute-radar-dot{fill:#f4c26c;stroke:rgba(12,18,28,.9);stroke-width:1.5}
+    .attribute-radar-core{fill:rgba(255,255,255,.82)}
+    .attribute-radar-label{fill:#f4eee4;font-size:11px;letter-spacing:.02em;font-family:Georgia,"Times New Roman",serif}
+    .attribute-radar-label tspan:last-child{fill:rgba(244,238,228,.7);font-size:10px}
+    .attribute-radar-tick{fill:rgba(244,238,228,.64);font-size:10px;font-family:"Trebuchet MS","Segoe UI",Tahoma,sans-serif}
+  `;
+  const entries = ATTRIBUTE_CHART_ORDER.map((key, index) => {
+    const angle = (-Math.PI / 2) + ((Math.PI * 2 * index) / ATTRIBUTE_CHART_ORDER.length);
+    const rawValue = Number(attributes?.[key] ?? 0);
+    const clamped = Math.max(0, Math.min(scaleMeta.max, rawValue));
+    return {
+      key,
+      label: titleizeToken(key),
+      value: rawValue,
+      clamped,
+      angle
+    };
+  });
+  const gridLevels = 5;
+  const gridPolygons = Array.from({ length: gridLevels }, (_, levelIndex) => {
+    const level = (levelIndex + 1) / gridLevels;
+    const points = entries.map((entry) => polarPoint(cx, cy, radius * level, entry.angle));
+    return `<polygon class="attribute-radar-grid" points="${pointsToSvg(points)}"></polygon>`;
+  }).join("");
+  const axes = entries.map((entry) => {
+    const end = polarPoint(cx, cy, radius, entry.angle);
+    return `<line class="attribute-radar-axis" x1="${cx}" y1="${cy}" x2="${end.x.toFixed(2)}" y2="${end.y.toFixed(2)}"></line>`;
+  }).join("");
+  const labels = entries.map((entry) => {
+    const point = polarPoint(cx, cy, labelRadius, entry.angle);
+    const anchor = Math.abs(point.x - cx) < 10 ? "middle" : (point.x > cx ? "start" : "end");
+    return `<text class="attribute-radar-label" x="${point.x.toFixed(2)}" y="${point.y.toFixed(2)}" text-anchor="${anchor}">
+      <tspan x="${point.x.toFixed(2)}" dy="0">${escapeHtml(entry.label)}</tspan>
+      <tspan x="${point.x.toFixed(2)}" dy="14">${entry.clamped}/${scaleMeta.max}</tspan>
+    </text>`;
+  }).join("");
+  const areaPoints = entries.map((entry) => polarPoint(cx, cy, radius * (entry.clamped / Math.max(scaleMeta.max, 1)), entry.angle));
+  const dataArea = `<polygon class="attribute-radar-area" points="${pointsToSvg(areaPoints)}"></polygon>`;
+  const valueDots = areaPoints.map((point) => `<circle class="attribute-radar-dot" cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="4"></circle>`).join("");
+  const tickLabels = Array.from({ length: gridLevels }, (_, levelIndex) => {
+    const value = Math.round((scaleMeta.max / gridLevels) * (levelIndex + 1));
+    const y = cy - (radius * ((levelIndex + 1) / gridLevels));
+    return `<text class="attribute-radar-tick" x="${cx + 10}" y="${y.toFixed(2)}">${value}</text>`;
+  }).join("");
+  return `
+    <svg class="attribute-radar-svg" xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="Attributprofil als Septagon">
+      <style>${svgStyle}</style>
+      <defs>
+        <linearGradient id="attributeRadarFill" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#f4c26c" stop-opacity="0.58"></stop>
+          <stop offset="100%" stop-color="#81b1ff" stop-opacity="0.18"></stop>
+        </linearGradient>
+      </defs>
+      ${gridPolygons}
+      ${axes}
+      <circle class="attribute-radar-core" cx="${cx}" cy="${cy}" r="4"></circle>
+      ${tickLabels}
+      ${dataArea}
+      ${valueDots}
+      ${labels}
+    </svg>
+  `;
+}
+
+function bestSkillSummary(skills, limit = 3) {
+  return (skills || [])
+    .slice()
+    .sort((left, right) => {
+      const rightPower = Number(right.effective_bonus ?? right.level ?? 0);
+      const leftPower = Number(left.effective_bonus ?? left.level ?? 0);
+      if (rightPower !== leftPower) return rightPower - leftPower;
+      const rightMastery = Number(right.mastery ?? 0);
+      const leftMastery = Number(left.mastery ?? 0);
+      return rightMastery - leftMastery;
+    })
+    .slice(0, limit)
+    .map((skill) => skill.name || titleizeToken(skill.id || ""))
+    .filter(Boolean);
+}
+
+function buildAttributeExportSvgMarkup(characterSheet) {
+  const stats = characterSheet?.sheet?.stats || {};
+  const overview = characterSheet?.sheet?.overview || {};
+  const metaInfo = characterSheet?.sheet?.meta || {};
+  const skills = characterSheet?.sheet?.skills || [];
+  const scaleMeta = attributeScaleMeta(stats);
+  const width = 900;
+  const height = 720;
+  const chartSize = 600;
+  const chartMarkup = attributeRadarSvgMarkup(stats.attributes || {}, scaleMeta, chartSize)
+    .replace(
+      '<svg class="attribute-radar-svg" xmlns="http://www.w3.org/2000/svg"',
+      `<svg class="attribute-radar-svg" xmlns="http://www.w3.org/2000/svg" x="240" y="60"`
+    );
+  const classText = sheet.class?.current?.name || overview.class_current?.name || "Keine Klasse";
+  const topSkills = bestSkillSummary(skills).join(", ") || "-";
+  const infoLines = [
+    { label: "Name", value: characterSheet.display_name || characterSheet.slot_id || "-" },
+    { label: "Klasse", value: classText },
+    { label: "Top-Skills", value: topSkills }
+  ];
+  const infoRows = infoLines.map((entry, index) => `
+    <text class="attribute-export-copy" x="36" y="${102 + (index * 76)}">
+      <tspan class="attribute-export-label" x="36" dy="0">${escapeHtml(entry.label)}</tspan>
+      <tspan class="attribute-export-value" x="36" dy="22">${escapeHtml(entry.value)}</tspan>
+    </text>
+  `).join("");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Attributprofil mit Charakterinfos">
+      <defs>
+        <linearGradient id="attributeExportBg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#0f1a28"></stop>
+          <stop offset="100%" stop-color="#09111a"></stop>
+        </linearGradient>
+      </defs>
+      <style>
+        .attribute-export-panel{fill:rgba(255,255,255,0.04);stroke:rgba(244,194,108,0.24);stroke-width:1.2}
+        .attribute-export-kicker{fill:rgba(244,238,228,0.72);font-size:11px;letter-spacing:.22em;text-transform:uppercase;font-family:"Trebuchet MS","Segoe UI",Tahoma,sans-serif}
+        .attribute-export-copy{font-family:Georgia,"Times New Roman",serif}
+        .attribute-export-label{fill:rgba(244,238,228,0.72);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+        .attribute-export-value{fill:#f4eee4;font-size:18px}
+      </style>
+      <rect x="0" y="0" width="${width}" height="${height}" fill="url(#attributeExportBg)"></rect>
+      <rect class="attribute-export-panel" x="24" y="24" rx="24" ry="24" width="236" height="336"></rect>
+      <text class="attribute-export-kicker" x="36" y="52">Charakterprofil</text>
+      ${infoRows}
+      ${chartMarkup}
+    </svg>`;
+}
+
+async function exportAttributeChartPng() {
+  if (!CHARACTER_SHEET) return;
+  let svgUrl = "";
+  try {
+    const svgMarkup = buildAttributeExportSvgMarkup(CHARACTER_SHEET);
+    const svgBlob = new Blob([svgMarkup], { type: "image/svg+xml;charset=utf-8" });
+    svgUrl = URL.createObjectURL(svgBlob);
+    const image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Chart konnte nicht gerendert werden."));
+      img.src = svgUrl;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = 900;
+    canvas.height = 720;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas-Kontext konnte nicht erzeugt werden.");
+    ctx.fillStyle = "#0d1621";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const pngBlob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (!pngBlob) throw new Error("PNG-Export fehlgeschlagen.");
+    const url = URL.createObjectURL(pngBlob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${(CHARACTER_SHEET.display_name || CHARACTER_SHEET.slot_id || "attribute_chart").replace(/[^\w\-]+/g, "_")}_werte.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showFlash("Attributgrafik als PNG exportiert.");
+  } catch (error) {
+    showFlash(error.message || "PNG-Export fehlgeschlagen.", true);
+  } finally {
+    if (svgUrl) URL.revokeObjectURL(svgUrl);
+  }
+}
+
+function formatSkillCost(cost) {
+  if (!cost || !cost.resource) return "-";
+  return `${cost.resource} ${cost.amount ?? 0}`;
+}
+
+function skillTagSummary(skill) {
+  return (skill.tags || []).slice(0, 4).join(", ");
+}
+
 function renderCharacterDrawer() {
   if (!CHARACTER_SHEET) return;
+  NPC_SHEET = null;
+  applyDrawerTabLayout("pc");
   const sheet = CHARACTER_SHEET.sheet || {};
   const overview = sheet.overview || {};
   const stats = sheet.stats || {};
@@ -854,18 +1409,22 @@ function renderCharacterDrawer() {
   const appearance = overview.appearance || {};
   const ageing = overview.ageing || {};
   const metaInfo = sheet.meta || {};
+  const classInfo = sheet.class || {};
+  const currentClass = classInfo.current || overview.class_current || null;
+  const injuriesScars = sheet.injuries_scars || {};
+  const resourceLabel = overview.resource_label || progression.resource_name || CAMPAIGN?.state?.world?.settings?.resource_name || "Ressource";
   el("drawer-title").textContent = CHARACTER_SHEET.display_name || CHARACTER_SHEET.slot_id;
   el("drawer-subtitle").textContent = `${CHARACTER_SHEET.scene_name || "Kein Ort"} • ${CHARACTER_SHEET.claimed_by_name || "Nicht geclaimt"}`;
 
   el("drawer-panel-overview").innerHTML = `
     <details class="accordion" open>
-      <summary>Identität</summary>
+      <summary>Übersicht</summary>
       <div class="accordion-body sheet-grid">
         <div class="sheet-block">
           ${detailRow("Name", overview.bio?.name)}
           ${detailRow("Geschlecht", overview.bio?.gender)}
           ${detailRow("Alter", `${overview.bio?.age_years ?? "-"} • ${ageStageLabel(overview.bio?.age_stage)}`)}
-          ${detailRow("Rolle", overview.bio?.party_role)}
+          ${detailRow("Klasse", currentClass?.name ? `${currentClass.name} (${currentClass.rank || "F"})` : "Noch keine Klasse")}
           ${detailRow("Ziel", overview.bio?.goal)}
           ${detailRow("Isekai-Preis", overview.bio?.isekai_price)}
         </div>
@@ -915,12 +1474,12 @@ function renderCharacterDrawer() {
     <details class="accordion" open>
       <summary>Ressourcen</summary>
       <div class="accordion-body stat-grid">
-        ${["hp", "stamina", "aether", "stress", "corruption", "wounds"].map((key) => `
-          <div class="stat-card">
-            <strong>${escapeHtml(titleizeToken(key))}</strong>
-            <div>${(overview.resources?.[key]?.current ?? 0)}/${(overview.resources?.[key]?.max ?? 0)}</div>
-          </div>
-        `).join("")}
+        <div class="stat-card"><strong>HP</strong><div>${overview.resources?.hp?.current ?? 0}/${overview.resources?.hp?.max ?? 0}</div></div>
+        <div class="stat-card"><strong>STA</strong><div>${overview.resources?.stamina?.current ?? 0}/${overview.resources?.stamina?.max ?? 0}</div></div>
+        <div class="stat-card"><strong>${escapeHtml(resourceLabel)}</strong><div>${progression.resource_current ?? 0}/${progression.resource_max ?? 0}</div></div>
+        <div class="stat-card"><strong>Traglast</strong><div>${sheet.gear_inventory?.carry_weight ?? 0}/${sheet.gear_inventory?.carry_limit ?? 0}</div></div>
+        <div class="stat-card"><strong>Injuries</strong><div>${overview.injury_count ?? 0}</div></div>
+        <div class="stat-card"><strong>Scars</strong><div>${overview.scar_count ?? 0}</div></div>
       </div>
     </details>
     <details class="accordion">
@@ -928,63 +1487,54 @@ function renderCharacterDrawer() {
       <div class="accordion-body sheet-grid">
         <div class="sheet-block">
           ${detailRow("System-Stufe", progression.system_level)}
-          ${detailRow("System XP", `${progression.system_xp ?? 0}/${progression.next_system_xp ?? 0}`)}
-          ${detailRow("Rang", progression.rank)}
-          ${detailRow("System-Fragmente", progression.system_fragments)}
-          ${detailRow("System-Kerne", progression.system_cores)}
-          ${detailRow("Attributspunkte", progression.attribute_points)}
-          ${detailRow("Fertigkeitspunkte", progression.skill_points)}
-          ${detailRow("Talentpunkte", progression.talent_points)}
+          ${detailRow("System XP", progression.system_xp)}
+          ${detailRow("Ressource", resourceLabel)}
+          ${detailRow("Ressourcenpool", `${progression.resource_current ?? 0}/${progression.resource_max ?? 0}`)}
         </div>
         <div class="sheet-block">
-          ${detailRow("Pfade", (progression.paths || []).map((path) => path.name || path.id).join(", "))}
-          ${detailRow("Potenzialkarten", (progression.potential_cards || []).map((card) => card.name || card.id).join(", "))}
-          ${detailRow("Klasse", metaInfo.class_state?.class_name || metaInfo.class_state?.class_id)}
+          ${detailRow("Klasse", currentClass?.name || "Noch keine Klasse")}
           ${detailRow("Fraktionen", (metaInfo.faction_memberships || []).filter((entry) => entry.active !== false).map((entry) => entry.name || entry.faction_id).join(", "))}
+          ${detailRow("Fusion möglich", sheet.skill_meta?.fusion_possible ? "Ja" : "Nein")}
         </div>
       </div>
     </details>
   `;
 
-  el("drawer-panel-stats").innerHTML = `
+  el("drawer-panel-class").innerHTML = `
+    <details class="accordion" open>
+      <summary>Klasse</summary>
+      <div class="accordion-body sheet-grid">
+        <div class="sheet-block">
+          ${detailRow("Name", currentClass?.name || "Noch keine Klasse")}
+          ${detailRow("Rank", currentClass?.rank || "-")}
+          ${detailRow("Level", currentClass ? `${currentClass.level ?? 1}/${currentClass.level_max ?? 10}` : "-")}
+          ${detailRow("XP", currentClass ? `${currentClass.xp ?? 0}/${currentClass.xp_next ?? 100}` : "-")}
+          ${detailRow("Affinitäten", (currentClass?.affinity_tags || []).join(", "))}
+        </div>
+        <div class="sheet-block">
+          ${detailRow("Beschreibung", currentClass?.description || "-")}
+          ${detailRow("Ascension-Status", currentClass?.ascension?.status || "none")}
+          ${detailRow("Ascension-Quest", classInfo.ascension_plotpoint?.title || "-")}
+          ${detailRow("Requirements", (classInfo.ascension_plotpoint?.requirements || currentClass?.ascension?.requirements || []).join(", "))}
+          ${detailRow("Result-Hint", currentClass?.ascension?.result_hint || "-")}
+        </div>
+      </div>
+    </details>
+  `;
+
+  el("drawer-panel-attributes").innerHTML = `
     <details class="accordion" open>
       <summary>Attribute</summary>
-      <div class="accordion-body stat-grid">
-        ${Object.entries(stats.attributes || {}).map(([key, value]) => `<div class="stat-card"><strong>${escapeHtml(key.toUpperCase())}</strong><div>${value}</div></div>`).join("")}
-      </div>
-    </details>
-    <details class="accordion" open>
-      <summary>Abgeleitete Werte</summary>
-      <div class="accordion-body sheet-grid">
-        <div class="sheet-block">
-          ${detailRow("Verteidigung", stats.derived?.defense)}
-          ${detailRow("Verteidigungs-Bonus", stats.modifier_summary?.defense)}
-          ${detailRow("Rüstung", stats.derived?.armor)}
-          ${detailRow("Initiative", stats.derived?.initiative)}
-          ${detailRow("Initiative-Bonus", stats.modifier_summary?.initiative)}
-          ${detailRow("Angriff Hauptwaffe", stats.derived?.attack_rating_mainhand)}
-          ${detailRow("Bonus Hauptwaffe", stats.modifier_summary?.attack_rating_mainhand)}
-          ${detailRow("Angriff Nebenhand", stats.derived?.attack_rating_offhand)}
-          ${detailRow("Bonus Nebenhand", stats.modifier_summary?.attack_rating_offhand)}
-          ${detailRow("Traglast", `${stats.derived?.carry_weight ?? 0}/${stats.derived?.carry_limit ?? 0}`)}
-          ${detailRow("Belastung", encumbranceLabel(stats.derived?.encumbrance_state))}
+      <div class="accordion-body attribute-radar-section">
+        <div class="attribute-radar-head">
+          <div class="small"><strong>Wertebereich:</strong> ${escapeHtml(attributeScaleMeta(stats).label)}</div>
+          <button class="btn ghost" id="exportAttributeChartBtn" type="button">Als PNG exportieren</button>
         </div>
-        <div class="sheet-block">
-          ${Object.entries(stats.resistances || {}).map(([key, value]) => detailRow(titleizeToken(key), value)).join("")}
+        <div class="attribute-radar-wrap">
+          ${attributeRadarSvgMarkup(stats.attributes || {}, attributeScaleMeta(stats))}
         </div>
-      </div>
-    </details>
-    <details class="accordion">
-      <summary>Alterungsmodifikatoren</summary>
-      <div class="accordion-body sheet-grid">
-        <div class="sheet-block">
-          ${detailRow("Stufe", ageStageLabel(stats.age_modifiers?.stage))}
-          ${detailRow("HP-Max", stats.age_modifiers?.resource_deltas?.hp_max)}
-          ${detailRow("STA-Max", stats.age_modifiers?.resource_deltas?.stamina_max)}
-        </div>
-        <div class="sheet-block">
-          ${detailRow("Skill-Boni", Object.entries(stats.age_modifiers?.skill_bonuses || {}).map(([key, value]) => `${titleizeToken(key)} +${value}`).join(", "))}
-          ${detailRow("Hinweise", (stats.age_modifiers?.notes || []).join(", "))}
+        <div class="stat-grid">
+          ${ATTRIBUTE_CHART_ORDER.map((key) => `<div class="stat-card"><strong>${escapeHtml(titleizeToken(key))}</strong><div>${stats.attributes?.[key] ?? 0}</div></div>`).join("")}
         </div>
       </div>
     </details>
@@ -992,24 +1542,7 @@ function renderCharacterDrawer() {
 
   el("drawer-panel-skills").innerHTML = `
     <details class="accordion" open>
-      <summary>Fertigkeitssystem</summary>
-      <div class="accordion-body sheet-grid">
-        <div class="sheet-block">
-          ${detailRow("System-Stufe", progression.system_level)}
-          ${detailRow("System XP", `${progression.system_xp ?? 0}/${progression.next_system_xp ?? 0}`)}
-          ${detailRow("Fertigkeitspunkte", progression.skill_points)}
-          ${detailRow("Talentpunkte", progression.talent_points)}
-        </div>
-        <div class="sheet-block">
-          ${detailRow("System-Fragmente", progression.system_fragments)}
-          ${detailRow("System-Kerne", progression.system_cores)}
-          ${detailRow("Pfade", (progression.paths || []).map((path) => path.name || path.id).join(", "))}
-          ${detailRow("Potenzialkarten", (progression.potential_cards || []).map((card) => card.name || card.id).join(", "))}
-        </div>
-      </div>
-    </details>
-    <details class="accordion" open>
-      <summary>Fertigkeiten</summary>
+      <summary>Skills</summary>
       <div class="accordion-body skill-list">
         ${(sheet.skills || []).length ? (sheet.skills || []).map((skill) => `
           <details class="skill-card">
@@ -1017,12 +1550,11 @@ function renderCharacterDrawer() {
               <div class="skill-card-head">
                 <div>
                   <strong>${escapeHtml(skill.name || titleizeToken(skill.id))}</strong>
-                  <div class="small">Stufe ${skill.level ?? 1} • Attribut ${escapeHtml(titleizeToken(skill.attribute || ""))} • Effektiv +${skill.effective_bonus ?? 0}${(skill.modifier_bonus ?? 0) ? ` • Modifikator +${skill.modifier_bonus}` : ""}</div>
+                  <div class="small">Stufe ${skill.level ?? 1}/${skill.level_max ?? 10} • ${escapeHtml(skillTagSummary(skill) || "ohne Tags")}</div>
                 </div>
                 <div class="inline-list">
                   <span class="rank-badge ${skillRankClass(skill.rank)}">${escapeHtml(skill.rank || "F")}</span>
-                  ${skill.path ? `<span class="mini-pill">${escapeHtml(skill.path)}</span>` : ""}
-                  ${skill.awakened ? `<span class="mini-pill">Erwacht</span>` : ""}
+                  ${skill.cost ? `<span class="mini-pill">${escapeHtml(formatSkillCost(skill.cost))}</span>` : ""}
                 </div>
               </div>
             </summary>
@@ -1031,44 +1563,49 @@ function renderCharacterDrawer() {
               <div class="sheet-grid" style="margin-top:12px">
                 <div class="sheet-block">
                   ${detailRow("Mastery", `${skill.mastery ?? 0}%`)}
-                  ${detailRow("Pfad", skill.path || (skill.path_choice_available ? "Auswahl verfügbar" : "-"))}
-                  ${detailRow("Nächste Entwicklung", (skill.evolutions || [])[0] || "-")}
+                  ${detailRow("Freigeschaltet durch", skill.unlocked_from || "-")}
+                  ${detailRow("Kosten", formatSkillCost(skill.cost))}
+                  ${detailRow("Preis", skill.price || "-")}
+                  ${detailRow("Class-Match", skill.class_match ? "On-Class" : "Off-Class")}
                 </div>
                 <div class="sheet-block">
-                  ${detailRow("Entwicklungen", (skill.evolutions || []).join(", "))}
-                  ${detailRow("Fusionen", (skill.fusion_candidates || []).map((entry) => entry.result).join(", "))}
-                  ${detailRow("Freischaltungen", (skill.unlocks || []).join(", "))}
+                  ${detailRow("Cooldown", skill.cooldown_turns == null ? "-" : `${skill.cooldown_turns} Turns`)}
+                  ${detailRow("Synergie", skill.synergy_notes || "-")}
+                  ${detailRow("Multiplikator", skill.effective_progress_multiplier ?? 1)}
+                  ${detailRow("Beschreibung", skill.description || "-")}
                 </div>
               </div>
-              ${skill.path_choice_available ? `<div class="readonly-note" style="margin-top:12px"><strong>Pfadauswahl verfügbar:</strong> ${(skill.path_options || []).map(escapeHtml).join(" • ")}</div>` : ""}
-              ${(skill.fusion_candidates || []).length ? `
-                <div class="skill-fusion-list">
-                  ${(skill.fusion_candidates || []).map((entry) => `
-                    <div class="inventory-item">
-                      <strong>${escapeHtml(entry.result || "-")}</strong><br/>
-                      <span class="small">Fusion mit ${escapeHtml(entry.with_display || titleizeToken(entry.with || ""))} • Rank ${escapeHtml(entry.rank || "S")} • braucht ${entry.requires_core ?? 1} System Core</span>
-                    </div>
-                  `).join("")}
-                </div>
-              ` : ""}
             </div>
           </details>
-        `).join("") : `<div class="small">Noch keine gelernten Skills. Start-Skills kommen erst über die Rollenwahl oder spätere Entwicklung.</div>`}
+        `).join("") : `<div class="small">Noch keine gelernten Skills.</div>`}
+        ${(sheet.skill_meta?.fusion_hints || []).length ? `<div class="readonly-note"><strong>Fusion möglich:</strong> ${(sheet.skill_meta.fusion_hints || []).map((entry) => `${entry.label} (${entry.result_rank})`).join(" • ")}</div>` : ""}
       </div>
     </details>
   `;
 
-  el("drawer-panel-abilities").innerHTML = `
+  el("drawer-panel-injuries").innerHTML = `
     <details class="accordion" open>
-      <summary>Fähigkeiten</summary>
+      <summary>Injuries</summary>
       <div class="accordion-body inventory-list">
-        ${(sheet.abilities || []).length ? (sheet.abilities || []).map((ability) => `
+        ${(injuriesScars.injuries || []).length ? (injuriesScars.injuries || []).map((injury) => `
           <div class="inventory-item">
-            <strong>${escapeHtml(ability.name || ability.id)}</strong><br/>
-            <span class="small">${escapeHtml(ability.type || "Fähigkeit")} • Kosten STA ${ability.cost?.stamina ?? ability.charges ?? 0} • Aether ${ability.cost?.aether ?? 0} • Abklingzeit ${ability.cooldown_turns ?? 0}</span><br/>
-            <span class="small">${escapeHtml(ability.description || "")}</span>
+            <strong>${escapeHtml(injury.title || injury.id)}</strong><br/>
+            <span class="small">${escapeHtml(injury.severity || "-")} • ${escapeHtml(injury.healing_stage || "-")} • ${injury.will_scar ? "hinterlässt Narbe" : "ohne Narbe"}</span><br/>
+            <span class="small">${escapeHtml((injury.effects || []).join(", ") || injury.notes || "-")}</span>
           </div>
-        `).join("") : `<div class="small">Noch keine Fähigkeiten.</div>`}
+        `).join("") : `<div class="small">Keine aktiven Injuries.</div>`}
+      </div>
+    </details>
+    <details class="accordion" open>
+      <summary>Scars</summary>
+      <div class="accordion-body inventory-list">
+        ${(injuriesScars.scars || []).length ? (injuriesScars.scars || []).map((scar) => `
+          <div class="inventory-item">
+            <strong>${escapeHtml(scar.title || scar.id)}</strong><br/>
+            <span class="small">Turn ${scar.created_turn ?? 0}</span><br/>
+            <span class="small">${escapeHtml(scar.description || "-")}</span>
+          </div>
+        `).join("") : `<div class="small">Noch keine Narben.</div>`}
       </div>
     </details>
   `;
@@ -1101,68 +1638,111 @@ function renderCharacterDrawer() {
     </details>
   `;
 
-  el("drawer-panel-effects").innerHTML = `
+  setDrawerTab(ACTIVE_DRAWER_TAB || "overview");
+  el("character-drawer").classList.remove("hidden");
+}
+
+async function openCharacterDrawer(slotId, tabId = "overview") {
+  const data = await api(`/api/campaigns/${SESSION.campaignId}/characters/${slotId}`);
+  CHARACTER_SHEET = data;
+  NPC_SHEET = null;
+  DRAWER_MODE = "pc";
+  ACTIVE_DRAWER_TAB = tabId;
+  renderCharacterDrawer();
+}
+
+function renderNpcDrawer() {
+  if (!NPC_SHEET) return;
+  CHARACTER_SHEET = null;
+  applyDrawerTabLayout("npc");
+  const sceneLabel = NPC_SHEET.last_seen_scene_name || NPC_SHEET.last_seen_scene_id || "Unbekannt";
+  el("drawer-title").textContent = NPC_SHEET.name || NPC_SHEET.npc_id;
+  el("drawer-subtitle").textContent = `${NPC_SHEET.race || "Unbekannt"} • Lv ${Number(NPC_SHEET.level || 1)} • ${NPC_SHEET.status || "active"}`;
+
+  el("drawer-panel-overview").innerHTML = `
     <details class="accordion" open>
-      <summary>Effekte</summary>
-      <div class="accordion-body inventory-list">
-        ${(sheet.effects || []).length ? (sheet.effects || []).map((effect) => `
-          <div class="inventory-item">
-            <strong>${escapeHtml(effect.name || effect.id)}</strong><br/>
-            <span class="small">${escapeHtml(effect.category || "Effekt")} • Dauer ${effect.duration_turns ?? 0} • Intensität ${effect.intensity ?? 0}</span><br/>
-            <span class="small">${escapeHtml(effect.description || "")}</span>
-          </div>
-        `).join("") : `<div class="small">Keine aktiven Effekte.</div>`}
+      <summary>Profil</summary>
+      <div class="accordion-body sheet-grid">
+        <div class="sheet-block">
+          ${detailRow("Name", NPC_SHEET.name)}
+          ${detailRow("Rasse", NPC_SHEET.race || "Unbekannt")}
+          ${detailRow("Level", Number(NPC_SHEET.level || 1))}
+          ${detailRow("Status", NPC_SHEET.status || "active")}
+          ${detailRow("Fraktion", NPC_SHEET.faction || "Keine")}
+          ${detailRow("Rollenhinweis", NPC_SHEET.role_hint || "Unklar")}
+        </div>
+        <div class="sheet-block">
+          ${detailRow("Erstes Auftreten", `Turn ${Number(NPC_SHEET.first_seen_turn || 0)}`)}
+          ${detailRow("Letztes Auftreten", `Turn ${Number(NPC_SHEET.last_seen_turn || 0)}`)}
+          ${detailRow("Letzter Ort", sceneLabel)}
+          ${detailRow("Erwähnungen", Number(NPC_SHEET.mention_count || 0))}
+          ${detailRow("Relevanz", Number(NPC_SHEET.relevance_score || 0))}
+          ${detailRow("Tags", (NPC_SHEET.tags || []).join(", ") || "-")}
+        </div>
       </div>
     </details>
   `;
 
-  el("drawer-panel-journal").innerHTML = `
+  el("drawer-panel-class").innerHTML = `
     <details class="accordion" open>
-      <summary>Journal-Notizen</summary>
-      <div class="accordion-body inventory-list">
-        ${(sheet.journal?.notes || []).length ? (sheet.journal.notes || []).map((entry) => `<div class="inventory-item">${escapeHtml(entry.text || entry.title || JSON.stringify(entry))}</div>`).join("") : `<div class="small">Noch keine Notizen.</div>`}
-      </div>
-    </details>
-    <details class="accordion" open>
-      <summary>Aussehensverlauf</summary>
-      <div class="accordion-body inventory-list">
-        ${(sheet.journal?.appearance_history || []).length ? [...(sheet.journal.appearance_history || [])].reverse().map((entry) => `
-          <div class="inventory-item">
-            <strong>${escapeHtml(appearanceEventLabel(entry.kind))}</strong><br/>
-            <span class="small">Tag ${entry.absolute_day ?? 0} • Turn ${entry.turn_number ?? 0}</span><br/>
-            <span class="small">${escapeHtml(entry.message || entry.new_value || "")}</span>
-          </div>
-        `).join("") : `<div class="small">Noch keine sichtbaren Veränderungen.</div>`}
-      </div>
-    </details>
-    <details class="accordion">
-      <summary>NPC-Beziehungen</summary>
-      <div class="accordion-body inventory-list">
-        ${(sheet.journal?.npc_relationships || []).length ? (sheet.journal.npc_relationships || []).map((entry) => `<div class="inventory-item"><strong>${escapeHtml(entry.name || entry.npc_id)}</strong><br/><span class="small">${escapeHtml(entry.status || "")} • ${entry.score ?? 0}</span></div>`).join("") : `<div class="small">Noch keine NPC-Beziehungen.</div>`}
-      </div>
-    </details>
-    <details class="accordion">
-      <summary>Ruf & Plotpoints</summary>
-      <div class="accordion-body inventory-list">
-        ${(sheet.journal?.reputation || []).map((entry) => `<div class="inventory-item"><strong>${escapeHtml(entry.name || entry.faction_id)}</strong><br/><span class="small">${entry.score ?? 0} • ${escapeHtml(entry.status || "")}</span></div>`).join("")}
-        ${(sheet.journal?.personal_plotpoints || []).map((entry) => `<div class="inventory-item"><strong>${escapeHtml(entry.title || entry.id)}</strong><br/><span class="small">${escapeHtml(entry.status || "")}</span></div>`).join("") || `<div class="small">Noch keine Einträge.</div>`}
+      <summary>Motiv & Ziel</summary>
+      <div class="accordion-body sheet-grid">
+        <div class="sheet-block">
+          ${detailRow("Primäres Ziel", NPC_SHEET.goal || "Noch unbekannt")}
+          ${detailRow("Backstory", NPC_SHEET.backstory_short || "Noch keine Kurzbiografie vorhanden.")}
+        </div>
       </div>
     </details>
   `;
+
+  el("drawer-panel-attributes").innerHTML = `
+    <details class="accordion" open>
+      <summary>Historie</summary>
+      <div class="accordion-body inventory-list">
+        ${(NPC_SHEET.history_notes || []).length
+          ? (NPC_SHEET.history_notes || []).map((entry) => `<div class="inventory-item small">${escapeHtml(entry)}</div>`).join("")
+          : `<div class="small">Noch keine Verlaufseinträge.</div>`}
+      </div>
+    </details>
+  `;
+
+  el("drawer-panel-skills").innerHTML = `
+    <details class="accordion" open>
+      <summary>Bezüge</summary>
+      <div class="accordion-body sheet-grid">
+        <div class="sheet-block">
+          ${detailRow("Fraktion", NPC_SHEET.faction || "Keine")}
+          ${detailRow("Rollenhinweis", NPC_SHEET.role_hint || "Unklar")}
+          ${detailRow("Aktiver Status", NPC_SHEET.status || "active")}
+          ${detailRow("Ort", sceneLabel)}
+        </div>
+      </div>
+    </details>
+  `;
+
+  const injuriesPanel = el("drawer-panel-injuries");
+  const gearPanel = el("drawer-panel-gear");
+  if (injuriesPanel) injuriesPanel.innerHTML = "";
+  if (gearPanel) gearPanel.innerHTML = "";
 
   setDrawerTab(ACTIVE_DRAWER_TAB || "overview");
   el("character-drawer").classList.remove("hidden");
 }
 
-async function openCharacterDrawer(slotId) {
-  const data = await api(`/api/campaigns/${SESSION.campaignId}/characters/${slotId}`);
-  CHARACTER_SHEET = data;
-  ACTIVE_DRAWER_TAB = "overview";
-  renderCharacterDrawer();
+async function openNpcDrawer(npcId, tabId = "overview") {
+  const data = await api(`/api/campaigns/${SESSION.campaignId}/npcs/${npcId}`);
+  NPC_SHEET = data;
+  CHARACTER_SHEET = null;
+  DRAWER_MODE = "npc";
+  ACTIVE_DRAWER_TAB = tabId;
+  renderNpcDrawer();
 }
 
 function closeCharacterDrawer() {
   CHARACTER_SHEET = null;
+  NPC_SHEET = null;
+  DRAWER_MODE = "pc";
+  applyDrawerTabLayout("pc");
   el("character-drawer").classList.add("hidden");
 }
 
@@ -1224,6 +1804,160 @@ function renderStyleTab() {
           ${CURRENT_THEME === "tavern" ? "Aktiv" : "Aktivieren"}
         </button>
       </article>
+      <article class="theme-card ${CURRENT_THEME === "glade" ? "active" : ""}">
+        <div class="theme-card-head">
+          <div>
+            <strong>Waldlichtung</strong>
+            <div class="small">Moosgrün, Nebel und ruhige Wildnis-Atmosphäre.</div>
+          </div>
+          <span class="badge">${CURRENT_THEME === "glade" ? "aktiv" : "verfügbar"}</span>
+        </div>
+        <div class="theme-preview preview-glade">
+          <div class="preview-topbar">
+            <span class="preview-chip">Lichtung</span>
+            <span class="preview-menu"></span>
+          </div>
+          <div class="preview-panel">
+            <div class="preview-title">Spuren im Farn</div>
+            <div class="preview-turn">
+              <div class="preview-badge leaf">Sagen</div>
+              <div class="preview-line long"></div>
+              <div class="preview-line medium"></div>
+            </div>
+          </div>
+        </div>
+        <button class="btn ${CURRENT_THEME === "glade" ? "ghost" : "primary"}" data-action="set-theme" data-theme="glade" type="button">
+          ${CURRENT_THEME === "glade" ? "Aktiv" : "Aktivieren"}
+        </button>
+      </article>
+      <article class="theme-card ${CURRENT_THEME === "hybrid" ? "active" : ""}">
+        <div class="theme-card-head">
+          <div>
+            <strong>Isekai (Hybrid)</strong>
+            <div class="small">Mittelalter trifft Tech-Magie mit klarem Kontrast.</div>
+          </div>
+          <span class="badge">${CURRENT_THEME === "hybrid" ? "aktiv" : "verfügbar"}</span>
+        </div>
+        <div class="theme-preview preview-hybrid">
+          <div class="preview-topbar">
+            <span class="preview-chip">Hybrid-Link</span>
+            <span class="preview-menu"></span>
+          </div>
+          <div class="preview-panel">
+            <div class="preview-title">Relikt-Schnittstelle</div>
+            <div class="preview-turn">
+              <div class="preview-badge hybrid">Tun</div>
+              <div class="preview-line long"></div>
+              <div class="preview-line short"></div>
+            </div>
+          </div>
+        </div>
+        <button class="btn ${CURRENT_THEME === "hybrid" ? "ghost" : "primary"}" data-action="set-theme" data-theme="hybrid" type="button">
+          ${CURRENT_THEME === "hybrid" ? "Aktiv" : "Aktivieren"}
+        </button>
+      </article>
+    </div>
+    <div class="panelTitle" style="margin-top:22px">Typografie</div>
+    <div class="section-copy small">Schriftart und Größe gelten nur lokal in deinem Browser. Mittel entspricht dem aktuellen Standard.</div>
+    <div class="theme-grid">
+      <article class="theme-card ${CURRENT_FONT_PRESET === "classic" ? "active" : ""}">
+        <div class="theme-card-head">
+          <div>
+            <strong>Standard</strong>
+            <div class="small">Die bisherige klassische Serifenschrift.</div>
+          </div>
+          <span class="badge">${CURRENT_FONT_PRESET === "classic" ? "aktiv" : "verfügbar"}</span>
+        </div>
+        <div class="type-preview type-preview-classic">
+          <div class="type-preview-title">Die Geschichte fließt ruhig weiter.</div>
+          <div class="type-preview-copy">Kaelen tastet sich durch den Regen, während im Hintergrund das Feuer nur noch glimmt.</div>
+        </div>
+        <button class="btn ${CURRENT_FONT_PRESET === "classic" ? "ghost" : "primary"}" data-action="set-font-preset" data-font-preset="classic" type="button">
+          ${CURRENT_FONT_PRESET === "classic" ? "Aktiv" : "Aktivieren"}
+        </button>
+      </article>
+      <article class="theme-card ${CURRENT_FONT_PRESET === "clean" ? "active" : ""}">
+        <div class="theme-card-head">
+          <div>
+            <strong>Klar</strong>
+            <div class="small">Sachlicher, moderner und etwas technischer.</div>
+          </div>
+          <span class="badge">${CURRENT_FONT_PRESET === "clean" ? "aktiv" : "verfügbar"}</span>
+        </div>
+        <div class="type-preview type-preview-clean">
+          <div class="type-preview-title">Die Geschichte fließt ruhig weiter.</div>
+          <div class="type-preview-copy">Kaelen tastet sich durch den Regen, während im Hintergrund das Feuer nur noch glimmt.</div>
+        </div>
+        <button class="btn ${CURRENT_FONT_PRESET === "clean" ? "ghost" : "primary"}" data-action="set-font-preset" data-font-preset="clean" type="button">
+          ${CURRENT_FONT_PRESET === "clean" ? "Aktiv" : "Aktivieren"}
+        </button>
+      </article>
+      <article class="theme-card ${CURRENT_FONT_PRESET === "literary" ? "active" : ""}">
+        <div class="theme-card-head">
+          <div>
+            <strong>Roman</strong>
+            <div class="small">Etwas buchiger und weicher für längeres Lesen.</div>
+          </div>
+          <span class="badge">${CURRENT_FONT_PRESET === "literary" ? "aktiv" : "verfügbar"}</span>
+        </div>
+        <div class="type-preview type-preview-literary">
+          <div class="type-preview-title">Die Geschichte fließt ruhig weiter.</div>
+          <div class="type-preview-copy">Kaelen tastet sich durch den Regen, während im Hintergrund das Feuer nur noch glimmt.</div>
+        </div>
+        <button class="btn ${CURRENT_FONT_PRESET === "literary" ? "ghost" : "primary"}" data-action="set-font-preset" data-font-preset="literary" type="button">
+          ${CURRENT_FONT_PRESET === "literary" ? "Aktiv" : "Aktivieren"}
+        </button>
+      </article>
+    </div>
+    <div class="theme-grid" style="margin-top:16px">
+      <article class="theme-card ${CURRENT_FONT_SIZE === "small" ? "active" : ""}">
+        <div class="theme-card-head">
+          <div>
+            <strong>Klein</strong>
+            <div class="small">Mehr Inhalt auf einmal sichtbar.</div>
+          </div>
+          <span class="badge">${CURRENT_FONT_SIZE === "small" ? "aktiv" : "verfügbar"}</span>
+        </div>
+        <div class="size-preview size-preview-small">
+          <div class="type-preview-title">Beispielgröße Klein</div>
+          <div class="type-preview-copy">Die Schatten hinter den Ruinen wirken enger, aber du siehst mehr Text gleichzeitig.</div>
+        </div>
+        <button class="btn ${CURRENT_FONT_SIZE === "small" ? "ghost" : "primary"}" data-action="set-font-size" data-font-size="small" type="button">
+          ${CURRENT_FONT_SIZE === "small" ? "Aktiv" : "Aktivieren"}
+        </button>
+      </article>
+      <article class="theme-card ${CURRENT_FONT_SIZE === "medium" ? "active" : ""}">
+        <div class="theme-card-head">
+          <div>
+            <strong>Mittel</strong>
+            <div class="small">Das aktuelle Standardmaß.</div>
+          </div>
+          <span class="badge">${CURRENT_FONT_SIZE === "medium" ? "aktiv" : "verfügbar"}</span>
+        </div>
+        <div class="size-preview size-preview-medium">
+          <div class="type-preview-title">Beispielgröße Mittel</div>
+          <div class="type-preview-copy">Die Schatten hinter den Ruinen wirken enger, aber du siehst mehr Text gleichzeitig.</div>
+        </div>
+        <button class="btn ${CURRENT_FONT_SIZE === "medium" ? "ghost" : "primary"}" data-action="set-font-size" data-font-size="medium" type="button">
+          ${CURRENT_FONT_SIZE === "medium" ? "Aktiv" : "Aktivieren"}
+        </button>
+      </article>
+      <article class="theme-card ${CURRENT_FONT_SIZE === "large" ? "active" : ""}">
+        <div class="theme-card-head">
+          <div>
+            <strong>Groß</strong>
+            <div class="small">Angenehmer zum Lesen aus Distanz.</div>
+          </div>
+          <span class="badge">${CURRENT_FONT_SIZE === "large" ? "aktiv" : "verfügbar"}</span>
+        </div>
+        <div class="size-preview size-preview-large">
+          <div class="type-preview-title">Beispielgröße Groß</div>
+          <div class="type-preview-copy">Die Schatten hinter den Ruinen wirken enger, aber du siehst mehr Text gleichzeitig.</div>
+        </div>
+        <button class="btn ${CURRENT_FONT_SIZE === "large" ? "ghost" : "primary"}" data-action="set-font-size" data-font-size="large" type="button">
+          ${CURRENT_FONT_SIZE === "large" ? "Aktiv" : "Aktivieren"}
+        </button>
+      </article>
     </div>
   `;
 }
@@ -1270,6 +2004,49 @@ function renderAuthorsNoteTab() {
     </label>
     <div class="small">Zuletzt aktualisiert: ${formatDate(note.updated_at)}</div>
     ${isHost() ? `<button class="btn primary" id="saveAuthorsNoteBtn" type="button">Author's Note speichern</button>` : ""}
+  `;
+}
+
+function renderDiaryTab() {
+  const root = el("tab-diary");
+  const diaries = CAMPAIGN.boards.player_diaries || {};
+  const currentId = currentPlayer();
+  const sharedBlocking = isSharedBlocking();
+  const entries = CAMPAIGN.players.map((player) => diaries[player.player_id] || {
+    player_id: player.player_id,
+    display_name: player.display_name,
+    content: "",
+    updated_at: null,
+    updated_by: player.player_id
+  });
+  root.innerHTML = `
+    <div class="panelTitle">Diary</div>
+    <div class="readonly-note">Jeder Spieler hat hier sein eigenes Tagebuch. Du kannst nur deinen eigenen Eintrag bearbeiten. Zeilen, die mit <code>//</code> beginnen, bleiben nur für dich sichtbar.</div>
+    <div class="diary-list">
+      ${entries.map((entry) => {
+        const isOwn = entry.player_id === currentId;
+        return `
+          <article class="diary-card ${isOwn ? "is-self" : ""}">
+            <div class="entity-meta">
+              <strong>${escapeHtml(entry.display_name || "Spieler")}</strong>
+              <span class="badge">${isOwn ? "dein Diary" : "read only"}</span>
+            </div>
+            ${isOwn ? `
+              <label class="field">
+                <span>Notizen</span>
+                <textarea id="player-diary-input" ${sharedBlocking ? "disabled" : ""}>${escapeHtml(entry.content || "")}</textarea>
+              </label>
+              <div class="turn-actions">
+                <button class="btn primary" id="savePlayerDiaryBtn" type="button" ${sharedBlocking ? "disabled" : ""}>Diary speichern</button>
+              </div>
+            ` : `
+              <div class="turn-block"><div class="turn-text">${escapeHtml(entry.content || "Noch keine Notizen.")}</div></div>
+            `}
+            <div class="small">Zuletzt aktualisiert: ${formatDate(entry.updated_at)}</div>
+          </article>
+        `;
+      }).join("")}
+    </div>
   `;
 }
 
@@ -1362,7 +2139,7 @@ function renderSessionSettingsTab() {
     <div class="readonly-note">
       <strong>Session-ID:</strong> ${escapeHtml(CAMPAIGN.campaign_meta.campaign_id)}<br/>
       <strong>Join-Code:</strong> ${escapeHtml(SESSION.joinCode || "gespeichert")}<br/>
-      <strong>Rolle:</strong> ${isHost() ? "Host" : "Teilnehmer"}<br/>
+      <strong>Status:</strong> ${isHost() ? "Host" : "Teilnehmer"}<br/>
       <strong>Aktualisiert:</strong> ${formatDate(CAMPAIGN.campaign_meta.updated_at)}
     </div>
     <div class="turn-actions">
@@ -1373,24 +2150,50 @@ function renderSessionSettingsTab() {
   `;
 }
 
+function sceneNameFromCampaign(sceneId) {
+  const id = String(sceneId || "").trim();
+  if (!id) return "";
+  const scene = CAMPAIGN?.state?.scenes?.[id];
+  if (scene?.name) return scene.name;
+  const mapNode = CAMPAIGN?.state?.map?.nodes?.[id];
+  if (mapNode?.name) return mapNode.name;
+  return id;
+}
+
 function renderCharactersTab() {
   const root = el("tab-chars");
-  const chars = CAMPAIGN.party_overview || [];
+  const codex = CAMPAIGN?.state?.npc_codex || {};
+  const npcs = Object.values(codex)
+    .filter((entry) => entry && entry.npc_id && entry.name)
+    .sort((a, b) => {
+      const relevanceDiff = Number(b.relevance_score || 0) - Number(a.relevance_score || 0);
+      if (relevanceDiff) return relevanceDiff;
+      const seenDiff = Number(b.last_seen_turn || 0) - Number(a.last_seen_turn || 0);
+      if (seenDiff) return seenDiff;
+      return Number(b.mention_count || 0) - Number(a.mention_count || 0);
+    });
+  if (!npcs.length) {
+    root.innerHTML = `
+      <div class="panelTitle">Charaktere</div>
+      <div class="empty-state small">Noch keine story-relevanten Figuren erfasst.</div>
+    `;
+    return;
+  }
   root.innerHTML = `
     <div class="panelTitle">Charaktere</div>
-    <div class="info-grid">
-      ${chars.map((card) => `
-        <div class="info-item">
-          <div class="entity-meta">
-            <strong>${escapeHtml(card.display_name || card.slot_id.toUpperCase())}</strong>
-            <span class="badge">${card.claimed_by ? "geclaimt" : "frei"}</span>
-            ${card.scene_name ? `<span class="badge">${escapeHtml(card.scene_name)}</span>` : `<span class="badge muted-badge">keine Szene</span>`}
+    <div class="info-grid npc-lexicon-grid">
+      ${npcs.map((npc) => `
+        <div class="info-item npc-codex-card">
+          <div class="entity-meta npc-codex-head">
+            <strong>${escapeHtml(npc.name)}</strong>
+            <span class="badge">Lv ${Number(npc.level || 1)}</span>
+            <span class="badge">${escapeHtml(npc.race || "Unbekannt")}</span>
           </div>
-          <div class="small">${escapeHtml(card.slot_id.toUpperCase())}</div>
-          <div class="small">HP ${escapeHtml(card.hp)} • STA ${escapeHtml(card.stamina)} • Aether ${escapeHtml(card.aether)}</div>
-          <div class="small">Rolle: ${escapeHtml(card.party_role || "-")}</div>
-          <div class="small">Traglast: ${escapeHtml(card.carry || "-")}</div>
-          <div class="turn-actions"><button class="btn ghost" data-action="open-character-sheet" data-slot-id="${card.slot_id}" type="button">Sheet öffnen</button></div>
+          <div class="small"><strong>Ziel:</strong> ${escapeHtml(npc.goal || "Noch unbekannt.")}</div>
+          <div class="small">Rolle: ${escapeHtml(npc.role_hint || "Unklar")} • Fraktion: ${escapeHtml(npc.faction || "Keine")}</div>
+          <div class="small">Zuletzt gesehen: Turn ${Number(npc.last_seen_turn || 0)}${npc.last_seen_scene_id ? ` • ${escapeHtml(sceneNameFromCampaign(npc.last_seen_scene_id))}` : ""}</div>
+          <div class="small">Erwähnungen: ${Number(npc.mention_count || 0)} • Relevanz: ${Number(npc.relevance_score || 0)} • Status: ${escapeHtml(npc.status || "active")}</div>
+          <div class="turn-actions"><button class="btn ghost" data-action="open-npc-sheet" data-npc-id="${npc.npc_id}" type="button">NPC-Bogen öffnen</button></div>
         </div>
       `).join("")}
     </div>
@@ -1496,6 +2299,17 @@ function pushSetupPrompt(promptState) {
   SETUP_FLOW.index = SETUP_FLOW.stack.length - 1;
 }
 
+function getSetupOptionEntries(question) {
+  if (Array.isArray(question?.option_entries) && question.option_entries.length) {
+    return question.option_entries;
+  }
+  return (question?.options || []).map((option) => ({
+    value: option,
+    label: option,
+    description: ""
+  }));
+}
+
 function renderSetupQuestionInput(question, answer) {
   if (question.type === "text") {
     return `<label class="field"><span>${escapeHtml(question.label)}</span><input id="setup-answer-text" type="text" value="${escapeHtml(typeof answer === "string" ? answer : "")}" /></label>`;
@@ -1517,27 +2331,47 @@ function renderSetupQuestionInput(question, answer) {
   }
   if (question.type === "select") {
     const selected = answer?.selected || "";
+    const optionEntries = getSetupOptionEntries(question);
     return `
       <div class="field">
         <span>${escapeHtml(question.label)}</span>
-        <select id="setup-answer-select">
-          <option value="">Bitte wählen</option>
-          ${(question.options || []).map((option) => `<option value="${escapeHtml(option)}" ${selected === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
-          ${question.allow_other ? `<option value="__other__" ${selected === "Sonstiges" ? "selected" : ""}>Sonstiges</option>` : ""}
-        </select>
+        <div class="setup-choice-list">
+          ${optionEntries.map((entry) => `
+            <label class="setup-choice ${selected === entry.value ? "is-selected" : ""}">
+              <input class="setup-answer-select-choice" type="radio" name="setup-select-choice" value="${escapeHtml(entry.value)}" ${selected === entry.value ? "checked" : ""} />
+              <span class="setup-choice-copy">
+                <strong>${escapeHtml(entry.label)}</strong>
+                ${entry.description ? `<small>${escapeHtml(entry.description)}</small>` : ""}
+              </span>
+            </label>
+          `).join("")}
+          ${question.allow_other ? `
+            <label class="setup-choice ${selected === "Sonstiges" ? "is-selected" : ""}">
+              <input class="setup-answer-select-choice" type="radio" name="setup-select-choice" value="__other__" ${selected === "Sonstiges" ? "checked" : ""} />
+              <span class="setup-choice-copy">
+                <strong>Eigene Antwort</strong>
+                <small>${escapeHtml(question.other_hint || "Wenn nichts passt, beschreibe deine eigene Richtung.")}</small>
+              </span>
+            </label>
+          ` : ""}
+        </div>
       </div>
     `;
   }
   if (question.type === "multiselect") {
     const selected = new Set(answer?.selected || []);
+    const optionEntries = getSetupOptionEntries(question);
     return `
       <div class="field">
         <span>${escapeHtml(question.label)}</span>
         <div class="setup-choice-list">
-          ${(question.options || []).map((option) => `
-            <label class="setup-choice">
-              <input class="setup-answer-multi" type="checkbox" value="${escapeHtml(option)}" ${selected.has(option) ? "checked" : ""} />
-              <span>${escapeHtml(option)}</span>
+          ${optionEntries.map((entry) => `
+            <label class="setup-choice ${selected.has(entry.value) ? "is-selected" : ""}">
+              <input class="setup-answer-multi" type="checkbox" value="${escapeHtml(entry.value)}" ${selected.has(entry.value) ? "checked" : ""} />
+              <span class="setup-choice-copy">
+                <strong>${escapeHtml(entry.label)}</strong>
+                ${entry.description ? `<small>${escapeHtml(entry.description)}</small>` : ""}
+              </span>
             </label>
           `).join("")}
         </div>
@@ -1550,10 +2384,10 @@ function renderSetupQuestionInput(question, answer) {
 function renderOtherInput(question, answer) {
   if (!question.allow_other) return "";
   if (question.type === "select") {
-    return `<label class="field"><span>Sonstiges (nur ausfüllen, wenn du oben Sonstiges wählst)</span><input id="setup-answer-other" type="text" value="${escapeHtml(answer?.other_text || "")}" /></label>`;
+    return `<label class="field"><span>${escapeHtml(question.other_hint || "Eigene Antwort (nur ausfüllen, wenn du oben Eigene Antwort wählst)")}</span><input id="setup-answer-other" type="text" value="${escapeHtml(answer?.other_text || "")}" /></label>`;
   }
   if (question.type === "multiselect") {
-    return `<label class="field"><span>Weitere Einträge (optional, durch Komma getrennt)</span><input id="setup-answer-other" type="text" value="${escapeHtml((answer?.other_values || []).join(", "))}" /></label>`;
+    return `<label class="field"><span>${escapeHtml(question.other_hint || "Weitere Einträge (optional, durch Komma getrennt)")}</span><input id="setup-answer-other" type="text" value="${escapeHtml((answer?.other_values || []).join(", "))}" /></label>`;
   }
   return "";
 }
@@ -1579,6 +2413,29 @@ function renderSetupModal() {
   el("setupSkipBtn").classList.toggle("hidden", question.required);
   el("setupRandomBtn").classList.toggle("hidden", !promptState?.question);
   el("setupPrevBtn").disabled = SETUP_FLOW.index <= 0;
+  if (isSharedBlocking()) {
+    el("setupPrevBtn").disabled = true;
+    el("setupSkipBtn").disabled = true;
+    el("setupSubmitBtn").disabled = true;
+    el("setupRandomBtn").disabled = true;
+    const questionInput = el("setup-question-root");
+    questionInput.querySelectorAll("input, textarea, select, button").forEach((node) => {
+      node.disabled = true;
+    });
+    const otherRoot = el("setup-other-root");
+    otherRoot.querySelectorAll("input, textarea, select, button").forEach((node) => {
+      node.disabled = true;
+    });
+  } else {
+    const questionInput = el("setup-question-root");
+    questionInput.querySelectorAll("input, textarea, select, button").forEach((node) => {
+      node.disabled = false;
+    });
+    const otherRoot = el("setup-other-root");
+    otherRoot.querySelectorAll("input, textarea, select, button").forEach((node) => {
+      node.disabled = false;
+    });
+  }
   el("setupSubmitBtn").textContent = promptState.progress.step >= promptState.progress.total
     ? (SETUP_FLOW.mode === "world" ? "Run definieren" : "Figur abschließen")
     : "Antwort senden";
@@ -1586,8 +2443,20 @@ function renderSetupModal() {
 }
 
 function openSetupFlow(mode, payload, slotId = null) {
-  closeSetupModal();
-  SETUP_FLOW = { mode, slotId, stack: [], index: -1 };
+  const normalizedSlotId = mode === "character" ? slotId : null;
+  const sameFlow =
+    SETUP_FLOW.mode === mode
+    && (SETUP_FLOW.slotId || null) === (normalizedSlotId || null)
+    && !el("setup-modal").classList.contains("hidden");
+
+  if (!sameFlow) {
+    closeSetupModal();
+    SETUP_FLOW = { mode, slotId: normalizedSlotId, stack: [], index: -1 };
+  } else {
+    SETUP_FLOW.mode = mode;
+    SETUP_FLOW.slotId = normalizedSlotId;
+    el("setup-waiting").classList.add("hidden");
+  }
   if (payload?.question) {
     pushSetupPrompt(payload);
     renderSetupModal();
@@ -1613,7 +2482,7 @@ function readCurrentSetupAnswer() {
     payload.value = checked?.value === "ja";
   }
   if (question.type === "select") {
-    const value = el("setup-answer-select").value;
+    const value = document.querySelector('input[name="setup-select-choice"]:checked')?.value || "";
     if (value === "__other__") {
       payload.value = "";
       payload.other_text = (el("setup-answer-other")?.value || "").trim();
@@ -1641,7 +2510,7 @@ function currentSetupRandomMode() {
 function renderSetupRandomPreview() {
   const root = el("setup-random-preview");
   if (!SETUP_RANDOM_STATE.previewAnswers.length) {
-    root.innerHTML = `<div class="empty-state small">Noch kein Vorschlag gewürfelt.</div>`;
+    root.innerHTML = `<div class="empty-state small">Noch kein Vorschlag erzeugt.</div>`;
     el("setupRandomApplyBtn").disabled = true;
     return;
   }
@@ -1652,7 +2521,7 @@ function renderSetupRandomPreview() {
         <article class="random-preview-item">
           <div class="random-preview-head">
             <strong>${escapeHtml(SETUP_RANDOM_STATE.previewTexts[index]?.label || entry.question_id || "")}</strong>
-            <button class="btn ghost random-inline-btn" data-action="reroll-preview-answer" data-index="${index}" type="button" aria-label="Nur diese Frage neu würfeln">🎲</button>
+            <button class="btn ghost random-inline-btn" data-action="reroll-preview-answer" data-index="${index}" type="button" aria-label="Nur diese Frage neu erzeugen">Neu</button>
           </div>
           <div class="small">${escapeHtml(SETUP_RANDOM_STATE.previewTexts[index]?.previewText || "")}</div>
         </article>
@@ -1692,7 +2561,7 @@ async function loadSetupRandomPreview(mode = currentSetupRandomMode()) {
   SETUP_RANDOM_STATE.questionId = promptState.question.question_id;
   el("setupRandomRerollBtn").disabled = true;
   el("setupRandomApplyBtn").disabled = true;
-  setBusy("setupRandomBtn", true, "🎲");
+  setBusy("setupRandomBtn", true, "...");
   try {
     clearPresenceActivity();
     const data = await api(`${setupEndpointBase()}/random`, {
@@ -1710,7 +2579,7 @@ async function loadSetupRandomPreview(mode = currentSetupRandomMode()) {
     showFlash(error.message, true);
   } finally {
     el("setupRandomRerollBtn").disabled = false;
-    setBusy("setupRandomBtn", false, "...", "🎲");
+    setBusy("setupRandomBtn", false, "...", "Neu");
   }
 }
 
@@ -1738,7 +2607,7 @@ async function rerollSetupPreviewAnswer(index) {
       previewText: replacement.preview_text || "",
     };
     renderSetupRandomPreview();
-    showFlash("Diese Frage wurde neu ausgewürfelt.");
+    showFlash("Diese Frage wurde neu erzeugt.");
   } catch (error) {
     showFlash(error.message, true);
   }
@@ -1774,8 +2643,8 @@ async function applySetupRandomPreview() {
     } else if (data.randomized_count) {
       showFlash(
         data.randomized_count === 1
-          ? "Der ausgewürfelte Vorschlag wurde übernommen."
-          : `${data.randomized_count} ausgewürfelte Antworten wurden übernommen.`
+          ? "Der erzeugte Vorschlag wurde übernommen."
+          : `${data.randomized_count} erzeugte Antworten wurden übernommen.`
       );
     }
   } catch (error) {
@@ -1839,26 +2708,43 @@ function renderCampaignView() {
   const activeNames = (CAMPAIGN.display_party || []).map((entry) => entry.display_name);
   const worldTime = CAMPAIGN.world_time || state.meta.world_time || {};
   const worldBits = [worldTime.day ? `Tag ${worldTime.day}` : null, worldTime.time_of_day || state.world.time || null, worldTime.weather || state.world.weather || null].filter(Boolean);
+  const timing = state.meta?.timing || {};
+  const campaignLength = String(state.world?.settings?.campaign_length || "medium").toLowerCase();
+  const pacingBits = [];
+  if (campaignLength === "open") {
+    pacingBits.push("Offene Kampagne");
+  } else {
+    if (timing.turns_target_est != null) pacingBits.push(`Ziel ${timing.turns_target_est}`);
+    if (timing.turns_left_est != null) pacingBits.push(`Rest ${timing.turns_left_est}`);
+  }
+  if (typeof timing.cycle_ema_sec === "number" && Number.isFinite(timing.cycle_ema_sec)) {
+    pacingBits.push(`Ø Zyklus ${Math.round(timing.cycle_ema_sec)}s`);
+  }
+  const sharedBlocking = isSharedBlocking();
   el("campaign-title").textContent = meta.title;
-  el("campaign-meta").textContent = `Turn ${state.meta.turn} • ${phaseLabel(state.meta.phase)}${worldBits.length ? ` • ${worldBits.join(" • ")}` : ""}`;
+  el("campaign-meta").textContent = `Turn ${state.meta.turn} • ${phaseLabel(state.meta.phase)}${worldBits.length ? ` • ${worldBits.join(" • ")}` : ""}${pacingBits.length ? ` • ${pacingBits.join(" • ")}` : ""}`;
   el("join-code-chip").textContent = `Code: ${SESSION.joinCode || "gespeichert"}`;
   el("viewer-summary").textContent = `${viewer().display_name || "Spieler"} • ${isHost() ? "Host" : "Spieler"} • ${claimed?.display_name || claimed?.slot_id || "kein Claim"}${activeNames.length ? ` • Aktiv: ${activeNames.join(", ")}` : ""}`;
-  el("claimed-actor-badge").textContent = claimed ? `Du spielst ${claimed.display_name || claimed.slot_id}` : "Kein Claim";
-  el("unclaimBtn").disabled = !claimed;
-  el("turn-input").disabled = !claimed || !isAdventure || !hasIntro;
-  el("submitTurnBtn").disabled = !claimed || !isAdventure || !hasIntro;
-  el("composer-hint").textContent = !isAdventure
+  el("unclaimBtn").disabled = !claimed || sharedBlocking;
+  el("turn-input").disabled = !claimed || !isAdventure || !hasIntro || sharedBlocking;
+  el("submitTurnBtn").disabled = !claimed || !isAdventure || !hasIntro || sharedBlocking;
+  el("composer-hint").textContent = sharedBlocking
+    ? "Während gerade ein Zug oder Setup verarbeitet wird, kannst du weiterlesen und dich umsehen, aber nichts Neues absenden."
+    : !isAdventure
     ? "Vor dem Abenteuer müssen Welt und alle benötigten Figuren abgeschlossen sein."
     : !hasIntro && intro.status === "failed"
     ? "Der Auftakt muss zuerst erfolgreich erzeugt werden, bevor du neue Beiträge senden kannst."
     : !hasIntro
     ? "Der GM bereitet gerade noch den ersten Szenenauftakt vor."
     : claimed
-    ? `Der GM baut deinen ${actionTypeLabel(CURRENT_ACTION_TYPE)}-Beitrag direkt in die laufende Szene ein.`
+    ? CURRENT_ACTION_TYPE === "canon"
+      ? "Dieser Beitrag wird direkt als kanonischer Zustand übernommen und ab dem nächsten Turn als Wahrheit behandelt."
+      : `Der GM baut deinen ${actionTypeLabel(CURRENT_ACTION_TYPE)}-Beitrag direkt in die laufende Szene ein.`
     : "Ohne Claim kannst du lesen, aber keinen Turn senden.";
   renderIntroBanner();
   renderTurns();
   renderPartyOverview();
+  renderDiaryTab();
   renderBoards();
   renderActivityBar();
   setActiveSidebarTab(ACTIVE_SIDEBAR_TAB || "chars");
@@ -1866,10 +2752,27 @@ function renderCampaignView() {
 }
 
 function applyCampaign(campaign) {
+  const previousCampaignId = CAMPAIGN?.campaign_meta?.campaign_id || null;
+  const previousLatestTurnId = (CAMPAIGN?.active_turns || []).slice(-1)[0]?.turn_id || null;
+  const nextCampaignId = campaign?.campaign_meta?.campaign_id || null;
+  const nextLatestTurnId = (campaign?.active_turns || []).slice(-1)[0]?.turn_id || null;
   CAMPAIGN = campaign;
+  if (nextCampaignId !== previousCampaignId) {
+    PARTY_HUD_PREV = {};
+  }
   applyLiveSnapshot(campaign.live || {});
+  if (nextLatestTurnId && nextLatestTurnId !== previousLatestTurnId) {
+    setRecentTurnHighlight(nextLatestTurnId);
+  }
+  if (nextCampaignId && nextCampaignId !== LAST_STORY_SCROLL_CAMPAIGN_ID && nextCampaignId !== previousCampaignId) {
+    LAST_STORY_SCROLL_CAMPAIGN_ID = nextCampaignId;
+    scheduleStoryScrollLatest();
+  }
   connectLiveEvents();
   if (CHARACTER_SHEET && !(campaign.character_sheet_slots || []).includes(CHARACTER_SHEET.slot_id)) {
+    closeCharacterDrawer();
+  }
+  if (NPC_SHEET && !(campaign.state?.npc_codex || {})[NPC_SHEET.npc_id]) {
     closeCharacterDrawer();
   }
   upsertSessionLibrary({
@@ -2045,6 +2948,7 @@ function forgetSession(campaignId) {
 }
 
 async function claimSlot(slotId) {
+  if (isSharedBlocking()) return;
   try {
     await sendPresenceActivity("claiming_slot", { slot_id: slotId });
     const data = await api(`/api/campaigns/${SESSION.campaignId}/slots/${slotId}/claim`, { method: "POST" });
@@ -2057,9 +2961,23 @@ async function claimSlot(slotId) {
   }
 }
 
+async function takeOverSlot(slotId) {
+  if (isSharedBlocking()) return;
+  try {
+    await sendPresenceActivity("claiming_slot", { slot_id: slotId });
+    const data = await api(`/api/campaigns/${SESSION.campaignId}/slots/${slotId}/takeover`, { method: "POST" });
+    applyCampaign(data.campaign);
+    showFlash(`${slotId.toUpperCase()} übernommen.`);
+  } catch (error) {
+    showFlash(error.message, true);
+  } finally {
+    clearPresenceActivity();
+  }
+}
+
 async function unclaimCurrentSlot() {
   const slot = claimedSlotId();
-  if (!slot) return;
+  if (!slot || isSharedBlocking()) return;
   try {
     const data = await api(`/api/campaigns/${SESSION.campaignId}/slots/${slot}/unclaim`, { method: "POST" });
     applyCampaign(data.campaign);
@@ -2070,7 +2988,7 @@ async function unclaimCurrentSlot() {
 }
 
 async function submitTurn() {
-  if (IS_SENDING_TURN) return;
+  if (IS_SENDING_TURN || isSharedBlocking()) return;
   const actor = claimedSlotId();
   const content = el("turn-input").value.trim();
   if (!actor || !content) return;
@@ -2081,7 +2999,7 @@ async function submitTurn() {
     const data = await api(`/api/campaigns/${SESSION.campaignId}/turns`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ actor, action_type: CURRENT_ACTION_TYPE, content })
+      body: JSON.stringify({ actor, mode: actionTypeLabel(CURRENT_ACTION_TYPE), text: content })
     });
     el("turn-input").value = "";
     applyCampaign(data.campaign);
@@ -2094,11 +3012,9 @@ async function submitTurn() {
 }
 
 async function continueStory() {
-  if (IS_SENDING_TURN) return;
+  if (IS_SENDING_TURN || isSharedBlocking()) return;
   const actor = claimedSlotId();
   if (!actor || !campaignHasIntro()) return;
-  const lastTurn = (CAMPAIGN?.active_turns || []).slice(-1)[0];
-  const lastBeat = (lastTurn?.gm_text_display || "").trim();
   IS_SENDING_TURN = true;
   try {
     clearPresenceActivity();
@@ -2107,10 +3023,8 @@ async function continueStory() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         actor,
-        action_type: "story",
-        content: lastBeat
-          ? `Weiter. Setze exakt bei diesem letzten Beat an: "${lastBeat}". Führe die aktuelle Szene organisch und ohne harten Sprung fort. Bleib bei den direkten Konsequenzen dieses Moments.`
-          : "Weiter. Führe die aktuelle Szene organisch und ohne harten Sprung fort. Bleib bei den direkten Konsequenzen des letzten Turns."
+        mode: "STORY",
+        text: CONTINUE_STORY_MARKER
       })
     });
     applyCampaign(data.campaign);
@@ -2122,7 +3036,7 @@ async function continueStory() {
 }
 
 async function retryCampaignIntro() {
-  if (!SESSION.campaignId || !isHost()) return;
+  if (!SESSION.campaignId || !isHost() || isSharedBlocking()) return;
   setBusy("retryIntroBtn", true, "Versuche...");
   try {
     clearPresenceActivity();
@@ -2157,7 +3071,7 @@ function closeEditModal() {
 }
 
 async function saveEdit() {
-  if (!EDIT_TURN_ID) return;
+  if (!EDIT_TURN_ID || isSharedBlocking()) return;
   setBusy("saveEditBtn", true, "Speichere...");
   try {
     clearPresenceActivity();
@@ -2180,6 +3094,7 @@ async function saveEdit() {
 }
 
 async function undoTurn(turnId) {
+  if (isSharedBlocking()) return;
   if (!confirm("Diesen Turn und alle späteren aktiven Turns wirklich undoen?")) return;
   try {
     clearPresenceActivity();
@@ -2192,12 +3107,13 @@ async function undoTurn(turnId) {
 }
 
 async function retryTurn(turnId) {
-  if (!confirm("Diesen Turn ab seinem Vorzustand neu ausrollen?")) return;
+  if (isSharedBlocking()) return;
+  if (!confirm("Diesen Turn ab seinem Vorzustand neu aufbauen?")) return;
   try {
     clearPresenceActivity();
     const data = await api(`/api/campaigns/${SESSION.campaignId}/turns/${turnId}/retry`, { method: "POST" });
     applyCampaign(data.campaign);
-    showFlash("Turn wurde neu gerollt.");
+    showFlash("Turn wurde neu aufgebaut.");
   } catch (error) {
     showFlash(error.message, true);
   }
@@ -2237,6 +3153,23 @@ async function saveAuthorsNote() {
     });
     applyCampaign(data.campaign);
     showFlash("Author's Note gespeichert.");
+  } catch (error) {
+    showFlash(error.message, true);
+  }
+}
+
+async function savePlayerDiary() {
+  const playerId = currentPlayer();
+  const input = el("player-diary-input");
+  if (!playerId || !input || isSharedBlocking()) return;
+  try {
+    const data = await api(`/api/campaigns/${SESSION.campaignId}/boards/diary/${playerId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: input.value })
+    });
+    applyCampaign(data.campaign);
+    showFlash("Diary gespeichert.");
   } catch (error) {
     showFlash(error.message, true);
   }
@@ -2451,10 +3384,13 @@ function setActiveSession(entry) {
 
 document.addEventListener("click", (event) => {
   const target = event.target;
+  const actionTarget = target.closest("[data-action]");
   if (target.id === "savePlotBtn") savePlotEssentials();
   if (target.id === "saveAuthorsNoteBtn") saveAuthorsNote();
+  if (target.id === "savePlayerDiaryBtn") savePlayerDiary();
   if (target.id === "saveStoryCardBtn") saveStoryCard();
   if (target.id === "saveWorldInfoBtn") saveWorldInfo();
+  if (target.id === "exportAttributeChartBtn") exportAttributeChartPng();
   if (target.id === "saveSettingsSessionBtn") saveCurrentSessionMeta();
   if (target.id === "exportSettingsSessionBtn") exportCurrentSession();
   if (target.id === "deleteSettingsSessionBtn") deleteCurrentSession();
@@ -2470,23 +3406,27 @@ document.addEventListener("click", (event) => {
   if (target.matches(".tab")) setActiveSidebarTab(target.dataset.tab);
   if (target.matches(".settings-tab")) setActiveSettingsTab(target.dataset.tab);
   if (target.matches(".drawer-tab")) setDrawerTab(target.dataset.drawerTab);
-  if (target.dataset.action === "set-theme") setTheme(target.dataset.theme);
-  if (target.dataset.action === "reroll-preview-answer") rerollSetupPreviewAnswer(target.dataset.index);
-  if (target.dataset.action === "claim-slot") claimSlot(target.dataset.slotId);
-  if (target.dataset.action === "open-character-sheet") openCharacterDrawer(target.dataset.slotId).catch((error) => showFlash(error.message, true));
-  if (target.dataset.action === "edit-turn") openEditModal(target.dataset.turnId);
-  if (target.dataset.action === "undo-turn") undoTurn(target.dataset.turnId);
-  if (target.dataset.action === "retry-turn") retryTurn(target.dataset.turnId);
-  if (target.dataset.action === "continue-turn") continueStory();
-  if (target.dataset.action === "open-session") openSavedSession(target.dataset.campaignId);
-  if (target.dataset.action === "edit-session") openSessionModal(target.dataset.campaignId);
-  if (target.dataset.action === "forget-session") forgetSession(target.dataset.campaignId);
-  if (target.dataset.action === "edit-story-card") {
-    EDITING_STORY_CARD_ID = target.dataset.cardId;
+  if (actionTarget?.dataset.action === "set-theme") setTheme(actionTarget.dataset.theme);
+  if (actionTarget?.dataset.action === "set-font-preset") setFontPreset(actionTarget.dataset.fontPreset);
+  if (actionTarget?.dataset.action === "set-font-size") setFontSize(actionTarget.dataset.fontSize);
+  if (actionTarget?.dataset.action === "reroll-preview-answer") rerollSetupPreviewAnswer(actionTarget.dataset.index);
+  if (actionTarget?.dataset.action === "claim-slot") claimSlot(actionTarget.dataset.slotId);
+  if (actionTarget?.dataset.action === "take-slot") takeOverSlot(actionTarget.dataset.slotId);
+  if (actionTarget?.dataset.action === "open-character-sheet") openCharacterDrawer(actionTarget.dataset.slotId, actionTarget.dataset.openTab || "overview").catch((error) => showFlash(error.message, true));
+  if (actionTarget?.dataset.action === "open-npc-sheet") openNpcDrawer(actionTarget.dataset.npcId, actionTarget.dataset.openTab || "overview").catch((error) => showFlash(error.message, true));
+  if (actionTarget?.dataset.action === "edit-turn") openEditModal(actionTarget.dataset.turnId);
+  if (actionTarget?.dataset.action === "undo-turn") undoTurn(actionTarget.dataset.turnId);
+  if (actionTarget?.dataset.action === "retry-turn") retryTurn(actionTarget.dataset.turnId);
+  if (actionTarget?.dataset.action === "continue-turn") continueStory();
+  if (actionTarget?.dataset.action === "open-session") openSavedSession(actionTarget.dataset.campaignId);
+  if (actionTarget?.dataset.action === "edit-session") openSessionModal(actionTarget.dataset.campaignId);
+  if (actionTarget?.dataset.action === "forget-session") forgetSession(actionTarget.dataset.campaignId);
+  if (actionTarget?.dataset.action === "edit-story-card") {
+    EDITING_STORY_CARD_ID = actionTarget.dataset.cardId;
     renderStoryCardsTab();
   }
-  if (target.dataset.action === "edit-world-entry") {
-    EDITING_WORLD_INFO_ID = target.dataset.entryId;
+  if (actionTarget?.dataset.action === "edit-world-entry") {
+    EDITING_WORLD_INFO_ID = actionTarget.dataset.entryId;
     renderWorldInfoTab();
   }
   if (target.id === "character-drawer") closeCharacterDrawer();
@@ -2562,7 +3502,11 @@ document.addEventListener("input", (event) => {
     return;
   }
   if (!el("setup-modal").classList.contains("hidden")) {
-    if (String(target.id || "").startsWith("setup-answer") || target.classList?.contains("setup-answer-multi")) {
+    if (
+      String(target.id || "").startsWith("setup-answer")
+      || target.classList?.contains("setup-answer-multi")
+      || target.classList?.contains("setup-answer-select-choice")
+    ) {
       scheduleSetupPresence();
     }
   }
@@ -2572,7 +3516,12 @@ document.addEventListener("change", (event) => {
   const target = event.target;
   if (!target) return;
   if (!el("setup-modal").classList.contains("hidden")) {
-    if (String(target.id || "").startsWith("setup-answer") || target.classList?.contains("setup-answer-multi") || target.name === "setup-boolean") {
+    if (
+      String(target.id || "").startsWith("setup-answer")
+      || target.classList?.contains("setup-answer-multi")
+      || target.classList?.contains("setup-answer-select-choice")
+      || target.name === "setup-boolean"
+    ) {
       scheduleSetupPresence();
     }
   }
@@ -2582,6 +3531,9 @@ bootstrap();
 
 async function bootstrap() {
   applyTheme(CURRENT_THEME);
+  applyFontPreset(CURRENT_FONT_PRESET);
+  applyFontSize(CURRENT_FONT_SIZE);
+  applyDrawerTabLayout("pc");
   setActiveSidebarTab("chars");
   setActiveSettingsTab("session");
   setActionMode("do");

@@ -4,7 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Isekai GM MVP</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260303p" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600;7..72,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css?v=20260305e" />
 </head>
 <body>
   <div class="app-shell">
@@ -105,7 +108,7 @@
       <main class="claim-layout">
         <div class="panel claim-panel">
           <div class="panelTitle">Slot claimen</div>
-          <p class="small">Jeder Spieler übernimmt genau einen freien Slot und baut daraus seine Figur.</p>
+          <p class="small">Jeder Spieler übernimmt genau einen Slot und baut daraus seine Figur. Falls ein Charakter festhängt, kannst du auch einen bereits geclaimten Slot erneut übernehmen.</p>
           <div id="claim-cards" class="claim-cards"></div>
         </div>
       </main>
@@ -145,18 +148,18 @@
               </div>
               <button class="btn primary hidden" id="retryIntroBtn" type="button">Auftakt erneut versuchen</button>
             </div>
-            <div id="live-activity-bar" class="live-activity-bar hidden"></div>
             <div id="turns" class="turns"></div>
           </div>
 
           <div class="panel composer-panel">
             <div class="panelTitle">Dein Beitrag</div>
             <div class="composer-meta">
-              <div id="claimed-actor-badge" class="badge">Kein Claim</div>
+              <div id="live-activity-bar" class="live-activity-bar live-activity-chip hidden"></div>
               <div class="action-switch" id="action-switch">
-                <button class="action-mode active" data-mode="do" type="button">Tun</button>
-                <button class="action-mode" data-mode="say" type="button">Sagen</button>
-                <button class="action-mode" data-mode="story" type="button">Story</button>
+                <button class="action-mode active" data-mode="do" type="button">TUN</button>
+                <button class="action-mode" data-mode="say" type="button">SAGEN</button>
+                <button class="action-mode" data-mode="story" type="button">STORY</button>
+                <button class="action-mode" data-mode="canon" type="button">CANON</button>
               </div>
             </div>
             <textarea id="turn-input" placeholder="Was passiert in deinem Zug?"></textarea>
@@ -174,11 +177,13 @@
           </div>
           <div class="sidebar-tabs">
             <button class="tab active" data-tab="chars" type="button">Charaktere</button>
+            <button class="tab" data-tab="diary" type="button">Diary</button>
             <button class="tab" data-tab="map" type="button">Karte</button>
             <button class="tab" data-tab="events" type="button">Events</button>
           </div>
 
           <div class="panel tabPanel" id="tab-chars"></div>
+          <div class="panel tabPanel hidden" id="tab-diary"></div>
           <div class="panel tabPanel hidden" id="tab-map"></div>
           <div class="panel tabPanel hidden" id="tab-events"></div>
         </aside>
@@ -197,22 +202,20 @@
         <button class="btn ghost" id="closeCharacterDrawerBtn" type="button">Schließen</button>
       </div>
       <div class="drawer-tabs">
-        <button class="drawer-tab active" data-drawer-tab="overview" type="button">Überblick</button>
-        <button class="drawer-tab" data-drawer-tab="stats" type="button">Werte</button>
-        <button class="drawer-tab" data-drawer-tab="skills" type="button">Fertigkeiten</button>
-        <button class="drawer-tab" data-drawer-tab="abilities" type="button">Fähigkeiten</button>
-        <button class="drawer-tab" data-drawer-tab="gear" type="button">Ausrüstung & Inventar</button>
-        <button class="drawer-tab" data-drawer-tab="effects" type="button">Effekte</button>
-        <button class="drawer-tab" data-drawer-tab="journal" type="button">Journal</button>
+        <button class="drawer-tab active" data-drawer-tab="overview" type="button">Übersicht</button>
+        <button class="drawer-tab" data-drawer-tab="class" type="button">Klasse</button>
+        <button class="drawer-tab" data-drawer-tab="attributes" type="button">Attribute</button>
+        <button class="drawer-tab" data-drawer-tab="skills" type="button">Skills</button>
+        <button class="drawer-tab" data-drawer-tab="injuries" type="button">Injuries &amp; Scars</button>
+        <button class="drawer-tab" data-drawer-tab="gear" type="button">Inventar</button>
       </div>
       <div class="drawer-content">
         <div class="drawer-panel" id="drawer-panel-overview"></div>
-        <div class="drawer-panel hidden" id="drawer-panel-stats"></div>
+        <div class="drawer-panel hidden" id="drawer-panel-class"></div>
+        <div class="drawer-panel hidden" id="drawer-panel-attributes"></div>
         <div class="drawer-panel hidden" id="drawer-panel-skills"></div>
-        <div class="drawer-panel hidden" id="drawer-panel-abilities"></div>
+        <div class="drawer-panel hidden" id="drawer-panel-injuries"></div>
         <div class="drawer-panel hidden" id="drawer-panel-gear"></div>
-        <div class="drawer-panel hidden" id="drawer-panel-effects"></div>
-        <div class="drawer-panel hidden" id="drawer-panel-journal"></div>
       </div>
     </div>
   </div>
@@ -315,8 +318,8 @@
       <div id="setup-modal-actions" class="modal-actions hidden">
         <button class="btn ghost" id="setupPrevBtn" type="button">Zurück</button>
         <button class="btn ghost" id="setupSkipBtn" type="button">Überspringen</button>
-        <button class="btn ghost dice-btn" id="setupRandomBtn" type="button" aria-label="Zufällige Antwort vom GM wählen">
-          <span class="dice-icon" aria-hidden="true">🎲</span>
+        <button class="btn ghost dice-btn" id="setupRandomBtn" type="button" aria-label="Antwortvorschlag vom GM erzeugen">
+          <span class="dice-icon" aria-hidden="true">Neu</span>
         </button>
         <button class="btn primary" id="setupSubmitBtn" type="button">Antwort senden</button>
       </div>
@@ -327,29 +330,29 @@
     <div class="modal-card random-card">
       <div class="modal-head">
         <div>
-          <div class="panelTitle">GM-Würfel</div>
-          <div class="small">Wähle zuerst, was randomisiert werden soll. Danach kannst du neu würfeln, bis der Vorschlag passt, und ihn dann übernehmen.</div>
+          <div class="panelTitle">GM-Vorschlag</div>
+          <div class="small">Wähle zuerst, was randomisiert werden soll. Danach kannst du neue Vorschläge erzeugen, bis einer passt, und ihn dann übernehmen.</div>
         </div>
         <button class="btn ghost" id="closeSetupRandomModalBtn" type="button">Schließen</button>
       </div>
       <div class="random-mode-list">
         <label class="setup-choice">
           <input type="radio" name="setup-random-mode" value="single" checked />
-          <span><strong>Nur diese Frage</strong><br/>Der GM würfelt nur die aktuelle Frage aus.</span>
+          <span><strong>Nur diese Frage</strong><br/>Der GM erzeugt nur für die aktuelle Frage einen Vorschlag.</span>
         </label>
         <label class="setup-choice">
           <input type="radio" name="setup-random-mode" value="all" />
-          <span><strong>Alles ab hier</strong><br/>Der GM würfelt alle restlichen Fragen dieses Setup-Flows aus.</span>
+          <span><strong>Alles ab hier</strong><br/>Der GM erzeugt Vorschläge für alle restlichen Fragen dieses Setup-Flows.</span>
         </label>
       </div>
       <div id="setup-random-preview" class="random-preview"></div>
       <div class="modal-actions">
-        <button class="btn ghost" id="setupRandomRerollBtn" type="button">Nochmal würfeln</button>
+        <button class="btn ghost" id="setupRandomRerollBtn" type="button">Neu generieren</button>
         <button class="btn primary" id="setupRandomApplyBtn" type="button">Übernehmen</button>
       </div>
     </div>
   </div>
 
-  <script src="/static/app.js?v=20260303p"></script>
-</body>
+    <script src="/static/app.js?v=20260305e"></script>
+  </body>
 </html>
