@@ -146,6 +146,147 @@ EXTRACTION_REASON_AMBIGUOUS_CLASS = "AMBIGUOUS_CLASS"
 EXTRACTION_REASON_DUPLICATE = "DUPLICATE_LIKELY"
 EXTRACTION_REASON_LOW_CONFIDENCE = "LOW_CONFIDENCE"
 EXTRACTION_REASON_CONFLICT_WITH_LLM = "CONFLICT_WITH_LLM"
+CODEX_KNOWLEDGE_LEVEL_MIN = 0
+CODEX_KNOWLEDGE_LEVEL_MAX = 4
+CODEX_KIND_RACE = "race"
+CODEX_KIND_BEAST = "beast"
+RACE_CODEX_BLOCK_ORDER = [
+    "identity",
+    "appearance",
+    "culture",
+    "homeland",
+    "class_affinities",
+    "skill_affinities",
+    "strengths",
+    "weaknesses",
+    "relations",
+    "notable_individuals",
+]
+BEAST_CODEX_BLOCK_ORDER = [
+    "identity",
+    "appearance",
+    "habitat",
+    "behavior",
+    "combat_style",
+    "known_abilities",
+    "strengths",
+    "weaknesses",
+    "loot",
+    "lore",
+]
+RACE_BLOCKS_BY_LEVEL = {
+    0: [],
+    1: ["identity", "appearance"],
+    2: ["culture", "homeland", "relations"],
+    3: ["class_affinities", "skill_affinities", "strengths", "weaknesses"],
+    4: ["notable_individuals"],
+}
+BEAST_BLOCKS_BY_LEVEL = {
+    0: [],
+    1: ["identity", "appearance", "habitat"],
+    2: ["behavior", "combat_style"],
+    3: ["known_abilities", "strengths", "weaknesses", "loot"],
+    4: ["lore"],
+}
+CODEX_DEFAULT_META = {
+    "version": 1,
+    "shared_knowledge": True,
+}
+CODEX_RACE_TRIGGER_LORE = {
+    "archiv",
+    "chronik",
+    "legende",
+    "lore",
+    "forschung",
+    "forscht",
+    "bibliothek",
+    "tafel",
+    "buch",
+    "aufzeichnung",
+    "codex",
+    "lehrtext",
+}
+CODEX_RACE_TRIGGER_CONTACT = {
+    "begegnet",
+    "trifft",
+    "spricht",
+    "verhandelt",
+    "diplomatie",
+    "hilfe",
+    "misstrauen",
+    "bittet",
+    "verfolgt",
+    "rettet",
+}
+CODEX_BEAST_TRIGGER_COMBAT = {
+    "kampf",
+    "angriff",
+    "klaue",
+    "biss",
+    "zahn",
+    "gift",
+    "schlag",
+    "trifft",
+    "duell",
+    "monster",
+    "bestie",
+}
+CODEX_BEAST_TRIGGER_DEFEAT = {
+    "besiegt",
+    "erlegt",
+    "getoetet",
+    "getötet",
+    "vernichtet",
+    "erschlagen",
+    "faellt",
+    "fällt",
+}
+CODEX_BEAST_TRIGGER_ABILITY = {
+    "faehigkeit",
+    "fähigkeit",
+    "atem",
+    "zauber",
+    "schrei",
+    "aura",
+    "sprung",
+    "regen",
+    "giftwolke",
+}
+ELEMENT_TOTAL_COUNT = 12
+ELEMENT_CORE_NAMES = ("Feuer", "Wasser", "Erde", "Luft", "Licht", "Schatten")
+ELEMENT_RELATIONS = {"dominant", "strong", "neutral", "weak", "countered"}
+ELEMENT_RELATION_SCORE = {
+    "dominant": 1.35,
+    "strong": 1.18,
+    "neutral": 1.0,
+    "weak": 0.88,
+    "countered": 0.72,
+}
+ELEMENT_CLASS_PATH_RANKS = ("F", "C", "B", "A", "S")
+ELEMENT_CLASS_PATH_MIN = 1
+ELEMENT_CLASS_PATH_MAX = 3
+ELEMENT_GENERATED_NAMES_FALLBACK = [
+    "Resonanz",
+    "Nebel",
+    "Asche",
+    "Sturmkern",
+    "Runenfluss",
+    "Sternenfrost",
+    "Dornengeist",
+    "Leere",
+    "Traum",
+    "Blut",
+    "Gezeitenstahl",
+    "Donnerglas",
+]
+ELEMENT_SIMILARITY_BLACKLIST = {
+    "feuer": {"flamme", "brand", "glut", "inferno", "hitz"},
+    "wasser": {"flut", "strom", "gezeiten", "regen", "welle"},
+    "erde": {"stein", "fels", "boden", "lehm"},
+    "luft": {"wind", "sturm", "hauch", "aetherwind"},
+    "licht": {"sonne", "strahl", "heilig", "glanz"},
+    "schatten": {"nacht", "dunkel", "umbra", "finsternis"},
+}
 
 ERROR_CODE_NARRATOR_RESPONSE = "NARRATOR_RESPONSE_ERROR"
 ERROR_CODE_JSON_REPAIR = "JSON_REPAIR_ERROR"
@@ -216,7 +357,26 @@ def extend_turn_patch_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
             "class_affinity",
             {"type": ["array", "null"], "items": {"type": "string"}},
         )
+        candidate["properties"].setdefault(
+            "elements",
+            {"type": ["array", "null"], "items": {"type": "string"}},
+        )
+        candidate["properties"].setdefault("element_primary", {"type": ["string", "null"]})
+        candidate["properties"].setdefault(
+            "element_synergies",
+            {"type": ["array", "null"], "items": {"type": "string"}},
+        )
         break
+    class_schema = properties.get("class_set")
+    if isinstance(class_schema, dict):
+        class_schema.setdefault("properties", {})
+        class_schema["properties"].setdefault("element_id", {"type": ["string", "null"]})
+        class_schema["properties"].setdefault(
+            "element_tags",
+            {"type": ["array", "null"], "items": {"type": "string"}},
+        )
+        class_schema["properties"].setdefault("path_id", {"type": ["string", "null"]})
+        class_schema["properties"].setdefault("path_rank", {"type": ["string", "null"]})
 
     progression_event_schema = {
         "type": "array",
@@ -227,6 +387,7 @@ def extend_turn_patch_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
                 "actor": {"type": "string"},
                 "target_skill_id": {"type": ["string", "null"]},
                 "target_class_id": {"type": ["string", "null"]},
+                "target_element_id": {"type": ["string", "null"]},
                 "severity": {"type": "string", "enum": ["low", "medium", "high"]},
                 "tags": {"type": "array", "items": {"type": "string"}},
                 "reason": {"type": "string"},
@@ -252,6 +413,9 @@ def extend_turn_patch_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
                         "level": {"type": "integer"},
                         "mastery": {"type": "integer"},
                         "description": {"type": "string"},
+                        "elements": {"type": "array", "items": {"type": "string"}},
+                        "element_primary": {"type": ["string", "null"]},
+                        "element_synergies": {"type": ["array", "null"], "items": {"type": "string"}},
                         "cost": {
                             "type": ["object", "null"],
                             "properties": {
@@ -1353,6 +1517,1426 @@ def normalize_npc_alias(text: str) -> str:
     return alias
 
 
+def normalize_codex_alias_text(text: Any) -> str:
+    alias = normalized_eval_text(text)
+    alias = (
+        alias.replace("ä", "ae")
+        .replace("ö", "oe")
+        .replace("ü", "ue")
+        .replace("ß", "ss")
+    )
+    alias = re.sub(r"\b(der|die|das|ein|eine|einen|einem|einer)\b", " ", alias)
+    alias = re.sub(r"[\-_]+", " ", alias)
+    alias = re.sub(r"\s+", " ", alias).strip()
+    return alias
+
+
+def strip_name_parenthetical(name: str) -> str:
+    cleaned = re.sub(r"\s*\([^)]*\)", " ", str(name or ""))
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,.;:!?")
+    return cleaned
+
+
+def strip_codex_name_prefix(name: str) -> str:
+    cleaned = str(name or "").strip()
+    cleaned = re.sub(
+        r"^(?:volk|stamm|orden)\s+(?:der|des)\s+",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    ).strip()
+    return cleaned
+
+
+def safe_last_token_variants(token: str, *, max_variants: int = 6) -> List[str]:
+    base = normalize_codex_alias_text(token)
+    if not base or len(base) < 4:
+        return [base] if base else []
+    variants: List[str] = [base]
+    suffixes = ("s", "e", "en", "er")
+    for suffix in suffixes:
+        if len(variants) >= max_variants:
+            break
+        if base.endswith(suffix) and len(base) - len(suffix) >= 3:
+            variants.append(base[: -len(suffix)])
+    for suffix in suffixes:
+        if len(variants) >= max_variants:
+            break
+        if not base.endswith(suffix):
+            variants.append(base + suffix)
+    deduped: List[str] = []
+    seen = set()
+    for variant in variants:
+        normalized = normalize_codex_alias_text(variant)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        deduped.append(normalized)
+        if len(deduped) >= max_variants:
+            break
+    return deduped
+
+
+def build_entity_alias_variants(name: str, aliases: Optional[List[str]] = None) -> List[str]:
+    raw_candidates: List[str] = []
+    base = str(name or "").strip()
+    if base:
+        raw_candidates.append(base)
+        base_without_parenthetical = strip_name_parenthetical(base)
+        if base_without_parenthetical:
+            raw_candidates.append(base_without_parenthetical)
+            stripped_prefix = strip_codex_name_prefix(base_without_parenthetical)
+            if stripped_prefix:
+                raw_candidates.append(stripped_prefix)
+    for alias in (aliases or []):
+        alias_text = str(alias or "").strip()
+        if not alias_text:
+            continue
+        raw_candidates.append(alias_text)
+        alias_without_parenthetical = strip_name_parenthetical(alias_text)
+        if alias_without_parenthetical:
+            raw_candidates.append(alias_without_parenthetical)
+
+    normalized_variants: List[str] = []
+    seen = set()
+    for candidate in raw_candidates:
+        normalized = normalize_codex_alias_text(candidate)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        normalized_variants.append(normalized)
+        tokens = normalized.split()
+        if len(tokens) > 1 and len(tokens[-1]) >= 4:
+            short_alias = normalize_codex_alias_text(tokens[-1])
+            if short_alias and short_alias not in seen:
+                seen.add(short_alias)
+                normalized_variants.append(short_alias)
+            for short_variant in safe_last_token_variants(tokens[-1], max_variants=4):
+                if short_variant and short_variant not in seen:
+                    seen.add(short_variant)
+                    normalized_variants.append(short_variant)
+        if not tokens or len(tokens[-1]) < 4:
+            continue
+        prefix = tokens[:-1]
+        for token_variant in safe_last_token_variants(tokens[-1], max_variants=6):
+            rebuilt = " ".join([*prefix, token_variant]).strip()
+            normalized_rebuilt = normalize_codex_alias_text(rebuilt)
+            if not normalized_rebuilt or normalized_rebuilt in seen:
+                continue
+            seen.add(normalized_rebuilt)
+            normalized_variants.append(normalized_rebuilt)
+    return normalized_variants
+
+
+def race_id_from_name(name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", normalize_codex_alias_text(name)).strip("_")
+    if not slug:
+        slug = make_id("race").split("_", 1)[1]
+    return f"race_{slug[:48]}"
+
+
+def beast_id_from_name(name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", normalize_codex_alias_text(name)).strip("_")
+    if not slug:
+        slug = make_id("beast").split("_", 1)[1]
+    return f"beast_{slug[:48]}"
+
+
+def default_race_profile(race_id: str, name: str) -> Dict[str, Any]:
+    return {
+        "id": str(race_id or race_id_from_name(name)).strip(),
+        "name": str(name or "Unbekannte Rasse").strip() or "Unbekannte Rasse",
+        "kind": "volk",
+        "rarity": "gewöhnlich",
+        "description_short": "",
+        "appearance": "",
+        "homeland": "",
+        "culture": "",
+        "temperament": "",
+        "strength_tags": [],
+        "weakness_tags": [],
+        "class_affinities": [],
+        "skill_affinities": [],
+        "social_reputation": "",
+        "playable": True,
+        "notable_traits": [],
+        "aliases": [],
+    }
+
+
+def default_beast_profile(beast_id: str, name: str) -> Dict[str, Any]:
+    return {
+        "id": str(beast_id or beast_id_from_name(name)).strip(),
+        "name": str(name or "Unbekannte Bestie").strip() or "Unbekannte Bestie",
+        "category": "bestie",
+        "danger_rating": 1,
+        "habitat": "",
+        "behavior": "",
+        "appearance": "",
+        "strength_tags": [],
+        "weakness_tags": [],
+        "combat_style": "",
+        "known_abilities": [],
+        "loot_tags": [],
+        "lore_notes": [],
+        "aliases": [],
+    }
+
+
+def normalize_race_profile(raw: Any, *, fallback_id: str = "") -> Optional[Dict[str, Any]]:
+    if not isinstance(raw, dict):
+        return None
+    name = str(raw.get("name") or "").strip()
+    if not name:
+        return None
+    race_id = str(raw.get("id") or fallback_id or race_id_from_name(name)).strip()
+    if not race_id:
+        return None
+    profile = default_race_profile(race_id, name)
+    profile["kind"] = str(raw.get("kind") or profile["kind"]).strip() or profile["kind"]
+    profile["rarity"] = str(raw.get("rarity") or profile["rarity"]).strip() or profile["rarity"]
+    profile["description_short"] = str(raw.get("description_short") or "").strip()
+    profile["appearance"] = str(raw.get("appearance") or "").strip()
+    profile["homeland"] = str(raw.get("homeland") or "").strip()
+    profile["culture"] = str(raw.get("culture") or "").strip()
+    profile["temperament"] = str(raw.get("temperament") or "").strip()
+    profile["social_reputation"] = str(raw.get("social_reputation") or "").strip()
+    profile["playable"] = bool(raw.get("playable", True))
+    for key in ("strength_tags", "weakness_tags", "class_affinities", "skill_affinities", "notable_traits", "aliases"):
+        values = [str(entry).strip() for entry in (raw.get(key) or []) if str(entry).strip()]
+        profile[key] = list(dict.fromkeys(values))
+    return profile
+
+
+def normalize_beast_profile(raw: Any, *, fallback_id: str = "") -> Optional[Dict[str, Any]]:
+    if not isinstance(raw, dict):
+        return None
+    name = str(raw.get("name") or "").strip()
+    if not name:
+        return None
+    beast_id = str(raw.get("id") or fallback_id or beast_id_from_name(name)).strip()
+    if not beast_id:
+        return None
+    profile = default_beast_profile(beast_id, name)
+    profile["category"] = str(raw.get("category") or profile["category"]).strip() or profile["category"]
+    profile["danger_rating"] = clamp(int(raw.get("danger_rating", 1) or 1), 1, 20)
+    profile["habitat"] = str(raw.get("habitat") or "").strip()
+    profile["behavior"] = str(raw.get("behavior") or "").strip()
+    profile["appearance"] = str(raw.get("appearance") or "").strip()
+    profile["combat_style"] = str(raw.get("combat_style") or "").strip()
+    for key in ("strength_tags", "weakness_tags", "known_abilities", "loot_tags", "lore_notes", "aliases"):
+        values = [str(entry).strip() for entry in (raw.get(key) or []) if str(entry).strip()]
+        profile[key] = list(dict.fromkeys(values))
+    return profile
+
+
+def element_id_from_name(name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", normalize_codex_alias_text(name)).strip("_")
+    if not slug:
+        slug = make_id("element").split("_", 1)[1]
+    return f"elem_{slug[:48]}"
+
+
+def default_element_profile(element_id: str, name: str, *, origin: str = "generated") -> Dict[str, Any]:
+    return {
+        "id": str(element_id or element_id_from_name(name)).strip(),
+        "name": str(name or "Unbenanntes Element").strip() or "Unbenanntes Element",
+        "rarity": "gewöhnlich",
+        "description": "",
+        "theme": "",
+        "origin": origin if origin in {"core", "generated", "emergent"} else "generated",
+        "strengths_against": [],
+        "weaknesses_against": [],
+        "synergies_with": [],
+        "status_effect_tags": [],
+        "class_affinities": [],
+        "skill_affinities": [],
+        "discoverable": True,
+        "lore_notes": [],
+        "visual_motif": "",
+        "temperament": "",
+        "environment_bias": "",
+        "aliases": [],
+    }
+
+
+def normalize_element_profile(raw: Any, *, fallback_id: str = "", fallback_origin: str = "generated") -> Optional[Dict[str, Any]]:
+    if not isinstance(raw, dict):
+        return None
+    name = str(raw.get("name") or "").strip()
+    if not name:
+        return None
+    element_id = str(raw.get("id") or fallback_id or element_id_from_name(name)).strip()
+    if not element_id:
+        return None
+    profile = default_element_profile(element_id, name, origin=fallback_origin)
+    profile.update({k: v for k, v in raw.items() if k in profile})
+    profile["id"] = element_id
+    profile["name"] = str(profile.get("name") or name).strip() or name
+    profile["rarity"] = str(profile.get("rarity") or "gewöhnlich").strip() or "gewöhnlich"
+    profile["description"] = str(profile.get("description") or "").strip()
+    profile["theme"] = str(profile.get("theme") or "").strip()
+    origin = str(profile.get("origin") or fallback_origin).strip().lower()
+    profile["origin"] = origin if origin in {"core", "generated", "emergent"} else fallback_origin
+    for key in (
+        "strengths_against",
+        "weaknesses_against",
+        "synergies_with",
+        "status_effect_tags",
+        "class_affinities",
+        "skill_affinities",
+        "lore_notes",
+        "aliases",
+    ):
+        profile[key] = list(dict.fromkeys([str(entry).strip() for entry in (profile.get(key) or []) if str(entry).strip()]))
+    profile["discoverable"] = bool(profile.get("discoverable", True))
+    profile["visual_motif"] = str(profile.get("visual_motif") or "").strip()
+    profile["temperament"] = str(profile.get("temperament") or "").strip()
+    profile["environment_bias"] = str(profile.get("environment_bias") or "").strip()
+    return profile
+
+
+def element_sort_key(entry: Tuple[str, Dict[str, Any]]) -> Tuple[str, str]:
+    element_id, payload = entry
+    return (normalize_codex_alias_text((payload or {}).get("name", "")), str(element_id))
+
+
+def relation_sort_value(value: str) -> int:
+    order = {"countered": 0, "weak": 1, "neutral": 2, "strong": 3, "dominant": 4}
+    return order.get(str(value or "neutral").strip().lower(), 2)
+
+
+def normalize_element_relation(value: Any) -> str:
+    relation = str(value or "neutral").strip().lower()
+    return relation if relation in ELEMENT_RELATIONS else "neutral"
+
+
+def build_element_alias_index(elements: Dict[str, Dict[str, Any]]) -> Dict[str, List[str]]:
+    index: Dict[str, List[str]] = {}
+    for element_id, profile in (elements or {}).items():
+        if not isinstance(profile, dict):
+            continue
+        variants = build_entity_alias_variants(str(profile.get("name") or element_id), profile.get("aliases") or [])
+        for alias in variants:
+            normalized = normalize_codex_alias_text(alias)
+            if not normalized:
+                continue
+            index.setdefault(normalized, [])
+            if element_id not in index[normalized]:
+                index[normalized].append(element_id)
+    for alias, ids in list(index.items()):
+        index[alias] = sorted(set(ids), key=str)
+    return stable_sorted_mapping(index, key_fn=lambda item: item[0])
+
+
+def build_default_element_relations(elements: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, str]]:
+    relation_map: Dict[str, Dict[str, str]] = {}
+    element_ids = list((elements or {}).keys())
+    for source_id in element_ids:
+        relation_map[source_id] = {}
+        for target_id in element_ids:
+            relation_map[source_id][target_id] = "neutral"
+    return relation_map
+
+
+def _set_element_relation(relations: Dict[str, Dict[str, str]], source_id: str, target_id: str, relation: str) -> None:
+    if source_id not in relations:
+        relations[source_id] = {}
+    relations[source_id][target_id] = normalize_element_relation(relation)
+
+
+def element_pair_rule_ids(elements: Dict[str, Dict[str, Any]], name_a: str, name_b: str) -> Tuple[str, str]:
+    wanted_a = normalize_codex_alias_text(name_a)
+    wanted_b = normalize_codex_alias_text(name_b)
+    found_a = ""
+    found_b = ""
+    for element_id, profile in (elements or {}).items():
+        normalized_name = normalize_codex_alias_text((profile or {}).get("name", ""))
+        if not found_a and normalized_name == wanted_a:
+            found_a = element_id
+        if not found_b and normalized_name == wanted_b:
+            found_b = element_id
+    return found_a, found_b
+
+
+def apply_element_anchor_relation_rules(elements: Dict[str, Dict[str, Any]], relations: Dict[str, Dict[str, str]]) -> None:
+    predefined = [
+        ("Feuer", "Wasser", "weak"),
+        ("Wasser", "Feuer", "strong"),
+        ("Feuer", "Erde", "strong"),
+        ("Erde", "Feuer", "neutral"),
+        ("Luft", "Erde", "strong"),
+        ("Erde", "Luft", "weak"),
+        ("Licht", "Schatten", "strong"),
+        ("Schatten", "Licht", "countered"),
+        ("Wasser", "Erde", "weak"),
+        ("Erde", "Wasser", "strong"),
+        ("Luft", "Wasser", "neutral"),
+        ("Wasser", "Luft", "neutral"),
+    ]
+    for src_name, dst_name, relation in predefined:
+        src_id, dst_id = element_pair_rule_ids(elements, src_name, dst_name)
+        if src_id and dst_id:
+            _set_element_relation(relations, src_id, dst_id, relation)
+
+
+def normalize_element_relations(
+    relations: Any,
+    elements: Dict[str, Dict[str, Any]],
+) -> Dict[str, Dict[str, str]]:
+    element_ids = list((elements or {}).keys())
+    normalized = build_default_element_relations(elements)
+    raw = relations if isinstance(relations, dict) else {}
+    for source_id, target_map in raw.items():
+        source = str(source_id or "").strip()
+        if source not in normalized or not isinstance(target_map, dict):
+            continue
+        for target_id, value in target_map.items():
+            target = str(target_id or "").strip()
+            if target not in normalized[source]:
+                continue
+            normalized[source][target] = normalize_element_relation(value)
+    for element_id in element_ids:
+        normalized.setdefault(element_id, {})
+        for target_id in element_ids:
+            normalized[element_id][target_id] = normalize_element_relation(
+                normalized[element_id].get(target_id, "neutral")
+            )
+    # deterministically set self-relations (default neutral)
+    for element_id in element_ids:
+        if element_id not in normalized:
+            normalized[element_id] = {}
+        normalized[element_id][element_id] = normalize_element_relation(
+            normalized[element_id].get(element_id, "neutral")
+        )
+    return stable_sorted_mapping(
+        {src: stable_sorted_mapping(dst_map, key_fn=lambda item: item[0]) for src, dst_map in normalized.items()},
+        key_fn=lambda item: item[0],
+    )
+
+
+def generated_element_too_similar(candidate: Dict[str, Any], existing: List[Dict[str, Any]]) -> Tuple[bool, str]:
+    name_norm = normalize_codex_alias_text(candidate.get("name", ""))
+    theme_norm = normalize_codex_alias_text(candidate.get("theme", ""))
+    if not name_norm:
+        return True, "EMPTY_NAME"
+    for core_norm, terms in ELEMENT_SIMILARITY_BLACKLIST.items():
+        if name_norm == core_norm:
+            return True, "TOO_SIMILAR_TO_CORE"
+        if any(term in name_norm for term in terms):
+            return True, "TOO_SIMILAR_TO_CORE"
+        if theme_norm and any(term in theme_norm for term in terms):
+            return True, "TOO_SIMILAR_TO_CORE"
+    for entry in existing:
+        existing_name_norm = normalize_codex_alias_text(entry.get("name", ""))
+        existing_theme_norm = normalize_codex_alias_text(entry.get("theme", ""))
+        if not existing_name_norm:
+            continue
+        if name_norm == existing_name_norm:
+            return True, "DUPLICATE_NAME"
+        if name_norm.startswith(existing_name_norm) or existing_name_norm.startswith(name_norm):
+            return True, "DUPLICATE_THEME"
+        if theme_norm and existing_theme_norm and (
+            theme_norm == existing_theme_norm
+            or theme_norm in existing_theme_norm
+            or existing_theme_norm in theme_norm
+        ):
+            return True, "DUPLICATE_THEME"
+    return False, ""
+
+
+def _theme_flavor(seed: random.Random, anchor: str) -> Tuple[str, str, List[str], List[str]]:
+    motifs = [
+        ("Resonanz von Schwingungen und Klang", "resonanz", ["desorientierung", "echo"], ["ruhe", "stille"]),
+        ("Nebel aus Erinnerung und Täuschung", "nebel", ["blindheit", "verwirrung"], ["wind", "fokus"]),
+        ("Asche als Rest alter Flammen", "asche", ["brandspur", "erstickung"], ["wasser", "reinigung"]),
+        ("Sternenstaub und kosmische Splitter", "sterne", ["strahl", "markierung"], ["schatten", "erde"]),
+        ("Leere und entziehende Kälte", "leere", ["auszehrung", "druck"], ["licht", "bindung"]),
+        ("Traum zwischen Hoffnung und Alb", "traum", ["schlaf", "furcht"], ["klarheit", "lärm"]),
+        ("Blutpakt und Lebensrausch", "blut", ["blutung", "rausch"], ["reinheit", "frost"]),
+        ("Dornenwuchs und uraltes Grün", "dornen", ["fessel", "gift"], ["feuer", "schneide"]),
+        ("Donnerglas und geladene Splitter", "donnerglas", ["schock", "bruch"], ["erde", "isolierung"]),
+        ("Gezeitenstahl aus flüssigem Metall", "gezeitenstahl", ["schnitt", "druck"], ["magnet", "säure"]),
+    ]
+    choice = seed.choice(motifs)
+    theme = f"{choice[0]} ({anchor})"
+    return choice[1], theme, choice[2], choice[3]
+
+
+def generate_world_elements_fallback(summary: Dict[str, Any]) -> List[Dict[str, Any]]:
+    seed_text = json.dumps(
+        {"theme": summary.get("theme", ""), "tone": summary.get("tone", ""), "premise": summary.get("premise", "")},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    seed = random.Random(int(hashlib.sha1(seed_text.encode("utf-8")).hexdigest(), 16) % (2**32))
+    anchor = pick_world_theme_anchor(summary)
+    names = deep_copy(ELEMENT_GENERATED_NAMES_FALLBACK)
+    seed.shuffle(names)
+    picked: List[Dict[str, Any]] = []
+    for raw_name in names:
+        short, theme, status_tags, weak_tags = _theme_flavor(seed, anchor)
+        candidate = {
+            "name": raw_name,
+            "rarity": "ungewöhnlich",
+            "description": f"{raw_name} prägt Konflikte dieser Welt durch {theme.lower()}.",
+            "theme": theme,
+            "origin": "generated",
+            "strengths_against": [],
+            "weaknesses_against": weak_tags[:2],
+            "synergies_with": [],
+            "status_effect_tags": status_tags[:2],
+            "class_affinities": [short],
+            "skill_affinities": [short],
+            "discoverable": True,
+            "lore_notes": [f"{raw_name} wird in {anchor} mit alten Ritualen verknüpft."],
+            "visual_motif": short,
+            "temperament": "unruhig",
+            "environment_bias": anchor,
+            "aliases": [],
+        }
+        too_similar, _reason = generated_element_too_similar(candidate, picked)
+        if too_similar:
+            continue
+        picked.append(candidate)
+        if len(picked) >= 6:
+            break
+    return picked[:6]
+
+
+ELEMENT_GENERATOR_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "elements": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "rarity": {"type": "string"},
+                    "description": {"type": "string"},
+                    "theme": {"type": "string"},
+                    "status_effect_tags": {"type": "array", "items": {"type": "string"}},
+                    "class_affinities": {"type": "array", "items": {"type": "string"}},
+                    "skill_affinities": {"type": "array", "items": {"type": "string"}},
+                    "lore_notes": {"type": "array", "items": {"type": "string"}},
+                    "visual_motif": {"type": "string"},
+                    "temperament": {"type": "string"},
+                    "environment_bias": {"type": "string"},
+                    "aliases": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["name", "description", "theme"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["elements"],
+    "additionalProperties": False,
+}
+
+
+def generate_world_elements_with_llm(summary: Dict[str, Any]) -> List[Dict[str, Any]]:
+    user = (
+        "Erzeuge genau 6 neue Elemente fuer diese Welt. "
+        "Nicht Feuer/Wasser/Erde/Luft/Licht/Schatten und keine reinen Umbenennungen davon. "
+        "Jedes Element braucht klar unterscheidbares Thema.\n"
+        f"Weltprofil: {json.dumps({'theme': summary.get('theme', ''), 'tone': summary.get('tone', ''), 'premise': summary.get('premise', '')}, ensure_ascii=False)}"
+    )
+    response = call_ollama_schema(
+        "Du bist ein präziser Worldbuilder. Antworte nur als JSON gemäß Schema.",
+        user,
+        ELEMENT_GENERATOR_SCHEMA,
+        timeout=120,
+        temperature=0.55,
+    )
+    rows = response.get("elements") if isinstance(response, dict) else []
+    if not isinstance(rows, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        candidate = {
+            "name": str(row.get("name") or "").strip(),
+            "rarity": str(row.get("rarity") or "ungewöhnlich").strip() or "ungewöhnlich",
+            "description": str(row.get("description") or "").strip(),
+            "theme": str(row.get("theme") or "").strip(),
+            "origin": "generated",
+            "strengths_against": [],
+            "weaknesses_against": [],
+            "synergies_with": [],
+            "status_effect_tags": [str(entry).strip() for entry in (row.get("status_effect_tags") or []) if str(entry).strip()],
+            "class_affinities": [str(entry).strip() for entry in (row.get("class_affinities") or []) if str(entry).strip()],
+            "skill_affinities": [str(entry).strip() for entry in (row.get("skill_affinities") or []) if str(entry).strip()],
+            "discoverable": True,
+            "lore_notes": [str(entry).strip() for entry in (row.get("lore_notes") or []) if str(entry).strip()],
+            "visual_motif": str(row.get("visual_motif") or "").strip(),
+            "temperament": str(row.get("temperament") or "").strip(),
+            "environment_bias": str(row.get("environment_bias") or "").strip(),
+            "aliases": [str(entry).strip() for entry in (row.get("aliases") or []) if str(entry).strip()],
+        }
+        out.append(candidate)
+    return out
+
+
+def generate_world_element_profiles(summary: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    elements: Dict[str, Dict[str, Any]] = {}
+    core_templates = [
+        ("Feuer", "core", "Zerstörerische Hitze und treibende Energie", "Verbrennung und Druck", ["brand", "hitzewallung"]),
+        ("Wasser", "core", "Fluss, Anpassung und Bindung", "Kontrolle, Heilung und Sog", ["durchnässung", "strudel"]),
+        ("Erde", "core", "Standfestigkeit, Last und Struktur", "Panzerung und Zermalmung", ["bruch", "fessel"]),
+        ("Luft", "core", "Tempo, Reichweite und Präzision", "Bewegung und Distanzkontrolle", ["verwirbelung", "stoß"]),
+        ("Licht", "core", "Offenbarung, Reinheit und Ordnung", "Blendung und Läuterung", ["blendung", "reinbrand"]),
+        ("Schatten", "core", "Verhüllung, Furcht und Umgehung", "Täuschung und Entzug", ["furcht", "verhüllung"]),
+    ]
+    for name, origin, desc, theme, effects in core_templates:
+        element_id = element_id_from_name(name)
+        elements[element_id] = normalize_element_profile(
+            {
+                "id": element_id,
+                "name": name,
+                "rarity": "anker",
+                "description": desc,
+                "theme": theme,
+                "origin": origin,
+                "status_effect_tags": effects,
+                "class_affinities": [normalize_codex_alias_text(name)],
+                "skill_affinities": [normalize_codex_alias_text(name)],
+                "discoverable": True,
+                "aliases": [name],
+            },
+            fallback_id=element_id,
+            fallback_origin=origin,
+        ) or default_element_profile(element_id, name, origin=origin)
+
+    generated_candidates: List[Dict[str, Any]] = []
+    llm_attempts = 0
+    max_llm_attempts = 3
+    while llm_attempts < max_llm_attempts and len(generated_candidates) < 6:
+        llm_attempts += 1
+        try:
+            batch = generate_world_elements_with_llm(summary)
+        except Exception:
+            batch = []
+        if not batch:
+            continue
+        generated_candidates.extend(batch)
+    accepted: List[Dict[str, Any]] = []
+    rejection_notes: List[str] = []
+    for candidate in generated_candidates:
+        too_similar, reason = generated_element_too_similar(candidate, accepted + list(elements.values()))
+        if too_similar:
+            rejection_notes.append(reason)
+            continue
+        accepted.append(candidate)
+        if len(accepted) >= 6:
+            break
+    if len(accepted) < 6:
+        for fallback in generate_world_elements_fallback(summary):
+            too_similar, reason = generated_element_too_similar(fallback, accepted + list(elements.values()))
+            if too_similar:
+                rejection_notes.append(reason)
+                continue
+            accepted.append(fallback)
+            if len(accepted) >= 6:
+                break
+    for candidate in accepted[:6]:
+        element_id = element_id_from_name(candidate.get("name", ""))
+        normalized = normalize_element_profile(
+            {
+                **candidate,
+                "id": element_id,
+                "origin": "generated",
+                "discoverable": True,
+            },
+            fallback_id=element_id,
+            fallback_origin="generated",
+        )
+        if normalized:
+            elements[element_id] = normalized
+    # hard clamp to 12 elements deterministically
+    elements = dict(list(stable_sorted_mapping(elements, key_fn=element_sort_key).items())[:ELEMENT_TOTAL_COUNT])
+    if rejection_notes:
+        meta_notes = summary.setdefault("_element_generation_notes", [])
+        if isinstance(meta_notes, list):
+            meta_notes.extend(rejection_notes[:12])
+    return stable_sorted_mapping(elements, key_fn=element_sort_key)
+
+
+def generate_element_relations(elements: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, str]]:
+    relations = build_default_element_relations(elements)
+    apply_element_anchor_relation_rules(elements, relations)
+    # generated/emergent relation hints from weaknesses/strengths/synergies
+    ids_by_name = {
+        normalize_codex_alias_text((profile or {}).get("name", "")): element_id
+        for element_id, profile in (elements or {}).items()
+        if isinstance(profile, dict)
+    }
+    for source_id, profile in (elements or {}).items():
+        if not isinstance(profile, dict):
+            continue
+        for target_name in (profile.get("strengths_against") or []):
+            target_id = ids_by_name.get(normalize_codex_alias_text(target_name))
+            if target_id:
+                _set_element_relation(relations, source_id, target_id, "strong")
+        for target_name in (profile.get("weaknesses_against") or []):
+            target_id = ids_by_name.get(normalize_codex_alias_text(target_name))
+            if target_id:
+                _set_element_relation(relations, source_id, target_id, "weak")
+        for target_name in (profile.get("synergies_with") or []):
+            target_id = ids_by_name.get(normalize_codex_alias_text(target_name))
+            if target_id and relations.get(source_id, {}).get(target_id) == "neutral":
+                _set_element_relation(relations, source_id, target_id, "strong")
+    return normalize_element_relations(relations, elements)
+
+
+def next_element_path_name(element_name: str, rank: str, path_seed: int) -> str:
+    suffixes = {
+        "F": ["Novize", "Student", "Lehrling"],
+        "C": ["Magier", "Wandler", "Hüter"],
+        "B": ["Adept", "Weber", "Kernträger"],
+        "A": ["Erzrufer", "Meister", "Archon"],
+        "S": ["Legende", "Erbe", "Ultimus"],
+    }
+    picks = suffixes.get(rank, ["Adept"])
+    return f"{element_name}-{picks[path_seed % len(picks)]}"
+
+
+def generate_element_class_paths(elements: Dict[str, Dict[str, Any]], summary: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+    seed_text = json.dumps(
+        {"theme": summary.get("theme", ""), "tone": summary.get("tone", ""), "premise": summary.get("premise", "")},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    rng = random.Random(int(hashlib.sha1(seed_text.encode("utf-8")).hexdigest(), 16) % (2**32))
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for element_id, profile in (elements or {}).items():
+        if not isinstance(profile, dict):
+            continue
+        name = str(profile.get("name") or element_id).strip()
+        path_count = clamp(1 + rng.randint(0, 2), ELEMENT_CLASS_PATH_MIN, ELEMENT_CLASS_PATH_MAX)
+        paths: List[Dict[str, Any]] = []
+        for path_index in range(path_count):
+            path_id = f"path_{element_id}_{path_index+1}"
+            rank_nodes: Dict[str, Dict[str, Any]] = {}
+            for rank in ELEMENT_CLASS_PATH_RANKS:
+                rank_skill_base = normalize_codex_alias_text(name).replace(" ", "_") or "element"
+                rank_nodes[rank] = {
+                    "id": f"{path_id}_{rank.lower()}",
+                    "name": next_element_path_name(name, rank, path_index + skill_rank_sort_value(rank)),
+                    "rank": rank,
+                    "element_id": element_id,
+                    "description": f"Pfadstufe {rank} des Elements {name}.",
+                    "required_level": 1 + (skill_rank_sort_value(rank) * 3),
+                    "required_class_level": 1 + skill_rank_sort_value(rank),
+                    "required_affinity_tags": list(dict.fromkeys([normalize_codex_alias_text(name), *profile.get("class_affinities", [])]))[:4],
+                    "required_skills": [],
+                    "core_skills_required": [
+                        f"{name} {['Impuls','Schnitt','Bindung'][path_index % 3]}",
+                        f"{name} Fokus",
+                    ],
+                    "core_skills_unlockable": [
+                        f"{name} Schub {rank}",
+                        f"{name} Mantel {rank}",
+                    ],
+                    "signature_skills": [f"{name} Signatur {rank}"],
+                    "signature_theme": str(profile.get("theme") or name),
+                    "next_paths": [],
+                    "skill_prefix": rank_skill_base,
+                }
+            paths.append(
+                {
+                    "id": path_id,
+                    "name": f"{name}-Pfad {path_index+1}",
+                    "element_id": element_id,
+                    "signature_theme": str(profile.get("theme") or name),
+                    "ranks": rank_nodes,
+                }
+            )
+        out[element_id] = paths
+    return stable_sorted_mapping(out, key_fn=lambda item: item[0])
+
+
+def normalize_class_path_rank_node(raw_node: Any, *, default_rank: str, element_id: str, path_id: str) -> Optional[Dict[str, Any]]:
+    if not isinstance(raw_node, dict):
+        return None
+    rank = normalize_skill_rank(raw_node.get("rank", default_rank))
+    node_id = str(raw_node.get("id") or f"{path_id}_{rank.lower()}").strip() or f"{path_id}_{rank.lower()}"
+    name = str(raw_node.get("name") or "").strip()
+    if not name:
+        return None
+    required_affinity_tags = [str(tag).strip() for tag in (raw_node.get("required_affinity_tags") or []) if str(tag).strip()]
+    required_skills = [str(skill).strip() for skill in (raw_node.get("required_skills") or []) if str(skill).strip()]
+    core_required = [str(skill).strip() for skill in (raw_node.get("core_skills_required") or []) if str(skill).strip()]
+    core_unlockable = [str(skill).strip() for skill in (raw_node.get("core_skills_unlockable") or []) if str(skill).strip()]
+    signature_skills = [str(skill).strip() for skill in (raw_node.get("signature_skills") or []) if str(skill).strip()]
+    if not core_required:
+        return None
+    return {
+        "id": node_id,
+        "name": name,
+        "rank": rank,
+        "element_id": str(raw_node.get("element_id") or element_id).strip() or element_id,
+        "description": str(raw_node.get("description") or "").strip(),
+        "required_level": max(1, int(raw_node.get("required_level", 1) or 1)),
+        "required_class_level": max(1, int(raw_node.get("required_class_level", 1) or 1)),
+        "required_affinity_tags": list(dict.fromkeys(required_affinity_tags)),
+        "required_skills": list(dict.fromkeys(required_skills)),
+        "core_skills_required": list(dict.fromkeys(core_required)),
+        "core_skills_unlockable": list(dict.fromkeys(core_unlockable)),
+        "signature_skills": list(dict.fromkeys(signature_skills)),
+        "signature_theme": str(raw_node.get("signature_theme") or "").strip(),
+        "next_paths": [str(path).strip() for path in (raw_node.get("next_paths") or []) if str(path).strip()],
+        "skill_prefix": str(raw_node.get("skill_prefix") or "").strip(),
+    }
+
+
+def normalize_element_class_paths(
+    raw_paths: Any,
+    elements: Dict[str, Dict[str, Any]],
+    summary: Optional[Dict[str, Any]] = None,
+) -> Dict[str, List[Dict[str, Any]]]:
+    generated_defaults = generate_element_class_paths(elements, summary or {})
+    if not isinstance(raw_paths, dict):
+        return generated_defaults
+    normalized: Dict[str, List[Dict[str, Any]]] = {}
+    for element_id, element_profile in (elements or {}).items():
+        bucket = raw_paths.get(element_id) if isinstance(raw_paths.get(element_id), list) else []
+        valid_paths: List[Dict[str, Any]] = []
+        for raw_path in bucket[:ELEMENT_CLASS_PATH_MAX]:
+            if not isinstance(raw_path, dict):
+                continue
+            path_id = str(raw_path.get("id") or "").strip() or f"path_{element_id}_{len(valid_paths)+1}"
+            path_name = str(raw_path.get("name") or "").strip()
+            ranks_raw = raw_path.get("ranks") if isinstance(raw_path.get("ranks"), dict) else {}
+            normalized_ranks: Dict[str, Dict[str, Any]] = {}
+            complete = True
+            for rank in ELEMENT_CLASS_PATH_RANKS:
+                node = normalize_class_path_rank_node(
+                    ranks_raw.get(rank),
+                    default_rank=rank,
+                    element_id=element_id,
+                    path_id=path_id,
+                )
+                if not node:
+                    complete = False
+                    break
+                normalized_ranks[rank] = node
+            if not complete or not path_name:
+                continue
+            valid_paths.append(
+                {
+                    "id": path_id,
+                    "name": path_name,
+                    "element_id": element_id,
+                    "signature_theme": str(raw_path.get("signature_theme") or element_profile.get("theme") or "").strip(),
+                    "ranks": normalized_ranks,
+                }
+            )
+        if not valid_paths:
+            valid_paths = deep_copy(generated_defaults.get(element_id) or [])
+        normalized[element_id] = valid_paths[:ELEMENT_CLASS_PATH_MAX]
+    return stable_sorted_mapping(normalized, key_fn=lambda item: str(item[0]))
+
+
+def ensure_world_element_system_from_setup(state: Dict[str, Any], setup_summary: Dict[str, Any]) -> None:
+    world = state.setdefault("world", {})
+    elements_raw = world.get("elements") if isinstance(world.get("elements"), dict) else {}
+    normalized_elements: Dict[str, Dict[str, Any]] = {}
+    for element_id, raw_element in elements_raw.items():
+        normalized = normalize_element_profile(raw_element, fallback_id=str(element_id), fallback_origin="generated")
+        if normalized:
+            normalized_elements[normalized["id"]] = normalized
+    if len(normalized_elements) != ELEMENT_TOTAL_COUNT:
+        normalized_elements = generate_world_element_profiles(setup_summary or {})
+    world["elements"] = stable_sorted_mapping(normalized_elements, key_fn=element_sort_key)
+    world["element_alias_index"] = build_element_alias_index(world["elements"])
+    world["element_relations"] = normalize_element_relations(world.get("element_relations"), world["elements"])
+    world["element_class_paths"] = normalize_element_class_paths(
+        world.get("element_class_paths"),
+        world["elements"],
+        setup_summary or {},
+    )
+    # reflect strengths/weaknesses from relation table to keep profiles coherent
+    for source_id, profile in (world["elements"] or {}).items():
+        rel_map = (world.get("element_relations") or {}).get(source_id) or {}
+        strengths = [target for target, rel in rel_map.items() if normalize_element_relation(rel) in {"strong", "dominant"} and target != source_id]
+        weaknesses = [target for target, rel in rel_map.items() if normalize_element_relation(rel) in {"weak", "countered"} and target != source_id]
+        profile["strengths_against"] = strengths
+        profile["weaknesses_against"] = weaknesses
+    world["elements"] = stable_sorted_mapping(world["elements"], key_fn=element_sort_key)
+
+
+def resolve_element_relation(world: Dict[str, Any], source_element_id: str, target_element_id: str) -> str:
+    source = str(source_element_id or "").strip()
+    target = str(target_element_id or "").strip()
+    if not source or not target:
+        return "neutral"
+    relations = (world or {}).get("element_relations") if isinstance((world or {}).get("element_relations"), dict) else {}
+    source_map = relations.get(source) if isinstance(relations.get(source), dict) else {}
+    return normalize_element_relation(source_map.get(target, "neutral"))
+
+
+def get_element_relation(world: Dict[str, Any], source_element_id: str, target_element_id: str) -> str:
+    return resolve_element_relation(world, source_element_id, target_element_id)
+
+
+def normalize_element_id_list(values: Any, world: Optional[Dict[str, Any]] = None) -> List[str]:
+    ids = set(((world or {}).get("elements") or {}).keys()) if isinstance((world or {}).get("elements"), dict) else set()
+    alias_index = ((world or {}).get("element_alias_index") or {}) if isinstance((world or {}).get("element_alias_index"), dict) else {}
+    out: List[str] = []
+    for raw in (values or []):
+        text = str(raw or "").strip()
+        if not text:
+            continue
+        if text in ids:
+            out.append(text)
+            continue
+        normalized = normalize_codex_alias_text(text)
+        matched = alias_index.get(normalized) if isinstance(alias_index.get(normalized), list) else []
+        if isinstance(matched, list) and len(matched) == 1:
+            out.append(str(matched[0]))
+            continue
+        candidate_id = element_id_from_name(text)
+        if candidate_id in ids:
+            out.append(candidate_id)
+    return list(dict.fromkeys([entry for entry in out if entry]))
+
+
+def normalize_skill_elements_for_world(skill: Dict[str, Any], world: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    normalized = deep_copy(skill or {})
+    normalized["elements"] = normalize_element_id_list(normalized.get("elements") or [], world or {})
+    primary_candidates = normalize_element_id_list([normalized.get("element_primary")], world or {})
+    normalized["element_primary"] = primary_candidates[0] if primary_candidates else (normalized["elements"][0] if normalized["elements"] else None)
+    if normalized.get("element_primary") and normalized["element_primary"] not in (normalized.get("elements") or []):
+        normalized["elements"] = [normalized["element_primary"], *(normalized.get("elements") or [])]
+    normalized["element_synergies"] = normalize_element_id_list(normalized.get("element_synergies") or [], world or {}) or None
+    return normalized
+
+
+def resolve_class_element_id(current_class: Optional[Dict[str, Any]], world: Dict[str, Any]) -> Optional[str]:
+    klass = normalize_class_current(current_class)
+    if not klass:
+        return None
+    existing = str(klass.get("element_id") or "").strip()
+    if existing and existing in ((world.get("elements") or {})):
+        return existing
+    for tag in (klass.get("element_tags") or []) + (klass.get("affinity_tags") or []):
+        found = normalize_element_id_list([tag], world)
+        if found:
+            return found[0]
+    found_from_name = normalize_element_id_list([klass.get("name", "")], world)
+    return found_from_name[0] if found_from_name else None
+
+
+def resolve_class_path_rank_node(world: Dict[str, Any], current_class: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    klass = normalize_class_current(current_class)
+    if not klass:
+        return None
+    element_id = resolve_class_element_id(klass, world)
+    if not element_id:
+        return None
+    all_paths = ((world.get("element_class_paths") or {}).get(element_id) or [])
+    if not isinstance(all_paths, list) or not all_paths:
+        return None
+    wanted_path_id = str(klass.get("path_id") or "").strip()
+    rank = normalize_skill_rank(klass.get("rank", "F"))
+    selected_path = None
+    if wanted_path_id:
+        selected_path = next((path for path in all_paths if str((path or {}).get("id") or "") == wanted_path_id), None)
+    if not selected_path:
+        selected_path = all_paths[0]
+    ranks = (selected_path or {}).get("ranks") if isinstance((selected_path or {}).get("ranks"), dict) else {}
+    node = ranks.get(rank) if isinstance(ranks.get(rank), dict) else None
+    if not node:
+        return None
+    return {
+        "path_id": str((selected_path or {}).get("id") or ""),
+        "path_name": str((selected_path or {}).get("name") or ""),
+        "element_id": element_id,
+        "rank": rank,
+        "node": deep_copy(node),
+    }
+
+
+def stable_sorted_mapping(values: Dict[str, Any], *, key_fn=None) -> Dict[str, Any]:
+    if not isinstance(values, dict):
+        return {}
+    if key_fn is None:
+        key_fn = lambda item: str(item[0])
+    items = sorted(values.items(), key=key_fn)
+    return {key: value for key, value in items}
+
+
+def codex_block_order(kind: str) -> List[str]:
+    if str(kind or "").strip().lower() == CODEX_KIND_RACE:
+        return list(RACE_CODEX_BLOCK_ORDER)
+    return list(BEAST_CODEX_BLOCK_ORDER)
+
+
+def codex_blocks_for_level(kind: str, level: int) -> List[str]:
+    clamped_level = clamp(int(level or 0), CODEX_KNOWLEDGE_LEVEL_MIN, CODEX_KNOWLEDGE_LEVEL_MAX)
+    block_map = RACE_BLOCKS_BY_LEVEL if str(kind or "").strip().lower() == CODEX_KIND_RACE else BEAST_BLOCKS_BY_LEVEL
+    ordered = codex_block_order(kind)
+    unlocked: List[str] = []
+    for idx in range(1, clamped_level + 1):
+        for block in (block_map.get(idx) or []):
+            if block in ordered and block not in unlocked:
+                unlocked.append(block)
+    return unlocked
+
+
+def merge_known_facts_stable(existing: Any, incoming: Any) -> List[str]:
+    merged: List[str] = []
+    seen_keys = set()
+    for source in (existing or []), (incoming or []):
+        for raw in source:
+            fact = str(raw or "").strip()
+            if not fact:
+                continue
+            fact_key = normalize_codex_alias_text(fact)
+            if not fact_key or fact_key in seen_keys:
+                continue
+            seen_keys.add(fact_key)
+            merged.append(fact)
+    return merged
+
+
+def stable_sorted_unique_strings(values: Any, *, limit: int = 64) -> List[str]:
+    cleaned = [str(value or "").strip() for value in (values or []) if str(value or "").strip()]
+    deduped = sorted(set(cleaned), key=lambda value: normalize_codex_alias_text(value))
+    return deduped[: max(1, int(limit or 1))]
+
+
+def default_race_codex_entry(race_id: str) -> Dict[str, Any]:
+    return {
+        "discovered": False,
+        "knowledge_level": 0,
+        "known_blocks": [],
+        "known_facts": [],
+        "encounter_count": 0,
+        "first_seen_turn": 0,
+        "last_updated_turn": 0,
+        "known_individuals": [],
+    }
+
+
+def default_beast_codex_entry(beast_id: str) -> Dict[str, Any]:
+    return {
+        "discovered": False,
+        "knowledge_level": 0,
+        "known_blocks": [],
+        "known_facts": [],
+        "encounter_count": 0,
+        "first_seen_turn": 0,
+        "last_updated_turn": 0,
+        "defeated_count": 0,
+        "observed_abilities": [],
+    }
+
+
+def normalize_codex_entry_stable(raw_entry: Any, *, kind: str) -> Dict[str, Any]:
+    base = deep_copy(raw_entry) if isinstance(raw_entry, dict) else {}
+    defaults = default_race_codex_entry("") if str(kind or "").strip().lower() == CODEX_KIND_RACE else default_beast_codex_entry("")
+    normalized = deep_copy(defaults)
+    normalized["discovered"] = bool(base.get("discovered", defaults["discovered"]))
+    normalized["knowledge_level"] = clamp(
+        int(base.get("knowledge_level", defaults["knowledge_level"]) or defaults["knowledge_level"]),
+        CODEX_KNOWLEDGE_LEVEL_MIN,
+        CODEX_KNOWLEDGE_LEVEL_MAX,
+    )
+    normalized["encounter_count"] = max(0, int(base.get("encounter_count", defaults["encounter_count"]) or defaults["encounter_count"]))
+    normalized["first_seen_turn"] = max(0, int(base.get("first_seen_turn", defaults["first_seen_turn"]) or defaults["first_seen_turn"]))
+    normalized["last_updated_turn"] = max(
+        normalized["first_seen_turn"],
+        int(base.get("last_updated_turn", defaults["last_updated_turn"]) or defaults["last_updated_turn"]),
+    )
+    order = codex_block_order(kind)
+    raw_blocks = [str(block or "").strip() for block in (base.get("known_blocks") or []) if str(block or "").strip()]
+    seen_blocks = set()
+    known_blocks: List[str] = []
+    for block in order:
+        if block in raw_blocks and block not in seen_blocks:
+            seen_blocks.add(block)
+            known_blocks.append(block)
+    normalized["known_blocks"] = known_blocks
+    normalized["known_facts"] = merge_known_facts_stable(base.get("known_facts") or [], [])
+
+    if str(kind or "").strip().lower() == CODEX_KIND_RACE:
+        normalized["known_individuals"] = stable_sorted_unique_strings(base.get("known_individuals") or [], limit=64)
+    else:
+        normalized["defeated_count"] = max(0, int(base.get("defeated_count", defaults.get("defeated_count", 0)) or defaults.get("defeated_count", 0)))
+        normalized["observed_abilities"] = stable_sorted_unique_strings(base.get("observed_abilities") or [], limit=64)
+    return normalized
+
+
+def race_profile_block_facts(profile: Dict[str, Any]) -> Dict[str, List[str]]:
+    return {
+        "identity": [
+            f"Art: {profile.get('kind') or 'Volk'}",
+            f"Seltenheit: {profile.get('rarity') or 'gewöhnlich'}",
+            f"Kurzprofil: {profile.get('description_short') or 'Noch kein Eintrag.'}",
+        ],
+        "appearance": [f"Erscheinung: {profile.get('appearance') or 'Noch unbekannt.'}"],
+        "culture": [
+            f"Kultur: {profile.get('culture') or 'Noch unbekannt.'}",
+            f"Temperament: {profile.get('temperament') or 'Noch unbekannt.'}",
+        ],
+        "homeland": [f"Heimat: {profile.get('homeland') or 'Unbekannt.'}"],
+        "class_affinities": [f"Klassen-Affinitäten: {', '.join(profile.get('class_affinities') or []) or 'Keine gesicherten Daten.'}"],
+        "skill_affinities": [f"Skill-Affinitäten: {', '.join(profile.get('skill_affinities') or []) or 'Keine gesicherten Daten.'}"],
+        "strengths": [f"Stärken: {', '.join(profile.get('strength_tags') or []) or 'Noch unbekannt.'}"],
+        "weaknesses": [f"Schwächen: {', '.join(profile.get('weakness_tags') or []) or 'Noch unbekannt.'}"],
+        "relations": [f"Sozialer Ruf: {profile.get('social_reputation') or 'Noch unklar.'}"],
+        "notable_individuals": [f"Bekannte Merkmale: {', '.join(profile.get('notable_traits') or []) or 'Noch keine bekannten Merkmale.'}"],
+    }
+
+
+def beast_profile_block_facts(profile: Dict[str, Any]) -> Dict[str, List[str]]:
+    return {
+        "identity": [
+            f"Kategorie: {profile.get('category') or 'Bestie'}",
+            f"Gefahrenstufe: {int(profile.get('danger_rating', 1) or 1)}",
+        ],
+        "appearance": [f"Erscheinung: {profile.get('appearance') or 'Noch unbekannt.'}"],
+        "habitat": [f"Lebensraum: {profile.get('habitat') or 'Noch unbekannt.'}"],
+        "behavior": [f"Verhalten: {profile.get('behavior') or 'Noch unbekannt.'}"],
+        "combat_style": [f"Kampfstil: {profile.get('combat_style') or 'Noch unbekannt.'}"],
+        "known_abilities": [f"Bekannte Fähigkeiten: {', '.join(profile.get('known_abilities') or []) or 'Noch keine gesicherten Daten.'}"],
+        "strengths": [f"Stärken: {', '.join(profile.get('strength_tags') or []) or 'Noch unbekannt.'}"],
+        "weaknesses": [f"Schwächen: {', '.join(profile.get('weakness_tags') or []) or 'Noch unbekannt.'}"],
+        "loot": [f"Loot-Hinweise: {', '.join(profile.get('loot_tags') or []) or 'Noch keine Hinweise.'}"],
+        "lore": [f"Lore: {', '.join(profile.get('lore_notes') or []) or 'Noch keine Aufzeichnungen.'}"],
+    }
+
+
+def codex_facts_for_blocks(kind: str, profile: Dict[str, Any], blocks: List[str]) -> List[str]:
+    kind_key = str(kind or "").strip().lower()
+    block_map = race_profile_block_facts(profile) if kind_key == CODEX_KIND_RACE else beast_profile_block_facts(profile)
+    ordered_blocks = [block for block in codex_block_order(kind_key) if block in (blocks or [])]
+    facts: List[str] = []
+    for block in ordered_blocks:
+        facts = merge_known_facts_stable(facts, block_map.get(block) or [])
+    return facts
+
+
+def build_world_alias_indexes(world: Dict[str, Any]) -> Dict[str, Dict[str, List[str]]]:
+    race_aliases: Dict[str, set] = {}
+    beast_aliases: Dict[str, set] = {}
+    for race_id, race in ((world.get("races") or {}).items()):
+        if not isinstance(race, dict):
+            continue
+        variants = build_entity_alias_variants(str(race.get("name") or ""), race.get("aliases") if isinstance(race.get("aliases"), list) else [])
+        for alias in variants:
+            race_aliases.setdefault(alias, set()).add(str(race_id))
+    for beast_id, beast in ((world.get("beast_types") or {}).items()):
+        if not isinstance(beast, dict):
+            continue
+        variants = build_entity_alias_variants(str(beast.get("name") or ""), beast.get("aliases") if isinstance(beast.get("aliases"), list) else [])
+        for alias in variants:
+            beast_aliases.setdefault(alias, set()).add(str(beast_id))
+    race_index = {alias: sorted(ids) for alias, ids in stable_sorted_mapping(race_aliases).items()}
+    beast_index = {alias: sorted(ids) for alias, ids in stable_sorted_mapping(beast_aliases).items()}
+    return {"race_alias_index": race_index, "beast_alias_index": beast_index}
+
+
+def build_world_exact_name_index(world: Dict[str, Any]) -> Dict[str, Dict[str, List[str]]]:
+    race_names: Dict[str, set] = {}
+    beast_names: Dict[str, set] = {}
+    for race_id, race in ((world.get("races") or {}).items()):
+        name_norm = normalize_codex_alias_text((race or {}).get("name", ""))
+        if name_norm:
+            race_names.setdefault(name_norm, set()).add(str(race_id))
+    for beast_id, beast in ((world.get("beast_types") or {}).items()):
+        name_norm = normalize_codex_alias_text((beast or {}).get("name", ""))
+        if name_norm:
+            beast_names.setdefault(name_norm, set()).add(str(beast_id))
+    return {
+        "race_names": {alias: sorted(ids) for alias, ids in stable_sorted_mapping(race_names).items()},
+        "beast_names": {alias: sorted(ids) for alias, ids in stable_sorted_mapping(beast_names).items()},
+    }
+
+
+def resolve_codex_entity_ids(text: str, alias_index: Dict[str, List[str]], exact_names: Optional[Dict[str, List[str]]] = None) -> Dict[str, Any]:
+    normalized_text = normalize_codex_alias_text(text)
+    if not normalized_text:
+        return {"matched": [], "ambiguous": [], "matched_aliases": {}}
+    matched_aliases: Dict[str, set] = {}
+    ambiguous: List[Dict[str, Any]] = []
+    search_space: Dict[str, List[str]] = {}
+
+    for alias, ids in (alias_index or {}).items():
+        alias_norm = normalize_codex_alias_text(alias)
+        if not alias_norm:
+            continue
+        dedup_ids = sorted({str(entry).strip() for entry in (ids or []) if str(entry).strip()})
+        if dedup_ids:
+            search_space[alias_norm] = dedup_ids
+    for alias, ids in (exact_names or {}).items():
+        alias_norm = normalize_codex_alias_text(alias)
+        if not alias_norm or alias_norm in search_space:
+            continue
+        dedup_ids = sorted({str(entry).strip() for entry in (ids or []) if str(entry).strip()})
+        if dedup_ids:
+            search_space[alias_norm] = dedup_ids
+
+    for alias in sorted(search_space.keys(), key=lambda value: (-len(value), value)):
+        pattern = rf"(?<!\w){re.escape(alias)}(?!\w)"
+        if not re.search(pattern, normalized_text):
+            continue
+        ids = search_space[alias]
+        if len(ids) == 1:
+            matched_aliases.setdefault(ids[0], set()).add(alias)
+        else:
+            ambiguous.append({"alias": alias, "entity_ids": list(ids)})
+
+    matched_ids = sorted(matched_aliases.keys())
+    return {
+        "matched": matched_ids,
+        "ambiguous": ambiguous,
+        "matched_aliases": {entity_id: sorted(aliases) for entity_id, aliases in matched_aliases.items()},
+    }
+
+
+def world_codex_sort_key(entry: Tuple[str, Dict[str, Any]]) -> Tuple[str, str]:
+    entity_id, payload = entry
+    return (normalize_codex_alias_text((payload or {}).get("name", "")), str(entity_id))
+
+
+def normalize_world_codex_structures(state: Dict[str, Any]) -> None:
+    world = state.setdefault("world", {})
+    world_races = world.get("races") if isinstance(world.get("races"), dict) else {}
+    world_beasts = world.get("beast_types") if isinstance(world.get("beast_types"), dict) else {}
+    world_elements = world.get("elements") if isinstance(world.get("elements"), dict) else {}
+
+    cleaned_races: Dict[str, Dict[str, Any]] = {}
+    for raw_id, raw_profile in world_races.items():
+        profile = normalize_race_profile(raw_profile, fallback_id=str(raw_id))
+        if not profile:
+            continue
+        cleaned_races[profile["id"]] = profile
+    cleaned_races = stable_sorted_mapping(cleaned_races, key_fn=world_codex_sort_key)
+
+    cleaned_beasts: Dict[str, Dict[str, Any]] = {}
+    for raw_id, raw_profile in world_beasts.items():
+        profile = normalize_beast_profile(raw_profile, fallback_id=str(raw_id))
+        if not profile:
+            continue
+        cleaned_beasts[profile["id"]] = profile
+    cleaned_beasts = stable_sorted_mapping(cleaned_beasts, key_fn=world_codex_sort_key)
+
+    cleaned_elements: Dict[str, Dict[str, Any]] = {}
+    for raw_id, raw_profile in world_elements.items():
+        fallback_origin = "core" if normalize_codex_alias_text((raw_profile or {}).get("name", "")) in {
+            normalize_codex_alias_text(name) for name in ELEMENT_CORE_NAMES
+        } else "generated"
+        profile = normalize_element_profile(raw_profile, fallback_id=str(raw_id), fallback_origin=fallback_origin)
+        if not profile:
+            continue
+        cleaned_elements[profile["id"]] = profile
+    cleaned_elements = stable_sorted_mapping(cleaned_elements, key_fn=element_sort_key)
+
+    world["races"] = cleaned_races
+    world["beast_types"] = cleaned_beasts
+    world["elements"] = cleaned_elements
+    alias_indexes = build_world_alias_indexes(world)
+    world["race_alias_index"] = alias_indexes["race_alias_index"]
+    world["beast_alias_index"] = alias_indexes["beast_alias_index"]
+    world["element_alias_index"] = build_element_alias_index(cleaned_elements)
+    world["element_relations"] = normalize_element_relations(world.get("element_relations"), cleaned_elements)
+    world["element_class_paths"] = normalize_element_class_paths(
+        world.get("element_class_paths"),
+        cleaned_elements,
+        ((state.get("setup") or {}).get("world") or {}).get("summary") or {},
+    )
+
+    codex = state.setdefault("codex", {})
+    codex_meta = codex.get("meta") if isinstance(codex.get("meta"), dict) else {}
+    normalized_meta = deep_copy(CODEX_DEFAULT_META)
+    normalized_meta.update({str(key): value for key, value in codex_meta.items()})
+    codex["meta"] = normalized_meta
+
+    codex_races_raw = codex.get("races") if isinstance(codex.get("races"), dict) else {}
+    codex_beasts_raw = codex.get("beasts") if isinstance(codex.get("beasts"), dict) else {}
+    normalized_codex_races: Dict[str, Dict[str, Any]] = {}
+    normalized_codex_beasts: Dict[str, Dict[str, Any]] = {}
+    for race_id in cleaned_races.keys():
+        normalized_codex_races[race_id] = normalize_codex_entry_stable(codex_races_raw.get(race_id), kind=CODEX_KIND_RACE)
+    for beast_id in cleaned_beasts.keys():
+        normalized_codex_beasts[beast_id] = normalize_codex_entry_stable(codex_beasts_raw.get(beast_id), kind=CODEX_KIND_BEAST)
+    for raw_id, raw_entry in codex_races_raw.items():
+        race_id = str(raw_id or "").strip()
+        if race_id and race_id not in normalized_codex_races:
+            normalized_codex_races[race_id] = normalize_codex_entry_stable(raw_entry, kind=CODEX_KIND_RACE)
+    for raw_id, raw_entry in codex_beasts_raw.items():
+        beast_id = str(raw_id or "").strip()
+        if beast_id and beast_id not in normalized_codex_beasts:
+            normalized_codex_beasts[beast_id] = normalize_codex_entry_stable(raw_entry, kind=CODEX_KIND_BEAST)
+
+    codex["races"] = stable_sorted_mapping(
+        normalized_codex_races,
+        key_fn=lambda item: (
+            normalize_codex_alias_text(str((((world.get("races") or {}).get(item[0]) or {}).get("name") or item[0]))),
+            item[0],
+        ),
+    )
+    codex["beasts"] = stable_sorted_mapping(
+        normalized_codex_beasts,
+        key_fn=lambda item: (
+            normalize_codex_alias_text(str((((world.get("beast_types") or {}).get(item[0]) or {}).get("name") or item[0]))),
+            item[0],
+        ),
+    )
+
+
+def pick_world_theme_anchor(summary: Dict[str, Any]) -> str:
+    theme = normalize_codex_alias_text(summary.get("theme", ""))
+    if "wuest" in theme or "sand" in theme:
+        return "desert"
+    if "wald" in theme or "forest" in theme:
+        return "forest"
+    if "urban" in theme or "stadt" in theme:
+        return "urban"
+    if "isekai" in theme or "hybrid" in theme:
+        return "hybrid"
+    return "default"
+
+
+def generate_world_race_profiles(summary: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    anchor = pick_world_theme_anchor(summary)
+    seed_text = json.dumps(
+        {
+            "theme": summary.get("theme", ""),
+            "tone": summary.get("tone", ""),
+            "conflict": summary.get("central_conflict", ""),
+            "anchor": anchor,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    rng = random.Random(int(hashlib.sha1(seed_text.encode("utf-8")).hexdigest(), 16) % (2**32))
+    race_count = clamp(5 + rng.randint(0, 2), 5, 7)
+
+    human_template = {
+        "name": "Menschen von Eldor",
+        "kind": "menschenvolk",
+        "rarity": "gewöhnlich",
+        "description_short": "Anpassungsfähiges Volk mit vielen Kulturen und kurzen Machtzyklen.",
+        "appearance": "Vielfältige Erscheinungsbilder, oft praktische Kleidung und Reiseausrüstung.",
+        "homeland": "Grenzstädte und Handelsrouten",
+        "culture": "Pragmatisch, ehrgeizig, stark fraktionsgeprägt",
+        "temperament": "wechselhaft",
+        "strength_tags": ["anpassung", "diplomatie", "handwerk"],
+        "weakness_tags": ["kurze_lebensspanne", "interne_spaltung"],
+        "class_affinities": ["ritter", "schuetze", "haendler"],
+        "skill_affinities": ["führung", "taktik", "überleben"],
+        "social_reputation": "dominant, aber misstrauisch betrachtet",
+        "playable": True,
+        "notable_traits": ["schnelle lernkurve", "fraktionsnetzwerke"],
+    }
+    magical_template = {
+        "name": "Aelvar",
+        "kind": "langlebiges arkanvolk",
+        "rarity": "selten",
+        "description_short": "Langlebiges Volk mit strenger Erinnerungskultur und Runenmagie.",
+        "appearance": "Leuchtende Iris, feine Gesichtszüge, glyphenartige Hautlinien.",
+        "homeland": "Nebelarchive der Hochhaine",
+        "culture": "Ritualisiert, wissenszentriert, zurückhaltend",
+        "temperament": "ruhig",
+        "strength_tags": ["arkane_praezision", "mentale_disziplin"],
+        "weakness_tags": ["fragile_koerper", "ueberheblichkeit"],
+        "class_affinities": ["runenweber", "mystiker", "hüter"],
+        "skill_affinities": ["runenmagie", "analyse", "barrieren"],
+        "social_reputation": "respektiert und gefürchtet",
+        "playable": True,
+        "notable_traits": ["langes gedächtnis", "rituelle namenbindung"],
+    }
+    robust_template = {
+        "name": "Dornzwerge",
+        "kind": "bergvolk",
+        "rarity": "ungewöhnlich",
+        "description_short": "Robustes Minenvolk mit eidbasierten Clans und Eisenkult.",
+        "appearance": "Massiger Körperbau, markante Narben und metallene Tätowierungen.",
+        "homeland": "Eisenspalten und Schachtfestungen",
+        "culture": "Ehrenkodex, Schuldbücher, Werkbanktradition",
+        "temperament": "stur",
+        "strength_tags": ["zähigkeit", "rüstungshandwerk", "nahkampf"],
+        "weakness_tags": ["geringe_magieresistenz", "starrheit"],
+        "class_affinities": ["vorhut", "schmied", "waechter"],
+        "skill_affinities": ["schildtechnik", "metallkunde", "standhaftigkeit"],
+        "social_reputation": "verlässlich, aber hart",
+        "playable": True,
+        "notable_traits": ["eidsiegel auf rüstungen", "steinlied-rituale"],
+    }
+    original_templates = [
+        {"name": "Nebelkin", "kind": "schleiervolk", "rarity": "selten", "description_short": "Zwielichtbewohner, die zwischen Sichtbarkeit und Nebel wechseln können.", "appearance": "Halbtransparente Hautschimmer und rauchige Konturen.", "homeland": "Verwobene Moorgrenzen", "culture": "Schwurhandel und geheime Familienpfade", "temperament": "berechnend", "strength_tags": ["täuschung", "heimlichkeit", "spurverdeckung"], "weakness_tags": ["lichtempfindlich", "ritualgebunden"], "class_affinities": ["schattenklinge", "späher", "hexer"], "skill_affinities": ["verschleierung", "fluchzeichen", "ausweichen"], "social_reputation": "misstrauisch beobachtet", "playable": True, "notable_traits": ["namensmasken", "schuldzeichen"]},
+        {"name": "Runengeborene", "kind": "kunstvolk", "rarity": "ungewöhnlich", "description_short": "Geborene Träger alter Runenadern mit instabilen Schüben.", "appearance": "Körpermale glühen bei Emotionen oder Ressourcennutzung.", "homeland": "Zerfallene Obeliskenfelder", "culture": "Prüfpfade, Mentorenlinien, Kodex des Gleichgewichts", "temperament": "intensiv", "strength_tags": ["runenresonanz", "ressourcenkontrolle"], "weakness_tags": ["ueberlastung", "instabile_impulse"], "class_affinities": ["runenwaechter", "arkanist", "katalysator"], "skill_affinities": ["kanalisierung", "sigillen", "resonanzschlag"], "social_reputation": "gesucht von Orden und Fraktionen", "playable": True, "notable_traits": ["resonanzkrisen", "zeichengeburtstage"]},
+        {"name": "Aschewanderer", "kind": "nomadenvolk", "rarity": "ungewöhnlich", "description_short": "Überlebenskünstler aus verbrannten Landstrichen mit Hitzetoleranz.", "appearance": "Rußgraue Hautmuster und hitzefeste Mantelstoffe.", "homeland": "Aschensenken und Kraterpfade", "culture": "Wanderpakten, Feuerriten, Tauschrecht", "temperament": "wachsam", "strength_tags": ["hitzetoleranz", "ausdauer", "spurlesen"], "weakness_tags": ["kälteanfällig", "wasserknappheit"], "class_affinities": ["jaeger", "lanzenreiter", "wüstenhüter"], "skill_affinities": ["überleben", "fährtenlesen", "schnellschläge"], "social_reputation": "respektiert als Kundschafter", "playable": True, "notable_traits": ["aschenkarten", "lebensschuld-bänder"]},
+        {"name": "Lumeniden", "kind": "lichtgebundenes volk", "rarity": "selten", "description_short": "Von Lichtadern geprägtes Volk, das Eide in Wahrheitszeichen bindet.", "appearance": "Helle Irisringe und leuchtende Narbenlinien.", "homeland": "Sonnenklöster und Grenzkathedralen", "culture": "Eidprüfung, Pflichtethos, Schutzorden", "temperament": "pflichtbewusst", "strength_tags": ["segen", "barriere", "moral"], "weakness_tags": ["dogmatisch", "korruptionsanfällig"], "class_affinities": ["hüter", "paladin", "kanalritter"], "skill_affinities": ["schutzfelder", "aura", "heilung"], "social_reputation": "hoch angesehen, politisch umkämpft", "playable": True, "notable_traits": ["wahrheitssiegel", "lichtliturgien"]},
+        {"name": "Knochenhirten", "kind": "karglandvolk", "rarity": "ungewöhnlich", "description_short": "Grenzvolk, das Reliktknochen für Werkzeuge und Verteidigung nutzt.", "appearance": "Knochenschmuck, staubige Mäntel, ritualisierte Schnittmuster.", "homeland": "Trockengräber und Windschluchten", "culture": "Ahnenpfade, Schicksalslieder, Sippenwachen", "temperament": "hart", "strength_tags": ["ausdauer", "ritualkunde", "zermuerbung"], "weakness_tags": ["soziale_aechtung", "starre_riten"], "class_affinities": ["klingenhirte", "totemkrieger", "seher"], "skill_affinities": ["totemkunst", "ritualklingen", "durchhaltewillen"], "social_reputation": "gefährlich, aber verlässlich im Krieg", "playable": True, "notable_traits": ["ahnenmasken", "knochensiegel"]},
+    ]
+
+    selected_templates = [deep_copy(human_template), deep_copy(magical_template), deep_copy(robust_template)]
+    originals = [deep_copy(entry) for entry in original_templates]
+    rng.shuffle(originals)
+    selected_templates.extend(originals[: max(2, race_count - 3)])
+    selected_templates = selected_templates[:race_count]
+    races: Dict[str, Dict[str, Any]] = {}
+    for template in selected_templates:
+        race_id = race_id_from_name(template.get("name", ""))
+        races[race_id] = normalize_race_profile({**template, "id": race_id}, fallback_id=race_id) or default_race_profile(race_id, template.get("name", ""))
+    return stable_sorted_mapping(races, key_fn=world_codex_sort_key)
+
+
+def generate_world_beast_profiles(summary: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    anchor = pick_world_theme_anchor(summary)
+    seed_text = json.dumps(
+        {
+            "theme": summary.get("theme", ""),
+            "tone": summary.get("tone", ""),
+            "density": summary.get("monsters_density", ""),
+            "anchor": anchor,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    rng = random.Random(int(hashlib.sha1(seed_text.encode("utf-8")).hexdigest(), 16) % (2**32))
+    beast_count = clamp(6 + rng.randint(0, 6), 6, 12)
+    templates = [
+        {"name": "Schattenwolf", "category": "bestie", "danger_rating": 3, "habitat": "Nebelwälder", "behavior": "jagt in Rudeln und umkreist verwundete Ziele", "appearance": "Dunkles Fell mit rauchigem Schimmer", "strength_tags": ["rudelangriff", "nachtjagd"], "weakness_tags": ["blendlicht", "laute_rituale"], "combat_style": "schnelle Flankenangriffe", "known_abilities": ["Nebeltritt", "Heulschock"], "loot_tags": ["reißzahn", "nachtfell"], "lore_notes": ["Meidet geweihte Feuerlinien."]},
+        {"name": "Runenbasilisk", "category": "aberration", "danger_rating": 8, "habitat": "Obeliskenruinen", "behavior": "lauert reglos und schlägt aus dem Hinterhalt zu", "appearance": "Schuppen mit leuchtenden Runenspalten", "strength_tags": ["versteinerungsblick", "panzerhaut"], "weakness_tags": ["spiegelnde_flaechen", "augenverletzlich"], "combat_style": "starre Blickachsen und kurze Explosivstöße", "known_abilities": ["Runenblick", "Steinhieb"], "loot_tags": ["runenschuppe", "basiliskenauge"], "lore_notes": ["Runen pulsen vor einem Blickangriff."]},
+        {"name": "Aschenmarder", "category": "bestie", "danger_rating": 2, "habitat": "Kraterpfade", "behavior": "stehlen Vorräte und testen Lagerwachen", "appearance": "Dichtes rußfarbenes Fell mit Funkenpartikeln", "strength_tags": ["hitzeresistenz", "hinterhalt"], "weakness_tags": ["wasser", "enge_gassen"], "combat_style": "schnelle Störangriffe", "known_abilities": ["Funkenbiss"], "loot_tags": ["hitzehaut", "druesenbeutel"], "lore_notes": ["Reagieren auf offene Ressourcenkristalle."]},
+        {"name": "Dornschreiter", "category": "konstrukt", "danger_rating": 6, "habitat": "Grenzgräben und Ruinenfelder", "behavior": "patrouilliert auf festen Routen", "appearance": "Metallknochen mit rankenartigen Dornen", "strength_tags": ["ruestung", "durchstoss"], "weakness_tags": ["gelenkpunkte", "resonanzzauber"], "combat_style": "geradlinige Druckangriffe", "known_abilities": ["Dornenramme", "Stahltritt"], "loot_tags": ["dornkern", "stahlsehne"], "lore_notes": ["Routen folgen oft alten Feldmarken."]},
+        {"name": "Mondkrähe", "category": "flugbestie", "danger_rating": 4, "habitat": "Felsstädte und Kapellenruinen", "behavior": "beobachtet Gruppen und stiehlt glänzende Relikte", "appearance": "Schwarzsilbrige Schwingen mit kaltem Glanz", "strength_tags": ["flug", "aufklaerung"], "weakness_tags": ["netzfallen", "blendung"], "combat_style": "Sturzangriffe und Geräuschstörung", "known_abilities": ["Klangriss", "Sturzschnitt"], "loot_tags": ["mondfeder", "kropfstein"], "lore_notes": ["Ihr Kreisflug kündigt oft Hinterhalte an."]},
+        {"name": "Grubenoger", "category": "koloss", "danger_rating": 7, "habitat": "Einsturzminen", "behavior": "territorial, reagiert auf Lärm und Erschütterung", "appearance": "Massiger Körper mit steiniger Haut", "strength_tags": ["wucht", "zähigkeit"], "weakness_tags": ["langsame_wendung", "sehnen"], "combat_style": "wuchtige Schläge und Schockwellen", "known_abilities": ["Erdstampfer", "Schuttwurf"], "loot_tags": ["ogersehne", "erzsplitter"], "lore_notes": ["Verfolgt bevorzugt den lautesten Gegner."]},
+        {"name": "Frostlaterne", "category": "geistbestie", "danger_rating": 5, "habitat": "Nebelmoore", "behavior": "lockt Reisende in Kältefelder", "appearance": "Schwebende Lichtkugel mit eisigem Schweif", "strength_tags": ["kälte", "verwirrung"], "weakness_tags": ["waermequellen", "segen"], "combat_style": "Distanzdruck und Auszehrung", "known_abilities": ["Kältefessel", "Irrlichtpfad"], "loot_tags": ["frostkern", "lichtstaub"], "lore_notes": ["Singen vor einem Kälteausbruch."]},
+        {"name": "Sumpfhydra", "category": "bestie", "danger_rating": 9, "habitat": "Vergiftete Feuchtlande", "behavior": "verteidigt Brutreviere aggressiv", "appearance": "Mehrköpfige Schlangenbestie mit dicker Schuppenhaut", "strength_tags": ["regeneration", "mehrfachangriff"], "weakness_tags": ["brandwunden", "kopfschlag"], "combat_style": "Dauerdruck mit mehreren Angriffswinkeln", "known_abilities": ["Mehrfachbiss", "Säureatem"], "loot_tags": ["hydraschuppe", "saeuredruesen"], "lore_notes": ["Abgetrennte Köpfe regenerieren langsam."]},
+        {"name": "Kettenmotte", "category": "schwarm", "danger_rating": 3, "habitat": "Verlassene Garnisonen", "behavior": "folgt Schwingungen von Metall", "appearance": "Graue Flügel mit kettenartigen Mustern", "strength_tags": ["schwarmdruck", "desorientierung"], "weakness_tags": ["rauch", "flaechenfeuer"], "combat_style": "Überwältigung durch Masse", "known_abilities": ["Scherenschwarm"], "loot_tags": ["fluegelstaub", "fadenzahn"], "lore_notes": ["Aktiv bei vibrierendem Stahl."]},
+        {"name": "Ruinentitan", "category": "koloss", "danger_rating": 12, "habitat": "Versunkene Tempel", "behavior": "erwacht auf Ressourcenimpulse", "appearance": "Gigantische Steinmetallgestalt mit leeren Augenhöhlen", "strength_tags": ["kolossale_wucht", "panzerung"], "weakness_tags": ["resonanzbrueche", "kernrisse"], "combat_style": "Langsame, verheerende Zonenangriffe", "known_abilities": ["Truemmerwelle", "Kernstoß"], "loot_tags": ["titanenkern", "runenmetall"], "lore_notes": ["Kernleuchten zeigen Verwundbarkeit an."]},
+        {"name": "Klingenrochen", "category": "wasserbestie", "danger_rating": 6, "habitat": "Unterirdische Seen", "behavior": "jagt im Schwarm unter der Wasseroberfläche", "appearance": "Flache Körper mit scharfem Flossensaum", "strength_tags": ["schnitte", "wasserkontrolle"], "weakness_tags": ["trocknung", "elektrische_entladung"], "combat_style": "Schnelle Kreisschnitte aus dem Wasser", "known_abilities": ["Flossensalve", "Sogkante"], "loot_tags": ["rochenhaut", "leitflosse"], "lore_notes": ["Vermeidet vibrierende Ufersteine."]},
+        {"name": "Dornenmimik", "category": "aberration", "danger_rating": 5, "habitat": "Verfallene Hallen", "behavior": "tarnt sich als Kiste oder Statue", "appearance": "Fleischige Oberfläche mit hölzernen Dornen", "strength_tags": ["tarnung", "ueberraschung"], "weakness_tags": ["aufmerksamkeit", "lichtkegel"], "combat_style": "kurze Burst-Angriffe aus Tarnung", "known_abilities": ["Schnappmaul", "Dornenwurf"], "loot_tags": ["mimikdruesen", "harzfasern"], "lore_notes": ["Reagiert auf Ressourcengeruch."]},
+    ]
+    pool = [deep_copy(entry) for entry in templates]
+    rng.shuffle(pool)
+    selected = pool[:beast_count]
+    beasts: Dict[str, Dict[str, Any]] = {}
+    for template in selected:
+        beast_id = beast_id_from_name(template.get("name", ""))
+        beasts[beast_id] = normalize_beast_profile({**template, "id": beast_id}, fallback_id=beast_id) or default_beast_profile(beast_id, template.get("name", ""))
+    return stable_sorted_mapping(beasts, key_fn=world_codex_sort_key)
+
+
+def ensure_world_codex_from_setup(state: Dict[str, Any], setup_summary: Dict[str, Any]) -> None:
+    world = state.setdefault("world", {})
+    world_races = world.get("races") if isinstance(world.get("races"), dict) else {}
+    world_beasts = world.get("beast_types") if isinstance(world.get("beast_types"), dict) else {}
+    if not world_races:
+        world["races"] = generate_world_race_profiles(setup_summary or {})
+    if not world_beasts:
+        world["beast_types"] = generate_world_beast_profiles(setup_summary or {})
+    ensure_world_element_system_from_setup(state, setup_summary or {})
+    normalize_world_codex_structures(state)
+
 def default_npc_entry(npc_id: str, name: str) -> Dict[str, Any]:
     return {
         "npc_id": npc_id,
@@ -1383,6 +2967,9 @@ def default_npc_entry(npc_id: str, name: str) -> Dict[str, Any]:
         "sta_max": 8,
         "res_current": 4,
         "res_max": 4,
+        "element_affinities": [],
+        "element_resistances": [],
+        "element_weaknesses": [],
         "conditions": [],
         "injuries": [],
         "scars": [],
@@ -1429,6 +3016,9 @@ def normalize_npc_entry(raw: Any, *, fallback_npc_id: str = "") -> Optional[Dict
     entry["sta_current"] = clamp(int(raw.get("sta_current", entry.get("sta_current", entry["sta_max"])) or entry.get("sta_current", entry["sta_max"])), 0, entry["sta_max"])
     entry["res_max"] = max(0, int(raw.get("res_max", entry.get("res_max", 4)) or entry.get("res_max", 4)))
     entry["res_current"] = clamp(int(raw.get("res_current", entry.get("res_current", entry["res_max"])) or entry.get("res_current", entry["res_max"])), 0, entry["res_max"])
+    entry["element_affinities"] = [str(value).strip() for value in (raw.get("element_affinities") or []) if str(value).strip()][:8]
+    entry["element_resistances"] = [str(value).strip() for value in (raw.get("element_resistances") or []) if str(value).strip()][:8]
+    entry["element_weaknesses"] = [str(value).strip() for value in (raw.get("element_weaknesses") or []) if str(value).strip()][:8]
     entry["conditions"] = [str(cond).strip() for cond in (raw.get("conditions") or []) if str(cond).strip()][:12]
     entry["injuries"] = [deep_copy(item) for item in (raw.get("injuries") or []) if isinstance(item, dict)][:16]
     entry["scars"] = [deep_copy(item) for item in (raw.get("scars") or []) if isinstance(item, dict)][:24]
@@ -1446,6 +3036,16 @@ def normalize_npc_codex_state(campaign: Dict[str, Any]) -> None:
         if not normalized_entry:
             continue
         npc_id = normalized_entry["npc_id"]
+        normalized_entry["element_affinities"] = normalize_element_id_list(normalized_entry.get("element_affinities") or [], state.get("world") or {})
+        normalized_entry["element_resistances"] = normalize_element_id_list(normalized_entry.get("element_resistances") or [], state.get("world") or {})
+        normalized_entry["element_weaknesses"] = normalize_element_id_list(normalized_entry.get("element_weaknesses") or [], state.get("world") or {})
+        npc_resource_name = normalize_resource_name((((normalized_entry.get("progression") or {}).get("resource_name")) or "Aether"), "Aether")
+        normalized_skills: Dict[str, Dict[str, Any]] = {}
+        for skill_id, raw_skill in ((normalized_entry.get("skills") or {}).items()):
+            skill = normalize_dynamic_skill_state(raw_skill, skill_id=str(skill_id), resource_name=npc_resource_name)
+            skill = normalize_skill_elements_for_world(skill, state.get("world") or {})
+            normalized_skills[skill["id"]] = skill
+        normalized_entry["skills"] = normalized_skills
         cleaned_codex[npc_id] = normalized_entry
         alias = normalize_npc_alias(normalized_entry.get("name", ""))
         if alias:
@@ -1544,6 +3144,10 @@ def default_class_current() -> Dict[str, Any]:
         "id": "",
         "name": "",
         "rank": "F",
+        "path_id": "",
+        "path_rank": "F",
+        "element_id": "",
+        "element_tags": [],
         "level": 1,
         "level_max": 10,
         "xp": 0,
@@ -1637,6 +3241,9 @@ def blank_character_state(slot_name: str) -> Dict[str, Any]:
         "sta_max": 10,
         "res_current": 5,
         "res_max": 5,
+        "element_affinities": [],
+        "element_resistances": [],
+        "element_weaknesses": [],
         "carry_current": 0,
         "carry_max": 10,
         "level": 1,
@@ -2347,6 +3954,9 @@ def dynamic_skill_default(skill_id: str = "", skill_name: str = "", resource_nam
         "manifestation_source": None,
         "category": None,
         "class_affinity": None,
+        "elements": [],
+        "element_primary": None,
+        "element_synergies": None,
         "cost": None,
         "price": None,
         "cooldown_turns": None,
@@ -2453,6 +4063,13 @@ def normalize_dynamic_skill_state(
     skill["category"] = category or None
     class_affinity = [str(tag).strip() for tag in (skill.get("class_affinity") or []) if str(tag).strip()]
     skill["class_affinity"] = class_affinity or None
+    skill["elements"] = list(dict.fromkeys([str(tag).strip() for tag in (skill.get("elements") or []) if str(tag).strip()]))
+    element_primary = str(skill.get("element_primary") or "").strip()
+    if element_primary and element_primary not in skill["elements"]:
+        skill["elements"].insert(0, element_primary)
+    skill["element_primary"] = element_primary or (skill["elements"][0] if skill["elements"] else None)
+    element_synergies = [str(tag).strip() for tag in (skill.get("element_synergies") or []) if str(tag).strip()]
+    skill["element_synergies"] = list(dict.fromkeys(element_synergies)) or None
     raw_cost = skill.get("cost")
     if isinstance(raw_cost, dict):
         cost_resource = str(raw_cost.get("resource") or resource_name).strip() or resource_name
@@ -2511,6 +4128,14 @@ def merge_dynamic_skill(existing: Dict[str, Any], incoming: Dict[str, Any], *, r
         base["category"] = new_data["category"]
     if new_data.get("class_affinity"):
         base["class_affinity"] = list(dict.fromkeys([*(base.get("class_affinity") or []), *(new_data.get("class_affinity") or [])]))
+    if new_data.get("elements"):
+        base["elements"] = list(dict.fromkeys([*(base.get("elements") or []), *(new_data.get("elements") or [])]))
+    if new_data.get("element_primary"):
+        base["element_primary"] = new_data.get("element_primary")
+        if base["element_primary"] and base["element_primary"] not in (base.get("elements") or []):
+            base["elements"] = [base["element_primary"], *(base.get("elements") or [])]
+    if new_data.get("element_synergies"):
+        base["element_synergies"] = list(dict.fromkeys([*(base.get("element_synergies") or []), *(new_data.get("element_synergies") or [])]))
     if new_data.get("cost"):
         base["cost"] = new_data["cost"]
     if new_data.get("price"):
@@ -2681,6 +4306,11 @@ def normalize_class_current(value: Any) -> Optional[Dict[str, Any]]:
         return None
     raw_rank = klass.get("rank", klass.get("class_rank", "F"))
     klass["rank"] = normalize_skill_rank(raw_rank)
+    klass["path_id"] = str(klass.get("path_id") or "").strip()
+    klass["path_rank"] = normalize_skill_rank(klass.get("path_rank") or klass.get("rank") or "F")
+    klass["element_id"] = str(klass.get("element_id") or "").strip()
+    raw_element_tags = klass.get("element_tags") or []
+    klass["element_tags"] = list(dict.fromkeys([str(entry).strip() for entry in raw_element_tags if str(entry).strip()]))
     klass["level"] = max(1, int(klass.get("level", klass.get("class_level", 1)) or 1))
     klass["level_max"] = max(klass["level"], int(klass.get("level_max", klass.get("class_level_max", 10)) or 10))
     default_xp_next = next_class_xp_for_level(klass["level"])
@@ -4271,6 +5901,7 @@ def normalize_progression_event(
         return None
     target_skill_id = str(raw_event.get("target_skill_id") or "").strip() or None
     target_class_id = str(raw_event.get("target_class_id") or "").strip() or None
+    target_element_id = str(raw_event.get("target_element_id") or "").strip() or None
     reason = str(raw_event.get("reason") or "").strip()
     metadata = deep_copy(raw_event.get("metadata") or {})
     skill_payload = deep_copy(raw_event.get("skill") or {})
@@ -4282,6 +5913,7 @@ def normalize_progression_event(
         "actor": normalized_actor,
         "target_skill_id": target_skill_id,
         "target_class_id": target_class_id,
+        "target_element_id": target_element_id,
         "severity": normalize_progression_event_severity(raw_event.get("severity")),
         "tags": list(dict.fromkeys(tags)),
         "source_turn": max(0, int(raw_event.get("source_turn", source_turn) or source_turn)),
@@ -4312,6 +5944,7 @@ def canonicalize_manifested_skill_payload(
     *,
     raw_skill: Dict[str, Any],
     character: Dict[str, Any],
+    world: Optional[Dict[str, Any]] = None,
     world_settings: Optional[Dict[str, Any]] = None,
     default_source: str = "Manifestation",
 ) -> Optional[Dict[str, Any]]:
@@ -4343,6 +5976,9 @@ def canonicalize_manifested_skill_payload(
             "manifestation_source": str(raw_skill.get("manifestation_source") or default_source),
             "category": raw_skill.get("category"),
             "class_affinity": raw_skill.get("class_affinity"),
+            "elements": raw_skill.get("elements"),
+            "element_primary": raw_skill.get("element_primary"),
+            "element_synergies": raw_skill.get("element_synergies"),
         },
         resource_name=resource_name,
         unlocked_from=default_source,
@@ -4357,6 +5993,16 @@ def canonicalize_manifested_skill_payload(
         skill["power_rating"] = max(1, raw_power_rating)
     if not skill.get("growth_potential"):
         skill["growth_potential"] = "mittel"
+    resolved_elements = normalize_element_id_list(skill.get("elements") or [], world or {})
+    if not resolved_elements:
+        class_element = resolve_class_element_id(character.get("class_current"), world or {})
+        if class_element:
+            resolved_elements = [class_element]
+    skill["elements"] = resolved_elements
+    primary_candidates = normalize_element_id_list([skill.get("element_primary")], world or {})
+    skill["element_primary"] = primary_candidates[0] if primary_candidates else (resolved_elements[0] if resolved_elements else None)
+    if skill.get("element_primary") and skill["element_primary"] not in skill["elements"]:
+        skill["elements"].insert(0, skill["element_primary"])
     return skill
 
 
@@ -4373,6 +6019,7 @@ def append_recent_progression_event(character: Dict[str, Any], event: Dict[str, 
             "reason": str(event.get("reason") or "").strip(),
             "target_skill_id": str(event.get("target_skill_id") or "").strip(),
             "target_class_id": str(event.get("target_class_id") or "").strip(),
+            "target_element_id": str(event.get("target_element_id") or "").strip(),
         }
     )
     if len(recent) > 40:
@@ -4448,6 +6095,102 @@ def apply_class_xp(character: Dict[str, Any], amount: int, *, event_reason: str 
         )
     character["class_current"] = normalize_class_current(current_class)
     return out
+
+
+def build_elemental_core_skill_payload(
+    *,
+    skill_name: str,
+    element_id: str,
+    class_name: str,
+    resource_name: str,
+    unlocked_from: str,
+) -> Dict[str, Any]:
+    pretty_name = clean_extracted_skill_name(skill_name) or str(skill_name or "").strip() or "Elementtechnik"
+    return normalize_dynamic_skill_state(
+        {
+            "id": skill_id_from_name(pretty_name),
+            "name": pretty_name,
+            "rank": "F",
+            "level": 1,
+            "level_max": DEFAULT_DYNAMIC_SKILL_LEVEL_MAX,
+            "tags": ["technik", "elementar", normalize_codex_alias_text(class_name)],
+            "description": f"{pretty_name} ist Teil des Klassenkerns von {class_name}.",
+            "effect_summary": f"{pretty_name} kanalisiert elementare Energie.",
+            "power_rating": 8,
+            "growth_potential": "mittel",
+            "elements": [element_id] if element_id else [],
+            "element_primary": element_id or None,
+            "cost": {"resource": resource_name, "amount": 1},
+            "unlocked_from": unlocked_from,
+            "manifestation_source": "class_core",
+            "category": "elemental_core",
+            "class_affinity": [normalize_codex_alias_text(class_name)] if class_name else None,
+            "xp": 0,
+            "next_xp": next_skill_xp_for_level(1),
+            "mastery": 0,
+        },
+        resource_name=resource_name,
+    )
+
+
+def ensure_class_rank_core_skills(
+    character: Dict[str, Any],
+    world: Dict[str, Any],
+    world_settings: Optional[Dict[str, Any]] = None,
+    *,
+    unlock_extra: bool = False,
+) -> List[str]:
+    messages: List[str] = []
+    current_class = normalize_class_current(character.get("class_current"))
+    if not current_class:
+        return messages
+    node_info = resolve_class_path_rank_node(world, current_class)
+    if not node_info:
+        return messages
+    node = node_info["node"]
+    current_class["path_id"] = str(node_info.get("path_id") or current_class.get("path_id") or "")
+    current_class["path_rank"] = normalize_skill_rank(node_info.get("rank") or current_class.get("rank") or "F")
+    current_class["element_id"] = str(node_info.get("element_id") or current_class.get("element_id") or "")
+    current_class["element_tags"] = list(
+        dict.fromkeys(
+            [
+                *(current_class.get("element_tags") or []),
+                str(current_class.get("element_id") or "").strip(),
+            ]
+        )
+    )
+    character["class_current"] = normalize_class_current(current_class)
+    skill_store = character.setdefault("skills", {})
+    resource_name = resource_name_for_character(character, world_settings or {})
+    class_name = str(current_class.get("name") or "")
+    required = [str(name).strip() for name in (node.get("core_skills_required") or []) if str(name).strip()]
+    unlockable = [str(name).strip() for name in (node.get("core_skills_unlockable") or []) if str(name).strip()]
+    signature = [str(name).strip() for name in (node.get("signature_skills") or []) if str(name).strip()]
+    guaranteed: List[str] = required[:1] if required else []
+    if unlock_extra:
+        guaranteed.extend(unlockable[:1])
+        if current_class.get("rank") in {"A", "S"}:
+            guaranteed.extend(signature[:1])
+    for skill_name in guaranteed:
+        skill_id = skill_id_from_name(skill_name)
+        if skill_id in skill_store:
+            existing = normalize_dynamic_skill_state(skill_store[skill_id], resource_name=resource_name)
+            if current_class.get("element_id") and current_class["element_id"] not in (existing.get("elements") or []):
+                existing["elements"] = [current_class["element_id"], *(existing.get("elements") or [])]
+                existing["element_primary"] = existing.get("element_primary") or current_class["element_id"]
+                skill_store[skill_id] = normalize_dynamic_skill_state(existing, resource_name=resource_name)
+            continue
+        new_skill = build_elemental_core_skill_payload(
+            skill_name=skill_name,
+            element_id=str(current_class.get("element_id") or ""),
+            class_name=class_name,
+            resource_name=resource_name,
+            unlocked_from=f"ClassCore:{current_class.get('rank','F')}",
+        )
+        skill_store[new_skill["id"]] = new_skill
+        char_name = str(((character.get("bio") or {}).get("name") or character.get("slot_id") or "").strip() or "Die Figur")
+        messages.append(f"{char_name} schaltet den Klassenkern-Skill {new_skill['name']} frei.")
+    return messages
 
 
 def refresh_skill_progression(character: Dict[str, Any]) -> None:
@@ -4808,6 +6551,7 @@ def manifest_skill_from_progression_event(
     character: Dict[str, Any],
     actor_slot: str,
     event: Dict[str, Any],
+    world: Optional[Dict[str, Any]],
     world_settings: Optional[Dict[str, Any]],
 ) -> Optional[str]:
     if str(event.get("type") or "").strip().lower() != "skill_manifestation":
@@ -4822,6 +6566,7 @@ def manifest_skill_from_progression_event(
     skill = canonicalize_manifested_skill_payload(
         raw_skill=payload,
         character=character,
+        world=world,
         world_settings=world_settings,
         default_source=f"Progression:{event.get('type', 'skill_manifestation')}",
     )
@@ -4848,6 +6593,7 @@ def apply_progression_events(
     action_type: str,
 ) -> Dict[str, Any]:
     world_settings = ((state_after.get("world") or {}).get("settings") or {})
+    world_model = state_after.get("world") if isinstance(state_after.get("world"), dict) else {}
     turn_number = int((state_after.get("meta") or {}).get("turn", 0) or 0)
     normalized_events = infer_progression_events_from_patch(
         state_before=state_before,
@@ -4877,6 +6623,7 @@ def apply_progression_events(
             character=character,
             actor_slot=slot_name,
             event=event,
+            world=state_after.get("world") if isinstance(state_after.get("world"), dict) else {},
             world_settings=world_settings,
         )
         if manifestation_msg:
@@ -4887,6 +6634,15 @@ def apply_progression_events(
                 event=event,
                 world_settings=world_settings,
                 actor_slot=slot_name,
+            )
+        )
+        event_type = str(event.get("type") or "").strip().lower()
+        event_messages.extend(
+            ensure_class_rank_core_skills(
+                character,
+                world_model,
+                world_settings,
+                unlock_extra=event_type in {"milestone_progress", "class_breakthrough", "boss_defeated", "skill_manifestation"},
             )
         )
         applied_events.append(event)
@@ -5092,6 +6848,9 @@ def normalize_character_state(character: Dict[str, Any], slot_name: str, items_d
     }
 
     merged["attributes"].update(character.get("attributes", {}) or {})
+    merged["element_affinities"] = [str(value).strip() for value in (character.get("element_affinities") or []) if str(value).strip()][:8]
+    merged["element_resistances"] = [str(value).strip() for value in (character.get("element_resistances") or []) if str(value).strip()][:8]
+    merged["element_weaknesses"] = [str(value).strip() for value in (character.get("element_weaknesses") or []) if str(value).strip()][:8]
     raw_skills = character.get("skills", {}) or {}
     if looks_like_legacy_seeded_skills(raw_skills):
         raw_skills = {}
@@ -5865,6 +7624,54 @@ def skill_rank_power_weight(rank: str) -> int:
     return {"F": 1, "E": 2, "D": 3, "C": 4, "B": 5, "A": 7, "S": 9}.get(normalize_skill_rank(rank), 1)
 
 
+def entity_element_profile_for_character(character: Dict[str, Any], world: Dict[str, Any]) -> Dict[str, List[str]]:
+    class_current = normalize_class_current(character.get("class_current")) or {}
+    class_element = resolve_class_element_id(class_current, world)
+    affinities = normalize_element_id_list(
+        [*(character.get("element_affinities") or []), *(class_current.get("element_tags") or []), class_element],
+        world,
+    )
+    resistances = normalize_element_id_list(character.get("element_resistances") or [], world)
+    weaknesses = normalize_element_id_list(character.get("element_weaknesses") or [], world)
+    return {"affinities": affinities, "resistances": resistances, "weaknesses": weaknesses}
+
+
+def entity_element_profile_for_npc(npc_entry: Dict[str, Any], world: Dict[str, Any]) -> Dict[str, List[str]]:
+    class_current = normalize_class_current(npc_entry.get("class_current")) or {}
+    class_element = resolve_class_element_id(class_current, world)
+    affinities = normalize_element_id_list(
+        [*(npc_entry.get("element_affinities") or []), *(class_current.get("element_tags") or []), class_element],
+        world,
+    )
+    resistances = normalize_element_id_list(npc_entry.get("element_resistances") or [], world)
+    weaknesses = normalize_element_id_list(npc_entry.get("element_weaknesses") or [], world)
+    return {"affinities": affinities, "resistances": resistances, "weaknesses": weaknesses}
+
+
+def element_matchup_multiplier(world: Dict[str, Any], attacker_profile: Dict[str, List[str]], defender_profile: Dict[str, List[str]]) -> float:
+    attacker = attacker_profile.get("affinities") or []
+    defender_affinities = defender_profile.get("affinities") or []
+    defender_resistances = set(defender_profile.get("resistances") or [])
+    defender_weaknesses = set(defender_profile.get("weaknesses") or [])
+    if not attacker:
+        return 1.0
+    multipliers: List[float] = []
+    for source in attacker:
+        # relation to defender affinities
+        for target in defender_affinities:
+            relation = resolve_element_relation(world, source, target)
+            multipliers.append(ELEMENT_RELATION_SCORE.get(relation, 1.0))
+        # explicit defender resistance/weakness tags
+        if source in defender_resistances:
+            multipliers.append(0.85)
+        if source in defender_weaknesses:
+            multipliers.append(1.15)
+    if not multipliers:
+        return 1.0
+    avg = sum(multipliers) / max(1, len(multipliers))
+    return max(0.72, min(1.35, avg))
+
+
 def compute_character_combat_score(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> int:
     attrs = character.get("attributes") or {}
     level = max(1, int(character.get("level", 1) or 1))
@@ -5938,10 +7745,13 @@ def compute_npc_combat_score(npc_entry: Dict[str, Any], world_settings: Optional
 
 def build_combat_scaling_context(state: Dict[str, Any], actor: str) -> Dict[str, Any]:
     world_settings = ((state.get("world") or {}).get("settings") or {})
+    world_model = state.get("world") if isinstance(state.get("world"), dict) else {}
     actor_character = ((state.get("characters") or {}).get(actor) or {})
     actor_scene = str(actor_character.get("scene_id") or "").strip()
     actor_score = compute_character_combat_score(actor_character, world_settings)
+    actor_element_profile = entity_element_profile_for_character(actor_character, world_model)
     threat_scores: List[int] = []
+    element_matchups: List[float] = []
 
     for slot_name, character in (state.get("characters") or {}).items():
         if slot_name == actor:
@@ -5949,6 +7759,10 @@ def build_combat_scaling_context(state: Dict[str, Any], actor: str) -> Dict[str,
         if actor_scene and str(character.get("scene_id") or "").strip() != actor_scene:
             continue
         threat_scores.append(compute_character_combat_score(character, world_settings))
+        enemy_profile = entity_element_profile_for_character(character, world_model)
+        forward = element_matchup_multiplier(world_model, actor_element_profile, enemy_profile)
+        reverse = element_matchup_multiplier(world_model, enemy_profile, actor_element_profile)
+        element_matchups.append(max(0.72, min(1.35, (forward / max(0.72, reverse)))))
 
     for raw_npc in sorted_npc_codex_entries(state):
         npc_scene = str(raw_npc.get("last_seen_scene_id") or "").strip()
@@ -5957,16 +7771,25 @@ def build_combat_scaling_context(state: Dict[str, Any], actor: str) -> Dict[str,
         if str(raw_npc.get("status") or "active").strip().lower() == "gone":
             continue
         threat_scores.append(compute_npc_combat_score(raw_npc, world_settings))
+        enemy_profile = entity_element_profile_for_npc(raw_npc, world_model)
+        forward = element_matchup_multiplier(world_model, actor_element_profile, enemy_profile)
+        reverse = element_matchup_multiplier(world_model, enemy_profile, actor_element_profile)
+        element_matchups.append(max(0.72, min(1.35, (forward / max(0.72, reverse)))))
 
     threat_score = max(1, int(round(sum(threat_scores) / max(1, len(threat_scores))))) if threat_scores else actor_score
     ratio = float(actor_score) / float(max(1, threat_score))
-    pressure = "high" if ratio <= 0.78 else "medium" if ratio <= 1.24 else "low"
+    element_factor = max(0.8, min(1.2, (sum(element_matchups) / max(1, len(element_matchups))))) if element_matchups else 1.0
+    weighted_ratio = ratio * element_factor
+    pressure = "high" if weighted_ratio <= 0.78 else "medium" if weighted_ratio <= 1.24 else "low"
     return {
         "actor_score": actor_score,
         "threat_score": threat_score,
         "ratio": round(ratio, 3),
+        "weighted_ratio": round(weighted_ratio, 3),
         "pressure": pressure,
         "threat_count": len(threat_scores),
+        "element_factor": round(element_factor, 3),
+        "element_affinities": actor_element_profile.get("affinities") or [],
     }
 
 
@@ -5989,14 +7812,16 @@ def apply_combat_scaling_to_patch(
         multiplier = 0.82
     else:
         multiplier = 1.0
+    element_factor = float(scaling_context.get("element_factor", 1.0) or 1.0)
+    element_adjusted = max(0.72, min(1.35, (multiplier * (1.0 / element_factor))))
     updated = deep_copy(patch or blank_patch())
     actor_patch = (updated.get("characters") or {}).get(actor)
     if not isinstance(actor_patch, dict):
-        return updated, {"applied": False, "multiplier": multiplier}
+        return updated, {"applied": False, "multiplier": multiplier, "element_factor": round(element_factor, 3), "effective_multiplier": round(element_adjusted, 3)}
     applied = False
     for key in ("hp_delta", "stamina_delta"):
         if key in actor_patch and int(actor_patch.get(key, 0) or 0) < 0:
-            scaled = int(round(int(actor_patch.get(key, 0) or 0) * multiplier))
+            scaled = int(round(int(actor_patch.get(key, 0) or 0) * element_adjusted))
             if scaled == 0:
                 scaled = -1
             actor_patch[key] = scaled
@@ -6006,14 +7831,14 @@ def apply_combat_scaling_to_patch(
         for key in ("hp", "stamina", "sta", "res", "aether"):
             raw = int(resources_delta.get(key, 0) or 0)
             if raw < 0:
-                scaled = int(round(raw * multiplier))
+                scaled = int(round(raw * element_adjusted))
                 if scaled == 0:
                     scaled = -1
                 resources_delta[key] = scaled
                 applied = True
         actor_patch["resources_delta"] = resources_delta
     updated.setdefault("characters", {})[actor] = actor_patch
-    return updated, {"applied": applied, "multiplier": multiplier}
+    return updated, {"applied": applied, "multiplier": multiplier, "element_factor": round(element_factor, 3), "effective_multiplier": round(element_adjusted, 3)}
 
 
 def infer_combat_context(
@@ -6667,6 +8492,8 @@ def build_rules_profile(campaign: Dict[str, Any]) -> Dict[str, Any]:
         "consequence_severity": world_settings.get("consequence_severity", summary.get("consequence_severity", "mittel")),
         "progression_speed": world_settings.get("progression_speed", summary.get("progression_speed", "normal")),
         "evolution_cost_policy": world_settings.get("evolution_cost_policy", summary.get("evolution_cost_policy", "leicht")),
+        "element_count": len((((campaign.get("state") or {}).get("world") or {}).get("elements") or {})),
+        "core_elements": list(ELEMENT_CORE_NAMES),
     }
 
 
@@ -7812,6 +9639,78 @@ def build_npc_codex_summary(state: Dict[str, Any], *, limit: int = 16) -> List[D
     return summary
 
 
+def sorted_world_profiles(state: Dict[str, Any], *, kind: str) -> List[Tuple[str, Dict[str, Any]]]:
+    world = state.get("world") or {}
+    source = world.get("races") if kind == CODEX_KIND_RACE else world.get("beast_types")
+    if not isinstance(source, dict):
+        return []
+    rows = [(str(entity_id), profile) for entity_id, profile in source.items() if isinstance(profile, dict)]
+    rows.sort(key=lambda row: (normalize_codex_alias_text((row[1] or {}).get("name", "")), row[0]))
+    return rows
+
+
+def build_race_codex_summary(state: Dict[str, Any], *, limit: int = 32) -> List[Dict[str, Any]]:
+    codex_races = (((state.get("codex") or {}).get("races") or {})
+                   if isinstance(((state.get("codex") or {}).get("races") or {}), dict) else {})
+    summary: List[Dict[str, Any]] = []
+    for race_id, profile in sorted_world_profiles(state, kind=CODEX_KIND_RACE)[: max(1, int(limit or 1))]:
+        entry = normalize_codex_entry_stable(codex_races.get(race_id), kind=CODEX_KIND_RACE)
+        summary.append(
+            {
+                "race_id": race_id,
+                "name": str((profile or {}).get("name") or race_id),
+                "knowledge_level": int(entry.get("knowledge_level", 0) or 0),
+                "discovered": bool(entry.get("discovered")),
+                "known_blocks": deep_copy(entry.get("known_blocks") or []),
+                "known_facts": deep_copy(entry.get("known_facts") or []),
+                "encounter_count": int(entry.get("encounter_count", 0) or 0),
+            }
+        )
+    return summary
+
+
+def build_beast_codex_summary(state: Dict[str, Any], *, limit: int = 40) -> List[Dict[str, Any]]:
+    codex_beasts = (((state.get("codex") or {}).get("beasts") or {})
+                    if isinstance(((state.get("codex") or {}).get("beasts") or {}), dict) else {})
+    summary: List[Dict[str, Any]] = []
+    for beast_id, profile in sorted_world_profiles(state, kind=CODEX_KIND_BEAST)[: max(1, int(limit or 1))]:
+        entry = normalize_codex_entry_stable(codex_beasts.get(beast_id), kind=CODEX_KIND_BEAST)
+        summary.append(
+            {
+                "beast_id": beast_id,
+                "name": str((profile or {}).get("name") or beast_id),
+                "knowledge_level": int(entry.get("knowledge_level", 0) or 0),
+                "discovered": bool(entry.get("discovered")),
+                "known_blocks": deep_copy(entry.get("known_blocks") or []),
+                "known_facts": deep_copy(entry.get("known_facts") or []),
+                "encounter_count": int(entry.get("encounter_count", 0) or 0),
+                "defeated_count": int(entry.get("defeated_count", 0) or 0),
+            }
+        )
+    return summary
+
+
+def build_world_element_summary(state: Dict[str, Any], *, limit: int = 16) -> List[Dict[str, Any]]:
+    world = state.get("world") if isinstance(state.get("world"), dict) else {}
+    rows = []
+    for element_id, profile in ((world.get("elements") or {}).items()):
+        if not isinstance(profile, dict):
+            continue
+        rows.append(
+            {
+                "id": element_id,
+                "name": str(profile.get("name") or element_id),
+                "origin": str(profile.get("origin") or "generated"),
+                "theme": str(profile.get("theme") or ""),
+                "status_effect_tags": deep_copy(profile.get("status_effect_tags") or []),
+                "class_affinities": deep_copy(profile.get("class_affinities") or []),
+                "skill_affinities": deep_copy(profile.get("skill_affinities") or []),
+            }
+        )
+    rows.sort(key=lambda entry: (normalize_codex_alias_text(entry.get("name", "")), entry.get("id", "")))
+    return rows[: max(1, int(limit or 1))]
+
+
 def build_extractor_context_packet(
     campaign: Dict[str, Any],
     state: Dict[str, Any],
@@ -7836,6 +9735,10 @@ def build_extractor_context_packet(
             slot_name: {
                 "display_name": display_name_for_slot(campaign, slot_name),
                 "scene_id": (state.get("characters", {}).get(slot_name) or {}).get("scene_id", ""),
+                "element_affinities": (state.get("characters", {}).get(slot_name) or {}).get("element_affinities", []),
+                "element_resistances": (state.get("characters", {}).get(slot_name) or {}).get("element_resistances", []),
+                "element_weaknesses": (state.get("characters", {}).get(slot_name) or {}).get("element_weaknesses", []),
+                "class_current": normalize_class_current((state.get("characters", {}).get(slot_name) or {}).get("class_current")),
                 "skills": [
                     {
                         "id": skill.get("id"),
@@ -7843,6 +9746,8 @@ def build_extractor_context_packet(
                         "rank": skill.get("rank"),
                         "level": skill.get("level"),
                         "tags": skill.get("tags", []),
+                        "elements": skill.get("elements", []),
+                        "element_primary": skill.get("element_primary"),
                     }
                     for skill in sorted(
                         [
@@ -7873,6 +9778,33 @@ def build_extractor_context_packet(
             item_id: item.get("name", "")
             for item_id, item in (state.get("items") or {}).items()
         },
+        "world_races": {
+            race_id: {
+                "name": race.get("name", race_id),
+                "aliases": race.get("aliases", []),
+            }
+            for race_id, race in ((state.get("world") or {}).get("races") or {}).items()
+        },
+        "world_beast_types": {
+            beast_id: {
+                "name": beast.get("name", beast_id),
+                "aliases": beast.get("aliases", []),
+            }
+            for beast_id, beast in ((state.get("world") or {}).get("beast_types") or {}).items()
+        },
+        "world_elements": {
+            element_id: {
+                "name": element.get("name", element_id),
+                "origin": element.get("origin", "generated"),
+                "aliases": element.get("aliases", []),
+            }
+            for element_id, element in ((state.get("world") or {}).get("elements") or {}).items()
+        },
+        "world_element_relations": (state.get("world") or {}).get("element_relations", {}),
+        "world_element_paths": (state.get("world") or {}).get("element_class_paths", {}),
+        "world_element_summary": build_world_element_summary(state, limit=18),
+        "race_codex_summary": build_race_codex_summary(state, limit=20),
+        "beast_codex_summary": build_beast_codex_summary(state, limit=20),
         "npc_codex_summary": build_npc_codex_summary(state, limit=18),
         "npc_codex": (state.get("npc_codex") or {}) if len((state.get("npc_codex") or {})) <= 24 else {},
         "source_text": source_text,
@@ -8987,6 +10919,271 @@ def apply_npc_upserts(
     return list(dict.fromkeys(touched))
 
 
+def contains_any_normalized_token(text: str, tokens: set) -> bool:
+    normalized_text = normalize_codex_alias_text(text)
+    if not normalized_text:
+        return False
+    for token in (tokens or set()):
+        token_norm = normalize_codex_alias_text(token)
+        if not token_norm:
+            continue
+        if re.search(rf"(?<!\w){re.escape(token_norm)}(?!\w)", normalized_text):
+            return True
+    return False
+
+
+def collect_beast_observed_abilities(text: str, beast_profile: Dict[str, Any]) -> List[str]:
+    normalized_text = normalize_codex_alias_text(text)
+    observed: List[str] = []
+    for ability in (beast_profile.get("known_abilities") or []):
+        ability_text = str(ability or "").strip()
+        if not ability_text:
+            continue
+        ability_norm = normalize_codex_alias_text(ability_text)
+        if ability_norm and re.search(rf"(?<!\w){re.escape(ability_norm)}(?!\w)", normalized_text):
+            observed.append(ability_text)
+    return observed
+
+
+def collect_codex_triggers(
+    campaign: Dict[str, Any],
+    state: Dict[str, Any],
+    *,
+    actor: str,
+    action_type: str,
+    player_text: str,
+    gm_text: str,
+    patch: Dict[str, Any],
+    npc_updates: List[str],
+    turn_number: int,
+) -> Dict[str, Any]:
+    normalize_world_codex_structures(state)
+    world = state.get("world") or {}
+    races = world.get("races") if isinstance(world.get("races"), dict) else {}
+    beasts = world.get("beast_types") if isinstance(world.get("beast_types"), dict) else {}
+    race_alias_index = world.get("race_alias_index") if isinstance(world.get("race_alias_index"), dict) else {}
+    beast_alias_index = world.get("beast_alias_index") if isinstance(world.get("beast_alias_index"), dict) else {}
+    exact_name_index = build_world_exact_name_index(world)
+
+    text_parts = [str(player_text or "").strip(), str(gm_text or "").strip()]
+    for event in (patch.get("events_add") or []):
+        if str(event or "").strip():
+            text_parts.append(str(event).strip())
+    combined_text = "\n".join(part for part in text_parts if part)
+
+    race_result = resolve_codex_entity_ids(combined_text, race_alias_index, exact_name_index.get("race_names") or {})
+    beast_result = resolve_codex_entity_ids(combined_text, beast_alias_index, exact_name_index.get("beast_names") or {})
+    triggers_by_key: Dict[Tuple[str, str], Dict[str, Any]] = {}
+
+    def merge_trigger(kind: str, entity_id: str, payload: Dict[str, Any]) -> None:
+        key = (kind, entity_id)
+        existing = triggers_by_key.get(key)
+        if not existing:
+            triggers_by_key[key] = {
+                "kind": kind,
+                "entity_id": entity_id,
+                "knowledge_target": int(payload.get("knowledge_target", 0) or 0),
+                "trigger_type": str(payload.get("trigger_type") or ""),
+                "encounter_inc": int(payload.get("encounter_inc", 0) or 0),
+                "known_individuals": stable_sorted_unique_strings(payload.get("known_individuals") or [], limit=32),
+                "observed_abilities": stable_sorted_unique_strings(payload.get("observed_abilities") or [], limit=32),
+                "defeated_inc": int(payload.get("defeated_inc", 0) or 0),
+            }
+            return
+        existing["knowledge_target"] = max(int(existing.get("knowledge_target", 0) or 0), int(payload.get("knowledge_target", 0) or 0))
+        existing["encounter_inc"] = int(existing.get("encounter_inc", 0) or 0) + int(payload.get("encounter_inc", 0) or 0)
+        existing["defeated_inc"] = int(existing.get("defeated_inc", 0) or 0) + int(payload.get("defeated_inc", 0) or 0)
+        existing["known_individuals"] = stable_sorted_unique_strings(
+            list(existing.get("known_individuals") or []) + list(payload.get("known_individuals") or []),
+            limit=32,
+        )
+        existing["observed_abilities"] = stable_sorted_unique_strings(
+            list(existing.get("observed_abilities") or []) + list(payload.get("observed_abilities") or []),
+            limit=32,
+        )
+        if int(payload.get("knowledge_target", 0) or 0) >= int(existing.get("knowledge_target", 0) or 0):
+            existing["trigger_type"] = str(payload.get("trigger_type") or existing.get("trigger_type") or "")
+
+    race_contact = contains_any_normalized_token(combined_text, CODEX_RACE_TRIGGER_CONTACT)
+    race_lore = contains_any_normalized_token(combined_text, CODEX_RACE_TRIGGER_LORE)
+    beast_combat = contains_any_normalized_token(combined_text, CODEX_BEAST_TRIGGER_COMBAT)
+    beast_defeat = contains_any_normalized_token(combined_text, CODEX_BEAST_TRIGGER_DEFEAT)
+    beast_ability = contains_any_normalized_token(combined_text, CODEX_BEAST_TRIGGER_ABILITY)
+
+    for race_id in (race_result.get("matched") or []):
+        knowledge_target = 1
+        trigger_type = "race_first_contact"
+        if race_contact:
+            knowledge_target = max(knowledge_target, 2)
+            trigger_type = "race_first_contact"
+        if race_lore:
+            knowledge_target = max(knowledge_target, 3)
+            trigger_type = "race_lore_discovered"
+        merge_trigger(
+            CODEX_KIND_RACE,
+            race_id,
+            {
+                "knowledge_target": knowledge_target,
+                "trigger_type": trigger_type,
+                "encounter_inc": 1,
+            },
+        )
+
+    for beast_id in (beast_result.get("matched") or []):
+        beast_profile = (beasts.get(beast_id) or {}) if isinstance(beasts, dict) else {}
+        knowledge_target = 1
+        trigger_type = "beast_first_sighting"
+        defeated_inc = 0
+        if beast_combat:
+            knowledge_target = max(knowledge_target, 2)
+            trigger_type = "beast_first_sighting"
+        if beast_ability:
+            knowledge_target = max(knowledge_target, 3)
+            trigger_type = "beast_ability_observed"
+        if beast_defeat:
+            knowledge_target = max(knowledge_target, 3)
+            trigger_type = "beast_defeated"
+            defeated_inc = 1
+        if contains_any_normalized_token(combined_text, CODEX_RACE_TRIGGER_LORE):
+            knowledge_target = max(knowledge_target, 4)
+            trigger_type = "codex_research_unlock"
+        merge_trigger(
+            CODEX_KIND_BEAST,
+            beast_id,
+            {
+                "knowledge_target": knowledge_target,
+                "trigger_type": trigger_type,
+                "encounter_inc": 1,
+                "defeated_inc": defeated_inc,
+                "observed_abilities": collect_beast_observed_abilities(combined_text, beast_profile),
+            },
+        )
+
+    npc_codex = state.get("npc_codex") if isinstance(state.get("npc_codex"), dict) else {}
+    for npc_id in (npc_updates or []):
+        npc = npc_codex.get(npc_id) if isinstance(npc_codex, dict) else None
+        if not isinstance(npc, dict):
+            continue
+        race_name = str(npc.get("race") or "").strip()
+        npc_name = str(npc.get("name") or "").strip()
+        if not race_name:
+            continue
+        npc_race_result = resolve_codex_entity_ids(race_name, race_alias_index, exact_name_index.get("race_names") or {})
+        for race_id in (npc_race_result.get("matched") or []):
+            merge_trigger(
+                CODEX_KIND_RACE,
+                race_id,
+                {
+                    "knowledge_target": 2,
+                    "trigger_type": "race_first_contact",
+                    "encounter_inc": 1,
+                    "known_individuals": [npc_name] if npc_name else [],
+                },
+            )
+
+    return {
+        "triggers": list(triggers_by_key.values()),
+        "ambiguous": {
+            "races": deep_copy(race_result.get("ambiguous") or []),
+            "beasts": deep_copy(beast_result.get("ambiguous") or []),
+        },
+        "source_turn": int(turn_number or 0),
+        "actor": actor,
+        "action_type": action_type,
+    }
+
+
+def apply_codex_triggers(state: Dict[str, Any], trigger_bundle: Dict[str, Any], *, turn_number: int) -> List[Dict[str, Any]]:
+    normalize_world_codex_structures(state)
+    world = state.get("world") or {}
+    races = world.get("races") if isinstance(world.get("races"), dict) else {}
+    beasts = world.get("beast_types") if isinstance(world.get("beast_types"), dict) else {}
+    codex = state.setdefault("codex", {})
+    codex_races = codex.setdefault("races", {})
+    codex_beasts = codex.setdefault("beasts", {})
+    updates: List[Dict[str, Any]] = []
+
+    for trigger in (trigger_bundle.get("triggers") or []):
+        kind = str(trigger.get("kind") or "").strip().lower()
+        entity_id = str(trigger.get("entity_id") or "").strip()
+        if not entity_id:
+            continue
+        if kind == CODEX_KIND_RACE and entity_id not in races:
+            continue
+        if kind == CODEX_KIND_BEAST and entity_id not in beasts:
+            continue
+        profile = races.get(entity_id) if kind == CODEX_KIND_RACE else beasts.get(entity_id)
+        if not isinstance(profile, dict):
+            continue
+        target_map = codex_races if kind == CODEX_KIND_RACE else codex_beasts
+        entry_before = normalize_codex_entry_stable(target_map.get(entity_id), kind=kind)
+        entry_after = deep_copy(entry_before)
+        entry_after["encounter_count"] = int(entry_after.get("encounter_count", 0) or 0) + max(0, int(trigger.get("encounter_inc", 0) or 0))
+        entry_after["knowledge_level"] = clamp(
+            max(int(entry_after.get("knowledge_level", 0) or 0), int(trigger.get("knowledge_target", 0) or 0)),
+            CODEX_KNOWLEDGE_LEVEL_MIN,
+            CODEX_KNOWLEDGE_LEVEL_MAX,
+        )
+        if int(entry_after.get("knowledge_level", 0) or 0) > 0:
+            entry_after["discovered"] = True
+            if not int(entry_after.get("first_seen_turn", 0) or 0):
+                entry_after["first_seen_turn"] = max(0, int(turn_number or 0))
+        entry_after["last_updated_turn"] = max(int(entry_after.get("last_updated_turn", 0) or 0), max(0, int(turn_number or 0)))
+        derived_blocks = codex_blocks_for_level(kind, int(entry_after.get("knowledge_level", 0) or 0))
+        entry_after["known_blocks"] = [block for block in codex_block_order(kind) if block in set((entry_after.get("known_blocks") or []) + derived_blocks)]
+        profile_facts = codex_facts_for_blocks(kind, profile, entry_after.get("known_blocks") or [])
+        entry_after["known_facts"] = merge_known_facts_stable(entry_after.get("known_facts") or [], profile_facts)
+
+        if kind == CODEX_KIND_RACE:
+            entry_after["known_individuals"] = stable_sorted_unique_strings(
+                list(entry_after.get("known_individuals") or []) + list(trigger.get("known_individuals") or []),
+                limit=64,
+            )
+        else:
+            entry_after["defeated_count"] = int(entry_after.get("defeated_count", 0) or 0) + max(0, int(trigger.get("defeated_inc", 0) or 0))
+            entry_after["observed_abilities"] = stable_sorted_unique_strings(
+                list(entry_after.get("observed_abilities") or []) + list(trigger.get("observed_abilities") or []),
+                limit=64,
+            )
+
+        normalized_after = normalize_codex_entry_stable(entry_after, kind=kind)
+        target_map[entity_id] = normalized_after
+        if normalized_after != entry_before:
+            updates.append(
+                {
+                    "kind": kind,
+                    "entity_id": entity_id,
+                    "name": str(profile.get("name") or entity_id),
+                    "trigger_type": str(trigger.get("trigger_type") or ""),
+                    "knowledge_before": int(entry_before.get("knowledge_level", 0) or 0),
+                    "knowledge_after": int(normalized_after.get("knowledge_level", 0) or 0),
+                    "new_blocks": [
+                        block
+                        for block in (normalized_after.get("known_blocks") or [])
+                        if block not in (entry_before.get("known_blocks") or [])
+                    ],
+                }
+            )
+
+    for ambiguous_kind, rows in ((trigger_bundle.get("ambiguous") or {}).items()):
+        for row in (rows or []):
+            alias = str((row or {}).get("alias") or "").strip()
+            entity_ids = [str(entry).strip() for entry in ((row or {}).get("entity_ids") or []) if str(entry).strip()]
+            if not alias or len(entity_ids) < 2:
+                continue
+            updates.append(
+                {
+                    "kind": "ambiguous",
+                    "entity_kind": ambiguous_kind[:-1] if ambiguous_kind.endswith("s") else ambiguous_kind,
+                    "alias": alias,
+                    "entity_ids": entity_ids,
+                }
+            )
+
+    normalize_world_codex_structures(state)
+    return updates
+
+
 def build_npc_extractor_context_packet(
     campaign: Dict[str, Any],
     state: Dict[str, Any],
@@ -10006,6 +12203,7 @@ def finalize_world_setup(campaign: Dict[str, Any], player_id: Optional[str]) -> 
         }
     )
     campaign["state"]["world"]["settings"] = normalize_world_settings(campaign["state"]["world"].get("settings") or {})
+    ensure_world_codex_from_setup(campaign["state"], setup_node.get("summary") or {})
     initialize_dynamic_slots(campaign, setup_node["summary"]["player_count"])
     apply_world_summary_to_boards(campaign, player_id)
     campaign["state"]["world"]["notes"] = setup_node["summary"].get("premise", "")
@@ -10492,6 +12690,10 @@ def normalize_campaign(campaign: Dict[str, Any]) -> Dict[str, Any]:
     state.setdefault("world", deep_copy(INITIAL_STATE["world"]))
     state["world"].setdefault("settings", {})
     state["world"]["settings"] = normalize_world_settings(state["world"].get("settings") or {})
+    state["world"].setdefault("elements", {})
+    state["world"].setdefault("element_relations", {})
+    state["world"].setdefault("element_alias_index", {})
+    state["world"].setdefault("element_class_paths", {})
     state["world"]["day"] = state["meta"]["world_time"]["day"]
     state["world"]["time"] = state["meta"]["world_time"]["time_of_day"]
     state["world"]["weather"] = state["meta"]["world_time"]["weather"]
@@ -10510,8 +12712,10 @@ def normalize_campaign(campaign: Dict[str, Any]) -> Dict[str, Any]:
     state.setdefault("characters", {})
     state.setdefault("recent_story", [])
     state.setdefault("events", [])
+    state.setdefault("codex", {"races": {}, "beasts": {}, "meta": deep_copy(CODEX_DEFAULT_META)})
     state.setdefault("npc_codex", {})
     state.setdefault("npc_alias_index", {})
+    normalize_world_codex_structures(state)
 
     boards = campaign["boards"]
     boards.setdefault("plot_essentials", default_boards()["plot_essentials"])
@@ -10551,10 +12755,40 @@ def normalize_campaign(campaign: Dict[str, Any]) -> Dict[str, Any]:
     setup["world"].setdefault("raw_transcript", [])
     setup["world"].setdefault("question_runtime", {})
     setup.setdefault("characters", {})
+    if setup["world"].get("completed"):
+        ensure_world_codex_from_setup(state, setup["world"].get("summary") or {})
 
     for slot_name in campaign_slots(campaign):
         state["characters"].setdefault(slot_name, blank_character_state(slot_name))
         state["characters"][slot_name] = normalize_character_state(state["characters"][slot_name], slot_name, state.get("items", {}))
+        state["characters"][slot_name]["element_affinities"] = normalize_element_id_list(
+            state["characters"][slot_name].get("element_affinities") or [],
+            state.get("world") or {},
+        )
+        state["characters"][slot_name]["element_resistances"] = normalize_element_id_list(
+            state["characters"][slot_name].get("element_resistances") or [],
+            state.get("world") or {},
+        )
+        state["characters"][slot_name]["element_weaknesses"] = normalize_element_id_list(
+            state["characters"][slot_name].get("element_weaknesses") or [],
+            state.get("world") or {},
+        )
+        normalized_class = normalize_class_current(state["characters"][slot_name].get("class_current"))
+        if normalized_class:
+            resolved_class_element = resolve_class_element_id(normalized_class, state.get("world") or {})
+            if resolved_class_element:
+                normalized_class["element_id"] = resolved_class_element
+                normalized_class["element_tags"] = list(
+                    dict.fromkeys([*(normalized_class.get("element_tags") or []), resolved_class_element])
+                )
+            state["characters"][slot_name]["class_current"] = normalize_class_current(normalized_class)
+        resource_name = resource_name_for_character(state["characters"][slot_name], state["world"].get("settings") or {})
+        normalized_skills: Dict[str, Dict[str, Any]] = {}
+        for skill_id, skill_value in ((state["characters"][slot_name].get("skills") or {}).items()):
+            normalized_skill = normalize_dynamic_skill_state(skill_value, skill_id=str(skill_id), resource_name=resource_name)
+            normalized_skill = normalize_skill_elements_for_world(normalized_skill, state.get("world") or {})
+            normalized_skills[normalized_skill["id"]] = normalized_skill
+        state["characters"][slot_name]["skills"] = normalized_skills
         reconcile_creator_inventory_items(state, state["characters"][slot_name])
         setup["characters"].setdefault(slot_name, default_character_setup_node())
         setup["characters"][slot_name]["question_queue"] = build_character_question_queue()
@@ -10728,6 +12962,7 @@ def public_turn(turn: Dict[str, Any], campaign: Dict[str, Any], viewer_id: Optio
         "combat_resolution": deep_copy(turn.get("combat_resolution") or {}),
         "resource_deltas_applied": deep_copy(turn.get("resource_deltas_applied") or {}),
         "progression_events": deep_copy(turn.get("progression_events") or []),
+        "codex_updates": deep_copy(turn.get("codex_updates") or []),
         "can_edit": is_campaign_player(campaign, viewer_id),
         "can_undo": is_campaign_player(campaign, viewer_id) and turn["status"] == "active",
         "can_retry": is_campaign_player(campaign, viewer_id) and turn["status"] == "active",
@@ -10984,6 +13219,14 @@ def build_context_packet(
         "scenes": state.get("scenes", {}),
         "characters": normalized_characters,
         "items": state.get("items", {}),
+        "world_races": (state.get("world") or {}).get("races", {}),
+        "world_beast_types": (state.get("world") or {}).get("beast_types", {}),
+        "world_elements": (state.get("world") or {}).get("elements", {}),
+        "world_element_relations": (state.get("world") or {}).get("element_relations", {}),
+        "world_element_paths": (state.get("world") or {}).get("element_class_paths", {}),
+        "world_element_summary": build_world_element_summary(state, limit=24),
+        "race_codex_summary": build_race_codex_summary(state, limit=24),
+        "beast_codex_summary": build_beast_codex_summary(state, limit=24),
         "npc_codex_summary": build_npc_codex_summary(state, limit=20),
         "npc_codex": (state.get("npc_codex") or {}) if len((state.get("npc_codex") or {})) <= 24 else {},
         "boards": campaign["boards"],
@@ -11167,6 +13410,36 @@ def build_context_knowledge_index(campaign: Dict[str, Any], state: Dict[str, Any
                     f"Kurz-Backstory: {npc.get('backstory_short', '') or 'Keine'}",
                 ],
                 "sources": [{"type": "npc", "id": npc.get("npc_id", str(npc_id)), "label": f"NPC-Codex: {npc.get('name', str(npc_id))}"}],
+            }
+        )
+
+    race_codex = ((state.get("codex") or {}).get("races") or {}) if isinstance(((state.get("codex") or {}).get("races") or {}), dict) else {}
+    for race_id, race_profile in sorted_world_profiles(state, kind=CODEX_KIND_RACE):
+        codex_entry = normalize_codex_entry_stable(race_codex.get(race_id), kind=CODEX_KIND_RACE)
+        known_facts = codex_entry.get("known_facts") or []
+        add_entry(
+            {
+                "type": "race",
+                "id": race_id,
+                "title": str((race_profile or {}).get("name") or race_id),
+                "aliases": [race_id] + list((race_profile or {}).get("aliases") or []),
+                "facts": known_facts if known_facts else [f"Wissensstand: {int(codex_entry.get('knowledge_level', 0) or 0)}/4"],
+                "sources": [{"type": "race", "id": race_id, "label": f"Rassenkodex: {str((race_profile or {}).get('name') or race_id)}"}],
+            }
+        )
+
+    beast_codex = ((state.get("codex") or {}).get("beasts") or {}) if isinstance(((state.get("codex") or {}).get("beasts") or {}), dict) else {}
+    for beast_id, beast_profile in sorted_world_profiles(state, kind=CODEX_KIND_BEAST):
+        codex_entry = normalize_codex_entry_stable(beast_codex.get(beast_id), kind=CODEX_KIND_BEAST)
+        known_facts = codex_entry.get("known_facts") or []
+        add_entry(
+            {
+                "type": "beast",
+                "id": beast_id,
+                "title": str((beast_profile or {}).get("name") or beast_id),
+                "aliases": [beast_id] + list((beast_profile or {}).get("aliases") or []),
+                "facts": known_facts if known_facts else [f"Wissensstand: {int(codex_entry.get('knowledge_level', 0) or 0)}/4"],
+                "sources": [{"type": "beast", "id": beast_id, "label": f"Bestienkodex: {str((beast_profile or {}).get('name') or beast_id)}"}],
             }
         )
 
@@ -12695,6 +14968,7 @@ def validate_patch(state: Dict[str, Any], patch: Dict[str, Any]) -> None:
         if upd.get("scene_id") and upd.get("scene_id") not in known_scene_ids:
             raise ValueError(f"Unknown scene id for {slot_name}: {upd.get('scene_id')}")
         resource_name = resource_name_for_character(state["characters"][slot_name], ((state.get("world") or {}).get("settings") or {}))
+        world_model = state.get("world") if isinstance(state.get("world"), dict) else {}
         for skill_id, skill_value in (upd.get("skills_set") or {}).items():
             normalized_skill = normalize_dynamic_skill_state(
                 skill_value,
@@ -12702,6 +14976,12 @@ def validate_patch(state: Dict[str, Any], patch: Dict[str, Any]) -> None:
                 skill_name=(skill_value or {}).get("name", skill_id) if isinstance(skill_value, dict) else str(skill_id),
                 resource_name=resource_name,
             )
+            normalized_skill = normalize_skill_elements_for_world(normalized_skill, world_model)
+            if normalized_skill.get("elements") and not all(
+                element_id in ((world_model.get("elements") or {}).keys())
+                for element_id in (normalized_skill.get("elements") or [])
+            ):
+                raise ValueError(f"Skill mit unbekanntem Element auf {slot_name}: {normalized_skill.get('name')}")
             cost = normalized_skill.get("cost")
             if cost and str(cost.get("resource") or "") != resource_name:
                 raise ValueError(f"Skill-Kosten nutzen fuer {slot_name} die falsche Ressource: {normalized_skill.get('name')}")
@@ -12734,6 +15014,10 @@ def validate_patch(state: Dict[str, Any], patch: Dict[str, Any]) -> None:
             raise ValueError(f"class_set ohne gueltige Klasse auf {slot_name}")
         if class_set and not (class_set.get("affinity_tags") or []):
             raise ValueError(f"class_set ohne affinity_tags auf {slot_name}")
+        if class_set:
+            resolved_class_element = resolve_class_element_id(class_set, world_model)
+            if class_set.get("element_id") and not resolved_class_element:
+                raise ValueError(f"class_set mit unbekanntem Element auf {slot_name}: {class_set.get('element_id')}")
         if class_update and not state["characters"][slot_name].get("class_current"):
             raise ValueError(f"class_update ohne bestehende Klasse auf {slot_name}")
         if class_update.get("rank") and normalize_skill_rank(class_update.get("rank")) != str(class_update.get("rank")).upper():
@@ -12757,6 +15041,22 @@ def validate_patch(state: Dict[str, Any], patch: Dict[str, Any]) -> None:
                     actor_name = str((((state.get("characters") or {}).get(slot_name) or {}).get("bio") or {}).get("name") or slot_name)
                     if skill_name and not is_skill_manifestation_name_plausible(skill_name, actor_name):
                         raise ValueError(f"skill_manifestation mit unplausiblem Skillnamen auf {slot_name}: {skill_name}")
+                    if skill_payload:
+                        normalized_manifest = normalize_dynamic_skill_state(
+                            skill_payload,
+                            skill_id=str((skill_payload or {}).get("id") or ""),
+                            skill_name=str((skill_payload or {}).get("name") or ""),
+                            resource_name=resource_name,
+                        )
+                        normalized_manifest = normalize_skill_elements_for_world(
+                            normalized_manifest,
+                            world_model,
+                        )
+                        if normalized_manifest.get("elements") and not all(
+                            element_id in ((world_model.get("elements") or {}).keys())
+                            for element_id in (normalized_manifest.get("elements") or [])
+                        ):
+                            raise ValueError(f"skill_manifestation mit unbekanntem Element auf {slot_name}")
         for injury in upd.get("injuries_add", []) or []:
             if not normalize_injury_state(injury):
                 raise ValueError(f"ungueltige Injury auf {slot_name}")
@@ -12860,6 +15160,10 @@ def sanitize_patch(state: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, An
                     skill_id=skill_key,
                     skill_name=str(skill_name or raw_key),
                     resource_name=resource_name_for_character(state["characters"][slot_name], ((state.get("world") or {}).get("settings") or {})),
+                )
+                normalized_skill_updates[skill_key] = normalize_skill_elements_for_world(
+                    normalized_skill_updates[skill_key],
+                    state.get("world") if isinstance(state.get("world"), dict) else {},
                 )
             upd["skills_set"] = normalized_skill_updates
         if upd.get("skills_delta"):
@@ -13110,6 +15414,10 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
                     resource_name=resource_name,
                     unlocked_from="Patch",
                 )
+                normalized_skill = normalize_skill_elements_for_world(
+                    normalized_skill,
+                    state.get("world") if isinstance(state.get("world"), dict) else {},
+                )
                 existing_skill = skill_store.get(normalized_skill["id"])
                 if not existing_skill:
                     existing_skill = next(
@@ -13144,6 +15452,10 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
                     resource_name=resource_name,
                 )
             skill = normalize_dynamic_skill_state(existing_skill, skill_id=skill_key, skill_name=(existing_skill or {}).get("name", skill_key), resource_name=resource_name)
+            skill = normalize_skill_elements_for_world(
+                skill,
+                state.get("world") if isinstance(state.get("world"), dict) else {},
+            )
             if isinstance(value, dict):
                 if "xp" in value:
                     multiplier = effective_skill_progress_multiplier(character, skill, world_settings)
@@ -13153,6 +15465,12 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
                     skill["level"] = clamp(int(skill.get("level", 1) or 1) + int(value.get("level", 0) or 0), 1, level_max)
                 if "description" in value and str(value.get("description") or "").strip():
                     skill["description"] = str(value.get("description")).strip()
+                if "elements" in value:
+                    skill["elements"] = list(dict.fromkeys([str(entry).strip() for entry in (value.get("elements") or []) if str(entry).strip()]))
+                if "element_primary" in value:
+                    skill["element_primary"] = str(value.get("element_primary") or "").strip() or None
+                if "element_synergies" in value:
+                    skill["element_synergies"] = list(dict.fromkeys([str(entry).strip() for entry in (value.get("element_synergies") or []) if str(entry).strip()])) or None
             else:
                 multiplier = effective_skill_progress_multiplier(character, skill, world_settings)
                 raw_delta = int(value or 0)
@@ -13164,7 +15482,10 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
                 skill["level"] += 1
             skill["next_xp"] = next_skill_xp_for_level(skill["level"])
             skill["xp"] = clamp(int(skill.get("xp", 0) or 0), 0, skill["next_xp"])
-            skill_store[skill["id"]] = normalize_dynamic_skill_state(skill, resource_name=resource_name)
+            skill_store[skill["id"]] = normalize_skill_elements_for_world(
+                normalize_dynamic_skill_state(skill, resource_name=resource_name),
+                state.get("world") if isinstance(state.get("world"), dict) else {},
+            )
 
         for condition in upd.get("conditions_add", []) or []:
             if condition and condition not in character["conditions"]:
@@ -13289,6 +15610,27 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
             merged_class.update(deep_copy(upd["class_update"]))
             character["class_current"] = normalize_class_current(merged_class)
         character["class_current"] = normalize_class_current(character.get("class_current"))
+        if character.get("class_current"):
+            resolved_element = resolve_class_element_id(
+                character.get("class_current"),
+                state.get("world") if isinstance(state.get("world"), dict) else {},
+            )
+            class_current = normalize_class_current(character.get("class_current")) or default_class_current()
+            if resolved_element:
+                class_current["element_id"] = resolved_element
+                class_current["element_tags"] = list(
+                    dict.fromkeys([*(class_current.get("element_tags") or []), resolved_element])
+                )
+            character["class_current"] = normalize_class_current(class_current)
+        core_skill_messages = ensure_class_rank_core_skills(
+            character,
+            state.get("world") if isinstance(state.get("world"), dict) else {},
+            ((state.get("world") or {}).get("settings") or {}),
+            unlock_extra=False,
+        )
+        if core_skill_messages:
+            state.setdefault("events", [])
+            state["events"].extend(core_skill_messages)
         for faction in upd.get("factions_add", []) or []:
             faction_id = faction.get("faction_id", "")
             if not faction_id:
@@ -13615,6 +15957,9 @@ def create_turn_record(
         + "\nGreife in den ersten 1-2 Sätzen die konkrete Aktion oder Aussage des Actors sichtbar auf."
         + "\nWenn der Spieltext in der ersten Person formuliert ist, löse 'ich/mich/mir/mein' immer auf den aktuellen Actor-Slot auf."
         + "\nNeue oder veränderte Kräfte, Magien, Waffenkünste und Körperentwicklungen werden im Patch über skills_set oder skills_delta abgebildet."
+        + "\nELEMENTSYSTEM ist bindend: Nutze nur Elemente aus world.elements. Wenn keine Relation definiert ist, gilt neutral."
+        + "\nElementare Klassen müssen element_id oder element_tags tragen. Skills können elements und element_primary setzen."
+        + "\nKlassenpfade sind in world.element_class_paths hinterlegt. Klassenfortschritt soll zu passenden Kernskills führen."
         + "\nWenn du beim aktuellen Actor sichtbar einen neuen getragenen oder gehaltenen Gegenstand einführst, musst du ihn auch im Patch über items_new plus inventory_add oder equipment_set kanonisch festhalten."
         + "\nBei action_type=story ist der Spielertext ein bereits gesetzter Story-Impuls oder kanonischer Beat. Wiederhole oder paraphrasiere ihn nicht fast wörtlich. Nimm ihn als gesetzt und schreibe direkt die unmittelbaren Konsequenzen und die nächste Entwicklung weiter."
         + "\nBei 'Weiter' setzt du exakt am letzten erzählten Beat an und springst nicht zu einer früheren Standardidee zurück."
@@ -13626,7 +15971,7 @@ def create_turn_record(
         + "\nIn Kampfszenen musst du aktiv vorhandene Ausrüstung, Klasse, Attribute und Skills der beteiligten Figuren berücksichtigen und im Fließtext konkret benennen, statt generische Treffertexte zu schreiben."
         + "\nNutze progression_events im Character-Patch für Fortschritt: type, actor, severity, reason, optional target_skill_id, optional target_class_id, optional skill (für skill_manifestation)."
         + "\nNeue Skills dürfen nur über skills_set oder progression_events(type=skill_manifestation) entstehen. Eine reine Floskel reicht nicht."
-        + f"\nCOMBAT-SKALIERUNG: actor_score={combat_scaling_context.get('actor_score')} threat_score={combat_scaling_context.get('threat_score')} pressure={combat_scaling_context.get('pressure')} ratio={combat_scaling_context.get('ratio')}."
+        + f"\nCOMBAT-SKALIERUNG: actor_score={combat_scaling_context.get('actor_score')} threat_score={combat_scaling_context.get('threat_score')} pressure={combat_scaling_context.get('pressure')} ratio={combat_scaling_context.get('ratio')} weighted_ratio={combat_scaling_context.get('weighted_ratio')} element_factor={combat_scaling_context.get('element_factor')}."
         + "\nEs gibt keine Würfel, keine DCs und keine Roll-Requests. requests darf nur clarify, choice oder none enthalten."
         + f"\nDie story muss mindestens {min_story_chars} Zeichen enthalten."
     )
@@ -14168,6 +16513,22 @@ def create_turn_record(
             trace_ctx=trace_ctx,
             exc=exc,
         )
+    codex_trigger_bundle = collect_codex_triggers(
+        campaign,
+        state_after,
+        actor=actor,
+        action_type=action_type,
+        player_text=content,
+        gm_text=npc_source_story or gm_text_display,
+        patch=patch,
+        npc_updates=npc_updates,
+        turn_number=int(state_after.get("meta", {}).get("turn", 0) or 0),
+    )
+    codex_updates = apply_codex_triggers(
+        state_after,
+        codex_trigger_bundle,
+        turn_number=int(state_after.get("meta", {}).get("turn", 0) or 0),
+    )
     skill_requests = build_skill_system_requests(campaign, state_before, state_after)
     now = utc_now()
     combined_requests = normalize_requests_payload(requests_payload + skill_requests, default_actor=actor)
@@ -14194,6 +16555,7 @@ def create_turn_record(
         "resource_deltas_applied": deep_copy(resource_deltas_applied),
         "progression_events": deep_copy(progression_result.get("events") or []),
         "npc_updates": deep_copy(npc_updates),
+        "codex_updates": deep_copy(codex_updates),
         "combat_meta": deep_copy(updated_combat),
         "state_before": state_before,
         "state_after": deep_copy(state_after),
