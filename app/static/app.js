@@ -12,9 +12,11 @@ let PENDING_REQUESTS = 0;
 let LOADING_TIMER = null;
 let CHARACTER_SHEET = null;
 let NPC_SHEET = null;
+let CODEX_SHEET = null;
 let DRAWER_MODE = "pc";
 let ACTIVE_DRAWER_TAB = "overview";
 let ACTIVE_SIDEBAR_TAB = "chars";
+let ACTIVE_CODEX_TAB = "npcs";
 let ACTIVE_SETTINGS_TAB = "session";
 let CURRENT_THEME = loadTheme();
 let CURRENT_FONT_PRESET = loadFontPreset();
@@ -39,6 +41,8 @@ let LIVE_STATE = {
   highlightTimer: null,
 };
 let PARTY_HUD_PREV = {};
+const NOVELTY_STORAGE_KEY = "isekaiNoveltyState";
+let NOVELTY_STATE = loadNoveltyState();
 const CONTINUE_STORY_MARKER = "__CONTINUE_STORY__";
 
 const ACTION_MODE_CONFIG = {
@@ -66,6 +70,38 @@ const NPC_DRAWER_TABS = [
   { id: "class", label: "Motiv & Ziel" },
   { id: "attributes", label: "Historie" },
   { id: "skills", label: "Bezüge" }
+];
+const CODEX_DRAWER_TABS = [
+  { id: "overview", label: "Übersicht" },
+  { id: "class", label: "Identität" },
+  { id: "attributes", label: "Herkunft" },
+  { id: "skills", label: "Stärken/Schwächen" },
+  { id: "injuries", label: "Fähigkeiten" },
+  { id: "gear", label: "Lore" }
+];
+const RACE_CODEX_BLOCK_ORDER = [
+  "identity",
+  "appearance",
+  "culture",
+  "homeland",
+  "class_affinities",
+  "skill_affinities",
+  "strengths",
+  "weaknesses",
+  "relations",
+  "notable_individuals"
+];
+const BEAST_CODEX_BLOCK_ORDER = [
+  "identity",
+  "appearance",
+  "habitat",
+  "behavior",
+  "combat_style",
+  "known_abilities",
+  "strengths",
+  "weaknesses",
+  "loot",
+  "lore"
 ];
 const VALID_THEMES = ["arcane", "tavern", "glade", "hybrid"];
 const THEME_LABELS = {
@@ -172,6 +208,193 @@ function loadSessionLibrary() {
   } catch {
     return [];
   }
+}
+
+function loadNoveltyState() {
+  try {
+    const raw = localStorage.getItem(NOVELTY_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+function saveNoveltyState() {
+  localStorage.setItem(NOVELTY_STORAGE_KEY, JSON.stringify(NOVELTY_STATE || {}));
+}
+
+function noveltyBucket(campaignId, create = false) {
+  const id = String(campaignId || "").trim();
+  if (!id) return null;
+  let bucket = NOVELTY_STATE[id];
+  if (!bucket && create) {
+    bucket = { items: {} };
+    NOVELTY_STATE[id] = bucket;
+  }
+  if (!bucket || typeof bucket !== "object") return null;
+  if (!bucket.items || typeof bucket.items !== "object" || Array.isArray(bucket.items)) {
+    if (!create) return null;
+    bucket.items = {};
+  }
+  return bucket;
+}
+
+function noveltyCount(campaignId, key) {
+  const bucket = noveltyBucket(campaignId, false);
+  if (!bucket) return 0;
+  const value = Number((bucket.items || {})[key] || 0);
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function noveltyLabel(campaignId, key) {
+  const count = noveltyCount(campaignId, key);
+  if (!count) return "";
+  return count > 1 ? `+${count}` : "Neu";
+}
+
+function noveltyMarkerMarkup(campaignId, key, compact = false) {
+  const label = noveltyLabel(campaignId, key);
+  if (!label) return "";
+  return `<span class="new-marker ${compact ? "compact" : ""}" title="Ungelesene Änderung">${escapeHtml(label)}</span>`;
+}
+
+function noveltyMarkerForCount(count, compact = false) {
+  const value = Math.max(0, Number(count || 0));
+  if (!value) return "";
+  const label = value > 1 ? `+${Math.floor(value)}` : "Neu";
+  return `<span class="new-marker ${compact ? "compact" : ""}" title="Ungelesene Änderung">${escapeHtml(label)}</span>`;
+}
+
+function noveltyCountByPrefix(campaignId, prefix) {
+  const bucket = noveltyBucket(campaignId, false);
+  if (!bucket) return 0;
+  return Object.entries(bucket.items || {}).reduce((acc, [key, value]) => {
+    if (!String(key).startsWith(prefix)) return acc;
+    const n = Number(value || 0);
+    return acc + (Number.isFinite(n) && n > 0 ? Math.floor(n) : 0);
+  }, 0);
+}
+
+function addNovelty(campaignId, key, amount = 1) {
+  const id = String(campaignId || "").trim();
+  const normalizedKey = String(key || "").trim();
+  const inc = Math.max(1, Number(amount || 1));
+  if (!id || !normalizedKey) return;
+  const bucket = noveltyBucket(id, true);
+  const current = noveltyCount(id, normalizedKey);
+  bucket.items[normalizedKey] = current + inc;
+  saveNoveltyState();
+}
+
+function clearNovelty(campaignId, key) {
+  const bucket = noveltyBucket(campaignId, false);
+  const normalizedKey = String(key || "").trim();
+  if (!bucket || !normalizedKey || !(normalizedKey in (bucket.items || {}))) return false;
+  delete bucket.items[normalizedKey];
+  saveNoveltyState();
+  return true;
+}
+
+function normalizeRank(rank) {
+  const value = String(rank || "F").trim().toUpperCase();
+  return ["F", "E", "D", "C", "B", "A", "S"].includes(value) ? value : "F";
+}
+
+function rankValue(rank) {
+  const order = { F: 1, E: 2, D: 3, C: 4, B: 5, A: 6, S: 7 };
+  return order[normalizeRank(rank)] || 1;
+}
+
+function injuryIdentity(entry, index) {
+  if (!entry || typeof entry !== "object") return `inj_${index}`;
+  const primary = String(entry.id || entry.title || entry.name || "").trim();
+  if (primary) return primary.toLowerCase();
+  const fallback = `${String(entry.severity || "").trim()}|${String(entry.healing_stage || "").trim()}|${index}`;
+  return fallback.toLowerCase();
+}
+
+function trackCampaignNovelty(previousCampaign, nextCampaign) {
+  const previousId = previousCampaign?.campaign_meta?.campaign_id || "";
+  const nextId = nextCampaign?.campaign_meta?.campaign_id || "";
+  if (!previousId || !nextId || previousId !== nextId) return;
+  const campaignId = nextId;
+
+  const prevChars = previousCampaign?.state?.characters || {};
+  const nextChars = nextCampaign?.state?.characters || {};
+  Object.entries(nextChars).forEach(([slotId, nextChar]) => {
+    const prevChar = prevChars?.[slotId] || {};
+    const prevSkills = prevChar?.skills || {};
+    const nextSkills = nextChar?.skills || {};
+    const newSkillCount = Object.keys(nextSkills).filter((skillId) => !prevSkills[skillId]).length;
+    if (newSkillCount > 0) addNovelty(campaignId, `skill:${slotId}`, newSkillCount);
+
+    const prevClass = prevChar?.class_current || null;
+    const nextClass = nextChar?.class_current || null;
+    if (nextClass && !prevClass) {
+      addNovelty(campaignId, `class:${slotId}`, 1);
+    } else if (nextClass && prevClass) {
+      const prevLevel = Number(prevClass.level || 1);
+      const nextLevel = Number(nextClass.level || 1);
+      if (nextLevel > prevLevel) addNovelty(campaignId, `class:${slotId}`, Math.floor(nextLevel - prevLevel));
+      if (rankValue(nextClass.rank) > rankValue(prevClass.rank)) addNovelty(campaignId, `class:${slotId}`, 1);
+    }
+
+    const prevInjuries = new Set((prevChar?.injuries || []).map((entry, index) => injuryIdentity(entry, index)));
+    const nextInjuries = (nextChar?.injuries || []).map((entry, index) => injuryIdentity(entry, index));
+    const newInjuryCount = nextInjuries.filter((id) => !prevInjuries.has(id)).length;
+    if (newInjuryCount > 0) addNovelty(campaignId, `injury:${slotId}`, newInjuryCount);
+  });
+
+  const prevCodex = previousCampaign?.state?.codex || {};
+  const nextCodex = nextCampaign?.state?.codex || {};
+  const prevRaceCodex = prevCodex?.races || {};
+  const nextRaceCodex = nextCodex?.races || {};
+  Object.entries(nextRaceCodex).forEach(([raceId, nextEntry]) => {
+    const prevLevel = Number(prevRaceCodex?.[raceId]?.knowledge_level || 0);
+    const nextLevel = Number(nextEntry?.knowledge_level || 0);
+    if (nextLevel > prevLevel) addNovelty(campaignId, `codex:race:${raceId}`, Math.floor(nextLevel - prevLevel));
+  });
+  const prevBeastCodex = prevCodex?.beasts || {};
+  const nextBeastCodex = nextCodex?.beasts || {};
+  Object.entries(nextBeastCodex).forEach(([beastId, nextEntry]) => {
+    const prevLevel = Number(prevBeastCodex?.[beastId]?.knowledge_level || 0);
+    const nextLevel = Number(nextEntry?.knowledge_level || 0);
+    if (nextLevel > prevLevel) addNovelty(campaignId, `codex:beast:${beastId}`, Math.floor(nextLevel - prevLevel));
+    if (prevLevel <= 0 && nextLevel > 0) addNovelty(campaignId, `beast:new:${beastId}`, 1);
+  });
+}
+
+function clearCharacterNovelty(slotId, tabId = "overview") {
+  const campaignId = CAMPAIGN?.campaign_meta?.campaign_id || SESSION?.campaignId || "";
+  if (!campaignId || !slotId) return;
+  const scope = String(tabId || "overview");
+  const keys = scope === "skills"
+    ? [`skill:${slotId}`]
+    : scope === "class"
+    ? [`class:${slotId}`]
+    : scope === "injuries"
+    ? [`injury:${slotId}`]
+    : [`skill:${slotId}`, `class:${slotId}`, `injury:${slotId}`];
+  let changed = false;
+  keys.forEach((key) => {
+    if (clearNovelty(campaignId, key)) changed = true;
+  });
+  if (changed) renderPartyOverview();
+}
+
+function clearCodexNovelty(kind, entityId) {
+  const campaignId = CAMPAIGN?.campaign_meta?.campaign_id || SESSION?.campaignId || "";
+  if (!campaignId || !kind || !entityId) return;
+  const keys = kind === "beast"
+    ? [`codex:beast:${entityId}`, `beast:new:${entityId}`]
+    : [`codex:race:${entityId}`];
+  let changed = false;
+  keys.forEach((key) => {
+    if (clearNovelty(campaignId, key)) changed = true;
+  });
+  if (changed) renderCharactersTab();
 }
 
 function saveSessionLibrary(library) {
@@ -1021,6 +1244,7 @@ function renderClaimView() {
 function renderPartyOverview() {
   const root = el("party-overview");
   const cards = CAMPAIGN?.party_overview || [];
+  const campaignId = CAMPAIGN?.campaign_meta?.campaign_id || "";
   if (!cards.length) {
     root.innerHTML = `<div class="empty-state small">Noch keine Party-Slots sichtbar.</div>`;
     return;
@@ -1035,13 +1259,13 @@ function renderPartyOverview() {
     <div class="party-card ${card.slot_id === claimedSlotId() ? "is-self" : ""}" data-action="open-character-sheet" data-slot-id="${card.slot_id}" role="button" tabindex="0">
       <div class="party-card-head">
         <div>
-          <div class="party-card-name">${escapeHtml(card.display_name || card.slot_id)}</div>
+          <div class="party-card-name">${escapeHtml(card.display_name || card.slot_id)} ${noveltyMarkerMarkup(campaignId, `skill:${card.slot_id}`, true)}</div>
           <div class="small party-card-subline">Ort: ${escapeHtml(card.scene_name || "???")}</div>
         </div>
         <span class="badge">${escapeHtml(claimBadge(card))}</span>
       </div>
       <div class="party-card-classline">
-        <span class="party-class-badge">${escapeHtml(card.class_name || "Keine Klasse")} ${card.class_rank ? `(${escapeHtml(card.class_rank)})` : ""}</span>
+        <span class="party-class-badge">${escapeHtml(card.class_name || "Keine Klasse")} ${card.class_rank ? `(${escapeHtml(card.class_rank)})` : ""}</span>${noveltyMarkerMarkup(campaignId, `class:${card.slot_id}`, true)}
         ${card.class_level ? `<span class="small">Lv ${card.class_level}/${card.class_level_max || 10}</span>` : `<span class="small">Noch keine Klasse</span>`}
       </div>
       <div class="party-activity ${cardActivity(card) ? "" : "is-idle"}">${escapeHtml(cardActivity(card)?.label || (card.claimed_by ? "Gerade ruhig." : "Wartet auf einen Spieler."))}</div>
@@ -1051,7 +1275,7 @@ function renderPartyOverview() {
         ${partyHudBarMarkup(card.resource_name || "Ressource", card.res_current, card.res_max, "res", PARTY_HUD_PREV[`${card.slot_id}:res`] ?? card.res_pct)}
       </div>
       <div class="party-chip-row">
-        <button class="mini-pill clickable-pill" data-action="open-character-sheet" data-slot-id="${card.slot_id}" data-open-tab="injuries" type="button">INJ ${card.injury_count ?? 0}</button>
+        <button class="mini-pill clickable-pill" data-action="open-character-sheet" data-slot-id="${card.slot_id}" data-open-tab="injuries" type="button">INJ ${card.injury_count ?? 0} ${noveltyLabel(campaignId, `injury:${card.slot_id}`)}</button>
         <button class="mini-pill clickable-pill" data-action="open-character-sheet" data-slot-id="${card.slot_id}" data-open-tab="injuries" type="button">SCAR ${card.scar_count ?? 0}</button>
         <span class="mini-pill">CARRY ${card.carry_current ?? 0}/${card.carry_max ?? 0}</span>
       </div>
@@ -1100,11 +1324,13 @@ function animatePartyHudBars(root) {
 }
 
 function currentDrawerTabs() {
-  return DRAWER_MODE === "npc" ? NPC_DRAWER_TABS : PC_DRAWER_TABS;
+  if (DRAWER_MODE === "npc") return NPC_DRAWER_TABS;
+  if (DRAWER_MODE === "codex") return CODEX_DRAWER_TABS;
+  return PC_DRAWER_TABS;
 }
 
 function applyDrawerTabLayout(mode) {
-  DRAWER_MODE = mode === "npc" ? "npc" : "pc";
+  DRAWER_MODE = mode === "npc" ? "npc" : mode === "codex" ? "codex" : "pc";
   const configs = currentDrawerTabs();
   const buttons = Array.from(document.querySelectorAll(".drawer-tab"));
   buttons.forEach((button, index) => {
@@ -1435,6 +1661,7 @@ function skillTagSummary(skill) {
 function renderCharacterDrawer() {
   if (!CHARACTER_SHEET) return;
   NPC_SHEET = null;
+  CODEX_SHEET = null;
   applyDrawerTabLayout("pc");
   const sheet = CHARACTER_SHEET.sheet || {};
   const overview = sheet.overview || {};
@@ -1680,14 +1907,17 @@ async function openCharacterDrawer(slotId, tabId = "overview") {
   const data = await api(`/api/campaigns/${SESSION.campaignId}/characters/${slotId}`);
   CHARACTER_SHEET = data;
   NPC_SHEET = null;
+  CODEX_SHEET = null;
   DRAWER_MODE = "pc";
   ACTIVE_DRAWER_TAB = tabId;
   renderCharacterDrawer();
+  clearCharacterNovelty(slotId, tabId);
 }
 
 function renderNpcDrawer() {
   if (!NPC_SHEET) return;
   CHARACTER_SHEET = null;
+  CODEX_SHEET = null;
   applyDrawerTabLayout("npc");
   const sceneLabel = NPC_SHEET.last_seen_scene_name || NPC_SHEET.last_seen_scene_id || "Unbekannt";
   const roleHint = npcRoleHintLabel(NPC_SHEET.role_hint);
@@ -1768,14 +1998,223 @@ async function openNpcDrawer(npcId, tabId = "overview") {
   const data = await api(`/api/campaigns/${SESSION.campaignId}/npcs/${npcId}`);
   NPC_SHEET = data;
   CHARACTER_SHEET = null;
+  CODEX_SHEET = null;
   DRAWER_MODE = "npc";
   ACTIVE_DRAWER_TAB = tabId;
   renderNpcDrawer();
 }
 
+function codexProfile(kind, entityId) {
+  if (!CAMPAIGN?.state?.world) return null;
+  if (kind === "race") return CAMPAIGN.state.world.races?.[entityId] || null;
+  if (kind === "beast") return CAMPAIGN.state.world.beast_types?.[entityId] || null;
+  return null;
+}
+
+function codexEntry(kind, entityId) {
+  if (!CAMPAIGN?.state?.codex) return null;
+  if (kind === "race") return CAMPAIGN.state.codex.races?.[entityId] || null;
+  if (kind === "beast") return CAMPAIGN.state.codex.beasts?.[entityId] || null;
+  return null;
+}
+
+function renderCodexDrawer() {
+  if (!CODEX_SHEET) return;
+  CHARACTER_SHEET = null;
+  NPC_SHEET = null;
+  applyDrawerTabLayout("codex");
+  const { kind, entityId, profile, entry } = CODEX_SHEET;
+  const level = Number(entry?.knowledge_level || 0);
+  const kindLabel = kind === "race" ? "Rasse" : "Bestie";
+  const knownBlocks = Array.isArray(entry?.known_blocks) ? entry.known_blocks : [];
+  const knownFacts = Array.isArray(entry?.known_facts) ? entry.known_facts : [];
+  el("drawer-title").textContent = profile?.name || entityId;
+  el("drawer-subtitle").textContent = `${kindLabel} • Wissen ${level}/4 • ${codexKnowledgeLabel(level)}`;
+
+  el("drawer-panel-overview").innerHTML = `
+    <details class="accordion" open>
+      <summary>Übersicht</summary>
+      <div class="accordion-body sheet-grid">
+        <div class="sheet-block">
+          ${detailRow("Typ", kindLabel)}
+          ${detailRow("Name", profile?.name || entityId)}
+          ${detailRow("Wissensstand", `${level}/4 (${codexKnowledgeLabel(level)})`)}
+          ${detailRow("Begegnungen", Number(entry?.encounter_count || 0))}
+          ${detailRow("Erstkontakt", `Turn ${Number(entry?.first_seen_turn || 0)}`)}
+          ${detailRow("Zuletzt aktualisiert", `Turn ${Number(entry?.last_updated_turn || 0)}`)}
+        </div>
+        <div class="sheet-block">
+          ${detailRow("Freigeschaltete Kapitel", knownBlocks.join(", ") || "Keine")}
+          ${detailRow("Fakten", knownFacts.length ? `${knownFacts.length} Einträge` : "Keine bekannten Fakten")}
+          ${kind === "beast" ? detailRow("Besiegt", Number(entry?.defeated_count || 0)) : detailRow("Bekannte Individuen", (entry?.known_individuals || []).join(", ") || "-")}
+        </div>
+      </div>
+    </details>
+  `;
+
+  if (kind === "race") {
+    el("drawer-panel-class").innerHTML = `
+      <details class="accordion" open>
+        <summary>Identität</summary>
+        <div class="accordion-body sheet-grid">
+          <div class="sheet-block">
+            ${detailRow("Art", profile?.kind || "-")}
+            ${detailRow("Seltenheit", profile?.rarity || "-")}
+            ${detailRow("Spielbar", profile?.playable ? "Ja" : "Nein")}
+            ${detailRow("Sozialer Ruf", profile?.social_reputation || "-")}
+          </div>
+          <div class="sheet-block">
+            ${detailRow("Kurzbeschreibung", profile?.description_short || "-")}
+            ${detailRow("Erscheinung", profile?.appearance || "-")}
+          </div>
+        </div>
+      </details>
+    `;
+    el("drawer-panel-attributes").innerHTML = `
+      <details class="accordion" open>
+        <summary>Herkunft</summary>
+        <div class="accordion-body sheet-grid">
+          <div class="sheet-block">
+            ${detailRow("Heimat", profile?.homeland || "-")}
+            ${detailRow("Kultur", profile?.culture || "-")}
+          </div>
+          <div class="sheet-block">
+            ${detailRow("Temperament", profile?.temperament || "-")}
+            ${detailRow("Beziehungen", profile?.social_reputation || "-")}
+          </div>
+        </div>
+      </details>
+    `;
+    el("drawer-panel-skills").innerHTML = `
+      <details class="accordion" open>
+        <summary>Stärken/Schwächen</summary>
+        <div class="accordion-body sheet-grid">
+          <div class="sheet-block">
+            ${detailRow("Stärken", (profile?.strength_tags || []).join(", ") || "-")}
+            ${detailRow("Schwächen", (profile?.weakness_tags || []).join(", ") || "-")}
+          </div>
+          <div class="sheet-block">
+            ${detailRow("Klassen-Affinitäten", (profile?.class_affinities || []).join(", ") || "-")}
+            ${detailRow("Skill-Affinitäten", (profile?.skill_affinities || []).join(", ") || "-")}
+          </div>
+        </div>
+      </details>
+    `;
+    el("drawer-panel-injuries").innerHTML = `
+      <details class="accordion" open>
+        <summary>Fähigkeiten</summary>
+        <div class="accordion-body">
+          <div class="small"><strong>Bekannte Individuen:</strong> ${(entry?.known_individuals || []).length ? escapeHtml((entry.known_individuals || []).join(", ")) : "Noch keine."}</div>
+        </div>
+      </details>
+    `;
+    el("drawer-panel-gear").innerHTML = `
+      <details class="accordion" open>
+        <summary>Lore</summary>
+        <div class="accordion-body sheet-grid">
+          <div class="sheet-block">
+            ${detailRow("Merkmale", (profile?.notable_traits || []).join(", ") || "-")}
+            ${detailRow("Alias", (profile?.aliases || []).join(", ") || "-")}
+          </div>
+          <div class="sheet-block">
+            <div class="small"><strong>Bekannte Fakten:</strong></div>
+            <div class="inventory-list" style="margin-top:8px">
+              ${(knownFacts.length ? knownFacts : ["Noch keine bekannten Fakten."]).map((fact) => `<div class="inventory-item small">${escapeHtml(fact)}</div>`).join("")}
+            </div>
+          </div>
+        </div>
+      </details>
+    `;
+  } else {
+    el("drawer-panel-class").innerHTML = `
+      <details class="accordion" open>
+        <summary>Identität</summary>
+        <div class="accordion-body sheet-grid">
+          <div class="sheet-block">
+            ${detailRow("Kategorie", profile?.category || "-")}
+            ${detailRow("Gefahr", Number(profile?.danger_rating || 1))}
+            ${detailRow("Erscheinung", profile?.appearance || "-")}
+          </div>
+          <div class="sheet-block">
+            ${detailRow("Kampfstil", profile?.combat_style || "-")}
+          </div>
+        </div>
+      </details>
+    `;
+    el("drawer-panel-attributes").innerHTML = `
+      <details class="accordion" open>
+        <summary>Herkunft</summary>
+        <div class="accordion-body sheet-grid">
+          <div class="sheet-block">
+            ${detailRow("Lebensraum", profile?.habitat || "-")}
+            ${detailRow("Verhalten", profile?.behavior || "-")}
+          </div>
+        </div>
+      </details>
+    `;
+    el("drawer-panel-skills").innerHTML = `
+      <details class="accordion" open>
+        <summary>Stärken/Schwächen</summary>
+        <div class="accordion-body sheet-grid">
+          <div class="sheet-block">
+            ${detailRow("Stärken", (profile?.strength_tags || []).join(", ") || "-")}
+            ${detailRow("Schwächen", (profile?.weakness_tags || []).join(", ") || "-")}
+          </div>
+        </div>
+      </details>
+    `;
+    el("drawer-panel-injuries").innerHTML = `
+      <details class="accordion" open>
+        <summary>Fähigkeiten</summary>
+        <div class="accordion-body sheet-grid">
+          <div class="sheet-block">
+            ${detailRow("Bekannte Fähigkeiten", (profile?.known_abilities || []).join(", ") || "-")}
+            ${detailRow("Beobachtet", (entry?.observed_abilities || []).join(", ") || "-")}
+          </div>
+        </div>
+      </details>
+    `;
+    el("drawer-panel-gear").innerHTML = `
+      <details class="accordion" open>
+        <summary>Lore</summary>
+        <div class="accordion-body sheet-grid">
+          <div class="sheet-block">
+            ${detailRow("Loot", (profile?.loot_tags || []).join(", ") || "-")}
+            ${detailRow("Lore", (profile?.lore_notes || []).join(", ") || "-")}
+            ${detailRow("Alias", (profile?.aliases || []).join(", ") || "-")}
+          </div>
+          <div class="sheet-block">
+            <div class="small"><strong>Bekannte Fakten:</strong></div>
+            <div class="inventory-list" style="margin-top:8px">
+              ${(knownFacts.length ? knownFacts : ["Noch keine bekannten Fakten."]).map((fact) => `<div class="inventory-item small">${escapeHtml(fact)}</div>`).join("")}
+            </div>
+          </div>
+        </div>
+      </details>
+    `;
+  }
+
+  setDrawerTab(ACTIVE_DRAWER_TAB || "overview");
+  el("character-drawer").classList.remove("hidden");
+}
+
+async function openCodexDrawer(kind, entityId, tabId = "overview") {
+  const profile = codexProfile(kind, entityId);
+  const entry = codexEntry(kind, entityId);
+  if (!profile) throw new Error("Kodex-Eintrag nicht gefunden.");
+  CODEX_SHEET = { kind, entityId, profile, entry: entry || {} };
+  NPC_SHEET = null;
+  CHARACTER_SHEET = null;
+  DRAWER_MODE = "codex";
+  ACTIVE_DRAWER_TAB = tabId;
+  renderCodexDrawer();
+  clearCodexNovelty(kind, entityId);
+}
+
 function closeCharacterDrawer() {
   CHARACTER_SHEET = null;
   NPC_SHEET = null;
+  CODEX_SHEET = null;
   DRAWER_MODE = "pc";
   applyDrawerTabLayout("pc");
   el("character-drawer").classList.add("hidden");
@@ -2195,10 +2634,48 @@ function sceneNameFromCampaign(sceneId) {
   return id;
 }
 
+function codexKnowledgeLabel(level) {
+  const value = Number(level || 0);
+  if (value <= 0) return "Unbekannt";
+  if (value === 1) return "Gesichtet";
+  if (value === 2) return "Beobachtet";
+  if (value === 3) return "Erforscht";
+  return "Vollständig";
+}
+
+function codexProgressPercent(level) {
+  const value = Number(level || 0);
+  return Math.max(0, Math.min(100, Math.round((value / 4) * 100)));
+}
+
+function renderCodexBlocks(knownBlocks, blockOrder) {
+  const known = new Set((Array.isArray(knownBlocks) ? knownBlocks : []).map((value) => String(value || "")));
+  return (blockOrder || []).map((block) => {
+    const unlocked = known.has(block);
+    return `<span class="codex-block-chip ${unlocked ? "is-known" : "is-locked"}">${escapeHtml(block)}</span>`;
+  }).join("");
+}
+
+function setActiveCodexTab(tabId) {
+  const allowed = ["npcs", "races", "beasts"];
+  ACTIVE_CODEX_TAB = allowed.includes(tabId) ? tabId : "npcs";
+  renderCharactersTab();
+}
+
 function renderCharactersTab() {
   const root = el("tab-chars");
-  const codex = CAMPAIGN?.state?.npc_codex || {};
-  const npcs = Object.values(codex)
+  const campaignId = CAMPAIGN?.campaign_meta?.campaign_id || "";
+  const npcCodex = CAMPAIGN?.state?.npc_codex || {};
+  const worldRaces = CAMPAIGN?.state?.world?.races || {};
+  const worldBeasts = CAMPAIGN?.state?.world?.beast_types || {};
+  const codexState = CAMPAIGN?.state?.codex || {};
+  const codexRaces = codexState?.races || {};
+  const codexBeasts = codexState?.beasts || {};
+  const activeTab = ["npcs", "races", "beasts"].includes(ACTIVE_CODEX_TAB) ? ACTIVE_CODEX_TAB : "npcs";
+  const raceTabNovelty = noveltyCountByPrefix(campaignId, "codex:race:");
+  const beastTabNovelty = noveltyCountByPrefix(campaignId, "codex:beast:") + noveltyCountByPrefix(campaignId, "beast:new:");
+
+  const npcs = Object.values(npcCodex)
     .filter((entry) => entry && entry.npc_id && entry.name)
     .sort((a, b) => {
       const relevanceDiff = Number(b.relevance_score || 0) - Number(a.relevance_score || 0);
@@ -2207,31 +2684,111 @@ function renderCharactersTab() {
       if (seenDiff) return seenDiff;
       return Number(b.mention_count || 0) - Number(a.mention_count || 0);
     });
-  if (!npcs.length) {
-    root.innerHTML = `
-      <div class="panelTitle">Charaktere</div>
-      <div class="empty-state small">Noch keine story-relevanten Figuren erfasst.</div>
-    `;
-    return;
-  }
-  root.innerHTML = `
-    <div class="panelTitle">Charaktere</div>
-    <div class="info-grid npc-lexicon-grid">
-      ${npcs.map((npc) => `
-        <div class="info-item npc-codex-card">
-          <div class="entity-meta npc-codex-head">
-            <strong>${escapeHtml(npc.name)}</strong>
-            <span class="badge">Lv ${Number(npc.level || 1)}</span>
-            <span class="badge">${escapeHtml(npc.race || "Unbekannt")}</span>
-          </div>
-          <div class="small"><strong>Ziel:</strong> ${escapeHtml(npc.goal || "Noch unbekannt.")}</div>
-          <div class="small">Rolle: ${escapeHtml(npcRoleHintLabel(npc.role_hint))} • Fraktion: ${escapeHtml(npc.faction || "Keine")}</div>
-          <div class="small">Zuletzt gesehen: Turn ${Number(npc.last_seen_turn || 0)}${npc.last_seen_scene_id ? ` • ${escapeHtml(sceneNameFromCampaign(npc.last_seen_scene_id))}` : ""}</div>
-          <div class="small">Erwähnungen: ${Number(npc.mention_count || 0)} • Relevanz: ${Number(npc.relevance_score || 0)}</div>
-          <div class="turn-actions"><button class="btn ghost" data-action="open-npc-sheet" data-npc-id="${npc.npc_id}" type="button">NPC-Bogen öffnen</button></div>
+
+  const raceRows = Object.entries(worldRaces)
+    .filter(([, profile]) => profile && profile.name)
+    .sort((a, b) => {
+      const nameA = String(a[1]?.name || a[0]).toLowerCase();
+      const nameB = String(b[1]?.name || b[0]).toLowerCase();
+      if (nameA !== nameB) return nameA.localeCompare(nameB, "de");
+      return String(a[0]).localeCompare(String(b[0]), "de");
+    });
+
+  const beastRows = Object.entries(worldBeasts)
+    .filter(([, profile]) => profile && profile.name)
+    .sort((a, b) => {
+      const nameA = String(a[1]?.name || a[0]).toLowerCase();
+      const nameB = String(b[1]?.name || b[0]).toLowerCase();
+      if (nameA !== nameB) return nameA.localeCompare(nameB, "de");
+      return String(a[0]).localeCompare(String(b[0]), "de");
+    });
+
+  let bodyHtml = "";
+  if (activeTab === "npcs") {
+    if (!npcs.length) {
+      bodyHtml = `<div class="empty-state small">Noch keine story-relevanten Figuren erfasst.</div>`;
+    } else {
+      bodyHtml = `
+        <div class="info-grid npc-lexicon-grid">
+          ${npcs.map((npc) => `
+            <div class="info-item npc-codex-card">
+              <div class="entity-meta npc-codex-head">
+                <strong>${escapeHtml(npc.name)}</strong>
+                <span class="badge">Lv ${Number(npc.level || 1)}</span>
+                <span class="badge">${escapeHtml(npc.race || "Unbekannt")}</span>
+              </div>
+              <div class="small"><strong>Ziel:</strong> ${escapeHtml(npc.goal || "Noch unbekannt.")}</div>
+              <div class="small">Rolle: ${escapeHtml(npcRoleHintLabel(npc.role_hint))} • Fraktion: ${escapeHtml(npc.faction || "Keine")}</div>
+              <div class="small">Zuletzt gesehen: Turn ${Number(npc.last_seen_turn || 0)}${npc.last_seen_scene_id ? ` • ${escapeHtml(sceneNameFromCampaign(npc.last_seen_scene_id))}` : ""}</div>
+              <div class="small">Erwähnungen: ${Number(npc.mention_count || 0)} • Relevanz: ${Number(npc.relevance_score || 0)}</div>
+              <div class="turn-actions"><button class="btn ghost" data-action="open-npc-sheet" data-npc-id="${npc.npc_id}" type="button">NPC-Bogen öffnen</button></div>
+            </div>
+          `).join("")}
         </div>
-      `).join("")}
+      `;
+    }
+  } else if (activeTab === "races") {
+    if (!raceRows.length) {
+      bodyHtml = `<div class="empty-state small">Noch keine Rassenprofile vorhanden.</div>`;
+    } else {
+      bodyHtml = `
+        <div class="info-grid codex-grid">
+          ${raceRows.map(([raceId, race]) => {
+            const entry = codexRaces[raceId] || {};
+            const level = Number(entry.knowledge_level || 0);
+            return `
+              <div class="info-item codex-compact-card">
+                <div class="entity-meta codex-compact-head">
+                  <strong>${escapeHtml(race.name || raceId)}</strong>
+                  <span class="badge">Wissen ${level}/4</span>${noveltyMarkerMarkup(campaignId, `codex:race:${raceId}`, true)}
+                </div>
+                <div class="small codex-state-label">${escapeHtml(codexKnowledgeLabel(level).toUpperCase())}</div>
+                <div class="small">Begegnungen: ${Number(entry.encounter_count || 0)} • Erstkontakt: Turn ${Number(entry.first_seen_turn || 0)}</div>
+                <div class="turn-actions">
+                  <button class="btn ghost" data-action="open-codex-entry" data-codex-kind="race" data-codex-id="${escapeHtml(raceId)}" type="button">Öffnen</button>
+                </div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+  } else {
+    if (!beastRows.length) {
+      bodyHtml = `<div class="empty-state small">Noch keine Bestienprofile vorhanden.</div>`;
+    } else {
+      bodyHtml = `
+        <div class="info-grid codex-grid">
+          ${beastRows.map(([beastId, beast]) => {
+            const entry = codexBeasts[beastId] || {};
+            const level = Number(entry.knowledge_level || 0);
+            return `
+              <div class="info-item codex-compact-card">
+                <div class="entity-meta codex-compact-head">
+                  <strong>${escapeHtml(beast.name || beastId)}</strong>
+                  <span class="badge">Wissen ${level}/4</span>${noveltyMarkerMarkup(campaignId, `codex:beast:${beastId}`, true)}${noveltyMarkerMarkup(campaignId, `beast:new:${beastId}`, true)}
+                </div>
+                <div class="small codex-state-label">${escapeHtml(codexKnowledgeLabel(level).toUpperCase())}</div>
+                <div class="small">Begegnungen: ${Number(entry.encounter_count || 0)} • Erstkontakt: Turn ${Number(entry.first_seen_turn || 0)}</div>
+                <div class="turn-actions">
+                  <button class="btn ghost" data-action="open-codex-entry" data-codex-kind="beast" data-codex-id="${escapeHtml(beastId)}" type="button">Öffnen</button>
+                </div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      `;
+    }
+  }
+
+  root.innerHTML = `
+    <div class="panelTitle">Kodex</div>
+    <div class="codex-subtabs">
+      <button class="codex-subtab ${activeTab === "npcs" ? "active" : ""}" data-codex-tab="npcs" type="button">NPCs</button>
+      <button class="codex-subtab ${activeTab === "races" ? "active" : ""}" data-codex-tab="races" type="button">Rassen ${noveltyMarkerForCount(raceTabNovelty, true)}</button>
+      <button class="codex-subtab ${activeTab === "beasts" ? "active" : ""}" data-codex-tab="beasts" type="button">Bestien ${noveltyMarkerForCount(beastTabNovelty, true)}</button>
     </div>
+    ${bodyHtml}
   `;
 }
 
@@ -2793,6 +3350,7 @@ function applyCampaign(campaign) {
   const previousLatestTurnId = (CAMPAIGN?.active_turns || []).slice(-1)[0]?.turn_id || null;
   const nextCampaignId = campaign?.campaign_meta?.campaign_id || null;
   const nextLatestTurnId = (campaign?.active_turns || []).slice(-1)[0]?.turn_id || null;
+  trackCampaignNovelty(CAMPAIGN, campaign);
   CAMPAIGN = campaign;
   if (nextCampaignId !== previousCampaignId) {
     PARTY_HUD_PREV = {};
@@ -2811,6 +3369,12 @@ function applyCampaign(campaign) {
   }
   if (NPC_SHEET && !(campaign.state?.npc_codex || {})[NPC_SHEET.npc_id]) {
     closeCharacterDrawer();
+  }
+  if (CODEX_SHEET) {
+    const codexExists = CODEX_SHEET.kind === "race"
+      ? Boolean(campaign.state?.world?.races?.[CODEX_SHEET.entityId])
+      : Boolean(campaign.state?.world?.beast_types?.[CODEX_SHEET.entityId]);
+    if (!codexExists) closeCharacterDrawer();
   }
   upsertSessionLibrary({
     campaignId: campaign.campaign_meta.campaign_id,
@@ -3536,6 +4100,7 @@ document.addEventListener("click", (event) => {
   }
   if (target.matches(".action-mode")) setActionMode(target.dataset.mode);
   if (target.matches(".tab")) setActiveSidebarTab(target.dataset.tab);
+  if (target.matches(".codex-subtab")) setActiveCodexTab(target.dataset.codexTab);
   if (target.matches(".settings-tab")) setActiveSettingsTab(target.dataset.tab);
   if (target.matches(".drawer-tab")) setDrawerTab(target.dataset.drawerTab);
   if (actionTarget?.dataset.action === "set-theme") setTheme(actionTarget.dataset.theme);
@@ -3546,6 +4111,7 @@ document.addEventListener("click", (event) => {
   if (actionTarget?.dataset.action === "take-slot") takeOverSlot(actionTarget.dataset.slotId);
   if (actionTarget?.dataset.action === "open-character-sheet") openCharacterDrawer(actionTarget.dataset.slotId, actionTarget.dataset.openTab || "overview").catch((error) => showFlash(error.message, true));
   if (actionTarget?.dataset.action === "open-npc-sheet") openNpcDrawer(actionTarget.dataset.npcId, actionTarget.dataset.openTab || "overview").catch((error) => showFlash(error.message, true));
+  if (actionTarget?.dataset.action === "open-codex-entry") openCodexDrawer(actionTarget.dataset.codexKind, actionTarget.dataset.codexId, actionTarget.dataset.openTab || "overview").catch((error) => showFlash(error.message, true));
   if (actionTarget?.dataset.action === "edit-turn") openEditModal(actionTarget.dataset.turnId);
   if (actionTarget?.dataset.action === "undo-turn") undoTurn(actionTarget.dataset.turnId);
   if (actionTarget?.dataset.action === "retry-turn") retryTurn(actionTarget.dataset.turnId);

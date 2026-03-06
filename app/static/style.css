@@ -377,8 +377,27 @@ box-shadow:var(--shadow),inset 0 1px 0 rgba(243,198,130,.08),inset 0 0 0 1px rgb
 .setup-other-root{margin-top:12px}
 .empty-state{padding:16px;border-radius:16px;border:1px dashed var(--border-strong);background:var(--panel-soft)}
 .muted-badge{opacity:.62}
+.new-marker{display:inline-flex;align-items:center;justify-content:center;min-width:34px;padding:2px 8px;border-radius:999px;border:1px solid rgba(255,183,77,.55);background:rgba(255,183,77,.18);color:#ffd7a0;font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:800;line-height:1.2}
+.new-marker.compact{min-width:28px;padding:2px 7px;font-size:9px}
+.mini-pill .new-marker{margin-left:6px}
 .info-grid{display:grid;gap:12px}
 .npc-lexicon-grid{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.codex-grid{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.codex-subtabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.codex-subtab{border:1px solid var(--border-strong);background:var(--button-ghost);color:var(--text);padding:8px 12px;border-radius:12px;font-weight:700;cursor:pointer}
+.codex-subtab.active{background:linear-gradient(180deg,var(--accent-soft),rgba(255,255,255,.05));border-color:var(--accent);box-shadow:0 0 0 1px rgba(255,255,255,.08) inset}
+.codex-entry-card{display:grid;gap:8px;border:1px solid var(--border)}
+.codex-entry-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.codex-compact-card{display:grid;gap:8px;border:1px solid var(--border);align-content:start}
+.codex-compact-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.codex-state-label{letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);font-weight:700}
+.codex-facts{display:grid;gap:4px}
+.codex-progress{height:8px;border-radius:999px;overflow:hidden;border:1px solid var(--border);background:rgba(255,255,255,.06)}
+.codex-progress-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent-strong),var(--accent));transition:width .2s ease}
+.codex-blocks-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.codex-block-chip{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;border:1px solid var(--border);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.codex-block-chip.is-known{background:rgba(86,158,122,.2);border-color:rgba(86,158,122,.45)}
+.codex-block-chip.is-locked{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.14);opacity:.58}
 .npc-codex-card{display:grid;gap:8px;border:1px solid var(--border)}
 .npc-codex-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .npc-codex-card .badge{font-size:11px;letter-spacing:.08em;text-transform:uppercase}
@@ -688,6 +707,42 @@ background:linear-gradient(180deg,rgba(18,30,44,.68),rgba(8,15,24,.9));
 border-color:rgba(126,171,203,.34);
 background:linear-gradient(180deg,rgba(15,29,43,.76),rgba(10,18,28,.88));
 box-shadow:inset 0 1px 0 rgba(181,219,247,.08);
+}
+[data-theme="hybrid"] .codex-entry-card{
+border-color:rgba(126,171,203,.34);
+background:linear-gradient(180deg,rgba(15,29,43,.76),rgba(10,18,28,.88));
+box-shadow:inset 0 1px 0 rgba(181,219,247,.08);
+}
+[data-theme="hybrid"] .codex-compact-card{
+border-color:rgba(126,171,203,.34);
+background:linear-gradient(180deg,rgba(15,29,43,.76),rgba(10,18,28,.88));
+box-shadow:inset 0 1px 0 rgba(181,219,247,.08);
+}
+[data-theme="hybrid"] .codex-subtab{
+background:linear-gradient(180deg,rgba(24,42,58,.74),rgba(11,24,35,.84));
+border-color:rgba(133,194,229,.32);
+}
+[data-theme="hybrid"] .codex-subtab.active{
+background:linear-gradient(180deg,rgba(39,84,112,.72),rgba(17,45,64,.82));
+border-color:rgba(143,220,255,.68);
+box-shadow:0 0 0 1px rgba(113,210,255,.24) inset,0 0 18px rgba(99,201,247,.2);
+}
+[data-theme="hybrid"] .codex-progress{
+border-color:rgba(133,194,229,.3);
+background:linear-gradient(180deg,rgba(7,15,23,.78),rgba(9,24,36,.66));
+}
+[data-theme="hybrid"] .codex-progress-fill{
+background:linear-gradient(90deg,#2e93c8,#7de2ff);
+box-shadow:0 0 12px rgba(106,210,255,.28);
+}
+[data-theme="hybrid"] .codex-block-chip.is-known{
+background:linear-gradient(180deg,rgba(58,132,166,.66),rgba(34,77,102,.76));
+border-color:rgba(149,220,255,.46);
+}
+[data-theme="hybrid"] .codex-block-chip.is-locked{
+background:linear-gradient(180deg,rgba(20,33,47,.72),rgba(11,20,30,.86));
+border-color:rgba(123,167,197,.24);
+opacity:.62;
 }
 [data-theme="hybrid"] .npc-codex-card .badge{
 background:linear-gradient(180deg,rgba(89,123,149,.6),rgba(52,72,90,.74));
