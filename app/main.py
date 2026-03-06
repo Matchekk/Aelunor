@@ -321,6 +321,39 @@ NPC_EXTRACTOR_SCHEMA = {
                     "scene_hint": {"type": "string"},
                     "history_note": {"type": "string"},
                     "relevance_score": {"type": "integer"},
+                    "class_current": {
+                        "type": ["object", "null"],
+                        "properties": {
+                            "id": {"type": "string"},
+                            "name": {"type": "string"},
+                            "rank": {"type": "string"},
+                            "level": {"type": "integer"},
+                            "level_max": {"type": "integer"},
+                            "xp": {"type": "integer"},
+                            "xp_next": {"type": "integer"},
+                            "affinity_tags": {"type": "array", "items": {"type": "string"}},
+                            "description": {"type": "string"},
+                            "ascension": {"type": ["object", "null"]},
+                        },
+                        "additionalProperties": True,
+                    },
+                    "skills": {
+                        "type": ["object", "null"],
+                        "additionalProperties": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string"},
+                                "name": {"type": "string"},
+                                "rank": {"type": "string"},
+                                "level": {"type": "integer"},
+                                "level_max": {"type": "integer"},
+                                "tags": {"type": "array", "items": {"type": "string"}},
+                                "description": {"type": "string"},
+                                "cost": {"type": ["object", "null"]},
+                            },
+                            "additionalProperties": True,
+                        },
+                    },
                 },
                 "required": ["name"],
                 "additionalProperties": False,
@@ -345,6 +378,7 @@ NPC_EXTRACTOR_SYSTEM_PROMPT = (
     "Erfasse nur Figuren mit erkennbarer Plot-Relevanz. "
     "Pflicht beim ersten relevanten Auftreten: Name, Rasse, Alter, Ziel, Level, Kurz-Backstory (best effort). "
     "Aktualisiere bei Wiedererwähnung vorhandene Figuren mit konkreteren Daten. "
+    "Wenn klar erkennbar, kannst du optional class_current und skills mitliefern (nur strukturierte Felder, keine Prosa). "
     "Erfinde keine Prosa, keine Requests, kein Patch."
 )
 
@@ -1786,6 +1820,29 @@ PROGRESSION_EVENT_BASE_XP = {
     "skill_manifestation": {"character": 22, "class": 14, "skill": 26},
     "training_success": {"character": 14, "class": 10, "skill": 14},
     "bond_event": {"character": 12, "class": 8, "skill": 6},
+}
+PROGRESSION_EVENT_PRIORITY = {
+    "boss_defeated": 100,
+    "milestone_progress": 90,
+    "class_breakthrough": 82,
+    "skill_manifestation": 76,
+    "combat_victory": 66,
+    "major_discovery": 62,
+    "skill_mastery_use": 52,
+    "training_success": 46,
+    "combat_survival": 40,
+    "bond_event": 34,
+}
+PROGRESSION_DENSITY_CAP_NON_MILESTONE = {"inferred": 1, "total": 3}
+PROGRESSION_DENSITY_CAP_MILESTONE = {"inferred": 2, "total": 5}
+PROGRESSION_SET_DIRECT_KEYS = {
+    "level",
+    "xp_total",
+    "xp_current",
+    "xp_to_next",
+    "class_level",
+    "class_xp",
+    "class_xp_to_next",
 }
 SKILL_MANIFESTATION_VERB_BLACKLIST = {
     "kaempfen",
@@ -4260,6 +4317,7 @@ def canonicalize_manifested_skill_payload(
 ) -> Optional[Dict[str, Any]]:
     resource_name = resource_name_for_character(character, world_settings)
     proposed_name = str(raw_skill.get("name") or raw_skill.get("id") or "").strip()
+    raw_power_rating = int(raw_skill.get("power_rating", 0) or 0)
     actor_name = str(((character.get("bio") or {}).get("name") or character.get("slot_id") or "").strip())
     if not is_skill_manifestation_name_plausible(proposed_name, actor_name):
         return None
@@ -4293,8 +4351,10 @@ def canonicalize_manifested_skill_payload(
         skill["description"] = f"{skill['name']} wurde unter Druck manifestiert."
     if not skill.get("effect_summary"):
         skill["effect_summary"] = skill["description"][:180]
-    if int(skill.get("power_rating", 0) or 0) <= 0:
+    if raw_power_rating <= 0:
         skill["power_rating"] = max(1, (skill_rank_sort_value(skill.get("rank")) + 1) * 6 + int(skill.get("level", 1) or 1))
+    else:
+        skill["power_rating"] = max(1, raw_power_rating)
     if not skill.get("growth_potential"):
         skill["growth_potential"] = "mittel"
     return skill
@@ -4481,6 +4541,79 @@ def normalize_progression_event_list(
     return normalized_events
 
 
+def progression_event_priority(event_type: str) -> int:
+    return int(PROGRESSION_EVENT_PRIORITY.get(str(event_type or "").strip().lower(), 10))
+
+
+def _event_origin(raw_event: Dict[str, Any]) -> str:
+    metadata = raw_event.get("metadata") if isinstance(raw_event.get("metadata"), dict) else {}
+    origin = str(metadata.get("origin") or "").strip().lower()
+    return origin if origin in {"explicit_patch", "inferred_patch"} else "inferred_patch"
+
+
+def reduce_progression_event_density(
+    events: List[Dict[str, Any]],
+    *,
+    state_after: Dict[str, Any],
+    action_type: str,
+) -> List[Dict[str, Any]]:
+    if action_type == "canon":
+        return [deep_copy(entry) for entry in events if isinstance(entry, dict)]
+    milestone = milestone_state_for_turn(
+        int((state_after.get("meta") or {}).get("turn", 0) or 0),
+        active_pacing_profile(state_after),
+    )
+    caps = PROGRESSION_DENSITY_CAP_MILESTONE if bool(milestone.get("is_milestone")) else PROGRESSION_DENSITY_CAP_NON_MILESTONE
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    actor_order: List[str] = []
+    for idx, raw_event in enumerate(events):
+        if not isinstance(raw_event, dict):
+            continue
+        actor = str(raw_event.get("actor") or "").strip()
+        if not actor:
+            continue
+        if actor not in grouped:
+            grouped[actor] = []
+            actor_order.append(actor)
+        entry = deep_copy(raw_event)
+        entry["_index"] = idx
+        grouped[actor].append(entry)
+
+    reduced: List[Dict[str, Any]] = []
+    for actor in actor_order:
+        actor_events = grouped.get(actor, [])
+        explicit_events: List[Dict[str, Any]] = []
+        inferred_events: List[Dict[str, Any]] = []
+        seen_keys: set[tuple[str, str, str]] = set()
+        for event in actor_events:
+            event_type = str(event.get("type") or "").strip().lower()
+            target_skill = str(event.get("target_skill_id") or "").strip().lower()
+            target_class = str(event.get("target_class_id") or "").strip().lower()
+            dedupe_key = (event_type, target_skill, target_class)
+            if dedupe_key in seen_keys:
+                continue
+            seen_keys.add(dedupe_key)
+            if _event_origin(event) == "explicit_patch":
+                explicit_events.append(event)
+            else:
+                inferred_events.append(event)
+
+        inferred_events = sorted(
+            inferred_events,
+            key=lambda item: (
+                -progression_event_priority(str(item.get("type") or "")),
+                -{"low": 1, "medium": 2, "high": 3}.get(str(item.get("severity") or "medium").strip().lower(), 2),
+                int(item.get("_index", 0) or 0),
+            ),
+        )
+        selected = explicit_events + inferred_events[: max(0, int(caps["inferred"]))]
+        selected = sorted(selected, key=lambda item: int(item.get("_index", 0) or 0))[: max(1, int(caps["total"]))]
+        for event in selected:
+            event.pop("_index", None)
+            reduced.append(event)
+    return reduced
+
+
 def infer_progression_events_from_patch(
     *,
     state_before: Dict[str, Any],
@@ -4497,13 +4630,16 @@ def infer_progression_events_from_patch(
         if not isinstance(upd, dict) or slot_name not in (state_after.get("characters") or {}):
             continue
         if upd.get("progression_events"):
-            inferred.extend(
-                normalize_progression_event_list(
-                    upd.get("progression_events"),
-                    actor=slot_name,
-                    source_turn=turn_number,
-                )
+            explicit_events = normalize_progression_event_list(
+                upd.get("progression_events"),
+                actor=slot_name,
+                source_turn=turn_number,
             )
+            for event in explicit_events:
+                metadata = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
+                metadata["origin"] = "explicit_patch"
+                event["metadata"] = metadata
+            inferred.extend(explicit_events)
         hp_delta = int(upd.get("hp_delta", 0) or 0)
         stamina_delta = int(upd.get("stamina_delta", 0) or 0)
         res_delta_raw = 0
@@ -4524,15 +4660,15 @@ def infer_progression_events_from_patch(
                     "target_skill_id": None,
                     "target_class_id": None,
                     "tags": ["combat"],
-                    "metadata": {"hp_delta": hp_delta},
+                    "metadata": {"hp_delta": hp_delta, "origin": "inferred_patch"},
                     "skill": {},
                 }
             )
         if (stamina_delta < 0 or res_delta_raw < 0) and upd.get("skills_delta"):
             for skill_id in (upd.get("skills_delta") or {}).keys():
-                inferred.append(
-                    {
-                        "type": "skill_mastery_use",
+                    inferred.append(
+                        {
+                            "type": "skill_mastery_use",
                         "actor": slot_name,
                         "target_skill_id": str(skill_id),
                         "severity": "low",
@@ -4540,10 +4676,10 @@ def infer_progression_events_from_patch(
                         "source_turn": turn_number,
                         "target_class_id": None,
                         "tags": ["skill_use"],
-                        "metadata": {"stamina_delta": stamina_delta, "res_delta": res_delta_raw},
-                        "skill": {},
-                    }
-                )
+                            "metadata": {"stamina_delta": stamina_delta, "res_delta": res_delta_raw, "origin": "inferred_patch"},
+                            "skill": {},
+                        }
+                    )
         if upd.get("class_set") or upd.get("class_update"):
             target_class_id = str(
                 ((normalize_class_current(upd.get("class_set")) or (upd.get("class_update") or {})).get("id") or "")
@@ -4558,7 +4694,7 @@ def infer_progression_events_from_patch(
                     "reason": "Klassenfortschritt",
                     "source_turn": turn_number,
                     "tags": ["class"],
-                    "metadata": {},
+                    "metadata": {"origin": "inferred_patch"},
                     "skill": {},
                 }
             )
@@ -4578,7 +4714,7 @@ def infer_progression_events_from_patch(
                 "reason": f"Plotpoint abgeschlossen: {plot_update.get('id', '')}",
                 "source_turn": turn_number,
                 "tags": ["milestone"],
-                "metadata": {"plotpoint_id": str(plot_update.get("id") or "")},
+                "metadata": {"plotpoint_id": str(plot_update.get("id") or ""), "origin": "inferred_patch"},
                 "skill": {},
             }
         )
@@ -4598,7 +4734,7 @@ def infer_progression_events_from_patch(
                 "reason": "Boss wurde besiegt",
                 "source_turn": turn_number,
                 "tags": ["combat", "boss"],
-                "metadata": {},
+                "metadata": {"origin": "inferred_patch"},
                 "skill": {},
             }
         )
@@ -4615,7 +4751,7 @@ def infer_progression_events_from_patch(
                 "reason": "Kampfsieg",
                 "source_turn": turn_number,
                 "tags": ["combat"],
-                "metadata": {},
+                "metadata": {"origin": "inferred_patch"},
                 "skill": {},
             }
         )
@@ -4718,6 +4854,11 @@ def apply_progression_events(
         state_after=state_after,
         patch=patch,
         actor=actor,
+        action_type=action_type,
+    )
+    normalized_events = reduce_progression_event_density(
+        normalized_events,
+        state_after=state_after,
         action_type=action_type,
     )
     event_messages: List[str] = []
@@ -8717,6 +8858,7 @@ def apply_npc_upserts(
     codex = state["npc_codex"]
     alias_index = state["npc_alias_index"]
     pc_aliases = existing_pc_aliases(campaign, state)
+    npc_resource_name = normalize_resource_name(str((((state.get("world") or {}).get("settings") or {}).get("resource_name") or "Aether")), "Aether")
     touched: List[str] = []
     for raw in npc_upserts:
         if not isinstance(raw, dict):
@@ -8749,6 +8891,72 @@ def apply_npc_upserts(
         entry["status"] = str(raw.get("status") or entry.get("status") or "active").strip().lower()
         if entry["status"] not in NPC_STATUS_ALLOWED:
             entry["status"] = "active"
+        incoming_class = normalize_class_current(raw.get("class_current"))
+        if incoming_class:
+            existing_class = normalize_class_current(entry.get("class_current"))
+            if not existing_class:
+                entry["class_current"] = incoming_class
+            else:
+                merged_class = deep_copy(existing_class)
+                merged_class["rank"] = (
+                    incoming_class.get("rank")
+                    if class_rank_sort_value(incoming_class.get("rank")) >= class_rank_sort_value(existing_class.get("rank"))
+                    else existing_class.get("rank")
+                )
+                merged_class["level"] = max(
+                    int(existing_class.get("level", 1) or 1),
+                    int(incoming_class.get("level", 1) or 1),
+                )
+                merged_class["level_max"] = max(
+                    int(existing_class.get("level_max", 10) or 10),
+                    int(incoming_class.get("level_max", 10) or 10),
+                )
+                merged_class["xp"] = max(
+                    int(existing_class.get("xp", 0) or 0),
+                    int(incoming_class.get("xp", 0) or 0),
+                )
+                merged_class["xp_next"] = max(
+                    1,
+                    int(existing_class.get("xp_next", 1) or 1),
+                    int(incoming_class.get("xp_next", 1) or 1),
+                )
+                merged_class["name"] = pick_more_specific_text(existing_class.get("name", ""), incoming_class.get("name", ""))
+                merged_class["description"] = pick_more_specific_text(
+                    existing_class.get("description", ""),
+                    incoming_class.get("description", ""),
+                )
+                merged_class["affinity_tags"] = list(
+                    dict.fromkeys(
+                        [str(tag).strip() for tag in (existing_class.get("affinity_tags") or []) if str(tag).strip()]
+                        + [str(tag).strip() for tag in (incoming_class.get("affinity_tags") or []) if str(tag).strip()]
+                    )
+                )
+                incoming_asc = incoming_class.get("ascension") if isinstance(incoming_class.get("ascension"), dict) else {}
+                existing_asc = merged_class.get("ascension") if isinstance(merged_class.get("ascension"), dict) else {}
+                if incoming_asc and str(incoming_asc.get("status") or "none").strip().lower() != "none":
+                    merged_class["ascension"] = deep_copy(incoming_asc)
+                elif existing_asc:
+                    merged_class["ascension"] = existing_asc
+                entry["class_current"] = normalize_class_current(merged_class)
+
+        incoming_skills = raw.get("skills") if isinstance(raw.get("skills"), dict) else {}
+        if incoming_skills:
+            existing_skill_store = normalize_skill_store(entry.get("skills") or {}, resource_name=npc_resource_name)
+            for raw_skill_id, raw_skill_value in incoming_skills.items():
+                incoming_skill = normalize_dynamic_skill_state(
+                    raw_skill_value,
+                    skill_id=str(raw_skill_id),
+                    skill_name=(raw_skill_value or {}).get("name", raw_skill_id) if isinstance(raw_skill_value, dict) else str(raw_skill_id),
+                    resource_name=npc_resource_name,
+                    unlocked_from="NPCCodex",
+                )
+                existing_skill = existing_skill_store.get(incoming_skill["id"])
+                existing_skill_store[incoming_skill["id"]] = (
+                    merge_dynamic_skill(existing_skill, incoming_skill, resource_name=npc_resource_name)
+                    if existing_skill
+                    else incoming_skill
+                )
+            entry["skills"] = existing_skill_store
         entry["mention_count"] = int(entry.get("mention_count", 0) or 0) + 1
         entry["relevance_score"] = max(int(entry.get("relevance_score", 0) or 0), relevance)
         entry["last_seen_turn"] = max(int(entry.get("last_seen_turn", 0) or 0), int(turn_number or 0))
@@ -13222,6 +13430,36 @@ def enforce_non_milestone_patch_limits(state: Dict[str, Any], patch: Dict[str, A
     return limited
 
 
+def enforce_progression_set_mode_limits(patch: Dict[str, Any], *, action_type: str) -> Dict[str, Any]:
+    if action_type == "canon":
+        return patch
+    limited = deep_copy(patch or blank_patch())
+    blocked_changes: List[str] = []
+    for slot_name, upd in (limited.get("characters") or {}).items():
+        if not isinstance(upd, dict):
+            continue
+        progression_set = upd.get("progression_set") if isinstance(upd.get("progression_set"), dict) else {}
+        if not progression_set:
+            continue
+        stripped = False
+        for key in PROGRESSION_SET_DIRECT_KEYS:
+            if key in progression_set:
+                progression_set.pop(key, None)
+                stripped = True
+        if stripped:
+            blocked_changes.append(slot_name)
+        if progression_set:
+            upd["progression_set"] = progression_set
+        else:
+            upd.pop("progression_set", None)
+    if blocked_changes:
+        limited.setdefault("events_add", [])
+        limited["events_add"].append(
+            "System: Direkte XP/Level-Setzung ist nur im Modus CANON bindend."
+        )
+    return limited
+
+
 def rewrite_story_length_guard(
     *,
     system_prompt: str,
@@ -13480,6 +13718,7 @@ def create_turn_record(
                 trace_ctx=trace_ctx,
                 exc=exc,
             )
+        extractor_piece = enforce_progression_set_mode_limits(extractor_piece, action_type=action_type)
         try:
             emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": "canon"})
             validate_patch(working_state, extractor_piece)
@@ -13673,6 +13912,7 @@ def create_turn_record(
             is_milestone=bool(milestone_info.get("is_milestone")),
             action_type=action_type,
         )
+        narrator_patch = enforce_progression_set_mode_limits(narrator_patch, action_type=action_type)
         try:
             emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": "narrator"})
             validate_patch(working_state, narrator_patch)
@@ -13775,6 +14015,7 @@ def create_turn_record(
                 is_milestone=bool(milestone_info.get("is_milestone")),
                 action_type=action_type,
             )
+            extractor_piece = enforce_progression_set_mode_limits(extractor_piece, action_type=action_type)
             try:
                 emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": f"extractor_{source_kind}"})
                 validate_patch(working_state, extractor_piece)
