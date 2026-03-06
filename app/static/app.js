@@ -45,7 +45,8 @@ const ACTION_MODE_CONFIG = {
   do: { label: "TUN", placeholder: "Was tut deine Figur konkret?" },
   say: { label: "SAGEN", placeholder: "Was sagt deine Figur?" },
   story: { label: "STORY", placeholder: "Welche Story-Richtung oder welchen Fokus willst du setzen?" },
-  canon: { label: "CANON", placeholder: "Welcher Fakt soll direkt kanonisch in den Zustand übernommen werden?" }
+  canon: { label: "CANON", placeholder: "Welcher Fakt soll direkt kanonisch in den Zustand übernommen werden?" },
+  context: { label: "KONTEXT", placeholder: "Welche Frage hast du zur aktuellen Lage, Figuren oder Welt?" }
 };
 
 const SIDEBAR_TAB_IDS = ["chars", "diary", "map", "events"];
@@ -812,7 +813,8 @@ function actionTypeLabel(actionType) {
     do: "TUN",
     say: "SAGEN",
     story: "STORY",
-    canon: "CANON"
+    canon: "CANON",
+    context: "KONTEXT"
   }[actionType] || actionType || "";
 }
 
@@ -887,14 +889,17 @@ function buildDisplayTurns(turns) {
 function setRecentTurnHighlight(turnId) {
   window.clearTimeout(LIVE_STATE.highlightTimer);
   LIVE_STATE.highlightTurnId = turnId || null;
-  if (!turnId) return;
-  LIVE_STATE.highlightTimer = window.setTimeout(() => {
-    LIVE_STATE.highlightTurnId = null;
-    LIVE_STATE.highlightTimer = null;
-    if (CAMPAIGN && !el("campaign-view").classList.contains("hidden")) {
-      renderTurns();
-    }
-  }, 4200);
+  LIVE_STATE.highlightTimer = null;
+}
+
+function clearRecentTurnHighlight(turnId = null) {
+  if (!LIVE_STATE.highlightTurnId) return;
+  if (turnId && LIVE_STATE.highlightTurnId !== turnId) return;
+  LIVE_STATE.highlightTurnId = null;
+  LIVE_STATE.highlightTimer = null;
+  if (CAMPAIGN && !el("campaign-view").classList.contains("hidden")) {
+    renderTurns();
+  }
 }
 
 function scheduleStoryScrollLatest() {
@@ -936,7 +941,7 @@ function renderTurns() {
           <div class="story-input-text">${escapeHtml(contributionText(turn))}</div>
         </div>
       ` : ""}
-      <div class="story-response ${turn.turn_id === highlightTurnId ? "turn-highlight" : ""}">
+      <div class="story-response ${turn.turn_id === highlightTurnId ? "turn-highlight" : ""}" data-turn-id="${turn.turn_id}">
         ${storyResponseMarkup(turn)}
       </div>
       <div class="turn-actions">
@@ -1137,6 +1142,35 @@ function setDrawerTab(tabId) {
 function detailRow(label, value) {
   const safeValue = value === undefined || value === null || value === "" ? "-" : String(value);
   return `<div class="small"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(safeValue)}</div>`;
+}
+
+function normalizeNpcFieldText(value) {
+  return String(value || "").trim();
+}
+
+function isNpcStatusOnlyLabel(value) {
+  const normalized = normalizeNpcFieldText(value)
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+  return (
+    normalized === "active"
+    || normalized === "status active"
+    || normalized === "status: active"
+    || normalized === "status : active"
+    || normalized === "status=active"
+  );
+}
+
+function npcRoleHintLabel(value) {
+  const hint = normalizeNpcFieldText(value);
+  if (!hint || isNpcStatusOnlyLabel(hint)) return "Unklar";
+  return hint;
+}
+
+function isNpcStatusHistoryLine(value) {
+  const normalized = normalizeNpcFieldText(value).toLowerCase();
+  if (!normalized) return false;
+  return /^status\s*[:=]/.test(normalized) || normalized === "active";
 }
 
 function skillRankClass(rank) {
@@ -1656,8 +1690,10 @@ function renderNpcDrawer() {
   CHARACTER_SHEET = null;
   applyDrawerTabLayout("npc");
   const sceneLabel = NPC_SHEET.last_seen_scene_name || NPC_SHEET.last_seen_scene_id || "Unbekannt";
+  const roleHint = npcRoleHintLabel(NPC_SHEET.role_hint);
+  const historyEntries = (NPC_SHEET.history_notes || []).filter((entry) => !isNpcStatusHistoryLine(entry));
   el("drawer-title").textContent = NPC_SHEET.name || NPC_SHEET.npc_id;
-  el("drawer-subtitle").textContent = `${NPC_SHEET.race || "Unbekannt"} • Lv ${Number(NPC_SHEET.level || 1)} • ${NPC_SHEET.status || "active"}`;
+  el("drawer-subtitle").textContent = `${NPC_SHEET.race || "Unbekannt"} • Lv ${Number(NPC_SHEET.level || 1)}`;
 
   el("drawer-panel-overview").innerHTML = `
     <details class="accordion" open>
@@ -1666,15 +1702,15 @@ function renderNpcDrawer() {
         <div class="sheet-block">
           ${detailRow("Name", NPC_SHEET.name)}
           ${detailRow("Rasse", NPC_SHEET.race || "Unbekannt")}
+          ${detailRow("Alter", NPC_SHEET.age || "Unbekannt")}
           ${detailRow("Level", Number(NPC_SHEET.level || 1))}
-          ${detailRow("Status", NPC_SHEET.status || "active")}
           ${detailRow("Fraktion", NPC_SHEET.faction || "Keine")}
-          ${detailRow("Rollenhinweis", NPC_SHEET.role_hint || "Unklar")}
+          ${detailRow("Rollenhinweis", roleHint)}
         </div>
         <div class="sheet-block">
           ${detailRow("Erstes Auftreten", `Turn ${Number(NPC_SHEET.first_seen_turn || 0)}`)}
           ${detailRow("Letztes Auftreten", `Turn ${Number(NPC_SHEET.last_seen_turn || 0)}`)}
-          ${detailRow("Letzter Ort", sceneLabel)}
+          ${detailRow("Zuletzt gesehen an Ort", sceneLabel)}
           ${detailRow("Erwähnungen", Number(NPC_SHEET.mention_count || 0))}
           ${detailRow("Relevanz", Number(NPC_SHEET.relevance_score || 0))}
           ${detailRow("Tags", (NPC_SHEET.tags || []).join(", ") || "-")}
@@ -1699,8 +1735,8 @@ function renderNpcDrawer() {
     <details class="accordion" open>
       <summary>Historie</summary>
       <div class="accordion-body inventory-list">
-        ${(NPC_SHEET.history_notes || []).length
-          ? (NPC_SHEET.history_notes || []).map((entry) => `<div class="inventory-item small">${escapeHtml(entry)}</div>`).join("")
+        ${historyEntries.length
+          ? historyEntries.map((entry) => `<div class="inventory-item small">${escapeHtml(entry)}</div>`).join("")
           : `<div class="small">Noch keine Verlaufseinträge.</div>`}
       </div>
     </details>
@@ -1712,9 +1748,8 @@ function renderNpcDrawer() {
       <div class="accordion-body sheet-grid">
         <div class="sheet-block">
           ${detailRow("Fraktion", NPC_SHEET.faction || "Keine")}
-          ${detailRow("Rollenhinweis", NPC_SHEET.role_hint || "Unklar")}
-          ${detailRow("Aktiver Status", NPC_SHEET.status || "active")}
-          ${detailRow("Ort", sceneLabel)}
+          ${detailRow("Rollenhinweis", roleHint)}
+          ${detailRow("Zuletzt gesehen an Ort", sceneLabel)}
         </div>
       </div>
     </details>
@@ -2190,9 +2225,9 @@ function renderCharactersTab() {
             <span class="badge">${escapeHtml(npc.race || "Unbekannt")}</span>
           </div>
           <div class="small"><strong>Ziel:</strong> ${escapeHtml(npc.goal || "Noch unbekannt.")}</div>
-          <div class="small">Rolle: ${escapeHtml(npc.role_hint || "Unklar")} • Fraktion: ${escapeHtml(npc.faction || "Keine")}</div>
+          <div class="small">Rolle: ${escapeHtml(npcRoleHintLabel(npc.role_hint))} • Fraktion: ${escapeHtml(npc.faction || "Keine")}</div>
           <div class="small">Zuletzt gesehen: Turn ${Number(npc.last_seen_turn || 0)}${npc.last_seen_scene_id ? ` • ${escapeHtml(sceneNameFromCampaign(npc.last_seen_scene_id))}` : ""}</div>
-          <div class="small">Erwähnungen: ${Number(npc.mention_count || 0)} • Relevanz: ${Number(npc.relevance_score || 0)} • Status: ${escapeHtml(npc.status || "active")}</div>
+          <div class="small">Erwähnungen: ${Number(npc.mention_count || 0)} • Relevanz: ${Number(npc.relevance_score || 0)}</div>
           <div class="turn-actions"><button class="btn ghost" data-action="open-npc-sheet" data-npc-id="${npc.npc_id}" type="button">NPC-Bogen öffnen</button></div>
         </div>
       `).join("")}
@@ -2739,6 +2774,8 @@ function renderCampaignView() {
     : claimed
     ? CURRENT_ACTION_TYPE === "canon"
       ? "Dieser Beitrag wird direkt als kanonischer Zustand übernommen und ab dem nächsten Turn als Wahrheit behandelt."
+      : CURRENT_ACTION_TYPE === "context"
+      ? "Diese Frage öffnet ein Kontext-Popup und verändert weder Story noch Weltzustand."
       : `Der GM baut deinen ${actionTypeLabel(CURRENT_ACTION_TYPE)}-Beitrag direkt in die laufende Szene ein.`
     : "Ohne Claim kannst du lesen, aber keinen Turn senden.";
   renderIntroBanner();
@@ -2842,9 +2879,11 @@ async function loadCampaign({ silent = false } = {}) {
 }
 
 function setActionMode(mode) {
+  if (!ACTION_MODE_CONFIG[mode]) mode = "do";
   CURRENT_ACTION_TYPE = mode;
   document.querySelectorAll(".action-mode").forEach((button) => button.classList.toggle("active", button.dataset.mode === mode));
   el("turn-input").placeholder = ACTION_MODE_CONFIG[mode].placeholder;
+  el("submitTurnBtn").textContent = mode === "context" ? "Frage stellen" : "Zug senden";
 }
 
 function setActiveSidebarTab(tabId) {
@@ -2992,6 +3031,10 @@ async function submitTurn() {
   const actor = claimedSlotId();
   const content = el("turn-input").value.trim();
   if (!actor || !content) return;
+  if (CURRENT_ACTION_TYPE === "context") {
+    await submitContextQuery(actor, content);
+    return;
+  }
   IS_SENDING_TURN = true;
   setBusy("submitTurnBtn", true, "Sende...");
   try {
@@ -3008,6 +3051,94 @@ async function submitTurn() {
   } finally {
     IS_SENDING_TURN = false;
     setBusy("submitTurnBtn", false, "...", "Zug senden");
+  }
+}
+
+function contextStatusLabel(status) {
+  const value = String(status || "").toLowerCase();
+  if (value === "found") return "Gefunden";
+  if (value === "ambiguous") return "Mehrdeutig";
+  if (value === "not_in_canon") return "Nicht im Kanon";
+  return "Kontext";
+}
+
+function renderContextModalResult(result, fallbackAnswer) {
+  if (!result || typeof result !== "object") {
+    return `<div class="context-explanation">${escapeHtml(fallbackAnswer || "Keine Kontextantwort verfügbar.")}</div>`;
+  }
+  const status = String(result.status || "not_in_canon").toLowerCase();
+  const title = String(result.title || result.target || "Kontext").trim() || "Kontext";
+  const explanation = String(result.explanation || fallbackAnswer || "").trim() || "Keine Kontextantwort verfügbar.";
+  const facts = Array.isArray(result.facts) ? result.facts.filter((entry) => String(entry || "").trim()) : [];
+  const sources = Array.isArray(result.sources) ? result.sources.filter((entry) => entry && typeof entry === "object" && String(entry.label || "").trim()) : [];
+  const suggestions = Array.isArray(result.suggestions) ? result.suggestions.filter((entry) => String(entry || "").trim()) : [];
+  const statusClass =
+    status === "found"
+      ? "context-status-found"
+      : status === "ambiguous"
+        ? "context-status-ambiguous"
+        : "context-status-missing";
+  return `
+    <div class="context-result">
+      <div class="context-result-head">
+        <span class="badge context-status-badge ${statusClass}">${escapeHtml(contextStatusLabel(status))}</span>
+        <span class="context-result-title">${escapeHtml(title)}</span>
+      </div>
+      <div class="context-explanation">${escapeHtml(explanation)}</div>
+      ${facts.length ? `
+        <div class="context-section">
+          <div class="context-section-label">Fakten</div>
+          <ul class="context-list">
+            ${facts.map((entry) => `<li>${escapeHtml(entry)}</li>`).join("")}
+          </ul>
+        </div>
+      ` : ""}
+      ${sources.length ? `
+        <div class="context-section">
+          <div class="context-section-label">Gefunden in</div>
+          <ul class="context-list">
+            ${sources.map((entry) => `<li>${escapeHtml(entry.label || "")}</li>`).join("")}
+          </ul>
+        </div>
+      ` : ""}
+      ${suggestions.length ? `
+        <div class="context-section">
+          <div class="context-section-label">Ähnliche Begriffe</div>
+          <div class="context-suggestions">${suggestions.map((entry) => `<span class="mini-pill">${escapeHtml(entry)}</span>`).join("")}</div>
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+function openContextModal(question, answer, result = null) {
+  el("context-modal-question").textContent = question ? `Frage: ${question}` : "";
+  el("context-modal-answer").innerHTML = renderContextModalResult(result, answer || "");
+  el("context-modal").classList.remove("hidden");
+}
+
+function closeContextModal() {
+  el("context-modal").classList.add("hidden");
+  el("context-modal-question").textContent = "";
+  el("context-modal-answer").innerHTML = "";
+}
+
+async function submitContextQuery(actor, content) {
+  IS_SENDING_TURN = true;
+  setBusy("submitTurnBtn", true, "Frage...");
+  try {
+    const data = await api(`/api/campaigns/${SESSION.campaignId}/context/query`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ actor, text: content })
+    });
+    openContextModal(content, data.answer || "", data.result || null);
+    el("turn-input").value = "";
+  } catch (error) {
+    showFlash(error.message, true);
+  } finally {
+    IS_SENDING_TURN = false;
+    setBusy("submitTurnBtn", false, "...", CURRENT_ACTION_TYPE === "context" ? "Frage stellen" : "Zug senden");
   }
 }
 
@@ -3370,6 +3501,7 @@ function leaveSession() {
   closeSessionModal();
   closeSettingsModal();
   closeCharacterDrawer();
+  closeContextModal();
   renderLanding();
 }
 
@@ -3430,6 +3562,7 @@ document.addEventListener("click", (event) => {
     renderWorldInfoTab();
   }
   if (target.id === "character-drawer") closeCharacterDrawer();
+  if (target.id === "context-modal") closeContextModal();
   if (target.id === "setup-random-modal") closeSetupRandomModal();
 });
 
@@ -3447,6 +3580,7 @@ el("openLandingSettingsBtn").addEventListener("click", () => openSettingsModal("
 el("closeSessionModalBtn").addEventListener("click", closeSessionModal);
 el("closeSettingsModalBtn").addEventListener("click", closeSettingsModal);
 el("closeCharacterDrawerBtn").addEventListener("click", closeCharacterDrawer);
+el("closeContextModalBtn").addEventListener("click", closeContextModal);
 el("setupRandomBtn").addEventListener("click", openSetupRandomModal);
 el("closeSetupRandomModalBtn").addEventListener("click", closeSetupRandomModal);
 el("setupRandomRerollBtn").addEventListener("click", () => loadSetupRandomPreview(currentSetupRandomMode()));
@@ -3525,6 +3659,14 @@ document.addEventListener("change", (event) => {
       scheduleSetupPresence();
     }
   }
+});
+
+document.addEventListener("mouseover", (event) => {
+  const target = event.target;
+  if (!target) return;
+  const highlighted = target.closest?.(".story-response.turn-highlight");
+  if (!highlighted) return;
+  clearRecentTurnHighlight(highlighted.dataset.turnId || null);
 });
 
 bootstrap();

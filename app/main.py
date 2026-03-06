@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import math
 import os
 import queue
@@ -31,6 +32,9 @@ OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.6"))
 OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "8192"))
 OLLAMA_REPEAT_PENALTY = float(os.getenv("OLLAMA_REPEAT_PENALTY", "1.18"))
 OLLAMA_REPEAT_LAST_N = int(os.getenv("OLLAMA_REPEAT_LAST_N", "192"))
+OLLAMA_TIMEOUT_SEC = int(os.getenv("OLLAMA_TIMEOUT_SEC", "240"))
+
+LOGGER = logging.getLogger("isekai.turns")
 
 LEGACY_CHARACTERS = ("Matchek", "Abo", "Beni")
 ACTION_TYPES = ("do", "say", "story", "canon")
@@ -127,6 +131,45 @@ LIVE_ACTIVITY_TTLS = {
 }
 BLOCKING_ACTION_TTL = 120
 SSE_PING_INTERVAL = 15
+ENABLE_HEURISTIC_NORMALIZE_BACKFILL = (
+    str(os.getenv("ENABLE_HEURISTIC_NORMALIZE_BACKFILL", "false")).strip().lower() in {"1", "true", "yes", "on"}
+)
+ENABLE_LEGACY_SHADOW_WRITEBACK = (
+    str(os.getenv("ENABLE_LEGACY_SHADOW_WRITEBACK", "false")).strip().lower() in {"1", "true", "yes", "on"}
+)
+EXTRACTION_QUARANTINE_DEFAULT_MAX = 300
+EXTRACTION_REASON_GENERIC_LOCATION = "GENERIC_LOCATION"
+EXTRACTION_REASON_MISSING_ACQUIRE = "MISSING_ACQUIRE_SIGNAL"
+EXTRACTION_REASON_ENV_OBJECT = "ENV_OBJECT_ONLY"
+EXTRACTION_REASON_VERB_STYLE_SKILL = "VERB_STYLE_SKILL"
+EXTRACTION_REASON_AMBIGUOUS_CLASS = "AMBIGUOUS_CLASS"
+EXTRACTION_REASON_DUPLICATE = "DUPLICATE_LIKELY"
+EXTRACTION_REASON_LOW_CONFIDENCE = "LOW_CONFIDENCE"
+EXTRACTION_REASON_CONFLICT_WITH_LLM = "CONFLICT_WITH_LLM"
+
+ERROR_CODE_NARRATOR_RESPONSE = "NARRATOR_RESPONSE_ERROR"
+ERROR_CODE_JSON_REPAIR = "JSON_REPAIR_ERROR"
+ERROR_CODE_SCHEMA_VALIDATION = "SCHEMA_VALIDATION_ERROR"
+ERROR_CODE_PATCH_SANITIZE = "PATCH_SANITIZE_ERROR"
+ERROR_CODE_PATCH_APPLY = "PATCH_APPLY_ERROR"
+ERROR_CODE_EXTRACTOR = "EXTRACTOR_ERROR"
+ERROR_CODE_NORMALIZE = "NORMALIZE_ERROR"
+ERROR_CODE_PERSISTENCE = "PERSISTENCE_ERROR"
+ERROR_CODE_SSE_BROADCAST = "SSE_BROADCAST_ERROR"
+ERROR_CODE_TURN_INTERNAL = "TURN_INTERNAL_ERROR"
+
+TURN_ERROR_USER_MESSAGES = {
+    ERROR_CODE_NARRATOR_RESPONSE: "Die KI-Antwort konnte gerade nicht verarbeitet werden.",
+    ERROR_CODE_JSON_REPAIR: "Die KI-Antwort war unvollständig oder ungültig formatiert.",
+    ERROR_CODE_SCHEMA_VALIDATION: "Die KI-Antwort passte nicht zum erwarteten Datenformat.",
+    ERROR_CODE_PATCH_SANITIZE: "Die KI-Änderungen konnten nicht sicher bereinigt werden.",
+    ERROR_CODE_PATCH_APPLY: "Die KI-Änderungen konnten nicht auf den Spielzustand angewendet werden.",
+    ERROR_CODE_EXTRACTOR: "Die Kanon-Extraktion konnte nicht abgeschlossen werden.",
+    ERROR_CODE_NORMALIZE: "Der Kampagnenzustand konnte nicht stabilisiert werden.",
+    ERROR_CODE_PERSISTENCE: "Die Kampagne konnte nicht gespeichert werden.",
+    ERROR_CODE_SSE_BROADCAST: "Das Live-Update konnte nicht verteilt werden.",
+    ERROR_CODE_TURN_INTERNAL: "Beim Verarbeiten des Zugs ist ein interner Fehler aufgetreten.",
+}
 
 with open(os.path.join(BASE_DIR, "prompts.json"), "r", encoding="utf-8") as f:
     PROMPTS = json.load(f)
@@ -155,6 +198,74 @@ def extend_turn_patch_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
     char_patch = (((extended.get("$defs") or {}).get("char_patch")) or {})
     properties = char_patch.setdefault("properties", {})
     properties.setdefault("scene_set", {"type": "string"})
+    skill_object_schema = (
+        ((properties.get("skills_set") or {}).get("additionalProperties") or {}).get("anyOf") or []
+    )
+    for candidate in skill_object_schema:
+        if not isinstance(candidate, dict):
+            continue
+        if candidate.get("type") != "object":
+            continue
+        candidate.setdefault("properties", {})
+        candidate["properties"].setdefault("effect_summary", {"type": "string"})
+        candidate["properties"].setdefault("power_rating", {"type": "integer"})
+        candidate["properties"].setdefault("growth_potential", {"type": "string"})
+        candidate["properties"].setdefault("manifestation_source", {"type": ["string", "null"]})
+        candidate["properties"].setdefault("category", {"type": ["string", "null"]})
+        candidate["properties"].setdefault(
+            "class_affinity",
+            {"type": ["array", "null"], "items": {"type": "string"}},
+        )
+        break
+
+    progression_event_schema = {
+        "type": "array",
+        "items": {
+            "type": "object",
+            "properties": {
+                "type": {"type": "string"},
+                "actor": {"type": "string"},
+                "target_skill_id": {"type": ["string", "null"]},
+                "target_class_id": {"type": ["string", "null"]},
+                "severity": {"type": "string", "enum": ["low", "medium", "high"]},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "reason": {"type": "string"},
+                "source_turn": {"type": "integer"},
+                "metadata": {"type": "object", "additionalProperties": True},
+                "skill": {"type": "object", "additionalProperties": True},
+            },
+            "required": ["type"],
+            "additionalProperties": False,
+        },
+    }
+    properties.setdefault("progression_events", progression_event_schema)
+
+    skills_delta = properties.get("skills_delta")
+    if isinstance(skills_delta, dict):
+        skills_delta["additionalProperties"] = {
+            "anyOf": [
+                {"type": "integer"},
+                {
+                    "type": "object",
+                    "properties": {
+                        "xp": {"type": "integer"},
+                        "level": {"type": "integer"},
+                        "mastery": {"type": "integer"},
+                        "description": {"type": "string"},
+                        "cost": {
+                            "type": ["object", "null"],
+                            "properties": {
+                                "resource": {"type": "string"},
+                                "amount": {"type": "integer"},
+                            },
+                            "required": ["resource", "amount"],
+                            "additionalProperties": False,
+                        },
+                    },
+                    "additionalProperties": True,
+                },
+            ]
+        }
     return extended
 
 
@@ -200,6 +311,7 @@ NPC_EXTRACTOR_SCHEMA = {
                 "properties": {
                     "name": {"type": "string"},
                     "race": {"type": "string"},
+                    "age": {"type": "string"},
                     "goal": {"type": "string"},
                     "level": {"type": "integer"},
                     "backstory_short": {"type": "string"},
@@ -231,7 +343,7 @@ NPC_EXTRACTOR_SYSTEM_PROMPT = (
     "Nimm keine Spielercharaktere auf. "
     "Nimm keine generischen Einmal-Nennungen wie 'Wache' oder 'Soldat' ohne individuelle Identität auf. "
     "Erfasse nur Figuren mit erkennbarer Plot-Relevanz. "
-    "Pflicht beim ersten relevanten Auftreten: Name, Rasse, Ziel, Level, Kurz-Backstory (best effort). "
+    "Pflicht beim ersten relevanten Auftreten: Name, Rasse, Alter, Ziel, Level, Kurz-Backstory (best effort). "
     "Aktualisiere bei Wiedererwähnung vorhandene Figuren mit konkreteren Daten. "
     "Erfinde keine Prosa, keine Requests, kein Patch."
 )
@@ -618,6 +730,67 @@ CHARACTER_ATTRIBUTE_SYSTEM_PROMPT = (
     "Bleibe deutsch in allen freien Texten, aber liefere hier nur die Zahlen."
 )
 
+CONTEXT_ASSISTANT_SYSTEM_PROMPT = (
+    "Du bist ein Kontext-Assistent für eine laufende deutschsprachige Isekai-Kampagne. "
+    "Du beantwortest Fragen zum aktuellen Stand (Story, Figuren, Orte, Fraktionen, offene Konflikte) "
+    "nur auf Basis der übergebenen Retrieval-Snippets. "
+    "Wichtig: Deine Antwort ist rein erklärend und verändert keinen Zustand. "
+    "Keine Prosa-Fortsetzung, kein Patch, keine Würfelmechanik. "
+    "Keine Markdown-Formatierung. Keine Meta-Aussagen über Textanalyse oder Prompting. "
+    "Antworte immer auf Deutsch, klar und strukturiert."
+)
+CONTEXT_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "status": {"type": "string", "enum": ["found", "not_in_canon", "ambiguous"]},
+        "intent": {"type": "string", "enum": ["define", "who", "where", "summary", "compare", "unknown"]},
+        "target": {"type": "string"},
+        "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
+        "entity_type": {"type": "string"},
+        "entity_id": {"type": "string"},
+        "title": {"type": "string"},
+        "explanation": {"type": "string"},
+        "facts": {"type": "array", "items": {"type": "string"}},
+        "sources": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "type": {"type": "string"},
+                    "id": {"type": "string"},
+                    "label": {"type": "string"},
+                },
+                "required": ["type", "id", "label"],
+                "additionalProperties": False,
+            },
+        },
+        "suggestions": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": [
+        "status",
+        "intent",
+        "target",
+        "confidence",
+        "entity_type",
+        "entity_id",
+        "title",
+        "explanation",
+        "facts",
+        "sources",
+        "suggestions",
+    ],
+    "additionalProperties": False,
+}
+CONTEXT_META_DRIFT_MARKERS = (
+    "analyse des textes",
+    "bereitgestellten text",
+    "anleitung fuer den autor",
+    "anleitung für den autor",
+    "keine neuen story-elemente",
+    "formatierungsvorschläge",
+    "formatierungsvorschlaege",
+)
+
 CHARACTER_ATTRIBUTE_SCHEMA = {
     "type": "object",
     "properties": {
@@ -645,6 +818,7 @@ TURN_RESPONSE_JSON_CONTRACT = (
     "`meta.phase` muss `world_setup`, `character_setup` oder `adventure` sein. "
     "Wenn du nichts ändern willst, nutze leere Objekte/Arrays statt Felder wegzulassen. "
     "Nutze in `characters` nur echte Slot-IDs als Keys. "
+    "Für Fortschritt nutze pro Character optional `progression_events` als Array strukturierter Events. "
     "`requests` ist ein Array von Objekten mit mindestens `type` und `actor`."
 )
 
@@ -943,6 +1117,155 @@ def make_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:10]}"
 
 
+class TurnFlowError(Exception):
+    def __init__(
+        self,
+        *,
+        error_code: str,
+        phase: str,
+        trace_id: str,
+        user_message: str,
+        cause_class: str = "",
+        cause_message: str = "",
+    ) -> None:
+        super().__init__(user_message)
+        self.error_code = str(error_code or ERROR_CODE_TURN_INTERNAL)
+        self.phase = str(phase or "")
+        self.trace_id = str(trace_id or "")
+        self.user_message = str(user_message or TURN_ERROR_USER_MESSAGES[ERROR_CODE_TURN_INTERNAL])
+        self.cause_class = str(cause_class or "")
+        self.cause_message = str(cause_message or "")
+
+    def to_client_detail(self) -> str:
+        return f"{self.user_message} [E:{self.error_code}]"
+
+
+def user_message_for_error_code(error_code: str) -> str:
+    return TURN_ERROR_USER_MESSAGES.get(error_code, TURN_ERROR_USER_MESSAGES[ERROR_CODE_TURN_INTERNAL])
+
+
+def new_turn_trace_context(campaign_id: str, slot_id: str, player_id: Optional[str]) -> Dict[str, Any]:
+    return {
+        "trace_id": make_id("trace"),
+        "campaign_id": str(campaign_id or ""),
+        "slot_id": str(slot_id or ""),
+        "player_id": str(player_id or ""),
+        "turn_id": "",
+        "last_phase": "",
+    }
+
+
+def emit_turn_phase_event(
+    ctx: Optional[Dict[str, Any]],
+    phase: str,
+    success: bool,
+    error_code: str = "OK",
+    error_class: str = "",
+    message: str = "",
+    extra: Optional[Dict[str, Any]] = None,
+) -> None:
+    if not isinstance(ctx, dict):
+        return
+    try:
+        ctx["last_phase"] = str(phase or "")
+        payload: Dict[str, Any] = {
+            "event": "turn_phase",
+            "ts": utc_now(),
+            "trace_id": str(ctx.get("trace_id") or ""),
+            "campaign_id": str(ctx.get("campaign_id") or ""),
+            "slot_id": str(ctx.get("slot_id") or ""),
+            "player_id": str(ctx.get("player_id") or ""),
+            "turn_id": str(ctx.get("turn_id") or ""),
+            "phase": str(phase or ""),
+            "success": bool(success),
+            "error_code": str(error_code or "OK"),
+            "error_class": str(error_class or ""),
+            "message": str(message or ""),
+        }
+        if isinstance(extra, dict) and extra:
+            payload["extra"] = deep_copy(extra)
+        LOGGER.info(json.dumps(payload, ensure_ascii=False))
+    except Exception:
+        return
+
+
+def turn_flow_error(
+    *,
+    error_code: str,
+    phase: str,
+    trace_ctx: Optional[Dict[str, Any]],
+    exc: Optional[BaseException] = None,
+    user_message: Optional[str] = None,
+) -> TurnFlowError:
+    trace_id = str((trace_ctx or {}).get("trace_id") or "")
+    return TurnFlowError(
+        error_code=error_code,
+        phase=phase,
+        trace_id=trace_id,
+        user_message=user_message or user_message_for_error_code(error_code),
+        cause_class=exc.__class__.__name__ if exc else "",
+        cause_message=str(exc) if exc else "",
+    )
+
+
+def looks_like_ollama_transport_error(message: str) -> bool:
+    lowered = str(message or "").strip().lower()
+    return (
+        "ollama error" in lowered
+        or "failed to parse grammar" in lowered
+        or "grammar_init" in lowered
+        or "llm predict error" in lowered
+        or "read timed out" in lowered
+        or "connection aborted" in lowered
+    )
+
+
+def classify_turn_exception(
+    exc: Exception,
+    *,
+    phase: str,
+    trace_ctx: Optional[Dict[str, Any]],
+) -> TurnFlowError:
+    if isinstance(exc, TurnFlowError):
+        return exc
+    if isinstance(exc, (requests.Timeout, requests.ConnectionError, requests.HTTPError)):
+        return turn_flow_error(
+            error_code=ERROR_CODE_NARRATOR_RESPONSE,
+            phase=phase,
+            trace_ctx=trace_ctx,
+            exc=exc,
+        )
+    if isinstance(exc, requests.RequestException):
+        return turn_flow_error(
+            error_code=ERROR_CODE_NARRATOR_RESPONSE,
+            phase=phase,
+            trace_ctx=trace_ctx,
+            exc=exc,
+        )
+    if isinstance(exc, RuntimeError):
+        msg = str(exc)
+        if "Model returned non-JSON content" in msg:
+            return turn_flow_error(
+                error_code=ERROR_CODE_JSON_REPAIR,
+                phase=phase,
+                trace_ctx=trace_ctx,
+                exc=exc,
+            )
+        if looks_like_ollama_transport_error(msg):
+            return turn_flow_error(
+                error_code=ERROR_CODE_NARRATOR_RESPONSE,
+                phase=phase,
+                trace_ctx=trace_ctx,
+                exc=exc,
+            )
+    return turn_flow_error(
+        error_code=ERROR_CODE_TURN_INTERNAL,
+        phase=phase,
+        trace_ctx=trace_ctx,
+        exc=exc,
+    )
+
+
 def make_join_code() -> str:
     alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     return "".join(secrets.choice(alphabet) for _ in range(6))
@@ -1001,6 +1324,7 @@ def default_npc_entry(npc_id: str, name: str) -> Dict[str, Any]:
         "npc_id": npc_id,
         "name": str(name or "").strip(),
         "race": "Unbekannt",
+        "age": "Unbekannt",
         "goal": "",
         "level": 1,
         "backstory_short": "",
@@ -1014,6 +1338,20 @@ def default_npc_entry(npc_id: str, name: str) -> Dict[str, Any]:
         "status": "active",
         "tags": ["npc", "story_relevant"],
         "history_notes": [],
+        "class_current": None,
+        "skills": {},
+        "xp_total": 0,
+        "xp_current": 0,
+        "xp_to_next": 120,
+        "hp_current": 10,
+        "hp_max": 10,
+        "sta_current": 8,
+        "sta_max": 8,
+        "res_current": 4,
+        "res_max": 4,
+        "conditions": [],
+        "injuries": [],
+        "scars": [],
     }
 
 
@@ -1028,6 +1366,7 @@ def normalize_npc_entry(raw: Any, *, fallback_npc_id: str = "") -> Optional[Dict
         return None
     entry = default_npc_entry(npc_id, name)
     entry["race"] = str(raw.get("race") or entry["race"]).strip() or "Unbekannt"
+    entry["age"] = str(raw.get("age") or entry["age"]).strip() or "Unbekannt"
     entry["goal"] = str(raw.get("goal") or "").strip()
     entry["level"] = clamp(int(raw.get("level", 1) or 1), 1, 999)
     entry["backstory_short"] = str(raw.get("backstory_short") or "").strip()
@@ -1044,6 +1383,21 @@ def normalize_npc_entry(raw: Any, *, fallback_npc_id: str = "") -> Optional[Dict
     entry["tags"] = list(dict.fromkeys(tags or entry["tags"]))
     history_notes = [str(note).strip() for note in (raw.get("history_notes") or []) if str(note).strip()]
     entry["history_notes"] = history_notes[-20:]
+    entry["class_current"] = normalize_class_current(raw.get("class_current"))
+    npc_resource_name = normalize_resource_name((((raw.get("progression") or {}).get("resource_name")) or "Aether"), "Aether")
+    entry["skills"] = normalize_skill_store(raw.get("skills") or {}, resource_name=npc_resource_name)
+    entry["xp_total"] = max(0, int(raw.get("xp_total", entry.get("xp_total", 0)) or entry.get("xp_total", 0)))
+    entry["xp_to_next"] = max(1, int(raw.get("xp_to_next", entry.get("xp_to_next", next_character_xp_for_level(entry["level"]))) or next_character_xp_for_level(entry["level"])))
+    entry["xp_current"] = clamp(int(raw.get("xp_current", entry.get("xp_current", 0)) or entry.get("xp_current", 0)), 0, entry["xp_to_next"])
+    entry["hp_max"] = max(1, int(raw.get("hp_max", entry.get("hp_max", 10)) or entry.get("hp_max", 10)))
+    entry["hp_current"] = clamp(int(raw.get("hp_current", entry.get("hp_current", entry["hp_max"])) or entry.get("hp_current", entry["hp_max"])), 0, entry["hp_max"])
+    entry["sta_max"] = max(0, int(raw.get("sta_max", entry.get("sta_max", 8)) or entry.get("sta_max", 8)))
+    entry["sta_current"] = clamp(int(raw.get("sta_current", entry.get("sta_current", entry["sta_max"])) or entry.get("sta_current", entry["sta_max"])), 0, entry["sta_max"])
+    entry["res_max"] = max(0, int(raw.get("res_max", entry.get("res_max", 4)) or entry.get("res_max", 4)))
+    entry["res_current"] = clamp(int(raw.get("res_current", entry.get("res_current", entry["res_max"])) or entry.get("res_current", entry["res_max"])), 0, entry["res_max"])
+    entry["conditions"] = [str(cond).strip() for cond in (raw.get("conditions") or []) if str(cond).strip()][:12]
+    entry["injuries"] = [deep_copy(item) for item in (raw.get("injuries") or []) if isinstance(item, dict)][:16]
+    entry["scars"] = [deep_copy(item) for item in (raw.get("scars") or []) if isinstance(item, dict)][:24]
     return entry
 
 
@@ -1160,8 +1514,17 @@ def default_class_current() -> Dict[str, Any]:
         "level_max": 10,
         "xp": 0,
         "xp_next": 100,
+        "class_id": "",
+        "class_name": "",
+        "class_rank": "F",
+        "class_level": 1,
+        "class_level_max": 10,
+        "class_xp": 0,
+        "class_xp_to_next": 100,
         "affinity_tags": [],
         "description": "",
+        "class_traits": [],
+        "class_mastery": 0,
         "ascension": {
             "status": "none",
             "quest_id": None,
@@ -1242,6 +1605,11 @@ def blank_character_state(slot_name: str) -> Dict[str, Any]:
         "res_max": 5,
         "carry_current": 0,
         "carry_max": 10,
+        "level": 1,
+        "xp_total": 0,
+        "xp_current": 0,
+        "xp_to_next": 120,
+        "recent_progression_events": [],
         "attributes": {
             "str": 0,
             "dex": 0,
@@ -1345,6 +1713,91 @@ def blank_character_state(slot_name: str) -> Dict[str, Any]:
 
 RESOURCE_KEYS = ("hp", "stamina", "aether", "stress", "corruption", "wounds")
 ATTRIBUTE_KEYS = ("str", "dex", "con", "int", "wis", "cha", "luck")
+# Canon-first runtime fields. These are the primary mutable gameplay truth.
+CANON_CHARACTER_FIELDS = {
+    "scene_id",
+    "class_current",
+    "skills",
+    "inventory",
+    "equipment",
+    "injuries",
+    "scars",
+    "hp_current",
+    "hp_max",
+    "sta_current",
+    "sta_max",
+    "res_current",
+    "res_max",
+    "carry_current",
+    "carry_max",
+    "level",
+    "xp_total",
+    "xp_current",
+    "xp_to_next",
+    "recent_progression_events",
+    "progression",
+}
+# Compatibility shadow fields: readable for old saves, optional writeback only.
+LEGACY_SHADOW_FIELDS = {
+    "resources",
+    "hp",
+    "stamina",
+    "equip",
+    "abilities",
+    "potential",
+}
+# Migration-only inputs from old state shapes.
+MIGRATION_ONLY_FIELDS = {
+    "bio.party_role",
+    "class_state",
+    "equip",
+    "abilities",
+    "resources",
+    "hp",
+    "stamina",
+    "potential",
+}
+PROGRESSION_EVENT_TYPES = {
+    "combat_victory",
+    "combat_survival",
+    "major_discovery",
+    "milestone_progress",
+    "boss_defeated",
+    "class_breakthrough",
+    "skill_mastery_use",
+    "skill_manifestation",
+    "training_success",
+    "bond_event",
+}
+PROGRESSION_EVENT_SEVERITIES = {"low", "medium", "high"}
+PROGRESSION_EVENT_SEVERITY_MULTIPLIER = {
+    "low": 1.0,
+    "medium": 1.35,
+    "high": 1.8,
+}
+PROGRESSION_EVENT_BASE_XP = {
+    "combat_victory": {"character": 28, "class": 18, "skill": 20},
+    "combat_survival": {"character": 14, "class": 8, "skill": 10},
+    "major_discovery": {"character": 24, "class": 14, "skill": 8},
+    "milestone_progress": {"character": 36, "class": 24, "skill": 14},
+    "boss_defeated": {"character": 55, "class": 34, "skill": 26},
+    "class_breakthrough": {"character": 26, "class": 30, "skill": 8},
+    "skill_mastery_use": {"character": 10, "class": 6, "skill": 16},
+    "skill_manifestation": {"character": 22, "class": 14, "skill": 26},
+    "training_success": {"character": 14, "class": 10, "skill": 14},
+    "bond_event": {"character": 12, "class": 8, "skill": 6},
+}
+SKILL_MANIFESTATION_VERB_BLACKLIST = {
+    "kaempfen",
+    "kämpfen",
+    "rennen",
+    "laufen",
+    "springen",
+    "ausweichen",
+    "bewegen",
+    "schlagen",
+    "treffen",
+}
 SKILL_KEYS = (
     "stealth",
     "perception",
@@ -1507,6 +1960,16 @@ def next_skill_xp_for_level(level: int) -> int:
     if normalized <= 0:
         return 60
     return 100 + ((normalized - 1) * 35)
+
+
+def next_character_xp_for_level(level: int) -> int:
+    normalized = max(1, int(level or 1))
+    return int(120 + ((normalized - 1) * 60) + (max(0, normalized - 1) ** 1.4) * 14)
+
+
+def next_class_xp_for_level(level: int) -> int:
+    normalized = max(1, int(level or 1))
+    return int(100 + ((normalized - 1) * 50) + (max(0, normalized - 1) ** 1.35) * 10)
 
 
 DEFAULT_DYNAMIC_SKILL_LEVEL_MAX = 10
@@ -1821,6 +2284,12 @@ def dynamic_skill_default(skill_id: str = "", skill_name: str = "", resource_nam
         "level_max": DEFAULT_DYNAMIC_SKILL_LEVEL_MAX,
         "tags": [],
         "description": "",
+        "effect_summary": "",
+        "power_rating": 5,
+        "growth_potential": "mittel",
+        "manifestation_source": None,
+        "category": None,
+        "class_affinity": None,
         "cost": None,
         "price": None,
         "cooldown_turns": None,
@@ -1906,6 +2375,27 @@ def normalize_dynamic_skill_state(
     skill["level"] = clamp(int(skill.get("level", 1) or 1), 1, skill["level_max"])
     skill["tags"] = [str(tag).strip() for tag in (skill.get("tags") or []) if str(tag).strip()]
     skill["description"] = str(skill.get("description", "") or "").strip() or f"{skill['name']} ist Teil der aktuellen Entwicklung."
+    skill["effect_summary"] = str(skill.get("effect_summary", "") or "").strip() or skill["description"][:180]
+    skill["growth_potential"] = str(skill.get("growth_potential", "") or "mittel").strip().lower() or "mittel"
+    if skill["growth_potential"] not in {"niedrig", "mittel", "hoch", "legendär"}:
+        skill["growth_potential"] = "mittel"
+    skill["power_rating"] = clamp(
+        int(
+            skill.get(
+                "power_rating",
+                max(1, (skill_rank_sort_value(skill["rank"]) + 1) * 5 + int(skill.get("level", 1) or 1)),
+            )
+            or 1
+        ),
+        1,
+        999,
+    )
+    manifestation_source = str(skill.get("manifestation_source", "") or "").strip()
+    skill["manifestation_source"] = manifestation_source or None
+    category = str(skill.get("category", "") or "").strip().lower()
+    skill["category"] = category or None
+    class_affinity = [str(tag).strip() for tag in (skill.get("class_affinity") or []) if str(tag).strip()]
+    skill["class_affinity"] = class_affinity or None
     raw_cost = skill.get("cost")
     if isinstance(raw_cost, dict):
         cost_resource = str(raw_cost.get("resource") or resource_name).strip() or resource_name
@@ -1952,6 +2442,18 @@ def merge_dynamic_skill(existing: Dict[str, Any], incoming: Dict[str, Any], *, r
     base["tags"] = list(dict.fromkeys([*(base.get("tags") or []), *(new_data.get("tags") or [])]))
     if new_data.get("description"):
         base["description"] = new_data["description"]
+    if new_data.get("effect_summary"):
+        base["effect_summary"] = new_data["effect_summary"]
+    if new_data.get("growth_potential"):
+        base["growth_potential"] = new_data["growth_potential"]
+    if int(new_data.get("power_rating", 0) or 0) > 0:
+        base["power_rating"] = max(int(base.get("power_rating", 1) or 1), int(new_data.get("power_rating", 1) or 1))
+    if new_data.get("manifestation_source"):
+        base["manifestation_source"] = new_data["manifestation_source"]
+    if new_data.get("category"):
+        base["category"] = new_data["category"]
+    if new_data.get("class_affinity"):
+        base["class_affinity"] = list(dict.fromkeys([*(base.get("class_affinity") or []), *(new_data.get("class_affinity") or [])]))
     if new_data.get("cost"):
         base["cost"] = new_data["cost"]
     if new_data.get("price"):
@@ -2120,11 +2622,13 @@ def normalize_class_current(value: Any) -> Optional[Dict[str, Any]]:
             klass["id"] = f"class_{klass['id']}"
     if not klass["name"]:
         return None
-    klass["rank"] = normalize_skill_rank(klass.get("rank"))
-    klass["level"] = max(1, int(klass.get("level", 1) or 1))
-    klass["level_max"] = max(klass["level"], int(klass.get("level_max", 10) or 10))
-    klass["xp_next"] = max(1, int(klass.get("xp_next", next_skill_xp_for_level(klass["level"])) or next_skill_xp_for_level(klass["level"])))
-    klass["xp"] = clamp(int(klass.get("xp", 0) or 0), 0, klass["xp_next"])
+    raw_rank = klass.get("rank", klass.get("class_rank", "F"))
+    klass["rank"] = normalize_skill_rank(raw_rank)
+    klass["level"] = max(1, int(klass.get("level", klass.get("class_level", 1)) or 1))
+    klass["level_max"] = max(klass["level"], int(klass.get("level_max", klass.get("class_level_max", 10)) or 10))
+    default_xp_next = next_class_xp_for_level(klass["level"])
+    klass["xp_next"] = max(1, int(klass.get("xp_next", klass.get("class_xp_to_next", default_xp_next)) or default_xp_next))
+    klass["xp"] = clamp(int(klass.get("xp", klass.get("class_xp", 0)) or 0), 0, klass["xp_next"])
     normalized_affinity_tags: List[str] = []
     for raw_tag in (klass.get("affinity_tags") or []):
         if isinstance(raw_tag, str):
@@ -2137,6 +2641,9 @@ def normalize_class_current(value: Any) -> Optional[Dict[str, Any]]:
                 normalized_affinity_tags.append(clean_part)
     klass["affinity_tags"] = list(dict.fromkeys(normalized_affinity_tags))
     klass["description"] = str(klass.get("description", "") or "").strip()
+    class_traits = [str(entry).strip() for entry in (klass.get("class_traits") or []) if str(entry).strip()]
+    klass["class_traits"] = list(dict.fromkeys(class_traits))
+    klass["class_mastery"] = clamp(int(klass.get("class_mastery", int((klass["xp"] / max(klass["xp_next"], 1)) * 100)) or 0), 0, 100)
     ascension = deep_copy(klass.get("ascension") or {})
     merged_ascension = deep_copy(default_class_current()["ascension"])
     merged_ascension.update(ascension)
@@ -2147,6 +2654,13 @@ def normalize_class_current(value: Any) -> Optional[Dict[str, Any]]:
     merged_ascension["requirements"] = [str(entry).strip() for entry in (merged_ascension.get("requirements") or []) if str(entry).strip()]
     merged_ascension["result_hint"] = str(merged_ascension.get("result_hint") or "").strip() or None
     klass["ascension"] = merged_ascension
+    klass["class_id"] = klass["id"]
+    klass["class_name"] = klass["name"]
+    klass["class_rank"] = klass["rank"]
+    klass["class_level"] = klass["level"]
+    klass["class_level_max"] = klass["level_max"]
+    klass["class_xp"] = klass["xp"]
+    klass["class_xp_to_next"] = klass["xp_next"]
     return klass
 
 
@@ -2244,40 +2758,198 @@ def setup_question_is_applicable(setup_node: Dict[str, Any], question_id: str) -
     return True
 
 
-def sync_canonical_resources(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> None:
-    resources = character.setdefault("resources", {})
+def canonical_resource_field_name(raw_name: Any) -> str:
+    normalized = normalized_eval_text(raw_name)
+    if normalized in {"hp", "health", "leben", "lebenspunkte"}:
+        return "hp"
+    if normalized in {"sta", "stamina", "ausdauer"}:
+        return "stamina"
+    if normalized in {"res", "resource", "mana", "aether", "äther", "qi", "ki", "energie"}:
+        return "aether"
+    if normalized in {"stress"}:
+        return "stress"
+    if normalized in {"corruption", "verderbnis"}:
+        return "corruption"
+    if normalized in {"wounds", "wound", "wunde", "wunden"}:
+        return "wounds"
+    return ""
+
+
+def ingest_legacy_resources_into_canonical(
+    character: Dict[str, Any],
+    world_settings: Optional[Dict[str, Any]] = None,
+    *,
+    source_character: Optional[Dict[str, Any]] = None,
+) -> None:
+    source = source_character if isinstance(source_character, dict) else character
+    resources = source.get("resources", {}) if isinstance(source.get("resources"), dict) else {}
     progression = character.setdefault("progression", {})
-    resource_label = str(((world_settings or {}).get("resource_name")) or progression.get("resource_name") or "Aether").strip() or "Aether"
-    resource_key = re.sub(r"[^a-z0-9]+", "_", normalized_eval_text(resource_label)).strip("_") or "resource"
-    hp_res = resources.setdefault("hp", {"current": 10, "base_max": 10, "bonus_max": 0, "max": 10})
-    sta_res = resources.setdefault("stamina", {"current": 10, "base_max": 10, "bonus_max": 0, "max": 10})
-    legacy_res = resources.get("aether") or {"current": 5, "base_max": 5, "bonus_max": 0, "max": 5}
-    character["hp_max"] = max(1, int(character.get("hp_max", hp_res.get("max", 10)) or hp_res.get("max", 10) or 10))
-    character["hp_current"] = clamp(int(character.get("hp_current", hp_res.get("current", character["hp_max"])) or hp_res.get("current", character["hp_max"]) or character["hp_max"]), 0, character["hp_max"])
-    character["sta_max"] = max(0, int(character.get("sta_max", sta_res.get("max", 10)) or sta_res.get("max", 10) or 10))
-    character["sta_current"] = clamp(int(character.get("sta_current", sta_res.get("current", character["sta_max"])) or sta_res.get("current", character["sta_max"]) or character["sta_max"]), 0, character["sta_max"])
-    default_res_max = int(progression.get("resource_max", legacy_res.get("max", 5)) or legacy_res.get("max", 5) or 5)
-    character["res_max"] = max(0, int(character.get("res_max", default_res_max) or default_res_max))
-    character["res_current"] = clamp(int(character.get("res_current", progression.get("resource_current", legacy_res.get("current", character["res_max"]))) or progression.get("resource_current", legacy_res.get("current", character["res_max"])) or character["res_max"]), 0, character["res_max"])
-    carry_limit = int(((character.get("derived") or {}).get("carry_limit", 10)) or 10)
-    carry_weight = int(((character.get("derived") or {}).get("carry_weight", 0)) or 0)
-    character["carry_max"] = max(0, int(character.get("carry_max", carry_limit) or carry_limit))
-    character["carry_current"] = clamp(int(character.get("carry_current", carry_weight) or carry_weight), 0, max(character["carry_max"], 0))
-    resources["hp"] = {"current": character["hp_current"], "base_max": character["hp_max"], "bonus_max": 0, "max": character["hp_max"]}
-    resources["stamina"] = {"current": character["sta_current"], "base_max": character["sta_max"], "bonus_max": 0, "max": character["sta_max"]}
-    resource_payload = {"current": character["res_current"], "base_max": character["res_max"], "bonus_max": 0, "max": character["res_max"]}
-    resources["aether"] = dict(resource_payload)
-    resources[resource_key] = dict(resource_payload)
+    resource_label = normalize_resource_name(
+        ((world_settings or {}).get("resource_name")) or progression.get("resource_name") or "Aether",
+        "Aether",
+    )
+    hp_res = resources.get("hp") or {}
+    sta_res = resources.get("stamina") or {}
+    legacy_res = resources.get("aether") or {}
+    if not legacy_res:
+        dynamic_key = re.sub(r"[^a-z0-9]+", "_", normalized_eval_text(resource_label)).strip("_")
+        if dynamic_key:
+            legacy_res = resources.get(dynamic_key) or {}
+
+    if "hp_max" not in source:
+        character["hp_max"] = max(1, int(hp_res.get("max", 10) or 10))
+    if "hp_current" not in source:
+        default_hp_current = hp_res.get("current", character.get("hp_max", 10))
+        character["hp_current"] = max(0, int(default_hp_current or 0))
+    if "sta_max" not in source:
+        character["sta_max"] = max(0, int(sta_res.get("max", 10) or 10))
+    if "sta_current" not in source:
+        default_sta_current = sta_res.get("current", character.get("sta_max", 10))
+        character["sta_current"] = max(0, int(default_sta_current or 0))
+    if "res_max" not in source:
+        default_res_max = progression.get("resource_max", legacy_res.get("max", 5))
+        character["res_max"] = max(0, int(default_res_max or 5))
+    if "res_current" not in source:
+        default_res_current = progression.get("resource_current", legacy_res.get("current", character.get("res_max", 5)))
+        character["res_current"] = max(0, int(default_res_current or 0))
+    if "carry_max" not in source:
+        carry_limit = int(((character.get("derived") or {}).get("carry_limit", 10)) or 10)
+        character["carry_max"] = max(0, carry_limit)
+    if "carry_current" not in source:
+        carry_weight = int(((character.get("derived") or {}).get("carry_weight", 0)) or 0)
+        character["carry_current"] = max(0, carry_weight)
+    if "hp" in source and "hp_current" not in source:
+        character["hp_current"] = max(0, int(character.get("hp", 0) or 0))
+    if "stamina" in source and "sta_current" not in source:
+        character["sta_current"] = max(0, int(character.get("stamina", 0) or 0))
     progression["resource_name"] = resource_label
-    progression["resource_current"] = character["res_current"]
-    progression["resource_max"] = character["res_max"]
-    character["hp"] = character["hp_current"]
-    character["stamina"] = character["sta_current"]
-    character.setdefault("derived", {})["carry_limit"] = character["carry_max"]
-    character.setdefault("derived", {})["carry_weight"] = character["carry_current"]
-    character.setdefault("equip", {})["weapon"] = (character.get("equipment") or {}).get("weapon", "")
-    character.setdefault("equip", {})["armor"] = (character.get("equipment") or {}).get("chest", "")
-    character.setdefault("equip", {})["trinket"] = (character.get("equipment") or {}).get("trinket", "")
+
+
+def reconcile_canonical_resources(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> None:
+    progression = character.setdefault("progression", {})
+    resource_label = normalize_resource_name(
+        ((world_settings or {}).get("resource_name")) or progression.get("resource_name") or "Aether",
+        "Aether",
+    )
+    character["hp_max"] = max(1, int(character.get("hp_max", 10) or 10))
+    character["hp_current"] = clamp(int(character.get("hp_current", character["hp_max"]) or character["hp_max"]), 0, character["hp_max"])
+    character["sta_max"] = max(0, int(character.get("sta_max", 10) or 10))
+    character["sta_current"] = clamp(int(character.get("sta_current", character["sta_max"]) or character["sta_max"]), 0, character["sta_max"])
+    character["res_max"] = max(0, int(character.get("res_max", 5) or 5))
+    character["res_current"] = clamp(int(character.get("res_current", character["res_max"]) or character["res_max"]), 0, character["res_max"])
+    character["carry_max"] = max(0, int(character.get("carry_max", 10) or 10))
+    character["carry_current"] = clamp(int(character.get("carry_current", 0) or 0), 0, character["carry_max"])
+    progression["resource_name"] = resource_label
+    progression["resource_current"] = int(character.get("res_current", 0) or 0)
+    progression["resource_max"] = int(character.get("res_max", 0) or 0)
+    character.setdefault("derived", {})["carry_limit"] = int(character["carry_max"])
+    character.setdefault("derived", {})["carry_weight"] = int(character["carry_current"])
+
+
+def build_compat_resources_view(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> Dict[str, Dict[str, int]]:
+    resource_label = resource_name_for_character(character, world_settings)
+    resource_key = re.sub(r"[^a-z0-9]+", "_", normalized_eval_text(resource_label)).strip("_") or "resource"
+    hp_max = max(1, int(character.get("hp_max", 10) or 10))
+    sta_max = max(0, int(character.get("sta_max", 10) or 10))
+    res_max = max(0, int(character.get("res_max", 5) or 5))
+    hp_payload = {"current": clamp(int(character.get("hp_current", hp_max) or hp_max), 0, hp_max), "base_max": hp_max, "bonus_max": 0, "max": hp_max}
+    sta_payload = {"current": clamp(int(character.get("sta_current", sta_max) or sta_max), 0, sta_max), "base_max": sta_max, "bonus_max": 0, "max": sta_max}
+    res_payload = {"current": clamp(int(character.get("res_current", res_max) or res_max), 0, res_max), "base_max": res_max, "bonus_max": 0, "max": res_max}
+    view = {
+        "hp": dict(hp_payload),
+        "stamina": dict(sta_payload),
+        "aether": dict(res_payload),
+    }
+    view[resource_key] = dict(res_payload)
+    for key in ("stress", "corruption", "wounds"):
+        raw = ((character.get("resources") or {}).get(key) or {}) if isinstance(character.get("resources"), dict) else {}
+        fallback_max = 10 if key != "wounds" else 3
+        entry_max = max(0, int(raw.get("max", fallback_max) or fallback_max))
+        view[key] = {
+            "current": clamp(int(raw.get("current", 0) or 0), 0, entry_max),
+            "base_max": max(0, int(raw.get("base_max", entry_max) or entry_max)),
+            "bonus_max": int(raw.get("bonus_max", 0) or 0),
+            "max": entry_max,
+        }
+    return view
+
+
+def strip_legacy_resource_shadows(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> None:
+    if ENABLE_LEGACY_SHADOW_WRITEBACK:
+        return
+    resources = character.get("resources")
+    if not isinstance(resources, dict):
+        return
+    resource_label = resource_name_for_character(character, world_settings)
+    dynamic_key = re.sub(r"[^a-z0-9]+", "_", normalized_eval_text(resource_label)).strip("_")
+    for key in ("hp", "stamina", "aether", dynamic_key):
+        if key and key in resources and key not in {"stress", "corruption", "wounds"}:
+            resources.pop(key, None)
+
+
+def strip_legacy_shadow_fields(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> None:
+    if ENABLE_LEGACY_SHADOW_WRITEBACK:
+        return
+    strip_legacy_resource_shadows(character, world_settings)
+    for field_name in ("hp", "stamina", "equip", "abilities", "potential", "class_state"):
+        character.pop(field_name, None)
+
+
+def legacy_misc_resources_set_from_payload(resources_set_payload: Any) -> Dict[str, Dict[str, int]]:
+    out: Dict[str, Dict[str, int]] = {}
+    if not isinstance(resources_set_payload, dict):
+        return out
+    for raw_key, raw_value in resources_set_payload.items():
+        mapped = canonical_resource_field_name(raw_key)
+        if mapped not in {"stress", "corruption", "wounds"}:
+            continue
+        if not isinstance(raw_value, dict):
+            continue
+        entry = {
+            "current": max(0, int(raw_value.get("current", 0) or 0)),
+            "max": max(0, int(raw_value.get("max", 0) or 0)),
+        }
+        if entry["max"] > 0:
+            entry["current"] = clamp(entry["current"], 0, entry["max"])
+        out[mapped] = entry
+    return out
+
+
+def legacy_misc_resource_deltas_from_update(upd: Dict[str, Any]) -> Dict[str, int]:
+    out = {"stress": 0, "corruption": 0, "wounds": 0}
+    raw_deltas = upd.get("resources_delta") if isinstance(upd.get("resources_delta"), dict) else {}
+    for raw_key, raw_value in raw_deltas.items():
+        mapped = canonical_resource_field_name(raw_key)
+        if mapped in out:
+            out[mapped] += int(raw_value or 0)
+    return out
+
+
+def write_legacy_shadow_fields(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> None:
+    resources_view = build_compat_resources_view(character, world_settings)
+    character["resources"] = deep_copy(resources_view)
+    character["hp"] = int(character.get("hp_current", 0) or 0)
+    character["stamina"] = int(character.get("sta_current", 0) or 0)
+    character["equip"] = {
+        "weapon": ((character.get("equipment") or {}).get("weapon", "") if isinstance(character.get("equipment"), dict) else ""),
+        "armor": ((character.get("equipment") or {}).get("chest", "") if isinstance(character.get("equipment"), dict) else ""),
+        "trinket": ((character.get("equipment") or {}).get("trinket", "") if isinstance(character.get("equipment"), dict) else ""),
+    }
+    character["potential"] = [
+        card.get("name", card.get("id", ""))
+        for card in (character.get("progression", {}).get("potential_cards") or [])
+        if isinstance(card, dict)
+    ]
+
+
+def sync_canonical_resources(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> None:
+    # Backward-compatible wrapper: canonical-first by default, optional legacy shadow writeback.
+    ingest_legacy_resources_into_canonical(character, world_settings)
+    reconcile_canonical_resources(character, world_settings)
+    if ENABLE_LEGACY_SHADOW_WRITEBACK:
+        write_legacy_shadow_fields(character, world_settings)
+    else:
+        strip_legacy_shadow_fields(character, world_settings)
 
 
 def sync_scars_into_appearance(character: Dict[str, Any]) -> None:
@@ -2372,6 +3044,72 @@ def default_boards(player_id: Optional[str] = None) -> Dict[str, Any]:
 
 def resource_delta_payload() -> Dict[str, int]:
     return {key: 0 for key in RESOURCE_KEYS}
+
+
+def canonical_resources_set_from_payload(
+    resources_set_payload: Any,
+    character: Dict[str, Any],
+    world_settings: Optional[Dict[str, Any]] = None,
+) -> Dict[str, int]:
+    canonical: Dict[str, int] = {}
+    if not isinstance(resources_set_payload, dict):
+        return canonical
+    for key in ("hp_current", "hp_max", "sta_current", "sta_max", "res_current", "res_max", "carry_current", "carry_max"):
+        if key in resources_set_payload:
+            canonical[key] = max(0, int(resources_set_payload.get(key, 0) or 0))
+    for raw_key, raw_value in resources_set_payload.items():
+        mapped = canonical_resource_field_name(raw_key)
+        if not mapped:
+            continue
+        if isinstance(raw_value, dict):
+            if mapped == "hp":
+                if "current" in raw_value:
+                    canonical["hp_current"] = max(0, int(raw_value.get("current", 0) or 0))
+                if "max" in raw_value:
+                    canonical["hp_max"] = max(1, int(raw_value.get("max", 0) or 0))
+            elif mapped == "stamina":
+                if "current" in raw_value:
+                    canonical["sta_current"] = max(0, int(raw_value.get("current", 0) or 0))
+                if "max" in raw_value:
+                    canonical["sta_max"] = max(0, int(raw_value.get("max", 0) or 0))
+            elif mapped == "aether":
+                if "current" in raw_value:
+                    canonical["res_current"] = max(0, int(raw_value.get("current", 0) or 0))
+                if "max" in raw_value:
+                    canonical["res_max"] = max(0, int(raw_value.get("max", 0) or 0))
+        else:
+            numeric = max(0, int(raw_value or 0))
+            if mapped == "hp":
+                canonical.setdefault("hp_current", numeric)
+            elif mapped == "stamina":
+                canonical.setdefault("sta_current", numeric)
+            elif mapped == "aether":
+                canonical.setdefault("res_current", numeric)
+    if "res_max" in canonical and "res_current" in canonical:
+        canonical["res_current"] = clamp(canonical["res_current"], 0, canonical["res_max"])
+    if "hp_max" in canonical and "hp_current" in canonical:
+        canonical["hp_current"] = clamp(canonical["hp_current"], 0, max(1, canonical["hp_max"]))
+    if "sta_max" in canonical and "sta_current" in canonical:
+        canonical["sta_current"] = clamp(canonical["sta_current"], 0, max(0, canonical["sta_max"]))
+    return canonical
+
+
+def canonical_resource_deltas_from_update(upd: Dict[str, Any]) -> Dict[str, int]:
+    deltas = {"hp_current": 0, "sta_current": 0, "res_current": 0, "carry_current": 0}
+    deltas["hp_current"] += int(upd.get("hp_delta", 0) or 0)
+    deltas["sta_current"] += int(upd.get("stamina_delta", 0) or 0)
+    raw_deltas = upd.get("resources_delta") if isinstance(upd.get("resources_delta"), dict) else {}
+    for raw_key, raw_value in raw_deltas.items():
+        mapped = canonical_resource_field_name(raw_key)
+        if mapped == "hp":
+            deltas["hp_current"] += int(raw_value or 0)
+        elif mapped == "stamina":
+            deltas["sta_current"] += int(raw_value or 0)
+        elif mapped == "aether":
+            deltas["res_current"] += int(raw_value or 0)
+        elif str(raw_key or "").strip().lower() == "carry":
+            deltas["carry_current"] += int(raw_value or 0)
+    return deltas
 
 
 def clamp(value: int, minimum: int, maximum: int) -> int:
@@ -2665,31 +3403,59 @@ def migrate_legacy_resource_bonus_modifiers(
             )
 
 
-def rebuild_resource_maxima(character: Dict[str, Any], items_db: Dict[str, Any], age_modifiers: Dict[str, Any]) -> None:
-    resources = character.setdefault("resources", {})
+def rebuild_resource_maxima(character: Dict[str, Any], items_db: Dict[str, Any], age_modifiers: Dict[str, Any]) -> Dict[str, Dict[str, int]]:
+    existing_resources = character.get("resources", {}) if isinstance(character.get("resources"), dict) else {}
     layer_presence: Dict[str, Dict[str, bool]] = {}
     for resource_key in RESOURCE_KEYS:
-        resource = resources.setdefault(resource_key, {})
+        resource = existing_resources.get(resource_key) if isinstance(existing_resources.get(resource_key), dict) else {}
         layer_presence[resource_key] = {
             "base_max": "base_max" in resource,
             "bonus_max": "bonus_max" in resource,
         }
-        resource.setdefault("current", 0)
-        resource.setdefault("base_max", int(resource.get("max", 0) or 0))
-        resource.setdefault("bonus_max", 0)
-        resource.setdefault("max", int(resource.get("max", 0) or 0))
 
     base_maxima = calculate_base_resource_maxima(character, age_modifiers)
     known_bonus = calculate_bonus_resource_maxima(character, items_db)
     migrate_legacy_resource_bonus_modifiers(character, base_maxima, known_bonus, layer_presence)
     total_bonus = calculate_bonus_resource_maxima(character, items_db)
 
+    runtime_layers: Dict[str, Dict[str, int]] = {}
     for resource_key in RESOURCE_KEYS:
-        resource = resources[resource_key]
-        resource["base_max"] = max(0, int(base_maxima.get(resource_key, resource.get("base_max", 0)) or 0))
-        resource["bonus_max"] = int(total_bonus.get(resource_key, 0) or 0)
-        resource["max"] = max(0, int(resource["base_max"]) + int(resource["bonus_max"]))
-        resource["current"] = clamp(int(resource.get("current", 0) or 0), 0, int(resource["max"]))
+        existing_layer = existing_resources.get(resource_key) if isinstance(existing_resources.get(resource_key), dict) else {}
+        base_max = max(0, int(base_maxima.get(resource_key, existing_layer.get("base_max", existing_layer.get("max", 0))) or 0))
+        bonus_max = int(total_bonus.get(resource_key, existing_layer.get("bonus_max", 0)) or 0)
+        max_value = max(0, base_max + bonus_max)
+        current_seed = int(existing_layer.get("current", 0) or 0)
+        runtime_layers[resource_key] = {
+            "current": clamp(current_seed, 0, max_value),
+            "base_max": base_max,
+            "bonus_max": bonus_max,
+            "max": max_value,
+        }
+
+    hp_layer = runtime_layers.get("hp", {"current": 10, "max": 10})
+    sta_layer = runtime_layers.get("stamina", {"current": 10, "max": 10})
+    res_layer = runtime_layers.get("aether", {"current": 5, "max": 5})
+    character["hp_max"] = max(1, int(hp_layer.get("max", character.get("hp_max", 10)) or character.get("hp_max", 10) or 10))
+    character["sta_max"] = max(0, int(sta_layer.get("max", character.get("sta_max", 10)) or character.get("sta_max", 10) or 10))
+    character["res_max"] = max(0, int(res_layer.get("max", character.get("res_max", 5)) or character.get("res_max", 5) or 5))
+    character["hp_current"] = clamp(int(character.get("hp_current", hp_layer.get("current", character["hp_max"])) or hp_layer.get("current", character["hp_max"]) or character["hp_max"]), 0, character["hp_max"])
+    character["sta_current"] = clamp(int(character.get("sta_current", sta_layer.get("current", character["sta_max"])) or sta_layer.get("current", character["sta_max"]) or character["sta_max"]), 0, character["sta_max"])
+    character["res_current"] = clamp(int(character.get("res_current", res_layer.get("current", character["res_max"])) or res_layer.get("current", character["res_max"]) or character["res_max"]), 0, character["res_max"])
+
+    if ENABLE_LEGACY_SHADOW_WRITEBACK:
+        character.setdefault("resources", {})
+        for key in RESOURCE_KEYS:
+            character["resources"][key] = deep_copy(runtime_layers[key])
+    else:
+        resources_shadow = character.setdefault("resources", {})
+        if not isinstance(resources_shadow, dict):
+            resources_shadow = {}
+            character["resources"] = resources_shadow
+        for key in ("stress", "corruption", "wounds"):
+            resources_shadow[key] = deep_copy(runtime_layers.get(key, {"current": 0, "base_max": 0, "bonus_max": 0, "max": 0}))
+        strip_legacy_resource_shadows(character)
+
+    return runtime_layers
 
 
 def item_by_id(state: Dict[str, Any], item_id: str) -> Dict[str, Any]:
@@ -2786,21 +3552,16 @@ def item_matches_equipment_slot(item: Dict[str, Any], equip_slot: str) -> bool:
     return inferred == slot
 
 
-def sync_legacy_character_fields(character: Dict[str, Any]) -> None:
-    resources = character.get("resources", {})
-    character["hp"] = int(((resources.get("hp") or {}).get("current", 0)) or 0)
-    character["stamina"] = int(((resources.get("stamina") or {}).get("current", 0)) or 0)
+def sync_legacy_character_fields(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> None:
+    # Deprecated compatibility helper. Only active when explicit legacy writeback is enabled.
+    if not ENABLE_LEGACY_SHADOW_WRITEBACK:
+        return
+    write_legacy_shadow_fields(character, world_settings)
     character["conditions"] = [
         effect.get("name", "")
         for effect in (character.get("effects") or [])
         if effect.get("visible", True) and effect.get("name")
     ][:6]
-    equipment = character.get("equipment", {}) or {}
-    character["equip"] = {
-        "weapon": equipment.get("weapon", ""),
-        "armor": equipment.get("chest", ""),
-    }
-    character["potential"] = [card.get("name", card.get("id", "")) for card in (character.get("progression", {}).get("potential_cards") or [])]
 
 
 def calculate_carry_limit(character: Dict[str, Any]) -> int:
@@ -3350,7 +4111,7 @@ def calculate_attack_rating(character: Dict[str, Any], hand: str, items_db: Dict
 
 
 def calculate_combat_flags(character: Dict[str, Any]) -> Dict[str, Any]:
-    hp_current = int((((character.get("resources") or {}).get("hp") or {}).get("current", 0)) or 0)
+    hp_current = int(character.get("hp_current", 0) or 0)
     downed = hp_current <= 0
     in_combat = bool(character.get("combat_state", {}).get("in_combat", False))
     can_act = not downed
@@ -3406,23 +4167,232 @@ def ensure_progression_shape(character: Dict[str, Any]) -> None:
     progression.setdefault("potential_cards", [])
 
 
+def ensure_character_progression_core(character: Dict[str, Any]) -> None:
+    level = max(1, int(character.get("level", 1) or 1))
+    xp_to_next = max(1, int(character.get("xp_to_next", next_character_xp_for_level(level)) or next_character_xp_for_level(level)))
+    xp_current = clamp(int(character.get("xp_current", 0) or 0), 0, xp_to_next)
+    xp_total = max(xp_current, int(character.get("xp_total", xp_current) or xp_current))
+    character["level"] = level
+    character["xp_to_next"] = xp_to_next
+    character["xp_current"] = xp_current
+    character["xp_total"] = xp_total
+    recent = character.get("recent_progression_events")
+    if not isinstance(recent, list):
+        character["recent_progression_events"] = []
+    else:
+        character["recent_progression_events"] = [deep_copy(entry) for entry in recent if isinstance(entry, dict)][-40:]
+
+
+def progression_speed_multiplier(world_settings: Optional[Dict[str, Any]] = None) -> float:
+    speed = str(((world_settings or {}).get("progression_speed") or "normal")).strip().lower()
+    if speed == "langsam":
+        return 0.82
+    if speed == "schnell":
+        return 1.22
+    return 1.0
+
+
+def normalize_progression_event_severity(value: Any) -> str:
+    severity = str(value or "medium").strip().lower()
+    return severity if severity in PROGRESSION_EVENT_SEVERITIES else "medium"
+
+
+def normalize_progression_event(
+    raw_event: Any,
+    *,
+    actor: str,
+    source_turn: int,
+    default_type: str = "milestone_progress",
+) -> Optional[Dict[str, Any]]:
+    if not isinstance(raw_event, dict):
+        return None
+    event_type = str(raw_event.get("type") or default_type).strip().lower()
+    if event_type not in PROGRESSION_EVENT_TYPES:
+        return None
+    normalized_actor = str(raw_event.get("actor") or actor or "").strip()
+    if not normalized_actor:
+        return None
+    target_skill_id = str(raw_event.get("target_skill_id") or "").strip() or None
+    target_class_id = str(raw_event.get("target_class_id") or "").strip() or None
+    reason = str(raw_event.get("reason") or "").strip()
+    metadata = deep_copy(raw_event.get("metadata") or {})
+    skill_payload = deep_copy(raw_event.get("skill") or {})
+    tags = [str(tag).strip() for tag in (raw_event.get("tags") or []) if str(tag).strip()]
+    if event_type == "skill_manifestation":
+        tags = list(dict.fromkeys(tags + ["manifestation"]))
+    return {
+        "type": event_type,
+        "actor": normalized_actor,
+        "target_skill_id": target_skill_id,
+        "target_class_id": target_class_id,
+        "severity": normalize_progression_event_severity(raw_event.get("severity")),
+        "tags": list(dict.fromkeys(tags)),
+        "source_turn": max(0, int(raw_event.get("source_turn", source_turn) or source_turn)),
+        "reason": reason,
+        "metadata": metadata if isinstance(metadata, dict) else {},
+        "skill": skill_payload if isinstance(skill_payload, dict) else {},
+    }
+
+
+def is_skill_manifestation_name_plausible(skill_name: str, actor_name: str) -> bool:
+    clean = clean_extracted_skill_name(skill_name)
+    normalized = normalized_eval_text(clean)
+    actor_norm = normalized_eval_text(actor_name)
+    if not clean or len(normalized) < 3:
+        return False
+    if normalized in UNIVERSAL_SKILL_LIKE_NAMES:
+        return False
+    if normalized in ABILITY_UNLOCK_GENERIC_NAMES:
+        return False
+    if normalized in SKILL_MANIFESTATION_VERB_BLACKLIST:
+        return False
+    if actor_norm and normalized == actor_norm:
+        return False
+    return True
+
+
+def canonicalize_manifested_skill_payload(
+    *,
+    raw_skill: Dict[str, Any],
+    character: Dict[str, Any],
+    world_settings: Optional[Dict[str, Any]] = None,
+    default_source: str = "Manifestation",
+) -> Optional[Dict[str, Any]]:
+    resource_name = resource_name_for_character(character, world_settings)
+    proposed_name = str(raw_skill.get("name") or raw_skill.get("id") or "").strip()
+    actor_name = str(((character.get("bio") or {}).get("name") or character.get("slot_id") or "").strip())
+    if not is_skill_manifestation_name_plausible(proposed_name, actor_name):
+        return None
+    skill = normalize_dynamic_skill_state(
+        {
+            "id": raw_skill.get("id") or skill_id_from_name(proposed_name),
+            "name": proposed_name,
+            "rank": normalize_skill_rank(raw_skill.get("rank")),
+            "level": max(1, int(raw_skill.get("level", 1) or 1)),
+            "level_max": max(1, int(raw_skill.get("level_max", DEFAULT_DYNAMIC_SKILL_LEVEL_MAX) or DEFAULT_DYNAMIC_SKILL_LEVEL_MAX)),
+            "xp": max(0, int(raw_skill.get("xp", 0) or 0)),
+            "next_xp": max(1, int(raw_skill.get("next_xp", next_skill_xp_for_level(1)) or next_skill_xp_for_level(1))),
+            "mastery": clamp(int(raw_skill.get("mastery", 0) or 0), 0, 100),
+            "tags": [str(tag).strip() for tag in (raw_skill.get("tags") or []) if str(tag).strip()],
+            "description": str(raw_skill.get("description") or "").strip(),
+            "effect_summary": str(raw_skill.get("effect_summary") or "").strip(),
+            "power_rating": int(raw_skill.get("power_rating", 0) or 0),
+            "growth_potential": str(raw_skill.get("growth_potential") or "").strip(),
+            "cost": raw_skill.get("cost"),
+            "price": raw_skill.get("price"),
+            "cooldown_turns": raw_skill.get("cooldown_turns"),
+            "unlocked_from": str(raw_skill.get("unlocked_from") or default_source),
+            "manifestation_source": str(raw_skill.get("manifestation_source") or default_source),
+            "category": raw_skill.get("category"),
+            "class_affinity": raw_skill.get("class_affinity"),
+        },
+        resource_name=resource_name,
+        unlocked_from=default_source,
+    )
+    if not skill.get("description"):
+        skill["description"] = f"{skill['name']} wurde unter Druck manifestiert."
+    if not skill.get("effect_summary"):
+        skill["effect_summary"] = skill["description"][:180]
+    if int(skill.get("power_rating", 0) or 0) <= 0:
+        skill["power_rating"] = max(1, (skill_rank_sort_value(skill.get("rank")) + 1) * 6 + int(skill.get("level", 1) or 1))
+    if not skill.get("growth_potential"):
+        skill["growth_potential"] = "mittel"
+    return skill
+
+
+def append_recent_progression_event(character: Dict[str, Any], event: Dict[str, Any]) -> None:
+    recent = character.setdefault("recent_progression_events", [])
+    if not isinstance(recent, list):
+        recent = []
+        character["recent_progression_events"] = recent
+    recent.append(
+        {
+            "type": str(event.get("type") or ""),
+            "severity": str(event.get("severity") or "medium"),
+            "source_turn": int(event.get("source_turn", 0) or 0),
+            "reason": str(event.get("reason") or "").strip(),
+            "target_skill_id": str(event.get("target_skill_id") or "").strip(),
+            "target_class_id": str(event.get("target_class_id") or "").strip(),
+        }
+    )
+    if len(recent) > 40:
+        del recent[:-40]
+
+
+def resolve_skill_id_for_event(character: Dict[str, Any], raw_skill_id: str) -> str:
+    skill_store = character.get("skills") or {}
+    if raw_skill_id in skill_store:
+        return raw_skill_id
+    normalized = normalized_eval_text(raw_skill_id)
+    if not normalized:
+        return ""
+    for skill_id, skill_value in skill_store.items():
+        if normalized_eval_text(str((skill_value or {}).get("name") or skill_id)) == normalized:
+            return skill_id
+    return ""
+
+
 def apply_system_xp(character: Dict[str, Any], amount: int) -> None:
     if amount <= 0:
         return
     ensure_progression_shape(character)
+    ensure_character_progression_core(character)
     progression = character["progression"]
-    progression["system_xp"] = int(progression.get("system_xp", 0) or 0) + amount
+    xp_gain = max(0, int(amount or 0))
+    character["xp_total"] = int(character.get("xp_total", 0) or 0) + xp_gain
+    character["xp_current"] = int(character.get("xp_current", 0) or 0) + xp_gain
+    progression["system_xp"] = int(progression.get("system_xp", 0) or 0) + max(1, xp_gain // 3)
+    while character["xp_current"] >= int(character.get("xp_to_next", next_character_xp_for_level(character["level"])) or next_character_xp_for_level(character["level"])):
+        required = int(character.get("xp_to_next", next_character_xp_for_level(character["level"])) or next_character_xp_for_level(character["level"]))
+        character["xp_current"] = max(0, int(character.get("xp_current", 0) or 0) - required)
+        character["level"] = int(character.get("level", 1) or 1) + 1
+        character["xp_to_next"] = next_character_xp_for_level(character["level"])
+        progression["attribute_points"] = int(progression.get("attribute_points", 0) or 0) + 1
+        progression["skill_points"] = int(progression.get("skill_points", 0) or 0) + 1
     while progression["system_xp"] >= int(progression.get("next_system_xp", 100) or 100):
         progression["system_xp"] -= int(progression.get("next_system_xp", 100) or 100)
         progression["system_level"] = int(progression.get("system_level", 1) or 1) + 1
-        progression["attribute_points"] = int(progression.get("attribute_points", 0) or 0) + 1
-        progression["skill_points"] = int(progression.get("skill_points", 0) or 0) + 1
         progression["talent_points"] = int(progression.get("talent_points", 0) or 0) + 1
         progression["next_system_xp"] = 100 + ((int(progression["system_level"]) - 1) * 50)
+    character["xp_current"] = clamp(int(character.get("xp_current", 0) or 0), 0, int(character.get("xp_to_next", 1) or 1))
+
+
+def apply_class_xp(character: Dict[str, Any], amount: int, *, event_reason: str = "") -> List[str]:
+    out: List[str] = []
+    if amount <= 0:
+        return out
+    current_class = normalize_class_current(character.get("class_current"))
+    if not current_class:
+        return out
+    current_class["xp"] = int(current_class.get("xp", 0) or 0) + int(amount or 0)
+    leveled = False
+    while (
+        current_class["level"] < current_class["level_max"]
+        and current_class["xp"] >= int(current_class.get("xp_next", next_class_xp_for_level(current_class["level"])) or next_class_xp_for_level(current_class["level"]))
+    ):
+        required = int(current_class.get("xp_next", next_class_xp_for_level(current_class["level"])) or next_class_xp_for_level(current_class["level"]))
+        current_class["xp"] = max(0, int(current_class.get("xp", 0) or 0) - required)
+        current_class["level"] += 1
+        current_class["xp_next"] = next_class_xp_for_level(current_class["level"])
+        leveled = True
+    current_class["xp_next"] = max(1, int(current_class.get("xp_next", next_class_xp_for_level(current_class["level"])) or next_class_xp_for_level(current_class["level"])))
+    current_class["xp"] = clamp(int(current_class.get("xp", 0) or 0), 0, current_class["xp_next"])
+    current_class["class_mastery"] = clamp(int((current_class["xp"] / max(current_class["xp_next"], 1)) * 100), 0, 100)
+    if current_class["level"] >= current_class["level_max"] and current_class.get("ascension", {}).get("status") == "none":
+        current_class.setdefault("ascension", {}).update({"status": "available"})
+        out.append(f"Klassenaufstieg bereit: {current_class.get('name', 'Klasse')}.")
+    if leveled:
+        out.append(
+            f"Klassenfortschritt: {current_class.get('name', 'Klasse')} erreicht Lv {current_class.get('level')}/{current_class.get('level_max')}."
+            + (f" ({event_reason})" if event_reason else "")
+        )
+    character["class_current"] = normalize_class_current(current_class)
+    return out
 
 
 def refresh_skill_progression(character: Dict[str, Any]) -> None:
     ensure_progression_shape(character)
+    ensure_character_progression_core(character)
     resource_name = resource_name_for_character(character)
     character["skills"] = {
         skill_id: normalize_dynamic_skill_state(
@@ -3434,15 +4404,356 @@ def refresh_skill_progression(character: Dict[str, Any]) -> None:
         )
         for skill_id, skill_value in (character.get("skills") or {}).items()
     }
-    character["abilities"] = []
+    if ENABLE_LEGACY_SHADOW_WRITEBACK:
+        character["abilities"] = []
+    else:
+        character.pop("abilities", None)
 
 
-def grant_skill_xp(character: Dict[str, Any], skill_name: str, outcome: str) -> List[str]:
-    return []
+def grant_skill_xp(
+    character: Dict[str, Any],
+    skill_name: str,
+    outcome: str,
+    *,
+    world_settings: Optional[Dict[str, Any]] = None,
+) -> List[str]:
+    skill_store = character.setdefault("skills", {})
+    if not skill_store:
+        return []
+    resolved_skill_id = resolve_skill_id_for_event(character, skill_name) or skill_id_from_name(skill_name)
+    if resolved_skill_id not in skill_store:
+        return []
+    outcome_key = str(outcome or "normal").strip().lower()
+    base_xp = {
+        "minor": 8,
+        "small": 10,
+        "normal": 16,
+        "major": 28,
+        "critical": 40,
+    }.get(outcome_key, 16)
+    resource_name = resource_name_for_character(character)
+    skill = normalize_dynamic_skill_state(skill_store[resolved_skill_id], skill_id=resolved_skill_id, resource_name=resource_name)
+    multiplier = effective_skill_progress_multiplier(character, skill, world_settings or {})
+    gained = max(1, int(round(base_xp * multiplier)))
+    skill["xp"] = int(skill.get("xp", 0) or 0) + gained
+    leveled = False
+    while skill["level"] < skill["level_max"] and skill["xp"] >= int(skill.get("next_xp", next_skill_xp_for_level(skill["level"])) or next_skill_xp_for_level(skill["level"])):
+        required = int(skill.get("next_xp", next_skill_xp_for_level(skill["level"])) or next_skill_xp_for_level(skill["level"]))
+        skill["xp"] = max(0, int(skill.get("xp", 0) or 0) - required)
+        skill["level"] += 1
+        skill["next_xp"] = next_skill_xp_for_level(skill["level"])
+        leveled = True
+    skill["mastery"] = clamp(int((int(skill.get("xp", 0) or 0) / max(1, int(skill.get("next_xp", 1) or 1))) * 100), 0, 100)
+    skill_store[resolved_skill_id] = normalize_dynamic_skill_state(skill, resource_name=resource_name)
+    messages: List[str] = []
+    if leveled:
+        messages.append(f"Skill-Fortschritt: {skill['name']} erreicht Lv {skill['level']}/{skill['level_max']}.")
+    return messages
 
 
 def parse_skill_event(campaign: Dict[str, Any], event_text: str) -> Optional[Dict[str, str]]:
+    text = str(event_text or "").strip()
+    if not text:
+        return None
+    marker = re.match(r"SKILL_XP\[(slot_[0-9]+):([^:\]]+):([^:\]]+)\]", text, flags=re.IGNORECASE)
+    if marker:
+        return {
+            "actor": marker.group(1).strip(),
+            "skill": marker.group(2).strip(),
+            "outcome": marker.group(3).strip().lower(),
+        }
     return None
+
+
+def normalize_progression_event_list(
+    events: Any,
+    *,
+    actor: str,
+    source_turn: int,
+) -> List[Dict[str, Any]]:
+    if not isinstance(events, list):
+        return []
+    normalized_events: List[Dict[str, Any]] = []
+    for raw_event in events:
+        normalized_event = normalize_progression_event(raw_event, actor=actor, source_turn=source_turn)
+        if normalized_event:
+            normalized_events.append(normalized_event)
+    return normalized_events
+
+
+def infer_progression_events_from_patch(
+    *,
+    state_before: Dict[str, Any],
+    state_after: Dict[str, Any],
+    patch: Dict[str, Any],
+    actor: str,
+    action_type: str,
+) -> List[Dict[str, Any]]:
+    turn_number = int((state_after.get("meta") or {}).get("turn", 0) or 0)
+    inferred: List[Dict[str, Any]] = []
+    patch_characters = patch.get("characters") or {}
+
+    for slot_name, upd in patch_characters.items():
+        if not isinstance(upd, dict) or slot_name not in (state_after.get("characters") or {}):
+            continue
+        if upd.get("progression_events"):
+            inferred.extend(
+                normalize_progression_event_list(
+                    upd.get("progression_events"),
+                    actor=slot_name,
+                    source_turn=turn_number,
+                )
+            )
+        hp_delta = int(upd.get("hp_delta", 0) or 0)
+        stamina_delta = int(upd.get("stamina_delta", 0) or 0)
+        res_delta_raw = 0
+        if isinstance(upd.get("resources_delta"), dict):
+            res_delta_raw = int(
+                (upd.get("resources_delta") or {}).get("res", 0)
+                or (upd.get("resources_delta") or {}).get("aether", 0)
+                or 0
+            )
+        if hp_delta < 0 and action_type in {"do", "story", "say"}:
+            inferred.append(
+                {
+                    "type": "combat_survival",
+                    "actor": slot_name,
+                    "severity": "medium" if hp_delta <= -3 else "low",
+                    "reason": "Überstandene Kampffolge",
+                    "source_turn": turn_number,
+                    "target_skill_id": None,
+                    "target_class_id": None,
+                    "tags": ["combat"],
+                    "metadata": {"hp_delta": hp_delta},
+                    "skill": {},
+                }
+            )
+        if (stamina_delta < 0 or res_delta_raw < 0) and upd.get("skills_delta"):
+            for skill_id in (upd.get("skills_delta") or {}).keys():
+                inferred.append(
+                    {
+                        "type": "skill_mastery_use",
+                        "actor": slot_name,
+                        "target_skill_id": str(skill_id),
+                        "severity": "low",
+                        "reason": "Skillnutzung unter Belastung",
+                        "source_turn": turn_number,
+                        "target_class_id": None,
+                        "tags": ["skill_use"],
+                        "metadata": {"stamina_delta": stamina_delta, "res_delta": res_delta_raw},
+                        "skill": {},
+                    }
+                )
+        if upd.get("class_set") or upd.get("class_update"):
+            target_class_id = str(
+                ((normalize_class_current(upd.get("class_set")) or (upd.get("class_update") or {})).get("id") or "")
+            ).strip() or None
+            inferred.append(
+                {
+                    "type": "class_breakthrough",
+                    "actor": slot_name,
+                    "target_skill_id": None,
+                    "target_class_id": target_class_id,
+                    "severity": "medium",
+                    "reason": "Klassenfortschritt",
+                    "source_turn": turn_number,
+                    "tags": ["class"],
+                    "metadata": {},
+                    "skill": {},
+                }
+            )
+
+    for plot_update in (patch.get("plotpoints_update") or []):
+        if not isinstance(plot_update, dict):
+            continue
+        if str(plot_update.get("status") or "").strip().lower() != "done":
+            continue
+        inferred.append(
+            {
+                "type": "milestone_progress",
+                "actor": actor,
+                "target_skill_id": None,
+                "target_class_id": None,
+                "severity": "medium",
+                "reason": f"Plotpoint abgeschlossen: {plot_update.get('id', '')}",
+                "source_turn": turn_number,
+                "tags": ["milestone"],
+                "metadata": {"plotpoint_id": str(plot_update.get("id") or "")},
+                "skill": {},
+            }
+        )
+
+    story_events = " ".join(str(entry or "") for entry in (patch.get("events_add") or []))
+    story_norm = normalized_eval_text(story_events)
+    if any(word in story_norm for word in ("boss", "erzgegner", "endgegner")) and any(
+        word in story_norm for word in ("besiegt", "gefallen", "zerstoert", "zerstört")
+    ):
+        inferred.append(
+            {
+                "type": "boss_defeated",
+                "actor": actor,
+                "target_skill_id": None,
+                "target_class_id": None,
+                "severity": "high",
+                "reason": "Boss wurde besiegt",
+                "source_turn": turn_number,
+                "tags": ["combat", "boss"],
+                "metadata": {},
+                "skill": {},
+            }
+        )
+    elif any(word in story_norm for word in ("gegner", "kreatur", "feind", "monster")) and any(
+        word in story_norm for word in ("besiegt", "fällt", "zerstoert", "zerstört", "ausgeschaltet")
+    ):
+        inferred.append(
+            {
+                "type": "combat_victory",
+                "actor": actor,
+                "target_skill_id": None,
+                "target_class_id": None,
+                "severity": "medium",
+                "reason": "Kampfsieg",
+                "source_turn": turn_number,
+                "tags": ["combat"],
+                "metadata": {},
+                "skill": {},
+            }
+        )
+    return inferred
+
+
+def apply_progression_event_xp(
+    *,
+    character: Dict[str, Any],
+    event: Dict[str, Any],
+    world_settings: Optional[Dict[str, Any]],
+    actor_slot: str,
+) -> List[str]:
+    messages: List[str] = []
+    event_type = str(event.get("type") or "").strip().lower()
+    if event_type not in PROGRESSION_EVENT_TYPES:
+        return messages
+    severity = normalize_progression_event_severity(event.get("severity"))
+    severity_mult = PROGRESSION_EVENT_SEVERITY_MULTIPLIER.get(severity, 1.0)
+    speed_mult = progression_speed_multiplier(world_settings)
+    base = PROGRESSION_EVENT_BASE_XP.get(event_type, PROGRESSION_EVENT_BASE_XP["milestone_progress"])
+
+    character_gain = max(1, int(round(base["character"] * severity_mult * speed_mult)))
+    class_gain = max(0, int(round(base["class"] * severity_mult * speed_mult)))
+    skill_gain = max(0, int(round(base["skill"] * severity_mult * speed_mult)))
+
+    before_level = int(character.get("level", 1) or 1)
+    apply_system_xp(character, character_gain)
+    after_level = int(character.get("level", 1) or 1)
+    if after_level > before_level:
+        char_name = str(((character.get("bio") or {}).get("name") or actor_slot).strip())
+        messages.append(f"{char_name} steigt auf Lv {after_level} auf.")
+
+    if class_gain > 0:
+        messages.extend(apply_class_xp(character, class_gain, event_reason=str(event.get("reason") or "")))
+
+    target_skill_id = str(event.get("target_skill_id") or "").strip()
+    if event_type == "skill_manifestation" and not target_skill_id:
+        skill_payload = deep_copy(event.get("skill") or {})
+        if isinstance(skill_payload, dict) and skill_payload.get("name"):
+            target_skill_id = skill_id_from_name(str(skill_payload.get("name") or ""))
+            event["target_skill_id"] = target_skill_id
+    if skill_gain > 0 and target_skill_id:
+        outcomes = {1: "small", 2: "normal", 3: "major"}
+        bucket = 1 if severity == "low" else 2 if severity == "medium" else 3
+        for _ in range(max(1, int(round(skill_gain / 12.0)))):
+            messages.extend(grant_skill_xp(character, target_skill_id, outcomes[bucket], world_settings=world_settings))
+    append_recent_progression_event(character, event)
+    return messages
+
+
+def manifest_skill_from_progression_event(
+    *,
+    character: Dict[str, Any],
+    actor_slot: str,
+    event: Dict[str, Any],
+    world_settings: Optional[Dict[str, Any]],
+) -> Optional[str]:
+    if str(event.get("type") or "").strip().lower() != "skill_manifestation":
+        return None
+    skill_store = character.setdefault("skills", {})
+    target_skill_id = str(event.get("target_skill_id") or "").strip()
+    if target_skill_id and target_skill_id in skill_store:
+        return None
+    payload = deep_copy(event.get("skill") or {})
+    if not isinstance(payload, dict) or not payload.get("name"):
+        return None
+    skill = canonicalize_manifested_skill_payload(
+        raw_skill=payload,
+        character=character,
+        world_settings=world_settings,
+        default_source=f"Progression:{event.get('type', 'skill_manifestation')}",
+    )
+    if not skill:
+        return None
+    existing = skill_store.get(skill["id"])
+    skill_store[skill["id"]] = (
+        merge_dynamic_skill(existing, skill, resource_name=resource_name_for_character(character, world_settings))
+        if existing
+        else skill
+    )
+    event["target_skill_id"] = skill["id"]
+    char_name = str(((character.get("bio") or {}).get("name") or actor_slot).strip())
+    return f"{char_name} manifestiert den neuen Skill {skill['name']} ({skill['rank']})."
+
+
+def apply_progression_events(
+    campaign: Dict[str, Any],
+    state_before: Dict[str, Any],
+    state_after: Dict[str, Any],
+    patch: Dict[str, Any],
+    *,
+    actor: str,
+    action_type: str,
+) -> Dict[str, Any]:
+    world_settings = ((state_after.get("world") or {}).get("settings") or {})
+    turn_number = int((state_after.get("meta") or {}).get("turn", 0) or 0)
+    normalized_events = infer_progression_events_from_patch(
+        state_before=state_before,
+        state_after=state_after,
+        patch=patch,
+        actor=actor,
+        action_type=action_type,
+    )
+    event_messages: List[str] = []
+    applied_events: List[Dict[str, Any]] = []
+    for raw_event in normalized_events:
+        event = normalize_progression_event(raw_event, actor=actor, source_turn=turn_number)
+        if not event:
+            continue
+        slot_name = str(event.get("actor") or "").strip()
+        if slot_name not in (state_after.get("characters") or {}):
+            continue
+        character = (state_after.get("characters") or {}).get(slot_name) or {}
+        ensure_progression_shape(character)
+        ensure_character_progression_core(character)
+        manifestation_msg = manifest_skill_from_progression_event(
+            character=character,
+            actor_slot=slot_name,
+            event=event,
+            world_settings=world_settings,
+        )
+        if manifestation_msg:
+            event_messages.append(manifestation_msg)
+        event_messages.extend(
+            apply_progression_event_xp(
+                character=character,
+                event=event,
+                world_settings=world_settings,
+                actor_slot=slot_name,
+            )
+        )
+        applied_events.append(event)
+        state_after["characters"][slot_name] = character
+    if event_messages:
+        state_after.setdefault("events", [])
+        state_after["events"].extend(event_messages)
+    return {"events": applied_events, "messages": event_messages}
 
 
 def build_skill_system_requests(
@@ -3450,14 +4761,66 @@ def build_skill_system_requests(
     state_before: Dict[str, Any],
     state_after: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
-    return []
+    requests: List[Dict[str, Any]] = []
+    world_settings = (((state_after.get("world") or {}).get("settings") or {}))
+    for slot_name, after_character in (state_after.get("characters") or {}).items():
+        before_character = ((state_before.get("characters") or {}).get(slot_name) or {})
+        before_level = int(before_character.get("level", 1) or 1)
+        after_level = int(after_character.get("level", 1) or 1)
+        if after_level > before_level:
+            requests.append(
+                {
+                    "type": "clarify",
+                    "actor": slot_name,
+                    "question": f"Neues Level erreicht ({after_level}). Soll der Fokus als nächstes eher auf Klasse oder Skill-Meisterung liegen?",
+                }
+            )
+        before_class = normalize_class_current(before_character.get("class_current"))
+        after_class = normalize_class_current(after_character.get("class_current"))
+        if after_class and (not before_class or int(after_class.get("level", 1) or 1) > int((before_class or {}).get("level", 1) or 1)):
+            requests.append(
+                {
+                    "type": "choice",
+                    "actor": slot_name,
+                    "question": f"Klassenfortschritt für {after_class.get('name', 'Klasse')}: Welche Richtung soll gestärkt werden?",
+                    "options": ["Offensive Schärfung", "Defensive Stabilität", "Ressourcenkontrolle", "Eigener Plan"],
+                }
+            )
+        skill_hints = build_skill_fusion_hints(after_character.get("skills") or {}, resource_name=resource_name_for_character(after_character, world_settings))
+        if skill_hints:
+            top_hint = skill_hints[0]
+            requests.append(
+                {
+                    "type": "choice",
+                    "actor": slot_name,
+                    "question": f"{top_hint.get('label')} Soll der Erzähler eine Evolution erzählerisch vorbereiten?",
+                    "options": ["Ja, vorbereiten", "Nein, vorerst nicht", "Eigener Plan"],
+                }
+            )
+            break
+    return requests[:2]
 
 
 def apply_skill_events(campaign: Dict[str, Any], state: Dict[str, Any], events: List[str]) -> List[str]:
-    return []
+    messages: List[str] = []
+    for event_text in (events or []):
+        parsed = parse_skill_event(campaign, str(event_text or ""))
+        if not parsed:
+            continue
+        actor = parsed.get("actor", "")
+        skill_name = parsed.get("skill", "")
+        outcome = parsed.get("outcome", "normal")
+        if actor not in (state.get("characters") or {}):
+            continue
+        character = (state.get("characters") or {}).get(actor) or {}
+        messages.extend(grant_skill_xp(character, skill_name, outcome, world_settings=((state.get("world") or {}).get("settings") or {})))
+        (state.get("characters") or {})[actor] = character
+    return messages
 
 
 def rebuild_character_derived(character: Dict[str, Any], items_db: Dict[str, Any], world_time: Optional[Dict[str, Any]] = None) -> None:
+    ensure_progression_shape(character)
+    ensure_character_progression_core(character)
     effective_world_time = normalize_world_time({"world_time": world_time or default_world_time()})
     normalize_age_fields(character, effective_world_time)
     age_character_if_needed(character, effective_world_time)
@@ -3492,7 +4855,10 @@ def rebuild_character_derived(character: Dict[str, Any], items_db: Dict[str, Any
         "resistances": calculate_resistances(character, items_db),
         "combat_flags": calculate_combat_flags(character),
     }
-    sync_legacy_character_fields(character)
+    reconcile_canonical_resources(character)
+    strip_legacy_shadow_fields(character)
+    if ENABLE_LEGACY_SHADOW_WRITEBACK:
+        sync_legacy_character_fields(character)
 
 
 def migrate_effects_from_conditions(character: Dict[str, Any]) -> None:
@@ -3519,7 +4885,36 @@ def migrate_effects_from_conditions(character: Dict[str, Any]) -> None:
 def normalize_character_state(character: Dict[str, Any], slot_name: str, items_db: Dict[str, Any]) -> Dict[str, Any]:
     base = blank_character_state(slot_name)
     merged = deep_copy(base)
-    merged.update({key: value for key, value in character.items() if key not in ("bio", "resources", "attributes", "derived", "skills", "abilities", "inventory", "equipment", "progression", "journal", "appearance", "class_state", "class_current", "aging", "modifiers", "injuries", "scars")})
+    merged.update(
+        {
+            key: value
+            for key, value in character.items()
+            if key
+            not in (
+                "bio",
+                "resources",
+                "attributes",
+                "derived",
+                "skills",
+                "abilities",
+                "inventory",
+                "equipment",
+                "progression",
+                "journal",
+                "appearance",
+                "class_state",
+                "class_current",
+                "aging",
+                "modifiers",
+                "injuries",
+                "scars",
+                "hp",
+                "stamina",
+                "equip",
+                "potential",
+            )
+        }
+    )
     merged["bio"].update(character.get("bio", {}) or {})
     legacy_role_text = str((merged.get("bio") or {}).get("party_role", "") or "")
     merged["bio"].pop("party_role", None)
@@ -3548,11 +4943,12 @@ def normalize_character_state(character: Dict[str, Any], slot_name: str, items_d
     merged["modifiers"].update(character.get("modifiers", {}) or {})
     ensure_character_modifier_shape(merged)
 
-    merged["resources"].update(character.get("resources", {}) or {})
-    if "hp" in character:
-        merged["resources"]["hp"]["current"] = int(character.get("hp", merged["resources"]["hp"]["current"]) or 0)
-    if "stamina" in character:
-        merged["resources"]["stamina"]["current"] = int(character.get("stamina", merged["resources"]["stamina"]["current"]) or 0)
+    raw_legacy_resources = character.get("resources", {}) if isinstance(character.get("resources"), dict) else {}
+    merged["resources"] = {
+        key: deep_copy(value)
+        for key, value in raw_legacy_resources.items()
+        if key in {"stress", "corruption", "wounds"} and isinstance(value, dict)
+    }
 
     merged["attributes"].update(character.get("attributes", {}) or {})
     raw_skills = character.get("skills", {}) or {}
@@ -3560,8 +4956,30 @@ def normalize_character_state(character: Dict[str, Any], slot_name: str, items_d
         raw_skills = {}
     merged["progression"].update(character.get("progression", {}) or {})
     ensure_progression_shape(merged)
+    merged["level"] = max(
+        1,
+        int(
+            character.get("level")
+            or merged["progression"].get("character_level")
+            or merged["progression"].get("system_level")
+            or merged["progression"].get("rank")
+            or merged.get("level", 1)
+            or 1
+        ),
+    )
+    merged["xp_current"] = max(0, int(character.get("xp_current", merged.get("xp_current", 0)) or 0))
+    merged["xp_total"] = max(merged["xp_current"], int(character.get("xp_total", merged.get("xp_total", merged["xp_current"])) or merged["xp_current"]))
+    merged["xp_to_next"] = max(
+        1,
+        int(character.get("xp_to_next", merged.get("xp_to_next", next_character_xp_for_level(merged["level"]))) or next_character_xp_for_level(merged["level"])),
+    )
+    merged["recent_progression_events"] = [deep_copy(entry) for entry in (character.get("recent_progression_events") or []) if isinstance(entry, dict)]
+    ensure_character_progression_core(merged)
     merged["skills"] = extract_skill_entries_for_character({**character, "skills": raw_skills, "slot_id": slot_name, "progression": merged["progression"]})
-    merged["abilities"] = []
+    if ENABLE_LEGACY_SHADOW_WRITEBACK:
+        merged["abilities"] = []
+    else:
+        merged.pop("abilities", None)
     merged["equipment"].update(character.get("equipment", {}) or {})
     merged["journal"].update(character.get("journal", {}) or {})
 
@@ -3598,10 +5016,14 @@ def normalize_character_state(character: Dict[str, Any], slot_name: str, items_d
     merged["scars"] = [entry for entry in (normalize_scar_state(raw) for raw in scars_raw) if entry]
     merged["skills"] = normalize_skill_store(merged.get("skills") or {}, resource_name=resource_name_for_character(merged))
     migrate_effects_from_conditions(merged)
-    sync_canonical_resources(merged)
+    ingest_legacy_resources_into_canonical(merged, source_character=character)
+    reconcile_canonical_resources(merged)
     resolve_injury_healing(merged, int(((character.get("meta") or {}).get("turn", 0)) or 0))
     rebuild_character_derived(merged, items_db)
-    sync_canonical_resources(merged)
+    reconcile_canonical_resources(merged)
+    strip_legacy_shadow_fields(merged)
+    if ENABLE_LEGACY_SHADOW_WRITEBACK:
+        write_legacy_shadow_fields(merged)
     sync_scars_into_appearance(merged)
     return merged
 
@@ -3745,6 +5167,53 @@ def default_attribute_influence_meta() -> Dict[str, Any]:
             },
         },
     }
+
+
+def default_extraction_quarantine() -> Dict[str, Any]:
+    return {
+        "entries": [],
+        "max_entries": EXTRACTION_QUARANTINE_DEFAULT_MAX,
+    }
+
+
+def normalize_extraction_quarantine_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
+    raw = meta.get("extraction_quarantine")
+    quarantine = deep_copy(raw) if isinstance(raw, dict) else default_extraction_quarantine()
+    max_entries = int(quarantine.get("max_entries", EXTRACTION_QUARANTINE_DEFAULT_MAX) or EXTRACTION_QUARANTINE_DEFAULT_MAX)
+    max_entries = clamp(max_entries, 50, 1000)
+    entries: List[Dict[str, Any]] = []
+    for raw_entry in (quarantine.get("entries") or []):
+        if not isinstance(raw_entry, dict):
+            continue
+        status = str(raw_entry.get("status") or "").strip().lower()
+        if status not in {"review", "reject"}:
+            continue
+        normalized_entry = {
+            "id": str(raw_entry.get("id") or make_id("xq")).strip(),
+            "turn": max(0, int(raw_entry.get("turn", 0) or 0)),
+            "actor": str(raw_entry.get("actor") or "").strip(),
+            "source": str(raw_entry.get("source") or "unknown").strip(),
+            "entity_type": str(raw_entry.get("entity_type") or "unknown").strip(),
+            "status": status,
+            "reason_code": str(raw_entry.get("reason_code") or EXTRACTION_REASON_LOW_CONFIDENCE).strip(),
+            "label": str(raw_entry.get("label") or "").strip(),
+            "payload": deep_copy(raw_entry.get("payload") or {}),
+            "created_at": str(raw_entry.get("created_at") or utc_now()),
+        }
+        entries.append(normalized_entry)
+    if len(entries) > max_entries:
+        entries = entries[-max_entries:]
+    normalized = {"entries": entries, "max_entries": max_entries}
+    meta["extraction_quarantine"] = normalized
+    return normalized
+
+
+def normalize_meta_migrations(meta: Dict[str, Any]) -> Dict[str, Any]:
+    raw = meta.get("migrations")
+    migrations = deep_copy(raw) if isinstance(raw, dict) else {}
+    migrations["npc_codex_seeded_from_story_cards"] = bool(migrations.get("npc_codex_seeded_from_story_cards", False))
+    meta["migrations"] = migrations
+    return migrations
 
 
 def normalize_world_settings(world_settings: Any) -> Dict[str, Any]:
@@ -4249,6 +5718,161 @@ def apply_skill_cost_deltas_to_patch(patch: Dict[str, Any], actor: str, delta_pa
     for key, value in deltas.items():
         resources_delta[key] = int(resources_delta.get(key, 0) or 0) + int(value or 0)
     return adjusted
+
+
+def skill_rank_power_weight(rank: str) -> int:
+    return {"F": 1, "E": 2, "D": 3, "C": 4, "B": 5, "A": 7, "S": 9}.get(normalize_skill_rank(rank), 1)
+
+
+def compute_character_combat_score(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> int:
+    attrs = character.get("attributes") or {}
+    level = max(1, int(character.get("level", 1) or 1))
+    class_current = normalize_class_current(character.get("class_current")) or {}
+    class_level = max(1, int(class_current.get("level", 1) or 1))
+    class_weight = skill_rank_power_weight(class_current.get("rank", "F"))
+    hp_ratio = int(round((int(character.get("hp_current", 0) or 0) / max(1, int(character.get("hp_max", 1) or 1))) * 100))
+    sta_ratio = int(round((int(character.get("sta_current", 0) or 0) / max(1, int(character.get("sta_max", 1) or 1))) * 100))
+    res_ratio = int(round((int(character.get("res_current", 0) or 0) / max(1, int(character.get("res_max", 1) or 1))) * 100))
+    base_stats = (
+        int(attrs.get("str", 0) or 0)
+        + int(attrs.get("dex", 0) or 0)
+        + int(attrs.get("con", 0) or 0)
+        + int(attrs.get("int", 0) or 0)
+        + int(attrs.get("wis", 0) or 0)
+        + int(attrs.get("luck", 0) or 0)
+    )
+    skill_power = 0
+    for raw_skill in (character.get("skills") or {}).values():
+        if not isinstance(raw_skill, dict):
+            continue
+        skill = normalize_dynamic_skill_state(raw_skill, resource_name=resource_name_for_character(character, world_settings))
+        skill_power += max(1, int(skill.get("level", 1) or 1)) * skill_rank_power_weight(skill.get("rank", "F"))
+    injury_penalty = 0
+    for raw_injury in (character.get("injuries") or []):
+        injury = normalize_injury_state(raw_injury)
+        if not injury:
+            continue
+        if injury.get("severity") == "schwer":
+            injury_penalty += 14
+        elif injury.get("severity") == "mittel":
+            injury_penalty += 7
+        else:
+            injury_penalty += 3
+    condition_penalty = max(0, len(character.get("conditions") or []) * 2)
+    resource_factor = int(round((hp_ratio * 0.45) + (sta_ratio * 0.3) + (res_ratio * 0.25)))
+    score = (
+        (level * 9)
+        + (class_level * (2 + class_weight))
+        + base_stats
+        + int(skill_power * 0.65)
+        + int(resource_factor * 0.35)
+        - injury_penalty
+        - condition_penalty
+    )
+    return max(1, score)
+
+
+def compute_npc_combat_score(npc_entry: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> int:
+    level = max(1, int(npc_entry.get("level", 1) or 1))
+    class_current = normalize_class_current(npc_entry.get("class_current")) or {}
+    class_level = max(1, int(class_current.get("level", level) or level))
+    class_weight = skill_rank_power_weight(class_current.get("rank", "F"))
+    hp_ratio = int(round((int(npc_entry.get("hp_current", 0) or 0) / max(1, int(npc_entry.get("hp_max", 1) or 1))) * 100))
+    sta_ratio = int(round((int(npc_entry.get("sta_current", 0) or 0) / max(1, int(npc_entry.get("sta_max", 1) or 1))) * 100))
+    res_ratio = int(round((int(npc_entry.get("res_current", 0) or 0) / max(1, int(npc_entry.get("res_max", 1) or 1))) * 100))
+    skill_power = 0
+    for raw_skill in (npc_entry.get("skills") or {}).values():
+        if not isinstance(raw_skill, dict):
+            continue
+        skill = normalize_dynamic_skill_state(raw_skill, resource_name=normalize_resource_name((((npc_entry.get("progression") or {}).get("resource_name")) or "Aether"), "Aether"))
+        skill_power += max(1, int(skill.get("level", 1) or 1)) * skill_rank_power_weight(skill.get("rank", "F"))
+    score = (
+        (level * 9)
+        + (class_level * (2 + class_weight))
+        + int(skill_power * 0.65)
+        + int(((hp_ratio * 0.45) + (sta_ratio * 0.3) + (res_ratio * 0.25)) * 0.35)
+    )
+    return max(1, score)
+
+
+def build_combat_scaling_context(state: Dict[str, Any], actor: str) -> Dict[str, Any]:
+    world_settings = ((state.get("world") or {}).get("settings") or {})
+    actor_character = ((state.get("characters") or {}).get(actor) or {})
+    actor_scene = str(actor_character.get("scene_id") or "").strip()
+    actor_score = compute_character_combat_score(actor_character, world_settings)
+    threat_scores: List[int] = []
+
+    for slot_name, character in (state.get("characters") or {}).items():
+        if slot_name == actor:
+            continue
+        if actor_scene and str(character.get("scene_id") or "").strip() != actor_scene:
+            continue
+        threat_scores.append(compute_character_combat_score(character, world_settings))
+
+    for raw_npc in sorted_npc_codex_entries(state):
+        npc_scene = str(raw_npc.get("last_seen_scene_id") or "").strip()
+        if actor_scene and npc_scene and npc_scene != actor_scene:
+            continue
+        if str(raw_npc.get("status") or "active").strip().lower() == "gone":
+            continue
+        threat_scores.append(compute_npc_combat_score(raw_npc, world_settings))
+
+    threat_score = max(1, int(round(sum(threat_scores) / max(1, len(threat_scores))))) if threat_scores else actor_score
+    ratio = float(actor_score) / float(max(1, threat_score))
+    pressure = "high" if ratio <= 0.78 else "medium" if ratio <= 1.24 else "low"
+    return {
+        "actor_score": actor_score,
+        "threat_score": threat_score,
+        "ratio": round(ratio, 3),
+        "pressure": pressure,
+        "threat_count": len(threat_scores),
+    }
+
+
+def apply_combat_scaling_to_patch(
+    patch: Dict[str, Any],
+    *,
+    actor: str,
+    combat_context: Dict[str, Any],
+    scaling_context: Dict[str, Any],
+    action_type: str,
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    if action_type == "canon":
+        return patch, {"applied": False, "multiplier": 1.0}
+    if not bool(combat_context.get("active") or combat_context.get("hinted")):
+        return patch, {"applied": False, "multiplier": 1.0}
+    pressure = str(scaling_context.get("pressure") or "medium").lower()
+    if pressure == "high":
+        multiplier = 1.28
+    elif pressure == "low":
+        multiplier = 0.82
+    else:
+        multiplier = 1.0
+    updated = deep_copy(patch or blank_patch())
+    actor_patch = (updated.get("characters") or {}).get(actor)
+    if not isinstance(actor_patch, dict):
+        return updated, {"applied": False, "multiplier": multiplier}
+    applied = False
+    for key in ("hp_delta", "stamina_delta"):
+        if key in actor_patch and int(actor_patch.get(key, 0) or 0) < 0:
+            scaled = int(round(int(actor_patch.get(key, 0) or 0) * multiplier))
+            if scaled == 0:
+                scaled = -1
+            actor_patch[key] = scaled
+            applied = True
+    resources_delta = actor_patch.get("resources_delta") if isinstance(actor_patch.get("resources_delta"), dict) else {}
+    if resources_delta:
+        for key in ("hp", "stamina", "sta", "res", "aether"):
+            raw = int(resources_delta.get(key, 0) or 0)
+            if raw < 0:
+                scaled = int(round(raw * multiplier))
+                if scaled == 0:
+                    scaled = -1
+                resources_delta[key] = scaled
+                applied = True
+        actor_patch["resources_delta"] = resources_delta
+    updated.setdefault("characters", {})[actor] = actor_patch
+    return updated, {"applied": applied, "multiplier": multiplier}
 
 
 def infer_combat_context(
@@ -5017,6 +6641,9 @@ def build_party_overview(campaign: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "class_rank": (current_class or {}).get("rank", ""),
                 "class_level": (current_class or {}).get("level"),
                 "class_level_max": (current_class or {}).get("level_max"),
+                "level": int(character.get("level", 1) or 1),
+                "xp_current": int(character.get("xp_current", 0) or 0),
+                "xp_to_next": int(character.get("xp_to_next", next_character_xp_for_level(int(character.get("level", 1) or 1))) or next_character_xp_for_level(int(character.get("level", 1) or 1))),
                 "hp_current": int(character.get("hp_current", 0) or 0),
                 "hp_max": int(character.get("hp_max", 0) or 0),
                 "sta_current": int(character.get("sta_current", 0) or 0),
@@ -5070,8 +6697,10 @@ def build_character_sheet_view(campaign: Dict[str, Any], slot_name: str) -> Dict
     if not character:
         raise HTTPException(status_code=404, detail="Charakter nicht gefunden.")
     character = normalize_character_state(character, slot_name, campaign.get("state", {}).get("items", {}) or {})
+    world_settings = (((campaign.get("state") or {}).get("world") or {}).get("settings") or {})
+    reconcile_canonical_resources(character, world_settings)
     bio = character.get("bio", {})
-    resources = character.get("resources", {})
+    resources = build_compat_resources_view(character, world_settings)
     derived = character.get("derived", {})
     skills = character.get("skills", {})
     equipment = character.get("equipment", {})
@@ -5100,8 +6729,7 @@ def build_character_sheet_view(campaign: Dict[str, Any], slot_name: str) -> Dict
             "rarity": item.get("rarity", "") if item_id else "",
             "weight": item.get("weight", 0) if item_id else 0,
         }
-    resource_name = resource_name_for_character(character, (((campaign.get("state") or {}).get("world") or {}).get("settings") or {}))
-    world_settings = (((campaign.get("state") or {}).get("world") or {}).get("settings") or {})
+    resource_name = resource_name_for_character(character, world_settings)
     current_class = normalize_class_current(character.get("class_current"))
     ascension_plotpoint = None
     current_quest_id = (((current_class or {}).get("ascension") or {}).get("quest_id"))
@@ -5158,6 +6786,12 @@ def build_character_sheet_view(campaign: Dict[str, Any], slot_name: str) -> Dict
                 "resources": resources,
                 "resource_label": resource_name,
                 "class_current": current_class,
+                "character_progression": {
+                    "level": int(character.get("level", 1) or 1),
+                    "xp_current": int(character.get("xp_current", 0) or 0),
+                    "xp_to_next": int(character.get("xp_to_next", next_character_xp_for_level(int(character.get("level", 1) or 1))) or next_character_xp_for_level(int(character.get("level", 1) or 1))),
+                    "xp_total": int(character.get("xp_total", 0) or 0),
+                },
                 "injury_count": len(character.get("injuries", []) or []),
                 "scar_count": len(character.get("scars", []) or []),
                 "location": {"scene_id": character.get("scene_id", ""), "scene_name": derive_scene_name(campaign, slot_name)},
@@ -5226,12 +6860,28 @@ def build_npc_sheet_view(campaign: Dict[str, Any], npc_id: str) -> Dict[str, Any
     scene_id = str(npc_entry.get("last_seen_scene_id") or "").strip()
     scene_name = scene_name_from_state(state, scene_id) if scene_id else ""
     history_notes = [str(note).strip() for note in (npc_entry.get("history_notes") or []) if str(note).strip()]
+    npc_class = normalize_class_current(npc_entry.get("class_current"))
+    npc_resource_name = normalize_resource_name((((npc_entry.get("progression") or {}).get("resource_name")) or (((state.get("world") or {}).get("settings") or {}).get("resource_name")) or "Aether"), "Aether")
+    npc_skills = [
+        normalize_dynamic_skill_state(
+            skill_value,
+            skill_id=skill_id,
+            skill_name=(skill_value or {}).get("name", skill_id) if isinstance(skill_value, dict) else skill_id,
+            resource_name=npc_resource_name,
+        )
+        for skill_id, skill_value in ((npc_entry.get("skills") or {}).items())
+    ]
+    npc_skills.sort(key=lambda entry: (skill_rank_sort_value(entry.get("rank")), entry.get("level", 1), entry.get("name", "")), reverse=True)
     return {
         "npc_id": npc_entry.get("npc_id"),
         "name": npc_entry.get("name"),
         "race": npc_entry.get("race"),
+        "age": npc_entry.get("age"),
         "goal": npc_entry.get("goal"),
         "level": npc_entry.get("level"),
+        "xp_total": int(npc_entry.get("xp_total", 0) or 0),
+        "xp_current": int(npc_entry.get("xp_current", 0) or 0),
+        "xp_to_next": int(npc_entry.get("xp_to_next", next_character_xp_for_level(int(npc_entry.get("level", 1) or 1))) or next_character_xp_for_level(int(npc_entry.get("level", 1) or 1))),
         "backstory_short": npc_entry.get("backstory_short"),
         "role_hint": npc_entry.get("role_hint"),
         "faction": npc_entry.get("faction"),
@@ -5244,6 +6894,20 @@ def build_npc_sheet_view(campaign: Dict[str, Any], npc_id: str) -> Dict[str, Any
         "relevance_score": npc_entry.get("relevance_score"),
         "history_notes": history_notes,
         "tags": npc_entry.get("tags", []),
+        "class_current": npc_class,
+        "skills": npc_skills,
+        "resources": {
+            "hp_current": int(npc_entry.get("hp_current", 0) or 0),
+            "hp_max": int(npc_entry.get("hp_max", 0) or 0),
+            "sta_current": int(npc_entry.get("sta_current", 0) or 0),
+            "sta_max": int(npc_entry.get("sta_max", 0) or 0),
+            "res_current": int(npc_entry.get("res_current", 0) or 0),
+            "res_max": int(npc_entry.get("res_max", 0) or 0),
+            "resource_name": npc_resource_name,
+        },
+        "conditions": npc_entry.get("conditions", []),
+        "injuries": npc_entry.get("injuries", []),
+        "scars": npc_entry.get("scars", []),
     }
 
 
@@ -5289,7 +6953,7 @@ def call_ollama_text(system: str, user: str) -> str:
             "num_ctx": 4096,
         },
     }
-    response = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=120)
+    response = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=max(30, OLLAMA_TIMEOUT_SEC))
     if response.status_code != 200:
         raise RuntimeError(f"Ollama error {response.status_code}: {response.text[:500]}")
     return (response.json().get("message", {}) or {}).get("content", "").strip()
@@ -5590,7 +7254,7 @@ def merge_character_patch_update(base: Dict[str, Any], incoming: Dict[str, Any])
                 target.update(deep_copy(value))
             else:
                 merged[key] = deep_copy(value)
-        elif key in {"conditions_add", "conditions_remove", "inventory_add", "inventory_remove", "abilities_add", "abilities_update", "potential_add", "factions_add", "factions_update", "injuries_add", "injuries_update", "injuries_heal", "scars_add", "appearance_flags_add", "effects_add", "effects_remove"}:
+        elif key in {"conditions_add", "conditions_remove", "inventory_add", "inventory_remove", "abilities_add", "abilities_update", "potential_add", "factions_add", "factions_update", "injuries_add", "injuries_update", "injuries_heal", "scars_add", "appearance_flags_add", "effects_add", "effects_remove", "progression_events"}:
             merged.setdefault(key, [])
             if isinstance(value, list):
                 merged[key].extend(deep_copy(value))
@@ -5993,6 +7657,8 @@ def build_npc_codex_summary(state: Dict[str, Any], *, limit: int = 16) -> List[D
                 "race": entry.get("race"),
                 "goal": entry.get("goal"),
                 "level": entry.get("level"),
+                "class_name": ((normalize_class_current(entry.get("class_current")) or {}).get("name") or ""),
+                "class_rank": ((normalize_class_current(entry.get("class_current")) or {}).get("rank") or ""),
                 "faction": entry.get("faction"),
                 "role_hint": entry.get("role_hint"),
                 "status": entry.get("status"),
@@ -6135,7 +7801,97 @@ def resolve_extractor_conflicts(
     return resolved
 
 
-def build_canon_fallback_patch(
+def make_extraction_candidate(
+    *,
+    state: Dict[str, Any],
+    actor: str,
+    source: str,
+    entity_type: str,
+    operation: str,
+    label: str,
+    normalized_key: str,
+    evidence_text: str,
+    payload: Dict[str, Any],
+    confidence: float,
+) -> Dict[str, Any]:
+    return {
+        "candidate_id": make_id("xc"),
+        "source": str(source or "unknown"),
+        "actor": str(actor or ""),
+        "turn": max(0, int(((state.get("meta") or {}).get("turn", 0) or 0))),
+        "entity_type": str(entity_type or "unknown"),
+        "operation": str(operation or ""),
+        "label": str(label or "").strip(),
+        "normalized_key": str(normalized_key or "").strip(),
+        "evidence_text": str(evidence_text or "").strip(),
+        "payload": deep_copy(payload or {}),
+        "confidence": float(clamp_float(float(confidence or 0.0), 0.0, 1.0)),
+        "status": "review",
+        "reason_code": EXTRACTION_REASON_LOW_CONFIDENCE,
+        "created_at": utc_now(),
+    }
+
+
+def candidate_status_rank(status: str) -> int:
+    lowered = str(status or "").strip().lower()
+    if lowered == "safe":
+        return 3
+    if lowered == "review":
+        return 2
+    return 1
+
+
+def item_name_in_character_inventory(state: Dict[str, Any], slot_name: str, item_name: str) -> bool:
+    normalized_name = normalized_eval_text(item_name)
+    if not normalized_name:
+        return False
+    character = ((state.get("characters") or {}).get(slot_name) or {})
+    items_db = state.get("items") or {}
+    for entry in list_inventory_items(character):
+        item_id = str(entry.get("item_id") or "").strip()
+        if not item_id:
+            continue
+        item = items_db.get(item_id) or {}
+        if normalized_eval_text(str(item.get("name") or "")) == normalized_name:
+            return True
+    return False
+
+
+def extract_environment_item_mentions(story_text: str, actor_display: str) -> List[Dict[str, str]]:
+    mentions: List[Dict[str, str]] = []
+    seen = set()
+    pattern = re.compile(
+        r"\b(?:liegt|liegen|stand|steht|stehen|haengt|hängt|hingen)\s+(?:ein|eine|einen|der|die|das)\s+([^,.!?;\n]{3,80})",
+        flags=re.IGNORECASE,
+    )
+    actor_relevant = actor_relevant_story_sentences(story_text, actor_display)
+    actor_relevant_set = set(actor_relevant)
+    sentence_pool = list(actor_relevant)
+    if not sentence_pool:
+        sentence_pool = [
+            sentence.strip()
+            for sentence in re.split(r"(?<=[.!?])\s+|\n+", str(story_text or ""))
+            if sentence.strip()
+        ]
+    for sentence in sentence_pool:
+        lowered = normalized_eval_text(sentence)
+        if sentence not in actor_relevant_set and not re.search(r"\b(ihm|ihr|ihnen)\b", lowered):
+            continue
+        if any(pattern_acq.search(sentence) for pattern_acq in AUTO_ITEM_ACQUIRE_PATTERNS):
+            continue
+        if any(pattern_eq.search(sentence) for pattern_eq in AUTO_ITEM_EQUIP_PATTERNS):
+            continue
+        for match in pattern.findall(sentence):
+            item_name = clean_auto_item_name(match)
+            normalized_name = normalized_eval_text(item_name)
+            if not item_name or not normalized_name or normalized_name in seen:
+                continue
+            seen.add(normalized_name)
+            mentions.append({"name": item_name, "sentence": sentence})
+    return mentions
+
+
+def build_heuristic_candidates(
     campaign: Dict[str, Any],
     state: Dict[str, Any],
     actor: str,
@@ -6143,19 +7899,627 @@ def build_canon_fallback_patch(
     source_text: str,
     *,
     source: str,
-) -> Dict[str, Any]:
-    patch = blank_patch()
+) -> List[Dict[str, Any]]:
+    if not str(source_text or "").strip():
+        return []
+    candidates: List[Dict[str, Any]] = []
+    seen_keys: set = set()
+    actor_display = display_name_for_slot(campaign, actor) if is_slot_id(actor) else actor
+    normalized_content = normalized_eval_text(source_text)
+
+    def push(candidate: Dict[str, Any]) -> None:
+        key = str(candidate.get("normalized_key") or "").strip()
+        if not key or key in seen_keys:
+            return
+        seen_keys.add(key)
+        candidates.append(candidate)
+
     if actor in (state.get("characters") or {}):
-        actor_display = display_name_for_slot(campaign, actor)
         class_payload = extract_auto_class_change(source_text, actor_display)
         if class_payload:
-            patch.setdefault("characters", {}).setdefault(actor, {})["class_set"] = normalize_class_current(class_payload)
-        patch = inject_story_unlock_abilities(campaign, state, actor, source_text, patch, seed_text=source_text if source == "player" else "")
-        patch = inject_story_items(campaign, state, actor, source_text, patch)
-        patch = inject_story_injuries(campaign, state, actor, source_text, patch, seed_text=source_text if source == "player" else "")
-        patch = inject_turn_story_journal(campaign, state, actor, source_text, patch, seed_text=source_text if source == "player" else "")
-    scene_patch = build_scene_patch_from_text(campaign, state, actor, source_text)
-    return merge_patch_payloads(patch, scene_patch)
+            normalized_class = normalize_class_current(class_payload)
+            if normalized_class:
+                class_label = str(normalized_class.get("name") or normalized_class.get("id") or "").strip()
+                push(
+                    make_extraction_candidate(
+                        state=state,
+                        actor=actor,
+                        source=source,
+                        entity_type="class",
+                        operation="set_class",
+                        label=class_label,
+                        normalized_key=f"class:{normalized_eval_text(str(normalized_class.get('id') or class_label))}",
+                        evidence_text=source_text,
+                        payload={"class_set": normalized_class},
+                        confidence=0.86,
+                    )
+                )
+        elif "klasse" in normalized_content and actor_display and normalized_eval_text(actor_display) in normalized_content:
+            push(
+                make_extraction_candidate(
+                    state=state,
+                    actor=actor,
+                    source=source,
+                    entity_type="class",
+                    operation="set_class",
+                    label="Klassenhinweis",
+                    normalized_key=f"class:ambiguous:{actor}",
+                    evidence_text=source_text,
+                    payload={"ambiguous": True},
+                    confidence=0.25,
+                )
+            )
+
+        for learned in extract_auto_learned_abilities(source_text, actor_display):
+            skill_name = str(learned.get("name") or "").strip()
+            if not skill_name:
+                continue
+            push(
+                make_extraction_candidate(
+                    state=state,
+                    actor=actor,
+                    source=source,
+                    entity_type="skill",
+                    operation="add_skill",
+                    label=skill_name,
+                    normalized_key=f"skill:{normalized_eval_text(skill_name)}",
+                    evidence_text=str(learned.get("description") or source_text),
+                    payload={
+                        "name": skill_name,
+                        "description": str(learned.get("description") or "").strip(),
+                        "tags": deep_copy(learned.get("tags") or []),
+                        "type": str(learned.get("type") or "active"),
+                        "explicit_learn": True,
+                    },
+                    confidence=0.78,
+                )
+            )
+
+        verb_style_match = re.search(
+            r"\b(?:ich|er|sie)\s+(?:kaempft|kämpft|rennt|springt|weicht|bewegt\s+sich)\b",
+            normalized_content,
+        )
+        if verb_style_match and not any(cue in normalized_content for cue in STORY_LEARN_CUES):
+            label = str(verb_style_match.group(0) or "stilaktion").strip()
+            push(
+                make_extraction_candidate(
+                    state=state,
+                    actor=actor,
+                    source=source,
+                    entity_type="skill",
+                    operation="add_skill",
+                    label=label,
+                    normalized_key=f"skill:verbstyle:{normalized_eval_text(label)}",
+                    evidence_text=source_text,
+                    payload={"mode": "style_verb"},
+                    confidence=0.2,
+                )
+            )
+
+        for event in extract_auto_story_item_events(source_text, actor_display):
+            item_name = str(event.get("name") or "").strip()
+            if not item_name:
+                continue
+            push(
+                make_extraction_candidate(
+                    state=state,
+                    actor=actor,
+                    source=source,
+                    entity_type="item",
+                    operation="add_item",
+                    label=item_name,
+                    normalized_key=f"item:{normalized_eval_text(item_name)}",
+                    evidence_text=str(event.get("sentence") or source_text),
+                    payload={
+                        "name": item_name,
+                        "mode": str(event.get("mode") or "acquire"),
+                        "sentence": str(event.get("sentence") or source_text),
+                    },
+                    confidence=0.8 if str(event.get("mode") or "") in {"acquire", "equip"} else 0.55,
+                )
+            )
+
+        for mention in extract_environment_item_mentions(source_text, actor_display):
+            item_name = str(mention.get("name") or "").strip()
+            if not item_name:
+                continue
+            push(
+                make_extraction_candidate(
+                    state=state,
+                    actor=actor,
+                    source=source,
+                    entity_type="item",
+                    operation="add_item",
+                    label=item_name,
+                    normalized_key=f"item:env:{normalized_eval_text(item_name)}",
+                    evidence_text=str(mention.get("sentence") or source_text),
+                    payload={"name": item_name, "mode": "environment_only"},
+                    confidence=0.2,
+                )
+            )
+
+    for scene in extract_scene_candidates(source_text, actor_display):
+        scene_name = str(scene.get("name") or "").strip()
+        if not scene_name:
+            continue
+        scope = str(scene.get("scope") or "").strip().lower()
+        scene_id = canonical_scene_id(scene_name)
+        targets = active_party(campaign) if scope == "group" and active_party(campaign) else [actor]
+        push(
+            make_extraction_candidate(
+                state=state,
+                actor=actor,
+                source=source,
+                entity_type="map",
+                operation="add_scene",
+                label=scene_name,
+                normalized_key=f"scene:{scene_id}",
+                evidence_text=source_text,
+                payload={
+                    "scene_id": scene_id,
+                    "scene_name": scene_name,
+                    "scope": scope,
+                    "targets": targets,
+                },
+                confidence=0.82 if scope in {"actor", "group"} else 0.4,
+            )
+        )
+    return candidates
+
+
+def classify_heuristic_candidate(
+    candidate: Dict[str, Any],
+    campaign: Dict[str, Any],
+    state: Dict[str, Any],
+    actor: str,
+    source_text: str,
+) -> Dict[str, Any]:
+    classified = deep_copy(candidate)
+    entity_type = str(classified.get("entity_type") or "").strip().lower()
+    label = str(classified.get("label") or "").strip()
+    payload = classified.get("payload") if isinstance(classified.get("payload"), dict) else {}
+    status = "review"
+    reason_code = EXTRACTION_REASON_LOW_CONFIDENCE
+    confidence = float(classified.get("confidence", 0.0) or 0.0)
+
+    if entity_type == "map":
+        scene_id = str(payload.get("scene_id") or canonical_scene_id(label)).strip()
+        generic_names = {
+            "dorf",
+            "wald",
+            "strasse",
+            "straße",
+            "raum",
+            "gebaude",
+            "gebäude",
+            "tuer",
+            "tür",
+            "haus",
+            "gegend",
+        }
+        normalized_label = normalized_eval_text(label)
+        scope = str(payload.get("scope") or "").strip().lower()
+        if normalized_label in generic_names or is_generic_scene_identifier(scene_id, label):
+            status = "reject"
+            reason_code = EXTRACTION_REASON_GENERIC_LOCATION
+            confidence = min(confidence, 0.25)
+        elif scope in {"actor", "group"}:
+            status = "safe"
+            reason_code = "SAFE_CONFIRMED"
+            confidence = max(confidence, 0.75)
+        else:
+            status = "review"
+            reason_code = EXTRACTION_REASON_LOW_CONFIDENCE
+    elif entity_type == "item":
+        mode = str(payload.get("mode") or "").strip().lower()
+        normalized_label = normalized_eval_text(label)
+        if mode == "environment_only":
+            status = "reject"
+            reason_code = EXTRACTION_REASON_ENV_OBJECT
+            confidence = min(confidence, 0.25)
+        elif normalized_label in {normalized_eval_text(entry) for entry in AUTO_ITEM_GENERIC_NAMES}:
+            status = "reject"
+            reason_code = EXTRACTION_REASON_ENV_OBJECT
+            confidence = min(confidence, 0.2)
+        elif mode in {"acquire", "equip"}:
+            status = "safe"
+            reason_code = "SAFE_CONFIRMED"
+            confidence = max(confidence, 0.72)
+        else:
+            status = "review"
+            reason_code = EXTRACTION_REASON_MISSING_ACQUIRE
+            confidence = min(confidence, 0.45)
+        if status == "safe" and item_name_in_character_inventory(state, actor, label):
+            status = "review"
+            reason_code = EXTRACTION_REASON_DUPLICATE
+            confidence = min(confidence, 0.5)
+    elif entity_type == "skill":
+        if str(payload.get("mode") or "").strip().lower() == "style_verb":
+            status = "reject"
+            reason_code = EXTRACTION_REASON_VERB_STYLE_SKILL
+            confidence = min(confidence, 0.25)
+        elif payload.get("explicit_learn"):
+            status = "safe"
+            reason_code = "SAFE_CONFIRMED"
+            confidence = max(confidence, 0.72)
+        else:
+            status = "review"
+            reason_code = EXTRACTION_REASON_LOW_CONFIDENCE
+        if status == "safe":
+            existing_skill_names = {
+                normalized_eval_text((entry or {}).get("name", ""))
+                for entry in (((state.get("characters") or {}).get(actor) or {}).get("skills") or {}).values()
+                if isinstance(entry, dict)
+            }
+            if normalized_eval_text(label) in existing_skill_names:
+                status = "review"
+                reason_code = EXTRACTION_REASON_DUPLICATE
+                confidence = min(confidence, 0.5)
+    elif entity_type == "class":
+        class_set = normalize_class_current(payload.get("class_set"))
+        if payload.get("ambiguous") or not class_set:
+            status = "review"
+            reason_code = EXTRACTION_REASON_AMBIGUOUS_CLASS
+            confidence = min(confidence, 0.35)
+        else:
+            existing_class = normalize_class_current((((state.get("characters") or {}).get(actor) or {}).get("class_current")))
+            if existing_class and (
+                normalized_eval_text(existing_class.get("id", "")) == normalized_eval_text(class_set.get("id", ""))
+                or normalized_eval_text(existing_class.get("name", "")) == normalized_eval_text(class_set.get("name", ""))
+            ):
+                status = "review"
+                reason_code = EXTRACTION_REASON_DUPLICATE
+                confidence = min(confidence, 0.45)
+            else:
+                status = "safe"
+                reason_code = "SAFE_CONFIRMED"
+                confidence = max(confidence, 0.78)
+            payload["class_set"] = class_set
+    else:
+        status = "reject"
+        reason_code = EXTRACTION_REASON_LOW_CONFIDENCE
+        confidence = min(confidence, 0.2)
+
+    classified["payload"] = payload
+    classified["status"] = status
+    classified["reason_code"] = reason_code
+    classified["confidence"] = clamp_float(confidence, 0.0, 1.0)
+    return classified
+
+
+def split_candidates(candidates: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    deduped: Dict[str, Dict[str, Any]] = {}
+    for candidate in candidates:
+        key = str(candidate.get("normalized_key") or "").strip() or str(candidate.get("candidate_id") or make_id("xc"))
+        current = deduped.get(key)
+        if current is None:
+            deduped[key] = candidate
+            continue
+        current_rank = candidate_status_rank(current.get("status", "reject"))
+        incoming_rank = candidate_status_rank(candidate.get("status", "reject"))
+        if incoming_rank > current_rank:
+            deduped[key] = candidate
+            continue
+        if incoming_rank == current_rank and float(candidate.get("confidence", 0.0) or 0.0) > float(current.get("confidence", 0.0) or 0.0):
+            deduped[key] = candidate
+    safe: List[Dict[str, Any]] = []
+    review: List[Dict[str, Any]] = []
+    reject: List[Dict[str, Any]] = []
+    for candidate in deduped.values():
+        status = str(candidate.get("status") or "").strip().lower()
+        if status == "safe":
+            safe.append(candidate)
+        elif status == "review":
+            review.append(candidate)
+        else:
+            reject.append(candidate)
+    return safe, review, reject
+
+
+def append_extraction_quarantine(state: Dict[str, Any], candidates_review_reject: List[Dict[str, Any]]) -> None:
+    if not candidates_review_reject:
+        return
+    meta = state.setdefault("meta", {})
+    quarantine = normalize_extraction_quarantine_meta(meta)
+    entries = quarantine.setdefault("entries", [])
+    seen = {
+        (
+            int(entry.get("turn", 0) or 0),
+            str(entry.get("actor") or ""),
+            str(entry.get("source") or ""),
+            str(entry.get("entity_type") or ""),
+            normalized_eval_text(entry.get("label", "")),
+            str(entry.get("reason_code") or ""),
+        )
+        for entry in entries
+        if isinstance(entry, dict)
+    }
+    for candidate in candidates_review_reject:
+        status = str(candidate.get("status") or "").strip().lower()
+        if status not in {"review", "reject"}:
+            continue
+        key = (
+            int(candidate.get("turn", 0) or 0),
+            str(candidate.get("actor") or ""),
+            str(candidate.get("source") or ""),
+            str(candidate.get("entity_type") or ""),
+            normalized_eval_text(candidate.get("label", "")),
+            str(candidate.get("reason_code") or ""),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        entries.append(
+            {
+                "id": make_id("xq"),
+                "turn": max(0, int(candidate.get("turn", 0) or 0)),
+                "actor": str(candidate.get("actor") or "").strip(),
+                "source": str(candidate.get("source") or "unknown").strip(),
+                "entity_type": str(candidate.get("entity_type") or "unknown").strip(),
+                "status": status,
+                "reason_code": str(candidate.get("reason_code") or EXTRACTION_REASON_LOW_CONFIDENCE).strip(),
+                "label": str(candidate.get("label") or "").strip(),
+                "payload": deep_copy(candidate.get("payload") or {}),
+                "created_at": str(candidate.get("created_at") or utc_now()),
+            }
+        )
+    max_entries = int(quarantine.get("max_entries", EXTRACTION_QUARANTINE_DEFAULT_MAX) or EXTRACTION_QUARANTINE_DEFAULT_MAX)
+    if len(entries) > max_entries:
+        quarantine["entries"] = entries[-max_entries:]
+
+
+def safe_candidates_to_patch(
+    candidates_safe: List[Dict[str, Any]],
+    campaign: Dict[str, Any],
+    state: Dict[str, Any],
+    actor: str,
+) -> Dict[str, Any]:
+    patch = blank_patch()
+    state_items = state.get("items") or {}
+    for candidate in candidates_safe:
+        entity_type = str(candidate.get("entity_type") or "").strip().lower()
+        payload = candidate.get("payload") if isinstance(candidate.get("payload"), dict) else {}
+        if entity_type == "map":
+            scene_id = str(payload.get("scene_id") or "").strip()
+            scene_name = str(payload.get("scene_name") or candidate.get("label") or "").strip()
+            targets = [slot for slot in (payload.get("targets") or [actor]) if slot in (state.get("characters") or {})]
+            if not scene_id or not scene_name or not targets:
+                continue
+            known_scene_ids = set((state.get("scenes") or {}).keys()) | set(((state.get("map") or {}).get("nodes") or {}).keys())
+            if scene_id not in known_scene_ids and not any(str(node.get("id") or "").strip() == scene_id for node in (patch.get("map_add_nodes") or [])):
+                patch["map_add_nodes"].append(
+                    {
+                        "id": scene_id,
+                        "name": scene_name,
+                        "type": "location",
+                        "danger": 1,
+                        "discovered": True,
+                    }
+                )
+            for slot_name in targets:
+                patch["characters"].setdefault(slot_name, {})["scene_id"] = scene_id
+        elif entity_type == "item":
+            item_name = str(payload.get("name") or candidate.get("label") or "").strip()
+            mode = str(payload.get("mode") or "acquire").strip().lower()
+            sentence = str(payload.get("sentence") or candidate.get("evidence_text") or "")
+            if not item_name or actor not in (state.get("characters") or {}):
+                continue
+            target_patch = patch.setdefault("characters", {}).setdefault(actor, {})
+            target_patch.setdefault("inventory_add", [])
+            target_patch.setdefault("equipment_set", {})
+            candidate_item_id = item_id_from_name(item_name)
+            item_id = candidate_item_id
+            suffix = 2
+            while item_id in state_items or item_id in (patch.get("items_new") or {}):
+                known = state_items.get(item_id) or (patch.get("items_new") or {}).get(item_id) or {}
+                if normalized_eval_text(str((known or {}).get("name") or "")) == normalized_eval_text(item_name):
+                    break
+                item_id = f"{candidate_item_id}-{suffix}"
+                suffix += 1
+            item_stub = build_auto_item_stub(item_name, sentence)
+            patch.setdefault("items_new", {})[item_id] = ensure_item_shape(
+                item_id,
+                {
+                    "name": item_name[0].upper() + item_name[1:] if item_name else item_name,
+                    "rarity": "common",
+                    "slot": item_stub.get("slot", ""),
+                    "weight": 1,
+                    "stackable": False,
+                    "max_stack": 1,
+                    "weapon_profile": item_stub.get("weapon_profile", {}),
+                    "modifiers": [],
+                    "effects": [],
+                    "durability": {"current": 100, "max": 100},
+                    "cursed": False,
+                    "curse_text": "",
+                    "tags": item_stub.get("tags", ["story_auto", "auto_item"]),
+                },
+            )
+            if item_id not in (target_patch.get("inventory_add") or []):
+                target_patch["inventory_add"].append(item_id)
+            if mode == "equip":
+                equip_slot = item_stub.get("slot") or "weapon"
+                target_patch["equipment_set"].setdefault(equip_slot, item_id)
+            if not target_patch.get("equipment_set"):
+                target_patch.pop("equipment_set", None)
+        elif entity_type == "skill":
+            if actor not in (state.get("characters") or {}):
+                continue
+            skill_name = str(payload.get("name") or candidate.get("label") or "").strip()
+            if not skill_name:
+                continue
+            resource_name = resource_name_for_character(
+                ((state.get("characters") or {}).get(actor) or {}),
+                ((state.get("world") or {}).get("settings") or {}),
+            )
+            skill_id = skill_id_from_name(skill_name)
+            target_patch = patch.setdefault("characters", {}).setdefault(actor, {})
+            target_patch.setdefault("skills_set", {})
+            target_patch["skills_set"][skill_id] = normalize_dynamic_skill_state(
+                {
+                    "id": skill_id,
+                    "name": skill_name,
+                    "rank": "F",
+                    "level": 1,
+                    "level_max": 10,
+                    "tags": deep_copy(payload.get("tags") or ["allgemein"]),
+                    "description": str(payload.get("description") or f"{skill_name} wurde im Abenteuer gelernt."),
+                    "cost": {"resource": resource_name, "amount": 1} if "magie" in (payload.get("tags") or []) else None,
+                    "price": None,
+                    "cooldown_turns": None,
+                    "unlocked_from": "Story",
+                    "synergy_notes": None,
+                },
+                resource_name=resource_name,
+            )
+        elif entity_type == "class":
+            class_set = normalize_class_current(payload.get("class_set"))
+            if not class_set or actor not in (state.get("characters") or {}):
+                continue
+            patch.setdefault("characters", {}).setdefault(actor, {})["class_set"] = class_set
+    return patch
+
+
+def merge_safe_patch_additive(
+    llm_patch: Dict[str, Any],
+    safe_patch: Dict[str, Any],
+    state: Dict[str, Any],
+) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    merged = normalize_patch_semantics(llm_patch)
+    safe = normalize_patch_semantics(safe_patch)
+    conflicts: List[Dict[str, Any]] = []
+
+    merged_items = merged.setdefault("items_new", {})
+    for item_id, item_payload in (safe.get("items_new") or {}).items():
+        if item_id in merged_items:
+            conflicts.append({"entity_type": "item", "label": str((item_payload or {}).get("name") or item_id), "payload": {"item_id": item_id}})
+            continue
+        merged_items[item_id] = deep_copy(item_payload)
+
+    existing_node_ids = {str(node.get("id") or "").strip() for node in (merged.get("map_add_nodes") or []) if isinstance(node, dict)}
+    for node in (safe.get("map_add_nodes") or []):
+        node_id = str((node or {}).get("id") or "").strip()
+        if not node_id or node_id in existing_node_ids:
+            continue
+        existing_node_ids.add(node_id)
+        merged.setdefault("map_add_nodes", []).append(deep_copy(node))
+
+    existing_edges = {
+        (str(edge.get("from") or "").strip(), str(edge.get("to") or "").strip(), str(edge.get("kind") or "path").strip())
+        for edge in (merged.get("map_add_edges") or [])
+        if isinstance(edge, dict)
+    }
+    for edge in (safe.get("map_add_edges") or []):
+        if not isinstance(edge, dict):
+            continue
+        key = (str(edge.get("from") or "").strip(), str(edge.get("to") or "").strip(), str(edge.get("kind") or "path").strip())
+        if not key[0] or not key[1] or key in existing_edges:
+            continue
+        existing_edges.add(key)
+        merged.setdefault("map_add_edges", []).append(deep_copy(edge))
+
+    existing_events = {str(event) for event in (merged.get("events_add") or [])}
+    for event in (safe.get("events_add") or []):
+        text = str(event or "").strip()
+        if not text or text in existing_events:
+            continue
+        existing_events.add(text)
+        merged.setdefault("events_add", []).append(text)
+
+    merged_characters = merged.setdefault("characters", {})
+    for slot_name, safe_update in (safe.get("characters") or {}).items():
+        if slot_name not in (state.get("characters") or {}):
+            continue
+        target = merged_characters.setdefault(slot_name, {})
+        if safe_update.get("scene_id"):
+            if target.get("scene_id"):
+                conflicts.append(
+                    {
+                        "entity_type": "map",
+                        "label": str(safe_update.get("scene_id") or ""),
+                        "payload": {"slot": slot_name, "scene_id": safe_update.get("scene_id")},
+                    }
+                )
+            else:
+                target["scene_id"] = str(safe_update.get("scene_id") or "").strip()
+
+        if safe_update.get("class_set"):
+            if target.get("class_set") or target.get("class_update"):
+                conflicts.append(
+                    {
+                        "entity_type": "class",
+                        "label": str((safe_update.get("class_set") or {}).get("name") or ""),
+                        "payload": {"slot": slot_name},
+                    }
+                )
+            else:
+                target["class_set"] = deep_copy(safe_update.get("class_set"))
+
+        safe_skills = safe_update.get("skills_set") or {}
+        if safe_skills:
+            target_skills = target.setdefault("skills_set", {})
+            existing_state_skill_names = {
+                normalized_eval_text((entry or {}).get("name", ""))
+                for entry in (((state.get("characters") or {}).get(slot_name) or {}).get("skills") or {}).values()
+                if isinstance(entry, dict)
+            }
+            existing_target_skill_names = {
+                normalized_eval_text((entry or {}).get("name", ""))
+                for entry in (target_skills or {}).values()
+                if isinstance(entry, dict)
+            }
+            for skill_id, skill_payload in safe_skills.items():
+                skill_name_norm = normalized_eval_text((skill_payload or {}).get("name", ""))
+                if skill_id in target_skills or (skill_name_norm and (skill_name_norm in existing_state_skill_names or skill_name_norm in existing_target_skill_names)):
+                    conflicts.append(
+                        {
+                            "entity_type": "skill",
+                            "label": str((skill_payload or {}).get("name") or skill_id),
+                            "payload": {"slot": slot_name, "skill_id": skill_id},
+                        }
+                    )
+                    continue
+                target_skills[skill_id] = deep_copy(skill_payload)
+                if skill_name_norm:
+                    existing_target_skill_names.add(skill_name_norm)
+
+        safe_inventory_add = safe_update.get("inventory_add") or []
+        if safe_inventory_add:
+            target_inventory_add = target.setdefault("inventory_add", [])
+            existing_inventory_ids = {
+                str(entry.get("item_id") or "").strip()
+                for entry in list_inventory_items(((state.get("characters") or {}).get(slot_name) or {}))
+                if str(entry.get("item_id") or "").strip()
+            }
+            for item_id in safe_inventory_add:
+                item_key = str(item_id or "").strip()
+                if not item_key:
+                    continue
+                if item_key in existing_inventory_ids or item_key in target_inventory_add:
+                    conflicts.append({"entity_type": "item", "label": item_key, "payload": {"slot": slot_name, "item_id": item_key}})
+                    continue
+                target_inventory_add.append(item_key)
+
+        safe_equipment = normalize_equipment_update_payload(safe_update.get("equipment_set") or safe_update.get("equip_set") or {})
+        if safe_equipment:
+            target_equipment = normalize_equipment_update_payload(target.get("equipment_set") or target.get("equip_set") or {})
+            for equip_slot, equip_item_id in safe_equipment.items():
+                if not equip_item_id:
+                    continue
+                if target_equipment.get(equip_slot):
+                    conflicts.append(
+                        {
+                            "entity_type": "item",
+                            "label": equip_item_id,
+                            "payload": {"slot": slot_name, "equip_slot": equip_slot, "item_id": equip_item_id},
+                        }
+                    )
+                    continue
+                target_equipment[equip_slot] = equip_item_id
+            if target_equipment:
+                target["equipment_set"] = target_equipment
+                target.pop("equip_set", None)
+    return merged, conflicts
 
 
 def call_canon_extractor(
@@ -6169,7 +8533,13 @@ def call_canon_extractor(
 ) -> Dict[str, Any]:
     if not str(source_text or "").strip():
         return blank_patch()
-    heuristic_patch = build_canon_fallback_patch(campaign, state, actor, action_type, source_text, source=source)
+    heuristic_candidates = build_heuristic_candidates(campaign, state, actor, action_type, source_text, source=source)
+    classified_candidates = [
+        classify_heuristic_candidate(candidate, campaign, state, actor, source_text)
+        for candidate in heuristic_candidates
+    ]
+    safe_candidates, review_candidates, reject_candidates = split_candidates(classified_candidates)
+    append_extraction_quarantine(state, review_candidates + reject_candidates)
     context_packet = build_extractor_context_packet(campaign, state, actor, action_type, source_text, source=source)
     user_prompt = (
         "STATE_PACKET(JSON):\n"
@@ -6178,6 +8548,7 @@ def call_canon_extractor(
         + CANON_EXTRACTOR_JSON_CONTRACT
         + "\n\nExtrahiere nur kanonische Fakten aus source_text als Patch. Keine Prosa. Keine Erklärungen."
     )
+    llm_patch = blank_patch()
     try:
         payload = call_ollama_schema(
             CANON_EXTRACTOR_SYSTEM_PROMPT,
@@ -6186,10 +8557,34 @@ def call_canon_extractor(
             timeout=120,
             temperature=0.1,
         )
-        patch = merge_patch_payloads(normalize_extractor_output_patch(payload), heuristic_patch)
+        llm_patch = normalize_extractor_output_patch(payload)
     except Exception:
-        patch = heuristic_patch
-    return resolve_extractor_conflicts(campaign, state, actor, action_type, source_text, patch, source=source)
+        llm_patch = blank_patch()
+    safe_patch = safe_candidates_to_patch(safe_candidates, campaign, state, actor)
+    merged_patch, merge_conflicts = merge_safe_patch_additive(llm_patch, safe_patch, state)
+    if merge_conflicts:
+        conflict_candidates: List[Dict[str, Any]] = []
+        for conflict in merge_conflicts:
+            conflict_candidates.append(
+                {
+                    "candidate_id": make_id("xc"),
+                    "source": source,
+                    "actor": actor,
+                    "turn": max(0, int(((state.get("meta") or {}).get("turn", 0) or 0))),
+                    "entity_type": str(conflict.get("entity_type") or "unknown"),
+                    "operation": "merge_conflict",
+                    "label": str(conflict.get("label") or "").strip(),
+                    "normalized_key": f"conflict:{normalized_eval_text(str(conflict.get('label') or ''))}",
+                    "evidence_text": str(source_text or ""),
+                    "payload": deep_copy(conflict.get("payload") or {}),
+                    "confidence": 0.35,
+                    "status": "review",
+                    "reason_code": EXTRACTION_REASON_CONFLICT_WITH_LLM,
+                    "created_at": utc_now(),
+                }
+            )
+        append_extraction_quarantine(state, conflict_candidates)
+    return resolve_extractor_conflicts(campaign, state, actor, action_type, source_text, merged_patch, source=source)
 
 
 def scene_name_from_state(state: Dict[str, Any], scene_id: str) -> str:
@@ -6341,6 +8736,7 @@ def apply_npc_upserts(
         entry = existing or default_npc_entry(npc_id, name)
         entry["name"] = pick_more_specific_text(entry.get("name", ""), name)
         entry["race"] = pick_more_specific_text(entry.get("race", "Unbekannt"), raw.get("race") or "")
+        entry["age"] = pick_more_specific_text(entry.get("age", "Unbekannt"), raw.get("age") or "")
         entry["goal"] = pick_more_specific_text(entry.get("goal", ""), raw.get("goal") or "")
         entry["backstory_short"] = pick_more_specific_text(entry.get("backstory_short", ""), raw.get("backstory_short") or "")
         entry["role_hint"] = pick_more_specific_text(entry.get("role_hint", ""), raw.get("role_hint") or "")
@@ -6555,10 +8951,11 @@ def call_ollama_chat(
     user: str,
     *,
     format_schema: Optional[Dict[str, Any]] = None,
-    timeout: int = 180,
+    timeout: Optional[int] = None,
     temperature: Optional[float] = None,
     repeat_penalty: Optional[float] = None,
 ) -> str:
+    request_timeout = max(30, int(timeout or OLLAMA_TIMEOUT_SEC))
     payload = {
         "model": OLLAMA_MODEL,
         "stream": False,
@@ -6576,7 +8973,7 @@ def call_ollama_chat(
     }
     if format_schema is not None:
         payload["format"] = format_schema
-    response = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=timeout)
+    response = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=request_timeout)
     if response.status_code != 200:
         message = f"Ollama error {response.status_code}: {response.text[:500]}"
         if format_schema is not None and ollama_format_fallback_needed(message):
@@ -6590,7 +8987,7 @@ def call_ollama_chat(
                 system,
                 fallback_user,
                 format_schema=None,
-                timeout=timeout,
+                timeout=request_timeout,
                 temperature=temperature,
                 repeat_penalty=repeat_penalty,
             )
@@ -6598,31 +8995,81 @@ def call_ollama_chat(
     return (response.json().get("message", {}) or {}).get("content", "").strip()
 
 
-def call_ollama_json(system: str, user: str, *, temperature: Optional[float] = None, repeat_penalty: Optional[float] = None) -> Dict[str, Any]:
+def call_ollama_json(
+    system: str,
+    user: str,
+    *,
+    temperature: Optional[float] = None,
+    repeat_penalty: Optional[float] = None,
+    trace_ctx: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     content = call_ollama_chat(
         system,
         user,
         format_schema=RESPONSE_SCHEMA,
-        timeout=180,
+        timeout=max(180, OLLAMA_TIMEOUT_SEC),
         temperature=OLLAMA_TEMPERATURE if temperature is None else temperature,
         repeat_penalty=repeat_penalty,
     )
     try:
-        return extract_json_payload(content)
+        parsed = extract_json_payload(content)
+        emit_turn_phase_event(
+            trace_ctx,
+            phase="narrator_json_parse_repair",
+            success=True,
+            extra={"mode": "parse_ok"},
+        )
+        return parsed
     except RuntimeError as exc:
         if "Model returned non-JSON content" not in str(exc):
             raise
-        return repair_json_payload_with_model(system, content, schema=RESPONSE_SCHEMA)
+        emit_turn_phase_event(
+            trace_ctx,
+            phase="narrator_json_parse_repair",
+            success=False,
+            error_code=ERROR_CODE_JSON_REPAIR,
+            error_class=exc.__class__.__name__,
+            message=str(exc)[:240],
+            extra={"mode": "parse_failed_repair_attempt"},
+        )
+        try:
+            repaired = repair_json_payload_with_model(system, content, schema=RESPONSE_SCHEMA)
+        except Exception as repair_exc:
+            emit_turn_phase_event(
+                trace_ctx,
+                phase="narrator_json_parse_repair",
+                success=False,
+                error_code=ERROR_CODE_JSON_REPAIR,
+                error_class=repair_exc.__class__.__name__,
+                message=str(repair_exc)[:240],
+                extra={"mode": "repair_failed"},
+            )
+            if trace_ctx is not None:
+                raise turn_flow_error(
+                    error_code=ERROR_CODE_JSON_REPAIR,
+                    phase="narrator_json_parse_repair",
+                    trace_ctx=trace_ctx,
+                    exc=repair_exc,
+                )
+            raise
+        emit_turn_phase_event(
+            trace_ctx,
+            phase="narrator_json_parse_repair",
+            success=True,
+            extra={"mode": "repair_ok"},
+        )
+        return repaired
 
 
-def call_ollama_schema(system: str, user: str, schema: Dict[str, Any], *, timeout: int = 120, temperature: float = 0.45) -> Dict[str, Any]:
-    content = call_ollama_chat(system, user, format_schema=schema, timeout=timeout, temperature=temperature)
+def call_ollama_schema(system: str, user: str, schema: Dict[str, Any], *, timeout: Optional[int] = None, temperature: float = 0.45) -> Dict[str, Any]:
+    schema_timeout = max(90, int(timeout or OLLAMA_TIMEOUT_SEC))
+    content = call_ollama_chat(system, user, format_schema=schema, timeout=schema_timeout, temperature=temperature)
     try:
         return extract_json_payload(content)
     except RuntimeError as exc:
         if "Model returned non-JSON content" not in str(exc):
             raise
-        return repair_json_payload_with_model(system, content, schema=schema, timeout=min(timeout, 90))
+        return repair_json_payload_with_model(system, content, schema=schema, timeout=min(schema_timeout, 120))
 
 
 def clean_setup_ai_copy(text: str) -> str:
@@ -7610,8 +10057,8 @@ def apply_character_summary_to_state(campaign: Dict[str, Any], slot_name: str) -
     }
     character.setdefault("progression", {})
     character["progression"]["resource_name"] = str((((campaign.get("state") or {}).get("world") or {}).get("settings") or {}).get("resource_name") or "Aether")
-    character["progression"]["resource_current"] = int(character.get("res_current", (((character.get("resources") or {}).get("aether") or {}).get("current", 5)) or 5))
-    character["progression"]["resource_max"] = int(character.get("res_max", (((character.get("resources") or {}).get("aether") or {}).get("max", 5)) or 5))
+    character["progression"]["resource_current"] = int(character.get("res_current", 5) or 5)
+    character["progression"]["resource_max"] = int(character.get("res_max", 5) or 5)
     class_start_mode = normalized_eval_text(summary.get("class_start_mode", ""))
     if "ki" in class_start_mode:
         seed = summary.get("class_seed") or summary.get("current_focus") or summary.get("strength") or "Überlebender"
@@ -7649,7 +10096,10 @@ def apply_character_summary_to_state(campaign: Dict[str, Any], slot_name: str) -
     reconcile_creator_inventory_items(campaign["state"], character)
     refresh_skill_progression(character)
     rebuild_character_derived(character, campaign["state"].get("items", {}), world_time)
-    sync_canonical_resources(character, (((campaign.get("state") or {}).get("world") or {}).get("settings") or {}))
+    reconcile_canonical_resources(character, (((campaign.get("state") or {}).get("world") or {}).get("settings") or {}))
+    strip_legacy_shadow_fields(character, (((campaign.get("state") or {}).get("world") or {}).get("settings") or {}))
+    if ENABLE_LEGACY_SHADOW_WRITEBACK:
+        write_legacy_shadow_fields(character, (((campaign.get("state") or {}).get("world") or {}).get("settings") or {}))
     sync_scars_into_appearance(character)
 
 
@@ -7840,6 +10290,8 @@ def normalize_campaign(campaign: Dict[str, Any]) -> Dict[str, Any]:
     normalize_meta_timing(state["meta"])
     normalize_combat_meta(state["meta"])
     normalize_attribute_influence_meta(state["meta"])
+    normalize_extraction_quarantine_meta(state["meta"])
+    migrations_meta = normalize_meta_migrations(state["meta"])
     milestone_defaults = milestone_state_for_turn(int(state["meta"].get("turn", 0) or 0), active_pacing_profile(state))
     state["meta"]["last_milestone_turn"] = int(state["meta"].get("last_milestone_turn", milestone_defaults["last"]) or milestone_defaults["last"])
     state["meta"]["next_milestone_turn"] = int(state["meta"].get("next_milestone_turn", milestone_defaults["next"]) or milestone_defaults["next"])
@@ -7868,9 +10320,12 @@ def normalize_campaign(campaign: Dict[str, Any]) -> Dict[str, Any]:
         boards["player_diaries"][player_id]["display_name"] = player.get("display_name", "")
 
     normalize_npc_codex_state(campaign)
-    if not state.get("npc_codex"):
-        seed_npc_codex_from_story_cards(campaign)
-        normalize_npc_codex_state(campaign)
+    should_seed_npc_codex = not bool(migrations_meta.get("npc_codex_seeded_from_story_cards"))
+    if should_seed_npc_codex:
+        if not state.get("npc_codex"):
+            seed_npc_codex_from_story_cards(campaign)
+            normalize_npc_codex_state(campaign)
+        migrations_meta["npc_codex_seeded_from_story_cards"] = True
 
     setup = campaign.setdefault("setup", default_setup())
     if setup.get("version") != 4:
@@ -7911,9 +10366,10 @@ def normalize_campaign(campaign: Dict[str, Any]) -> Dict[str, Any]:
         if not state["meta"]["intro_state"].get("generated_turn_id"):
             state["meta"]["intro_state"]["generated_turn_id"] = active_turns(campaign)[0]["turn_id"]
 
-    materialize_story_items_from_turn_history(campaign)
-    materialize_story_abilities_from_turn_history(campaign)
-    reconcile_scene_ids_with_story(campaign)
+    # normalize_campaign stays structurally passive by default.
+    # Legacy backfill is explicit opt-in only.
+    if ENABLE_HEURISTIC_NORMALIZE_BACKFILL:
+        run_legacy_normalize_backfill(campaign)
     rebuild_all_character_derived(campaign)
     compute_turn_budget_estimates(state)
 
@@ -7927,12 +10383,83 @@ def load_campaign(campaign_id: str) -> Dict[str, Any]:
     return normalize_campaign(load_json(path))
 
 
-def save_campaign(campaign: Dict[str, Any], *, reason: str = "campaign_updated") -> None:
-    campaign = normalize_campaign(campaign)
+def save_campaign(
+    campaign: Dict[str, Any],
+    *,
+    reason: str = "campaign_updated",
+    trace_ctx: Optional[Dict[str, Any]] = None,
+) -> None:
+    try:
+        emit_turn_phase_event(trace_ctx, phase="normalize", success=True, extra={"reason": reason})
+        campaign = normalize_campaign(campaign)
+        emit_turn_phase_event(trace_ctx, phase="normalize", success=True, extra={"reason": reason, "result": "ok"})
+    except Exception as exc:
+        emit_turn_phase_event(
+            trace_ctx,
+            phase="normalize",
+            success=False,
+            error_code=ERROR_CODE_NORMALIZE,
+            error_class=exc.__class__.__name__,
+            message=str(exc)[:240],
+            extra={"reason": reason},
+        )
+        if trace_ctx is not None:
+            raise turn_flow_error(
+                error_code=ERROR_CODE_NORMALIZE,
+                phase="normalize",
+                trace_ctx=trace_ctx,
+                exc=exc,
+            )
+        raise
+
     campaign["campaign_meta"]["updated_at"] = utc_now()
     campaign_id = campaign["campaign_meta"]["campaign_id"]
-    save_json(campaign_path(campaign_id), campaign)
-    broadcast_campaign_sync(campaign_id, reason=reason)
+
+    try:
+        emit_turn_phase_event(trace_ctx, phase="persist_save", success=True, extra={"reason": reason})
+        save_json(campaign_path(campaign_id), campaign)
+        emit_turn_phase_event(trace_ctx, phase="persist_save", success=True, extra={"reason": reason, "result": "ok"})
+    except Exception as exc:
+        emit_turn_phase_event(
+            trace_ctx,
+            phase="persist_save",
+            success=False,
+            error_code=ERROR_CODE_PERSISTENCE,
+            error_class=exc.__class__.__name__,
+            message=str(exc)[:240],
+            extra={"reason": reason},
+        )
+        if trace_ctx is not None:
+            raise turn_flow_error(
+                error_code=ERROR_CODE_PERSISTENCE,
+                phase="persist_save",
+                trace_ctx=trace_ctx,
+                exc=exc,
+            )
+        raise
+
+    try:
+        emit_turn_phase_event(trace_ctx, phase="sse_broadcast", success=True, extra={"reason": reason})
+        broadcast_campaign_sync(campaign_id, reason=reason)
+        emit_turn_phase_event(trace_ctx, phase="sse_broadcast", success=True, extra={"reason": reason, "result": "ok"})
+    except Exception as exc:
+        emit_turn_phase_event(
+            trace_ctx,
+            phase="sse_broadcast",
+            success=False,
+            error_code=ERROR_CODE_SSE_BROADCAST,
+            error_class=exc.__class__.__name__,
+            message=str(exc)[:240],
+            extra={"reason": reason},
+        )
+        if trace_ctx is not None:
+            raise turn_flow_error(
+                error_code=ERROR_CODE_SSE_BROADCAST,
+                phase="sse_broadcast",
+                trace_ctx=trace_ctx,
+                exc=exc,
+            )
+        raise
 
 
 def active_turns(campaign: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -7992,6 +10519,7 @@ def public_turn(turn: Dict[str, Any], campaign: Dict[str, Any], viewer_id: Optio
         "attribute_profile": deep_copy(turn.get("attribute_profile") or {}),
         "combat_resolution": deep_copy(turn.get("combat_resolution") or {}),
         "resource_deltas_applied": deep_copy(turn.get("resource_deltas_applied") or {}),
+        "progression_events": deep_copy(turn.get("progression_events") or []),
         "can_edit": is_campaign_player(campaign, viewer_id),
         "can_undo": is_campaign_player(campaign, viewer_id) and turn["status"] == "active",
         "can_retry": is_campaign_player(campaign, viewer_id) and turn["status"] == "active",
@@ -8103,7 +10631,8 @@ def build_public_boards(campaign: Dict[str, Any], viewer_id: Optional[str]) -> D
 
 
 def build_campaign_view(campaign: Dict[str, Any], viewer_id: Optional[str]) -> Dict[str, Any]:
-    campaign = normalize_campaign(campaign)
+    # View assembly must stay passive and never mutate the live campaign object.
+    campaign = normalize_campaign(deep_copy(campaign))
     return {
         "campaign_meta": {
             "campaign_id": campaign["campaign_meta"]["campaign_id"],
@@ -8184,9 +10713,9 @@ def rebuild_memory_summary(campaign: Dict[str, Any]) -> None:
             slot_name: {
                 "display_name": display_name_for_slot(campaign, slot_name),
                 "scene_id": data["scene_id"],
-                "hp": (data.get("resources", {}).get("hp") or {}).get("current", 0),
-                "stamina": (data.get("resources", {}).get("stamina") or {}).get("current", 0),
-                "aether": (data.get("resources", {}).get("aether") or {}).get("current", 0),
+                "hp": int(data.get("hp_current", 0) or 0),
+                "stamina": int(data.get("sta_current", 0) or 0),
+                "resource": int(data.get("res_current", 0) or 0),
                 "conditions": compact_conditions(data),
             }
             for slot_name, data in campaign["state"]["characters"].items()
@@ -8277,6 +10806,511 @@ def is_suspicious_story_text(text: str) -> bool:
 
 def normalized_eval_text(text: str) -> str:
     return re.sub(r"\s+", " ", re.sub(r"[^a-zA-ZäöüÄÖÜß0-9 ]+", " ", str(text or "").lower())).strip()
+
+
+def context_state_signature(state: Dict[str, Any]) -> str:
+    serialized = json.dumps(state or {}, ensure_ascii=False, sort_keys=True, default=str)
+    return hash_secret(serialized)
+
+
+def strip_markdown_like(text: str) -> str:
+    cleaned = str(text or "")
+    cleaned = re.sub(r"^\s*#{1,6}\s*", "", cleaned, flags=re.MULTILINE)
+    cleaned = cleaned.replace("**", "").replace("__", "").replace("`", "")
+    cleaned = re.sub(r"^\s*[-*]\s+", "• ", cleaned, flags=re.MULTILINE)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    return cleaned.strip()
+
+
+def parse_context_intent(question: str) -> Dict[str, str]:
+    raw = str(question or "").strip()
+    lowered = normalized_eval_text(raw)
+    target = ""
+    intent = "unknown"
+    patterns = [
+        ("define", r"(?:^|\b)(?:was ist|was bedeutet|erklaer mir|erklär mir|was ist nochmal)\s+(.+)$"),
+        ("who", r"(?:^|\b)(?:wer ist|wer war)\s+(.+)$"),
+        ("where", r"(?:^|\b)(?:wo ist|wo befindet sich|wo liegt)\s+(.+)$"),
+    ]
+    for detected_intent, pattern in patterns:
+        match = re.search(pattern, lowered, flags=re.IGNORECASE)
+        if match:
+            intent = detected_intent
+            target = match.group(1)
+            break
+    if not target:
+        quoted = re.search(r"[\"“„']([^\"“”„']{2,120})[\"”„']", raw)
+        if quoted:
+            target = quoted.group(1)
+            if intent == "unknown":
+                intent = "define"
+    if intent == "unknown":
+        if any(marker in lowered for marker in ("zusammenfassung", "aktueller stand", "was bisher", "worum geht")):
+            intent = "summary"
+        elif any(marker in lowered for marker in ("vergleich", "unterschied", "vs ", "gegenüber")):
+            intent = "compare"
+    target = re.sub(r"\?$", "", str(target or "").strip()).strip(" .,:;!?")
+    target = re.sub(r"^(?:ein(?:e|en|em|er)?|der|die|das)\s+", "", target, flags=re.IGNORECASE).strip()
+    return {"intent": intent, "target": target}
+
+
+def build_context_knowledge_index(campaign: Dict[str, Any], state: Dict[str, Any]) -> List[Dict[str, Any]]:
+    entries: List[Dict[str, Any]] = []
+    world_settings = (((state.get("world") or {}).get("settings") or {}))
+
+    def add_entry(entry: Dict[str, Any]) -> None:
+        normalized_aliases = []
+        for alias in (entry.get("aliases") or []):
+            cleaned = str(alias or "").strip()
+            if cleaned:
+                normalized_aliases.append(cleaned)
+        source_rows = []
+        for row in (entry.get("sources") or []):
+            if not isinstance(row, dict):
+                continue
+            source_rows.append(
+                {
+                    "type": str(row.get("type") or "").strip(),
+                    "id": str(row.get("id") or "").strip(),
+                    "label": str(row.get("label") or "").strip(),
+                }
+            )
+        facts = [str(fact).strip() for fact in (entry.get("facts") or []) if str(fact).strip()]
+        title = str(entry.get("title") or "").strip()
+        if not title:
+            return
+        entries.append(
+            {
+                "type": str(entry.get("type") or "unknown").strip() or "unknown",
+                "id": str(entry.get("id") or "").strip(),
+                "title": title,
+                "aliases": list(dict.fromkeys(normalized_aliases + [title])),
+                "facts": facts[:12],
+                "sources": source_rows[:8],
+            }
+        )
+
+    for slot_name in campaign_slots(campaign):
+        character = ((state.get("characters") or {}).get(slot_name) or {})
+        display_name = display_name_for_slot(campaign, slot_name)
+        class_current = normalize_class_current(character.get("class_current"))
+        if class_current:
+            class_id = str(class_current.get("id") or class_current.get("name") or f"class_{slot_name}")
+            add_entry(
+                {
+                    "type": "class",
+                    "id": f"{slot_name}:{class_id}",
+                    "title": str(class_current.get("name") or class_id),
+                    "aliases": [class_id, class_current.get("name", ""), display_name],
+                    "facts": [
+                        f"Träger: {display_name}",
+                        f"Rang: {class_current.get('rank', 'F')}",
+                        f"Level: {class_current.get('level', 1)}/{class_current.get('level_max', 10)}",
+                        f"Affinitäten: {', '.join(class_current.get('affinity_tags', [])) or 'Keine'}",
+                        f"Beschreibung: {class_current.get('description', '') or 'Keine Beschreibung.'}",
+                    ],
+                    "sources": [{"type": "class", "id": f"{slot_name}:{class_id}", "label": f"Klasse von {display_name}"}],
+                }
+            )
+        resource_name = resource_name_for_character(character, world_settings)
+        for skill_id, skill_value in ((character.get("skills") or {}).items()):
+            skill_state = normalize_dynamic_skill_state(
+                skill_value,
+                skill_id=skill_id,
+                skill_name=(skill_value or {}).get("name", skill_id) if isinstance(skill_value, dict) else skill_id,
+                resource_name=resource_name,
+            )
+            add_entry(
+                {
+                    "type": "skill",
+                    "id": f"{slot_name}:{skill_state.get('id', skill_id)}",
+                    "title": skill_state.get("name", skill_id),
+                    "aliases": [skill_state.get("id", skill_id), skill_state.get("name", skill_id), display_name],
+                    "facts": [
+                        f"Träger: {display_name}",
+                        f"Rang: {skill_state.get('rank', 'F')}",
+                        f"Level: {skill_state.get('level', 1)}/{skill_state.get('level_max', 10)}",
+                        f"Tags: {', '.join(skill_state.get('tags') or []) or 'Keine'}",
+                        f"Beschreibung: {skill_state.get('description', '') or 'Keine Beschreibung.'}",
+                    ],
+                    "sources": [{"type": "skill", "id": f"{slot_name}:{skill_state.get('id', skill_id)}", "label": f"Skill von {display_name}"}],
+                }
+            )
+
+    for npc_id, raw_npc in ((state.get("npc_codex") or {}).items()):
+        npc = normalize_npc_entry(raw_npc, fallback_npc_id=str(npc_id))
+        if not npc:
+            continue
+        scene_name = scene_name_from_state(state, npc.get("last_seen_scene_id", ""))
+        add_entry(
+            {
+                "type": "npc",
+                "id": npc.get("npc_id", str(npc_id)),
+                "title": npc.get("name", str(npc_id)),
+                "aliases": [npc.get("name", ""), npc.get("npc_id", ""), npc.get("role_hint", ""), npc.get("faction", "")],
+                "facts": [
+                    f"Rasse: {npc.get('race', 'Unbekannt')}",
+                    f"Alter: {npc.get('age', 'Unbekannt')}",
+                    f"Level: {npc.get('level', 1)}",
+                    f"Ziel: {npc.get('goal', '') or 'Unbekannt'}",
+                    f"Fraktion: {npc.get('faction', '') or 'Keine'}",
+                    f"Status: {npc.get('status', 'active')}",
+                    f"Zuletzt gesehen: {scene_name or 'Unbekannt'}",
+                    f"Kurz-Backstory: {npc.get('backstory_short', '') or 'Keine'}",
+                ],
+                "sources": [{"type": "npc", "id": npc.get("npc_id", str(npc_id)), "label": f"NPC-Codex: {npc.get('name', str(npc_id))}"}],
+            }
+        )
+
+    for plotpoint in (state.get("plotpoints") or []):
+        if not isinstance(plotpoint, dict):
+            continue
+        plot_id = str(plotpoint.get("id") or "").strip()
+        title = str(plotpoint.get("title") or plot_id).strip()
+        if not title:
+            continue
+        add_entry(
+            {
+                "type": "plotpoint",
+                "id": plot_id,
+                "title": title,
+                "aliases": [plot_id, title, plotpoint.get("type", ""), plotpoint.get("owner", "")],
+                "facts": [
+                    f"Typ: {plotpoint.get('type', 'story')}",
+                    f"Status: {plotpoint.get('status', 'active')}",
+                    f"Owner: {plotpoint.get('owner') or 'Kein Owner'}",
+                    f"Notizen: {plotpoint.get('notes', '') or 'Keine'}",
+                    f"Requirements: {', '.join(plotpoint.get('requirements') or []) or 'Keine'}",
+                ],
+                "sources": [{"type": "plotpoint", "id": plot_id or title, "label": f"Plotpoint: {title}"}],
+            }
+        )
+
+    for item_id, raw_item in ((state.get("items") or {}).items()):
+        item = ensure_item_shape(item_id, raw_item if isinstance(raw_item, dict) else {})
+        add_entry(
+            {
+                "type": "item",
+                "id": item_id,
+                "title": item.get("name", item_id),
+                "aliases": [item_id, item.get("name", ""), item.get("slot", "")],
+                "facts": [
+                    f"Seltenheit: {item.get('rarity', 'common')}",
+                    f"Slot: {item.get('slot', '') or 'Kein Slot'}",
+                    f"Beschreibung: {item.get('description', '') or 'Keine Beschreibung.'}",
+                    f"Tags: {', '.join(item.get('tags') or []) or 'Keine'}",
+                ],
+                "sources": [{"type": "item", "id": item_id, "label": f"Item: {item.get('name', item_id)}"}],
+            }
+        )
+
+    for scene_id, scene in ((state.get("scenes") or {}).items()):
+        if not isinstance(scene, dict):
+            continue
+        scene_name = str(scene.get("name") or scene_id).strip()
+        add_entry(
+            {
+                "type": "scene",
+                "id": scene_id,
+                "title": scene_name,
+                "aliases": [scene_id, scene_name],
+                "facts": [
+                    f"Gefahr: {scene.get('danger', 1)}",
+                    f"Notizen: {scene.get('notes', '') or 'Keine'}",
+                ],
+                "sources": [{"type": "scene", "id": scene_id, "label": f"Ort: {scene_name}"}],
+            }
+        )
+    for scene_id, node in (((state.get("map") or {}).get("nodes") or {}).items()):
+        node_name = str((node or {}).get("name") or scene_id).strip()
+        add_entry(
+            {
+                "type": "scene",
+                "id": scene_id,
+                "title": node_name,
+                "aliases": [scene_id, node_name],
+                "facts": [
+                    f"Gefahr: {int((node or {}).get('danger', 1) or 1)}",
+                    f"Typ: {str((node or {}).get('type') or 'location')}",
+                    f"Entdeckt: {'Ja' if (node or {}).get('discovered', True) else 'Nein'}",
+                ],
+                "sources": [{"type": "scene", "id": scene_id, "label": f"Karte: {node_name}"}],
+            }
+        )
+
+    for faction_entry in (campaign.get("boards", {}).get("world_info") or []):
+        if not isinstance(faction_entry, dict):
+            continue
+        if str(faction_entry.get("category") or "").strip().lower() != "faction":
+            continue
+        faction_id = str(faction_entry.get("entry_id") or canonical_scene_id(str(faction_entry.get("title") or "faction"))).strip()
+        title = str(faction_entry.get("title") or faction_id).strip()
+        add_entry(
+            {
+                "type": "faction",
+                "id": faction_id,
+                "title": title,
+                "aliases": [title, faction_id],
+                "facts": [f"Beschreibung: {str(faction_entry.get('content') or '').strip() or 'Keine'}"],
+                "sources": [{"type": "faction", "id": faction_id, "label": f"World Info: {title}"}],
+            }
+        )
+
+    return entries
+
+
+def resolve_context_target(index: List[Dict[str, Any]], target: str) -> Dict[str, Any]:
+    normalized_target = normalize_npc_alias(target)
+    if not normalized_target:
+        return {"status": "not_in_canon", "entry": None, "confidence": "low", "matches": [], "suggestions": []}
+    exact_matches: List[Dict[str, Any]] = []
+    scored: List[Tuple[float, Dict[str, Any]]] = []
+    for entry in index:
+        aliases = [normalize_npc_alias(alias) for alias in ([entry.get("title")] + list(entry.get("aliases") or []))]
+        aliases = [alias for alias in aliases if alias]
+        if normalized_target in aliases:
+            exact_matches.append(entry)
+            continue
+        best = 0.0
+        for alias in aliases:
+            best = max(best, SequenceMatcher(None, normalized_target, alias).ratio())
+        if best > 0:
+            scored.append((best, entry))
+    if len(exact_matches) == 1:
+        return {"status": "found", "entry": exact_matches[0], "confidence": "high", "matches": exact_matches, "suggestions": []}
+    if len(exact_matches) > 1:
+        suggestions = [entry.get("title", "") for entry in exact_matches[:6] if entry.get("title")]
+        return {"status": "ambiguous", "entry": None, "confidence": "medium", "matches": exact_matches, "suggestions": suggestions}
+    scored.sort(key=lambda row: row[0], reverse=True)
+    if scored and scored[0][0] >= 0.9:
+        top_score = scored[0][0]
+        close = [entry for score, entry in scored if abs(top_score - score) <= 0.02 and score >= 0.88]
+        if len(close) == 1:
+            confidence = "high" if top_score >= 0.96 else "medium"
+            return {"status": "found", "entry": close[0], "confidence": confidence, "matches": [close[0]], "suggestions": []}
+        suggestions = [entry.get("title", "") for entry in close[:6] if entry.get("title")]
+        return {"status": "ambiguous", "entry": None, "confidence": "low", "matches": close, "suggestions": suggestions}
+    suggestions = [entry.get("title", "") for score, entry in scored if score >= 0.62 and entry.get("title")][:6]
+    return {"status": "not_in_canon", "entry": None, "confidence": "low", "matches": [], "suggestions": list(dict.fromkeys(suggestions))}
+
+
+def build_context_result_payload(
+    *,
+    status: str,
+    intent: str,
+    target: str,
+    confidence: str,
+    entity_type: str,
+    entity_id: str,
+    title: str,
+    explanation: str,
+    facts: Optional[List[str]] = None,
+    sources: Optional[List[Dict[str, str]]] = None,
+    suggestions: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    return {
+        "status": status if status in {"found", "not_in_canon", "ambiguous"} else "not_in_canon",
+        "intent": intent if intent in {"define", "who", "where", "summary", "compare", "unknown"} else "unknown",
+        "target": str(target or "").strip(),
+        "confidence": confidence if confidence in {"high", "medium", "low"} else "low",
+        "entity_type": str(entity_type or "unknown"),
+        "entity_id": str(entity_id or ""),
+        "title": str(title or "").strip(),
+        "explanation": strip_markdown_like(explanation),
+        "facts": [strip_markdown_like(fact) for fact in (facts or []) if str(fact or "").strip()],
+        "sources": [
+            {
+                "type": str(entry.get("type") or "").strip(),
+                "id": str(entry.get("id") or "").strip(),
+                "label": strip_markdown_like(str(entry.get("label") or "").strip()),
+            }
+            for entry in (sources or [])
+            if isinstance(entry, dict) and str(entry.get("type") or "").strip() and str(entry.get("id") or "").strip()
+        ],
+        "suggestions": [strip_markdown_like(suggestion) for suggestion in (suggestions or []) if str(suggestion or "").strip()],
+    }
+
+
+def deterministic_context_result_from_entry(intent: str, target: str, entry: Dict[str, Any], confidence: str) -> Dict[str, Any]:
+    title = str(entry.get("title") or target or "Kanon-Eintrag").strip()
+    facts = [str(fact).strip() for fact in (entry.get("facts") or []) if str(fact).strip()]
+    if intent == "where":
+        explanation = (
+            f"Im aktuellen Kanon ist „{title}“ als relevanter Eintrag erfasst. "
+            "Der letzte bekannte Ortsbezug steht in den gefundenen Fakten und Quellen."
+        )
+    elif intent == "who":
+        explanation = (
+            f"„{title}“ ist im aktuellen Kanon als Figur oder Referenz vorhanden. "
+            "Hier sind die bestätigten Eckdaten aus dem Zustand."
+        )
+    else:
+        explanation = (
+            f"Im aktuellen Kanon bedeutet „{title}“ Folgendes. "
+            "Die Antwort basiert auf den gespeicherten Zustandsdaten dieser Kampagne."
+        )
+    return build_context_result_payload(
+        status="found",
+        intent=intent,
+        target=target,
+        confidence=confidence,
+        entity_type=str(entry.get("type") or "unknown"),
+        entity_id=str(entry.get("id") or ""),
+        title=title,
+        explanation=explanation,
+        facts=facts[:8],
+        sources=entry.get("sources") or [],
+        suggestions=[],
+    )
+
+
+def context_meta_drift_detected(result: Dict[str, Any]) -> bool:
+    merged = normalized_eval_text(
+        f"{result.get('title', '')}\n{result.get('explanation', '')}\n{' '.join(result.get('facts') or [])}"
+    )
+    return any(marker in merged for marker in CONTEXT_META_DRIFT_MARKERS)
+
+
+def build_reduced_context_snippets(index: List[Dict[str, Any]], *, target: str = "", limit: int = 12) -> List[Dict[str, Any]]:
+    normalized_target = normalize_npc_alias(target)
+    scored: List[Tuple[float, Dict[str, Any]]] = []
+    for entry in index:
+        base_score = 0.2
+        if normalized_target:
+            aliases = [normalize_npc_alias(alias) for alias in ([entry.get("title")] + list(entry.get("aliases") or []))]
+            aliases = [alias for alias in aliases if alias]
+            similarity = max((SequenceMatcher(None, normalized_target, alias).ratio() for alias in aliases), default=0.0)
+            base_score += similarity
+        if entry.get("type") in {"npc", "class", "skill", "plotpoint"}:
+            base_score += 0.15
+        scored.append((base_score, entry))
+    scored.sort(key=lambda row: row[0], reverse=True)
+    snippets: List[Dict[str, Any]] = []
+    for _, entry in scored[: max(1, int(limit or 1))]:
+        snippets.append(
+            {
+                "type": entry.get("type"),
+                "id": entry.get("id"),
+                "title": entry.get("title"),
+                "facts": list(entry.get("facts") or [])[:4],
+                "sources": list(entry.get("sources") or [])[:2],
+            }
+        )
+    return snippets
+
+
+def build_context_result_via_llm(question: str, intent: str, target: str, snippets: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    user_prompt = (
+        "KONTEXTFRAGE:\n"
+        + str(question or "")
+        + "\n\nRETRIEVAL_SNIPPETS(JSON):\n"
+        + json.dumps(snippets, ensure_ascii=False)
+        + "\n\nANTWORTREGELN:\n"
+        + "- Nutze ausschließlich Fakten aus RETRIEVAL_SNIPPETS.\n"
+        + "- Wenn nicht genug Informationen vorliegen, status=not_in_canon oder ambiguous.\n"
+        + "- Kein Markdown, kein Meta über Textanalyse."
+    )
+    try:
+        payload = call_ollama_schema(
+            CONTEXT_ASSISTANT_SYSTEM_PROMPT,
+            user_prompt,
+            CONTEXT_RESPONSE_SCHEMA,
+            timeout=90,
+            temperature=0.2,
+        )
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    normalized_result = build_context_result_payload(
+        status=str(payload.get("status") or "not_in_canon"),
+        intent=str(payload.get("intent") or intent),
+        target=str(payload.get("target") or target),
+        confidence=str(payload.get("confidence") or "low"),
+        entity_type=str(payload.get("entity_type") or "unknown"),
+        entity_id=str(payload.get("entity_id") or ""),
+        title=str(payload.get("title") or (target or "Kontext")),
+        explanation=str(payload.get("explanation") or ""),
+        facts=payload.get("facts") if isinstance(payload.get("facts"), list) else [],
+        sources=payload.get("sources") if isinstance(payload.get("sources"), list) else [],
+        suggestions=payload.get("suggestions") if isinstance(payload.get("suggestions"), list) else [],
+    )
+    if context_meta_drift_detected(normalized_result):
+        return None
+    return normalized_result
+
+
+def extract_story_target_evidence(campaign: Dict[str, Any], target: str, *, max_hits: int = 6) -> Dict[str, Any]:
+    normalized_target = normalize_npc_alias(target)
+    if not normalized_target:
+        return {"facts": [], "sources": []}
+    token_set = {token for token in normalized_target.split() if len(token) >= 3}
+    facts: List[str] = []
+    sources: List[Dict[str, str]] = []
+    seen_sentences: set[str] = set()
+    turns = list(active_turns(campaign))[-24:]
+    for turn in reversed(turns):
+        turn_id = str(turn.get("turn_id") or "")
+        turn_number = int(turn.get("turn_number") or 0)
+        for field_name, label in (("gm_text_display", "GM"), ("input_text_display", "Spieler")):
+            text_block = str(turn.get(field_name) or "")
+            if not text_block:
+                continue
+            for sentence in re.split(r"(?<=[.!?])\s+|\n+", text_block):
+                clean_sentence = str(sentence or "").strip()
+                if len(clean_sentence) < 12:
+                    continue
+                normalized_sentence = normalize_npc_alias(clean_sentence)
+                if not normalized_sentence:
+                    continue
+                direct_hit = normalized_target in normalized_sentence
+                token_hit = bool(token_set) and sum(1 for token in token_set if token in normalized_sentence) >= max(1, min(2, len(token_set)))
+                if not direct_hit and not token_hit:
+                    continue
+                signature = normalized_sentence[:220]
+                if signature in seen_sentences:
+                    continue
+                seen_sentences.add(signature)
+                facts.append(clean_sentence)
+                sources.append(
+                    {
+                        "type": "turn",
+                        "id": turn_id or f"turn_{turn_number}",
+                        "label": f"Turn {turn_number} ({label})",
+                    }
+                )
+                if len(facts) >= max_hits:
+                    return {"facts": facts, "sources": sources}
+    return {"facts": facts, "sources": sources}
+
+
+def context_result_to_answer_text(result: Dict[str, Any]) -> str:
+    status = str(result.get("status") or "not_in_canon")
+    title = str(result.get("title") or result.get("target") or "Kontext").strip() or "Kontext"
+    explanation = strip_markdown_like(str(result.get("explanation") or "").strip())
+    facts = [strip_markdown_like(str(entry or "").strip()) for entry in (result.get("facts") or []) if str(entry or "").strip()]
+    suggestions = [strip_markdown_like(str(entry or "").strip()) for entry in (result.get("suggestions") or []) if str(entry or "").strip()]
+    sources = [strip_markdown_like(str((entry or {}).get("label") or "").strip()) for entry in (result.get("sources") or []) if isinstance(entry, dict)]
+    sources = [entry for entry in sources if entry]
+
+    if status == "found":
+        lines = [explanation or f"Im aktuellen Kanon ist „{title}“ eindeutig hinterlegt."]
+        if facts:
+            lines.append("Fakten: " + "; ".join(facts[:6]))
+        if sources:
+            lines.append("Gefunden in: " + ", ".join(sources[:4]))
+        return "\n\n".join(lines).strip()
+
+    if status == "ambiguous":
+        lines = [f"Der Begriff „{title}“ ist mehrdeutig im aktuellen Kanon."]
+        if suggestions:
+            lines.append("Meintest du: " + ", ".join(suggestions[:6]))
+        return "\n\n".join(lines).strip()
+
+    lines = [f"Der Begriff „{title}“ ist im aktuellen Kanon nicht hinterlegt."]
+    if suggestions:
+        lines.append("Ähnliche Begriffe: " + ", ".join(suggestions[:6]))
+    return "\n\n".join(lines).strip()
 
 
 def clean_auto_ability_name(raw_name: str) -> str:
@@ -9190,6 +12224,13 @@ def materialize_story_abilities_from_turn_history(campaign: Dict[str, Any]) -> N
                 )
 
 
+def run_legacy_normalize_backfill(campaign: Dict[str, Any]) -> None:
+    """Optional legacy heuristic backfill path. Disabled by default."""
+    materialize_story_items_from_turn_history(campaign)
+    materialize_story_abilities_from_turn_history(campaign)
+    reconcile_scene_ids_with_story(campaign)
+
+
 def text_tokens(text: str) -> List[str]:
     return re.findall(r"[a-zA-ZäöüÄÖÜß]{2,}", str(text or "").lower())
 
@@ -9489,6 +12530,25 @@ def validate_patch(state: Dict[str, Any], patch: Dict[str, Any]) -> None:
             raise ValueError(f"class_update ohne bestehende Klasse auf {slot_name}")
         if class_update.get("rank") and normalize_skill_rank(class_update.get("rank")) != str(class_update.get("rank")).upper():
             raise ValueError(f"class_update mit ungueltigem Rank auf {slot_name}")
+        if "progression_events" in upd:
+            normalized_events = normalize_progression_event_list(
+                upd.get("progression_events"),
+                actor=slot_name,
+                source_turn=int((state.get("meta") or {}).get("turn", 0) or 0) + 1,
+            )
+            if len(normalized_events) != len(upd.get("progression_events") or []):
+                raise ValueError(f"ungueltige progression_events auf {slot_name}")
+            for event in normalized_events:
+                if str(event.get("actor") or "").strip() != slot_name:
+                    raise ValueError(f"progression_event actor mismatch auf {slot_name}")
+                if str(event.get("type") or "").strip().lower() == "skill_manifestation":
+                    skill_payload = event.get("skill") if isinstance(event.get("skill"), dict) else {}
+                    if not skill_payload and not str(event.get("target_skill_id") or "").strip():
+                        raise ValueError(f"skill_manifestation ohne Skill-Definition auf {slot_name}")
+                    skill_name = str((skill_payload or {}).get("name") or "").strip()
+                    actor_name = str((((state.get("characters") or {}).get(slot_name) or {}).get("bio") or {}).get("name") or slot_name)
+                    if skill_name and not is_skill_manifestation_name_plausible(skill_name, actor_name):
+                        raise ValueError(f"skill_manifestation mit unplausiblem Skillnamen auf {slot_name}: {skill_name}")
         for injury in upd.get("injuries_add", []) or []:
             if not normalize_injury_state(injury):
                 raise ValueError(f"ungueltige Injury auf {slot_name}")
@@ -9609,6 +12669,13 @@ def sanitize_patch(state: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, An
                 else:
                     normalized_skill_deltas[skill_key] = deep_copy(raw_value)
             upd["skills_delta"] = normalized_skill_deltas
+        if "progression_events" in upd:
+            source_turn = int((state.get("meta") or {}).get("turn", 0) or 0) + 1
+            upd["progression_events"] = normalize_progression_event_list(
+                upd.get("progression_events"),
+                actor=slot_name,
+                source_turn=source_turn,
+            )
         if upd.get("injuries_add"):
             upd["injuries_add"] = [entry for entry in (normalize_injury_state(raw) for raw in (upd.get("injuries_add") or [])) if entry]
         if upd.get("injuries_update"):
@@ -9747,39 +12814,36 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
         if slot_name not in state["characters"]:
             continue
         character = state["characters"][slot_name]
+        ensure_progression_shape(character)
+        ensure_character_progression_core(character)
         character["scene_id"] = upd.get("scene_id", character["scene_id"])
         if upd.get("bio_set"):
             character["bio"] = {**character.get("bio", {}), **upd["bio_set"]}
             character["bio"].pop("party_role", None)
         if upd.get("resources_set"):
-            canonical_set = upd.get("resources_set") or {}
-            for key, value in (upd.get("resources_set") or {}).items():
-                if key in RESOURCE_KEYS and isinstance(value, dict):
-                    current = character.setdefault("resources", {}).setdefault(key, {"current": 0, "max": 0})
-                    current.update({k: int(v) for k, v in value.items() if k in ("current", "max")})
-            for key in ("hp_current", "hp_max", "sta_current", "sta_max", "res_current", "res_max", "carry_current", "carry_max"):
-                if key in canonical_set:
-                    character[key] = max(0, int(canonical_set.get(key, 0) or 0))
-        resource_deltas = resource_delta_payload()
-        resource_deltas["hp"] += int(upd.get("hp_delta", 0) or 0)
-        resource_deltas["stamina"] += int(upd.get("stamina_delta", 0) or 0)
-        for key, value in (upd.get("resources_delta") or {}).items():
-            if key in resource_deltas:
-                resource_deltas[key] += int(value or 0)
-        canonical_resource_deltas = {"hp_current": 0, "sta_current": 0, "res_current": 0, "carry_current": 0}
-        for key, value in (upd.get("resources_delta") or {}).items():
-            if key == "hp":
-                canonical_resource_deltas["hp_current"] += int(value or 0)
-            elif key == "sta":
-                canonical_resource_deltas["sta_current"] += int(value or 0)
-            elif key == "res":
-                canonical_resource_deltas["res_current"] += int(value or 0)
-            elif key == "carry":
-                canonical_resource_deltas["carry_current"] += int(value or 0)
-        for resource_key, delta in resource_deltas.items():
-            if delta:
-                current_resource = character.setdefault("resources", {}).setdefault(resource_key, {"current": 0, "max": 0})
-                current_resource["current"] = int(current_resource.get("current", 0) or 0) + delta
+            canonical_set = canonical_resources_set_from_payload(
+                upd.get("resources_set"),
+                character,
+                ((state.get("world") or {}).get("settings") or {}),
+            )
+            for key, value in canonical_set.items():
+                character[key] = max(0, int(value or 0))
+            misc_resource_set = legacy_misc_resources_set_from_payload(upd.get("resources_set"))
+            if misc_resource_set:
+                resources_store = character.setdefault("resources", {})
+                if not isinstance(resources_store, dict):
+                    resources_store = {}
+                    character["resources"] = resources_store
+                for misc_key, misc_payload in misc_resource_set.items():
+                    max_value = max(0, int(misc_payload.get("max", 0) or 0))
+                    current_value = max(0, int(misc_payload.get("current", 0) or 0))
+                    resources_store[misc_key] = {
+                        "current": clamp(current_value, 0, max_value) if max_value > 0 else current_value,
+                        "base_max": max_value,
+                        "bonus_max": 0,
+                        "max": max_value,
+                    }
+        canonical_resource_deltas = canonical_resource_deltas_from_update(upd)
         if canonical_resource_deltas["hp_current"]:
             character["hp_current"] = int(character.get("hp_current", 0) or 0) + canonical_resource_deltas["hp_current"]
         if canonical_resource_deltas["sta_current"]:
@@ -9788,6 +12852,25 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
             character["res_current"] = int(character.get("res_current", 0) or 0) + canonical_resource_deltas["res_current"]
         if canonical_resource_deltas["carry_current"]:
             character["carry_current"] = int(character.get("carry_current", 0) or 0) + canonical_resource_deltas["carry_current"]
+        misc_resource_deltas = legacy_misc_resource_deltas_from_update(upd)
+        if any(int(misc_resource_deltas.get(key, 0) or 0) != 0 for key in ("stress", "corruption", "wounds")):
+            resources_store = character.setdefault("resources", {})
+            if not isinstance(resources_store, dict):
+                resources_store = {}
+                character["resources"] = resources_store
+            for misc_key in ("stress", "corruption", "wounds"):
+                delta = int(misc_resource_deltas.get(misc_key, 0) or 0)
+                if not delta:
+                    continue
+                current_entry = resources_store.get(misc_key) if isinstance(resources_store.get(misc_key), dict) else {}
+                max_value = max(0, int(current_entry.get("max", 10 if misc_key != "wounds" else 3) or (10 if misc_key != "wounds" else 3)))
+                current_value = int(current_entry.get("current", 0) or 0) + delta
+                resources_store[misc_key] = {
+                    "current": clamp(current_value, 0, max_value),
+                    "base_max": max(0, int(current_entry.get("base_max", max_value) or max_value)),
+                    "bonus_max": int(current_entry.get("bonus_max", 0) or 0),
+                    "max": max_value,
+                }
 
         if upd.get("attributes_set"):
             character.setdefault("attributes", {}).update(
@@ -9949,7 +13032,10 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
             if "cooldown_turns" in ability_update:
                 skill["cooldown_turns"] = max(0, int(ability_update.get("cooldown_turns", 0) or 0))
             skill_store[ability_id] = normalize_dynamic_skill_state(skill, resource_name=resource_name)
-        character["abilities"] = []
+        if ENABLE_LEGACY_SHADOW_WRITEBACK:
+            character["abilities"] = []
+        else:
+            character.pop("abilities", None)
 
         for potential in upd.get("potential_add", []) or []:
             if isinstance(potential, dict):
@@ -9961,7 +13047,25 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
                 character.setdefault("progression", {}).setdefault("potential_cards", []).append(card)
 
         if upd.get("progression_set"):
-            character.setdefault("progression", {}).update(upd["progression_set"])
+            progression_set = deep_copy(upd["progression_set"] or {})
+            character.setdefault("progression", {}).update(progression_set)
+            if "level" in progression_set:
+                character["level"] = max(1, int(progression_set.get("level", character.get("level", 1)) or character.get("level", 1)))
+            if "xp_total" in progression_set:
+                character["xp_total"] = max(0, int(progression_set.get("xp_total", character.get("xp_total", 0)) or character.get("xp_total", 0)))
+            if "xp_current" in progression_set:
+                character["xp_current"] = max(0, int(progression_set.get("xp_current", character.get("xp_current", 0)) or character.get("xp_current", 0)))
+            if "xp_to_next" in progression_set:
+                character["xp_to_next"] = max(1, int(progression_set.get("xp_to_next", character.get("xp_to_next", 1)) or character.get("xp_to_next", 1)))
+            if "class_xp" in progression_set or "class_level" in progression_set:
+                current_class = normalize_class_current(character.get("class_current")) or default_class_current()
+                if "class_xp" in progression_set:
+                    current_class["xp"] = max(0, int(progression_set.get("class_xp", current_class.get("xp", 0)) or current_class.get("xp", 0)))
+                if "class_xp_to_next" in progression_set:
+                    current_class["xp_next"] = max(1, int(progression_set.get("class_xp_to_next", current_class.get("xp_next", 1)) or current_class.get("xp_next", 1)))
+                if "class_level" in progression_set:
+                    current_class["level"] = max(1, int(progression_set.get("class_level", current_class.get("level", 1)) or current_class.get("level", 1)))
+                character["class_current"] = normalize_class_current(current_class)
         if upd.get("journal_add"):
             journal = character.setdefault("journal", {})
             for key, value in upd["journal_add"].items():
@@ -10032,6 +13136,7 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
             )
 
         ensure_progression_shape(character)
+        ensure_character_progression_core(character)
         character["skills"] = normalize_skill_store(character.get("skills") or {}, resource_name=resource_name)
         new_scars = resolve_injury_healing(character, int(state.get("meta", {}).get("turn", 0) or 0))
         if new_scars:
@@ -10040,7 +13145,10 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
             for scar in new_scars:
                 state["events"].append(f"{char_name} trägt nun {scar.get('title')}.")
         rebuild_character_derived(character, state.get("items", {}), effective_world_time)
-        sync_canonical_resources(character, ((state.get("world") or {}).get("settings") or {}))
+        reconcile_canonical_resources(character, ((state.get("world") or {}).get("settings") or {}))
+        strip_legacy_shadow_fields(character, ((state.get("world") or {}).get("settings") or {}))
+        if ENABLE_LEGACY_SHADOW_WRITEBACK:
+            write_legacy_shadow_fields(character, ((state.get("world") or {}).get("settings") or {}))
         sync_scars_into_appearance(character)
 
     meta = patch.get("meta")
@@ -10192,6 +13300,7 @@ def create_turn_record(
     content: str,
     request_received_ts: Optional[float] = None,
     retry_of_turn_id: Optional[str] = None,
+    trace_ctx: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     state_before = deep_copy(campaign["state"])
     working_state = deep_copy(campaign["state"])
@@ -10205,6 +13314,7 @@ def create_turn_record(
     min_story_chars = int(pacing_profile.get("min_story_chars", 800) or 800)
     max_story_chars = int(pacing_profile.get("max_story_chars", 2200) or 2200)
     combat_context = infer_combat_context(working_state, actor, action_type, content)
+    combat_scaling_context = build_combat_scaling_context(working_state, actor)
     actor_character = (working_state.get("characters", {}) or {}).get(actor, {})
     attribute_profile = derive_attribute_relevance(working_state, actor, action_type, content, combat_context)
     attribute_bias = compute_attribute_bias(attribute_profile, actor_character, ((working_state.get("world") or {}).get("settings") or {}))
@@ -10276,6 +13386,9 @@ def create_turn_record(
         + "\nWenn eine Figur Schaden nimmt, erschöpft wird oder ihre Ressource sichtbar einsetzt, muss der Patch das sofort über hp_delta, stamina_delta oder resources_delta(res) abbilden."
         + "\nWenn eine Figur im Text klar getroffen, verwundet, erschöpft oder magisch ausgelaugt wird und der Patch keine passende Ressourcenänderung enthält, ist die Antwort unvollständig."
         + "\nIn Kampfszenen musst du aktiv vorhandene Ausrüstung, Klasse, Attribute und Skills der beteiligten Figuren berücksichtigen und im Fließtext konkret benennen, statt generische Treffertexte zu schreiben."
+        + "\nNutze progression_events im Character-Patch für Fortschritt: type, actor, severity, reason, optional target_skill_id, optional target_class_id, optional skill (für skill_manifestation)."
+        + "\nNeue Skills dürfen nur über skills_set oder progression_events(type=skill_manifestation) entstehen. Eine reine Floskel reicht nicht."
+        + f"\nCOMBAT-SKALIERUNG: actor_score={combat_scaling_context.get('actor_score')} threat_score={combat_scaling_context.get('threat_score')} pressure={combat_scaling_context.get('pressure')} ratio={combat_scaling_context.get('ratio')}."
         + "\nEs gibt keine Würfel, keine DCs und keine Roll-Requests. requests darf nur clarify, choice oder none enthalten."
         + f"\nDie story muss mindestens {min_story_chars} Zeichen enthalten."
     )
@@ -10292,6 +13405,7 @@ def create_turn_record(
         "attribute_profile": attribute_profile,
         "attribute_bias": attribute_bias,
         "combat_context": combat_context,
+        "combat_scaling": combat_scaling_context,
     }
 
     narrator_patch = blank_patch()
@@ -10302,17 +13416,120 @@ def create_turn_record(
     resource_deltas_applied: Dict[str, Any] = {}
     combat_resolution: Dict[str, Any] = {}
 
+    def narrator_turn_error(message: str) -> TurnFlowError:
+        emit_turn_phase_event(
+            trace_ctx,
+            phase="narrator_call_finished",
+            success=False,
+            error_code=ERROR_CODE_NARRATOR_RESPONSE,
+            error_class="NarratorGuardError",
+            message=str(message)[:240],
+        )
+        return turn_flow_error(
+            error_code=ERROR_CODE_NARRATOR_RESPONSE,
+            phase="narrator_call_finished",
+            trace_ctx=trace_ctx,
+            user_message=message,
+        )
+
     if action_type == "canon":
         prompt_payload = {
             "system": CANON_EXTRACTOR_SYSTEM_PROMPT,
             "user": build_extractor_context_packet(campaign, working_state, actor, action_type, content, source="player"),
         }
-        extractor_piece = call_canon_extractor(campaign, working_state, actor, action_type, content, source="player")
+        emit_turn_phase_event(trace_ctx, phase="extractor_patch_generation", success=True, extra={"stage": "canon"})
+        try:
+            extractor_piece = call_canon_extractor(campaign, working_state, actor, action_type, content, source="player")
+            emit_turn_phase_event(trace_ctx, phase="extractor_patch_generation", success=True, extra={"stage": "canon", "result": "ok"})
+        except Exception as exc:
+            emit_turn_phase_event(
+                trace_ctx,
+                phase="extractor_patch_generation",
+                success=False,
+                error_code=ERROR_CODE_EXTRACTOR,
+                error_class=exc.__class__.__name__,
+                message=str(exc)[:240],
+                extra={"stage": "canon"},
+            )
+            raise turn_flow_error(
+                error_code=ERROR_CODE_EXTRACTOR,
+                phase="extractor_patch_generation",
+                trace_ctx=trace_ctx,
+                exc=exc,
+            )
         extractor_piece.setdefault("events_add", [])
         extractor_piece["events_add"].append(f"KANON: {content}")
-        extractor_piece = sanitize_patch(working_state, extractor_piece)
-        validate_patch(working_state, extractor_piece)
-        working_state = apply_patch(working_state, extractor_piece, attribute_cap=attribute_cap_for_campaign(campaign))
+        emit_turn_phase_event(trace_ctx, phase="extractor_patch_apply", success=True, extra={"stage": "canon"})
+        try:
+            emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": "canon"})
+            extractor_piece = sanitize_patch(working_state, extractor_piece)
+            emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": "canon", "result": "ok"})
+        except Exception as exc:
+            emit_turn_phase_event(
+                trace_ctx,
+                phase="patch_sanitize",
+                success=False,
+                error_code=ERROR_CODE_PATCH_SANITIZE,
+                error_class=exc.__class__.__name__,
+                message=str(exc)[:240],
+                extra={"stage": "canon"},
+            )
+            raise turn_flow_error(
+                error_code=ERROR_CODE_PATCH_SANITIZE,
+                phase="patch_sanitize",
+                trace_ctx=trace_ctx,
+                exc=exc,
+            )
+        try:
+            emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": "canon"})
+            validate_patch(working_state, extractor_piece)
+            emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": "canon", "result": "ok"})
+        except Exception as exc:
+            emit_turn_phase_event(
+                trace_ctx,
+                phase="schema_validation",
+                success=False,
+                error_code=ERROR_CODE_SCHEMA_VALIDATION,
+                error_class=exc.__class__.__name__,
+                message=str(exc)[:240],
+                extra={"stage": "canon"},
+            )
+            raise turn_flow_error(
+                error_code=ERROR_CODE_SCHEMA_VALIDATION,
+                phase="schema_validation",
+                trace_ctx=trace_ctx,
+                exc=exc,
+            )
+        try:
+            emit_turn_phase_event(trace_ctx, phase="patch_apply", success=True, extra={"stage": "canon"})
+            working_state = apply_patch(working_state, extractor_piece, attribute_cap=attribute_cap_for_campaign(campaign))
+            emit_turn_phase_event(trace_ctx, phase="patch_apply", success=True, extra={"stage": "canon", "result": "ok"})
+            emit_turn_phase_event(trace_ctx, phase="extractor_patch_apply", success=True, extra={"stage": "canon", "result": "ok"})
+        except Exception as exc:
+            emit_turn_phase_event(
+                trace_ctx,
+                phase="patch_apply",
+                success=False,
+                error_code=ERROR_CODE_PATCH_APPLY,
+                error_class=exc.__class__.__name__,
+                message=str(exc)[:240],
+                extra={"stage": "canon"},
+            )
+            emit_turn_phase_event(
+                trace_ctx,
+                phase="extractor_patch_apply",
+                success=False,
+                error_code=ERROR_CODE_PATCH_APPLY,
+                error_class=exc.__class__.__name__,
+                message=str(exc)[:240],
+                extra={"stage": "canon"},
+            )
+            raise turn_flow_error(
+                error_code=ERROR_CODE_PATCH_APPLY,
+                phase="patch_apply",
+                trace_ctx=trace_ctx,
+                exc=exc,
+            )
         extractor_patch = merge_patch_payloads(extractor_patch, extractor_piece)
         gm_text_display = "Kanon übernommen."
     else:
@@ -10321,24 +13538,37 @@ def create_turn_record(
         for attempt in range(1, MAX_TURN_MODEL_ATTEMPTS + 1):
             attempt_temperature = OLLAMA_TEMPERATURE if attempt == 1 else min(0.9, OLLAMA_TEMPERATURE + 0.12 * (attempt - 1))
             attempt_repeat_penalty = OLLAMA_REPEAT_PENALTY if attempt == 1 else min(1.35, OLLAMA_REPEAT_PENALTY + 0.06 * (attempt - 1))
-            out = normalize_model_output_payload(
-                call_ollama_json(
-                    system_prompt,
-                    prompt_attempt_user,
-                    temperature=attempt_temperature,
-                    repeat_penalty=attempt_repeat_penalty,
-                ),
-                default_actor=actor,
-            )
+            emit_turn_phase_event(trace_ctx, phase="narrator_call_started", success=True, extra={"attempt": attempt})
+            try:
+                out = normalize_model_output_payload(
+                    call_ollama_json(
+                        system_prompt,
+                        prompt_attempt_user,
+                        temperature=attempt_temperature,
+                        repeat_penalty=attempt_repeat_penalty,
+                        trace_ctx=trace_ctx,
+                    ),
+                    default_actor=actor,
+                )
+                emit_turn_phase_event(trace_ctx, phase="narrator_call_finished", success=True, extra={"attempt": attempt})
+            except Exception as exc:
+                classified = classify_turn_exception(exc, phase="narrator_call_finished", trace_ctx=trace_ctx)
+                emit_turn_phase_event(
+                    trace_ctx,
+                    phase="narrator_call_finished",
+                    success=False,
+                    error_code=classified.error_code,
+                    error_class=classified.cause_class or exc.__class__.__name__,
+                    message=(classified.cause_message or str(exc))[:240],
+                    extra={"attempt": attempt},
+                )
+                raise classified
             if not isinstance(out, dict) or "story" not in out or "patch" not in out or "requests" not in out:
-                raise HTTPException(status_code=500, detail="Model output missing required fields")
+                raise narrator_turn_error("Die KI-Antwort hatte ein ungültiges Antwortformat.")
             inactive_refs = inactive_character_refs(campaign, out.get("story", ""), out.get("patch") or {})
             if inactive_refs:
                 if attempt == MAX_TURN_MODEL_ATTEMPTS:
-                    raise HTTPException(
-                        status_code=500,
-                        detail=f"Modell hat wiederholt ungültige Figuren eingeführt: {', '.join(inactive_refs)}.",
-                    )
+                    raise narrator_turn_error(f"Die KI hat wiederholt ungültige Figuren eingeführt: {', '.join(inactive_refs)}.")
                 prompt_attempt_user = (
                     user_prompt
                     + "\n\nDEINE LETZTE ANTWORT HAT INAKTIVE ODER UNFERTIGE FIGUREN EINGEFÜHRT ("
@@ -10360,7 +13590,7 @@ def create_turn_record(
                 if attempt == MAX_TURN_MODEL_ATTEMPTS and only_repetition and has_structured_progress:
                     break
                 if attempt == MAX_TURN_MODEL_ATTEMPTS:
-                    raise HTTPException(status_code=500, detail="Die Modellantwort kam dem letzten Beat zu nahe und konnte nicht sauber weiterentwickelt werden. Bitte sende denselben Beitrag noch einmal.")
+                    raise narrator_turn_error("Die KI-Antwort kam dem letzten Beat zu nahe und konnte nicht sauber weiterentwickelt werden.")
                 prompt_attempt_user = (
                     user_prompt
                     + "\n\nDEINE LETZTE ANTWORT WAR QUALITATIV NICHT AKZEPTABEL:\n- "
@@ -10373,7 +13603,7 @@ def create_turn_record(
             if not is_suspicious_story_text(out.get("story", "")):
                 break
             if attempt == MAX_TURN_MODEL_ATTEMPTS:
-                raise HTTPException(status_code=500, detail="Modellantwort wirkt abgeschnitten. Bitte Retry verwenden.")
+                raise narrator_turn_error("Die KI-Antwort wirkt abgeschnitten.")
             prompt_attempt_user = (
                 user_prompt
                 + "\n\nDEINE LETZTE ANTWORT WAR OFFENSICHTLICH ABGESCHNITTEN. "
@@ -10381,17 +13611,39 @@ def create_turn_record(
             )
 
         requests_payload = normalize_requests_payload(out.get("requests", []), default_actor=actor)
-        out["story"] = rewrite_story_length_guard(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            story_text=out.get("story", ""),
-            patch=out.get("patch") or blank_patch(),
-            requests_payload=requests_payload,
-            min_story_chars=min_story_chars,
-            max_story_chars=max_story_chars,
-        )
+        try:
+            out["story"] = rewrite_story_length_guard(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                story_text=out.get("story", ""),
+                patch=out.get("patch") or blank_patch(),
+                requests_payload=requests_payload,
+                min_story_chars=min_story_chars,
+                max_story_chars=max_story_chars,
+            )
+        except Exception as exc:
+            raise classify_turn_exception(exc, phase="narrator_call_finished", trace_ctx=trace_ctx)
 
-        narrator_patch = sanitize_patch(working_state, out["patch"])
+        try:
+            emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": "narrator"})
+            narrator_patch = sanitize_patch(working_state, out["patch"])
+            emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": "narrator", "result": "ok"})
+        except Exception as exc:
+            emit_turn_phase_event(
+                trace_ctx,
+                phase="patch_sanitize",
+                success=False,
+                error_code=ERROR_CODE_PATCH_SANITIZE,
+                error_class=exc.__class__.__name__,
+                message=str(exc)[:240],
+                extra={"stage": "narrator"},
+            )
+            raise turn_flow_error(
+                error_code=ERROR_CODE_PATCH_SANITIZE,
+                phase="patch_sanitize",
+                trace_ctx=trace_ctx,
+                exc=exc,
+            )
         narrator_patch, attribute_delta_adjustments = apply_attribute_bias_to_patch(narrator_patch, actor, attribute_bias)
         if attribute_delta_adjustments:
             resource_deltas_applied["attribute_bias"] = attribute_delta_adjustments
@@ -10406,25 +13658,182 @@ def create_turn_record(
             narrator_patch = apply_skill_cost_deltas_to_patch(narrator_patch, actor, skill_cost_payload)
             resource_deltas_applied["skill_cost"] = deep_copy(skill_cost_payload.get("deltas") or {})
             resource_deltas_applied["skill_cost_skills"] = deep_copy(skill_cost_payload.get("skills") or [])
+        narrator_patch, combat_scaling_meta = apply_combat_scaling_to_patch(
+            narrator_patch,
+            actor=actor,
+            combat_context=combat_context,
+            scaling_context=combat_scaling_context,
+            action_type=action_type,
+        )
+        if combat_scaling_meta.get("applied"):
+            resource_deltas_applied["combat_scaling"] = deep_copy(combat_scaling_meta)
         narrator_patch = enforce_non_milestone_patch_limits(
             working_state,
             narrator_patch,
             is_milestone=bool(milestone_info.get("is_milestone")),
             action_type=action_type,
         )
-        validate_patch(working_state, narrator_patch)
-        working_state = apply_patch(working_state, narrator_patch, attribute_cap=attribute_cap_for_campaign(campaign))
+        try:
+            emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": "narrator"})
+            validate_patch(working_state, narrator_patch)
+            emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": "narrator", "result": "ok"})
+        except Exception as exc:
+            emit_turn_phase_event(
+                trace_ctx,
+                phase="schema_validation",
+                success=False,
+                error_code=ERROR_CODE_SCHEMA_VALIDATION,
+                error_class=exc.__class__.__name__,
+                message=str(exc)[:240],
+                extra={"stage": "narrator"},
+            )
+            raise turn_flow_error(
+                error_code=ERROR_CODE_SCHEMA_VALIDATION,
+                phase="schema_validation",
+                trace_ctx=trace_ctx,
+                exc=exc,
+            )
+        try:
+            emit_turn_phase_event(trace_ctx, phase="patch_apply", success=True, extra={"stage": "narrator"})
+            working_state = apply_patch(working_state, narrator_patch, attribute_cap=attribute_cap_for_campaign(campaign))
+            emit_turn_phase_event(trace_ctx, phase="patch_apply", success=True, extra={"stage": "narrator", "result": "ok"})
+        except Exception as exc:
+            emit_turn_phase_event(
+                trace_ctx,
+                phase="patch_apply",
+                success=False,
+                error_code=ERROR_CODE_PATCH_APPLY,
+                error_class=exc.__class__.__name__,
+                message=str(exc)[:240],
+                extra={"stage": "narrator"},
+            )
+            raise turn_flow_error(
+                error_code=ERROR_CODE_PATCH_APPLY,
+                phase="patch_apply",
+                trace_ctx=trace_ctx,
+                exc=exc,
+            )
         for source_text, source_kind in ((content, "player"), (out.get("story", ""), "narrator")):
-            extractor_piece = call_canon_extractor(campaign, working_state, actor, action_type, source_text, source=source_kind)
-            extractor_piece = sanitize_patch(working_state, extractor_piece)
+            emit_turn_phase_event(trace_ctx, phase="extractor_patch_generation", success=True, extra={"stage": source_kind})
+            try:
+                extractor_piece = call_canon_extractor(campaign, working_state, actor, action_type, source_text, source=source_kind)
+                emit_turn_phase_event(
+                    trace_ctx,
+                    phase="extractor_patch_generation",
+                    success=True,
+                    extra={"stage": source_kind, "result": "ok"},
+                )
+            except Exception as exc:
+                emit_turn_phase_event(
+                    trace_ctx,
+                    phase="extractor_patch_generation",
+                    success=False,
+                    error_code=ERROR_CODE_EXTRACTOR,
+                    error_class=exc.__class__.__name__,
+                    message=str(exc)[:240],
+                    extra={"stage": source_kind},
+                )
+                raise turn_flow_error(
+                    error_code=ERROR_CODE_EXTRACTOR,
+                    phase="extractor_patch_generation",
+                    trace_ctx=trace_ctx,
+                    exc=exc,
+                )
+            emit_turn_phase_event(trace_ctx, phase="extractor_patch_apply", success=True, extra={"stage": source_kind})
+            try:
+                emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": f"extractor_{source_kind}"})
+                extractor_piece = sanitize_patch(working_state, extractor_piece)
+                emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": f"extractor_{source_kind}", "result": "ok"})
+            except Exception as exc:
+                emit_turn_phase_event(
+                    trace_ctx,
+                    phase="patch_sanitize",
+                    success=False,
+                    error_code=ERROR_CODE_PATCH_SANITIZE,
+                    error_class=exc.__class__.__name__,
+                    message=str(exc)[:240],
+                    extra={"stage": f"extractor_{source_kind}"},
+                )
+                emit_turn_phase_event(
+                    trace_ctx,
+                    phase="extractor_patch_apply",
+                    success=False,
+                    error_code=ERROR_CODE_PATCH_SANITIZE,
+                    error_class=exc.__class__.__name__,
+                    message=str(exc)[:240],
+                    extra={"stage": source_kind},
+                )
+                raise turn_flow_error(
+                    error_code=ERROR_CODE_PATCH_SANITIZE,
+                    phase="patch_sanitize",
+                    trace_ctx=trace_ctx,
+                    exc=exc,
+                )
             extractor_piece = enforce_non_milestone_patch_limits(
                 working_state,
                 extractor_piece,
                 is_milestone=bool(milestone_info.get("is_milestone")),
                 action_type=action_type,
             )
-            validate_patch(working_state, extractor_piece)
-            working_state = apply_patch(working_state, extractor_piece, attribute_cap=attribute_cap_for_campaign(campaign))
+            try:
+                emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": f"extractor_{source_kind}"})
+                validate_patch(working_state, extractor_piece)
+                emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": f"extractor_{source_kind}", "result": "ok"})
+            except Exception as exc:
+                emit_turn_phase_event(
+                    trace_ctx,
+                    phase="schema_validation",
+                    success=False,
+                    error_code=ERROR_CODE_SCHEMA_VALIDATION,
+                    error_class=exc.__class__.__name__,
+                    message=str(exc)[:240],
+                    extra={"stage": f"extractor_{source_kind}"},
+                )
+                emit_turn_phase_event(
+                    trace_ctx,
+                    phase="extractor_patch_apply",
+                    success=False,
+                    error_code=ERROR_CODE_SCHEMA_VALIDATION,
+                    error_class=exc.__class__.__name__,
+                    message=str(exc)[:240],
+                    extra={"stage": source_kind},
+                )
+                raise turn_flow_error(
+                    error_code=ERROR_CODE_SCHEMA_VALIDATION,
+                    phase="schema_validation",
+                    trace_ctx=trace_ctx,
+                    exc=exc,
+                )
+            try:
+                emit_turn_phase_event(trace_ctx, phase="patch_apply", success=True, extra={"stage": f"extractor_{source_kind}"})
+                working_state = apply_patch(working_state, extractor_piece, attribute_cap=attribute_cap_for_campaign(campaign))
+                emit_turn_phase_event(trace_ctx, phase="patch_apply", success=True, extra={"stage": f"extractor_{source_kind}", "result": "ok"})
+                emit_turn_phase_event(trace_ctx, phase="extractor_patch_apply", success=True, extra={"stage": source_kind, "result": "ok"})
+            except Exception as exc:
+                emit_turn_phase_event(
+                    trace_ctx,
+                    phase="patch_apply",
+                    success=False,
+                    error_code=ERROR_CODE_PATCH_APPLY,
+                    error_class=exc.__class__.__name__,
+                    message=str(exc)[:240],
+                    extra={"stage": f"extractor_{source_kind}"},
+                )
+                emit_turn_phase_event(
+                    trace_ctx,
+                    phase="extractor_patch_apply",
+                    success=False,
+                    error_code=ERROR_CODE_PATCH_APPLY,
+                    error_class=exc.__class__.__name__,
+                    message=str(exc)[:240],
+                    extra={"stage": source_kind},
+                )
+                raise turn_flow_error(
+                    error_code=ERROR_CODE_PATCH_APPLY,
+                    phase="patch_apply",
+                    trace_ctx=trace_ctx,
+                    exc=exc,
+                )
             extractor_patch = merge_patch_payloads(extractor_patch, extractor_piece)
         gm_text_display = out["story"]
 
@@ -10472,26 +13881,52 @@ def create_turn_record(
     }
     state_after = working_state
     append_character_change_events(state_before, state_after, turn_number=int(state_after.get("meta", {}).get("turn", 0) or 0))
+    progression_result = apply_progression_events(
+        campaign,
+        state_before,
+        state_after,
+        patch,
+        actor=actor,
+        action_type=action_type,
+    )
     skill_messages = apply_skill_events(campaign, state_after, patch.get("events_add") or [])
     if skill_messages:
         state_after.setdefault("events", [])
         state_after["events"].extend(skill_messages)
     npc_source_story = gm_text_display if action_type != "canon" else ""
-    npc_upserts = call_npc_extractor(
-        campaign,
-        state_after,
-        actor,
-        action_type,
-        content,
-        npc_source_story,
-    )
-    npc_updates = apply_npc_upserts(
-        campaign,
-        state_after,
-        npc_upserts,
-        source_text=f"{content}\n{npc_source_story}".strip(),
-        turn_number=int(state_after.get("meta", {}).get("turn", 0) or 0),
-    )
+    emit_turn_phase_event(trace_ctx, phase="npc_extractor", success=True, extra={"stage": "start"})
+    try:
+        npc_upserts = call_npc_extractor(
+            campaign,
+            state_after,
+            actor,
+            action_type,
+            content,
+            npc_source_story,
+        )
+        npc_updates = apply_npc_upserts(
+            campaign,
+            state_after,
+            npc_upserts,
+            source_text=f"{content}\n{npc_source_story}".strip(),
+            turn_number=int(state_after.get("meta", {}).get("turn", 0) or 0),
+        )
+        emit_turn_phase_event(trace_ctx, phase="npc_extractor", success=True, extra={"stage": "ok", "upserts": len(npc_upserts or [])})
+    except Exception as exc:
+        emit_turn_phase_event(
+            trace_ctx,
+            phase="npc_extractor",
+            success=False,
+            error_code=ERROR_CODE_EXTRACTOR,
+            error_class=exc.__class__.__name__,
+            message=str(exc)[:240],
+        )
+        raise turn_flow_error(
+            error_code=ERROR_CODE_EXTRACTOR,
+            phase="npc_extractor",
+            trace_ctx=trace_ctx,
+            exc=exc,
+        )
     skill_requests = build_skill_system_requests(campaign, state_before, state_after)
     now = utc_now()
     combined_requests = normalize_requests_payload(requests_payload + skill_requests, default_actor=actor)
@@ -10516,6 +13951,7 @@ def create_turn_record(
         "attribute_profile": deep_copy(attribute_profile),
         "combat_resolution": deep_copy(combat_resolution),
         "resource_deltas_applied": deep_copy(resource_deltas_applied),
+        "progression_events": deep_copy(progression_result.get("events") or []),
         "npc_updates": deep_copy(npc_updates),
         "combat_meta": deep_copy(updated_combat),
         "state_before": state_before,
@@ -10527,6 +13963,8 @@ def create_turn_record(
         "edit_history": [],
         "prompt_payload": prompt_payload,
     }
+    if isinstance(trace_ctx, dict):
+        trace_ctx["turn_id"] = turn_record["turn_id"]
     campaign["state"] = state_after
     normalize_npc_codex_state(campaign)
     campaign.setdefault("turns", []).append(turn_record)
@@ -10866,6 +14304,11 @@ class TurnEditIn(BaseModel):
     gm_text_display: str
 
 
+class ContextQueryIn(BaseModel):
+    text: str
+    actor: Optional[str] = None
+
+
 class PresenceActivityIn(BaseModel):
     kind: Literal["typing_turn", "editing_turn", "claiming_slot", "building_character", "building_world", "reviewing_choices"]
     slot_id: Optional[str] = None
@@ -10978,6 +14421,7 @@ def get_llm_status() -> Dict[str, Any]:
     return {
         "ollama_url": OLLAMA_URL,
         "configured_model": OLLAMA_MODEL,
+        "request_timeout_sec": OLLAMA_TIMEOUT_SEC,
         "seed": OLLAMA_SEED,
         "temperature": OLLAMA_TEMPERATURE,
         "num_ctx": OLLAMA_NUM_CTX,
@@ -11747,6 +15191,8 @@ def create_turn(
             raise HTTPException(status_code=409, detail="Der Kampagnenauftakt fehlt noch. Bitte zuerst den Auftakt erneut versuchen.")
         raise HTTPException(status_code=409, detail="Die Geschichte hat noch keinen Auftakt. Bitte warte auf den ersten GM-Text.")
     require_claim(campaign, x_player_id, actor)
+    trace_ctx = new_turn_trace_context(campaign_id, actor, x_player_id)
+    emit_turn_phase_event(trace_ctx, phase="input_accepted", success=True, extra={"action_type": action_type})
     clear_live_activity(campaign_id, x_player_id)
     blocking_kind = "continue_turn" if content.startswith("Weiter.") else "submit_turn"
     start_blocking_action(campaign, player_id=x_player_id, kind=blocking_kind, slot_id=actor)
@@ -11759,15 +15205,223 @@ def create_turn(
             action_type=action_type,
             content=content,
             request_received_ts=request_received_ts,
+            trace_ctx=trace_ctx,
         )
-        save_campaign(campaign, reason="turn_created")
-    except HTTPException:
-        raise
+        save_campaign(campaign, reason="turn_created", trace_ctx=trace_ctx)
+    except TurnFlowError as exc:
+        emit_turn_phase_event(
+            trace_ctx,
+            phase=exc.phase or str((trace_ctx or {}).get("last_phase") or "turn_internal"),
+            success=False,
+            error_code=exc.error_code,
+            error_class=exc.cause_class,
+            message=exc.cause_message[:240],
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=exc.to_client_detail(),
+            headers={
+                "X-Turn-Trace-Id": exc.trace_id,
+                "X-Turn-Error-Code": exc.error_code,
+            },
+        )
+    except HTTPException as exc:
+        if int(exc.status_code or 500) < 500:
+            raise
+        classified = classify_turn_exception(
+            exc,
+            phase=str((trace_ctx or {}).get("last_phase") or "turn_internal"),
+            trace_ctx=trace_ctx,
+        )
+        emit_turn_phase_event(
+            trace_ctx,
+            phase=classified.phase,
+            success=False,
+            error_code=classified.error_code,
+            error_class=classified.cause_class or exc.__class__.__name__,
+            message=(classified.cause_message or str(exc.detail))[:240],
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=classified.to_client_detail(),
+            headers={
+                "X-Turn-Trace-Id": classified.trace_id,
+                "X-Turn-Error-Code": classified.error_code,
+            },
+        )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        classified = classify_turn_exception(
+            exc,
+            phase=str((trace_ctx or {}).get("last_phase") or "turn_internal"),
+            trace_ctx=trace_ctx,
+        )
+        emit_turn_phase_event(
+            trace_ctx,
+            phase=classified.phase,
+            success=False,
+            error_code=classified.error_code,
+            error_class=classified.cause_class or exc.__class__.__name__,
+            message=(classified.cause_message or str(exc))[:240],
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=classified.to_client_detail(),
+            headers={
+                "X-Turn-Trace-Id": classified.trace_id,
+                "X-Turn-Error-Code": classified.error_code,
+            },
+        )
     finally:
         clear_blocking_action(campaign_id)
-    return {"turn_id": turn["turn_id"], "campaign": build_campaign_view(campaign, x_player_id)}
+    return {
+        "turn_id": turn["turn_id"],
+        "trace_id": str((trace_ctx or {}).get("trace_id") or ""),
+        "campaign": build_campaign_view(campaign, x_player_id),
+    }
+
+
+@app.post("/api/campaigns/{campaign_id}/context/query")
+def query_campaign_context(
+    campaign_id: str,
+    inp: ContextQueryIn,
+    x_player_id: Optional[str] = Header(default=None),
+    x_player_token: Optional[str] = Header(default=None),
+) -> Dict[str, Any]:
+    campaign = load_campaign(campaign_id)
+    authenticate_player(campaign, x_player_id, x_player_token, required=True)
+    question = str(inp.text or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Leere Kontextfrage ist nicht erlaubt.")
+
+    actor = str(inp.actor or "").strip()
+    if actor:
+        if actor not in campaign.get("state", {}).get("characters", {}):
+            raise HTTPException(status_code=400, detail="Unbekannter Slot für Kontextfrage.")
+    else:
+        actor = (
+            player_claim(campaign, x_player_id)
+            or (active_party(campaign)[0] if active_party(campaign) else "")
+            or (campaign_slots(campaign)[0] if campaign_slots(campaign) else "")
+        )
+    if not actor:
+        raise HTTPException(status_code=409, detail="Kein verfügbarer Kontext-Actor vorhanden.")
+    state = campaign["state"]
+    signature_before = context_state_signature(state)
+
+    intent_data = parse_context_intent(question)
+    intent = str(intent_data.get("intent") or "unknown")
+    target = str(intent_data.get("target") or "").strip()
+
+    index = build_context_knowledge_index(campaign, state)
+    result: Optional[Dict[str, Any]] = None
+
+    if target:
+        resolved = resolve_context_target(index, target)
+        if resolved.get("status") == "found" and isinstance(resolved.get("entry"), dict):
+            result = deterministic_context_result_from_entry(
+                intent=intent,
+                target=target,
+                entry=resolved["entry"],
+                confidence=str(resolved.get("confidence") or "medium"),
+            )
+        elif resolved.get("status") == "ambiguous":
+            suggestions = resolved.get("suggestions") if isinstance(resolved.get("suggestions"), list) else []
+            result = build_context_result_payload(
+                status="ambiguous",
+                intent=intent,
+                target=target,
+                confidence=str(resolved.get("confidence") or "low"),
+                entity_type="unknown",
+                entity_id="",
+                title=target,
+                explanation=f"Der Begriff „{target}“ ist im aktuellen Kanon mehrdeutig.",
+                facts=[],
+                sources=[],
+                suggestions=suggestions[:8],
+            )
+        else:
+            story_evidence = extract_story_target_evidence(campaign, target, max_hits=5)
+            story_facts = story_evidence.get("facts") if isinstance(story_evidence.get("facts"), list) else []
+            story_sources = story_evidence.get("sources") if isinstance(story_evidence.get("sources"), list) else []
+            if story_facts:
+                result = build_context_result_payload(
+                    status="found",
+                    intent=intent,
+                    target=target,
+                    confidence="medium",
+                    entity_type="unknown",
+                    entity_id="",
+                    title=target,
+                    explanation=(
+                        f"Der Begriff „{target}“ ist nicht als eigener Codex-Eintrag hinterlegt, "
+                        "kommt aber in der laufenden Geschichte vor."
+                    ),
+                    facts=story_facts[:5],
+                    sources=story_sources[:5],
+                    suggestions=[],
+                )
+            else:
+                suggestions = resolved.get("suggestions") if isinstance(resolved.get("suggestions"), list) else []
+                result = build_context_result_payload(
+                    status="not_in_canon",
+                    intent=intent,
+                    target=target,
+                    confidence="low",
+                    entity_type="unknown",
+                    entity_id="",
+                    title=target,
+                    explanation=f"Der Begriff „{target}“ ist im aktuellen Kanon nicht hinterlegt.",
+                    facts=[],
+                    sources=[],
+                    suggestions=suggestions[:8],
+                )
+
+    if result is None and intent in {"summary", "compare", "unknown"}:
+        llm_target = target or question
+        snippets = build_reduced_context_snippets(index, target=llm_target, limit=14)
+        llm_result = build_context_result_via_llm(question, intent, llm_target, snippets)
+        if llm_result is not None:
+            result = llm_result
+        else:
+            result = build_context_result_payload(
+                status="not_in_canon",
+                intent=intent,
+                target=llm_target,
+                confidence="low",
+                entity_type="unknown",
+                entity_id="",
+                title=llm_target,
+                explanation="Für diese Frage konnte ich im aktuellen Kanon keine belastbaren Fakten finden.",
+                facts=[],
+                sources=[],
+                suggestions=[],
+            )
+
+    if result is None:
+        fallback_target = target or question
+        result = build_context_result_payload(
+            status="not_in_canon",
+            intent=intent,
+            target=fallback_target,
+            confidence="low",
+            entity_type="unknown",
+            entity_id="",
+            title=fallback_target,
+            explanation=f"Der Begriff „{fallback_target}“ ist im aktuellen Kanon nicht hinterlegt.",
+            facts=[],
+            sources=[],
+            suggestions=[],
+        )
+
+    answer = context_result_to_answer_text(result)
+    if not answer:
+        answer = "Keine belastbare Kontextantwort verfügbar."
+
+    signature_after = context_state_signature(campaign["state"])
+    if signature_before != signature_after:
+        raise HTTPException(status_code=500, detail="Kontextabfrage hat unerwartet den Zustand verändert.")
+
+    return {"answer": answer, "actor": actor, "question": question, "result": result}
 
 
 @app.patch("/api/campaigns/{campaign_id}/turns/{turn_id}")

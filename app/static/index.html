@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600;7..72,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css?v=20260305e" />
+  <link rel="stylesheet" href="/static/style.css?v=20260305g" />
 </head>
 <body>
   <div class="app-shell">
@@ -160,6 +160,7 @@
                 <button class="action-mode" data-mode="say" type="button">SAGEN</button>
                 <button class="action-mode" data-mode="story" type="button">STORY</button>
                 <button class="action-mode" data-mode="canon" type="button">CANON</button>
+                <button class="action-mode" data-mode="context" type="button">KONTEXT</button>
               </div>
             </div>
             <textarea id="turn-input" placeholder="Was passiert in deinem Zug?"></textarea>
@@ -216,6 +217,21 @@
         <div class="drawer-panel hidden" id="drawer-panel-skills"></div>
         <div class="drawer-panel hidden" id="drawer-panel-injuries"></div>
         <div class="drawer-panel hidden" id="drawer-panel-gear"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="context-modal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="panelTitle">Kontext</div>
+          <div class="small" id="context-modal-question"></div>
+        </div>
+        <button class="btn ghost" id="closeContextModalBtn" type="button">Schließen</button>
+      </div>
+      <div class="turn-block">
+        <div class="turn-text" id="context-modal-answer"></div>
       </div>
     </div>
   </div>
@@ -353,6 +369,6 @@
     </div>
   </div>
 
-    <script src="/static/app.js?v=20260305e"></script>
+    <script src="/static/app.js?v=20260305g"></script>
   </body>
 </html>

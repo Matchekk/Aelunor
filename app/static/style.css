@@ -258,7 +258,7 @@ box-shadow:var(--shadow),inset 0 1px 0 rgba(243,198,130,.08),inset 0 0 0 1px rgb
 .story-input-text{font-size:18px;line-height:1.65;color:var(--text-muted);white-space:pre-wrap}
 .story-response{font-size:20px;line-height:1.85;white-space:pre-wrap}
 .story-inline-impulse{font-weight:700;color:var(--text);opacity:.98}
-.turn-highlight{position:relative;border-radius:18px;padding:14px 16px;background:rgba(244,194,108,.16);box-shadow:0 0 0 1px rgba(244,194,108,.18) inset;animation:turn-highlight-fade 4.2s ease-out forwards}
+.turn-highlight{position:relative;border-radius:18px;padding:14px 16px;background:rgba(244,194,108,.16);box-shadow:0 0 0 1px rgba(244,194,108,.18) inset}
 .turn-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
 .composer-panel textarea,.field textarea,.field input,.field select,#turn-input{width:100%;border-radius:16px;border:1px solid var(--border-strong);background:var(--panel-deep);color:var(--text);padding:13px 14px}
 #turn-input{min-height:120px;font-size:22px;line-height:1.35;resize:vertical}
@@ -390,6 +390,20 @@ box-shadow:var(--shadow),inset 0 1px 0 rgba(243,198,130,.08),inset 0 0 0 1px rgb
 .diary-card.is-self{border-color:rgba(244,194,108,.58);background:linear-gradient(180deg,rgba(244,194,108,.12),rgba(255,255,255,.03));box-shadow:0 0 0 1px rgba(244,194,108,.12) inset}
 .turn-block{padding:14px 16px;border-radius:16px;border:1px solid var(--border);background:var(--panel-deep)}
 .turn-text{white-space:pre-wrap;line-height:1.65}
+.context-result{display:grid;gap:14px}
+.context-result-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.context-status-badge{border-color:var(--border-strong)}
+.context-status-found{background:rgba(82,173,124,.2);border-color:rgba(82,173,124,.42)}
+.context-status-ambiguous{background:rgba(220,162,82,.2);border-color:rgba(220,162,82,.42)}
+.context-status-missing{background:rgba(182,114,114,.2);border-color:rgba(182,114,114,.44)}
+.context-result-title{font-weight:700;letter-spacing:.04em}
+.context-explanation{line-height:1.65}
+.context-section{display:grid;gap:8px}
+.context-section-label{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-muted)}
+.context-list{margin:0;padding-left:18px;display:grid;gap:6px}
+.context-list li{line-height:1.55}
+.context-suggestions{display:flex;gap:8px;flex-wrap:wrap}
+#context-modal-answer{white-space:normal}
 .theme-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
 .theme-card{display:grid;gap:14px;padding:16px;border-radius:18px;border:1px solid var(--border);background:var(--panel-soft)}
 .theme-card.active{box-shadow:0 0 0 1px var(--accent) inset}
