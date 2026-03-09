@@ -1,4 +1,4 @@
-# Isekai GM MVP
+# Aelunor
 
 Lokales, browserbasiertes Multiplayer-Story-RPG mit KI-GM (Ollama), kanonischem Patch-State und Live-Sync.
 

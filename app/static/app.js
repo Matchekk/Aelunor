@@ -125,7 +125,7 @@ const THEME_LABELS = {
   arcane: "Nachtblau",
   tavern: "Taverne",
   glade: "Waldlichtung",
-  hybrid: "Isekai (Hybrid)"
+  hybrid: "Aelunor (Hybrid)"
 };
 
 const FONT_PRESET_LABELS = {
@@ -2327,7 +2327,7 @@ function renderStyleTab() {
       <article class="theme-card ${CURRENT_THEME === "hybrid" ? "active" : ""}">
         <div class="theme-card-head">
           <div>
-            <strong>Isekai (Hybrid)</strong>
+            <strong>Aelunor (Hybrid)</strong>
             <div class="small">Mittelalter trifft Tech-Magie mit klarem Kontrast.</div>
           </div>
           <span class="badge">${CURRENT_THEME === "hybrid" ? "aktiv" : "verfügbar"}</span>
@@ -3638,7 +3638,7 @@ function setActiveSettingsTab(tabId) {
 }
 
 async function createCampaign() {
-  const title = el("create-title").value.trim() || "Neue Isekai-Kampagne";
+  const title = el("create-title").value.trim() || "Neue Aelunor-Kampagne";
   const displayName = el("create-name").value.trim();
   if (!displayName) {
     showFlash("Bitte gib deinen Namen ein.", true);

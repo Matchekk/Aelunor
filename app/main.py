@@ -18249,7 +18249,7 @@ def create_campaign_record(
     campaign = {
         "campaign_meta": {
             "campaign_id": campaign_id,
-            "title": title.strip() or "Neue Isekai-Kampagne",
+            "title": title.strip() or "Neue Aelunor-Kampagne",
             "join_code_hash": hash_secret(join_code),
             "host_player_id": identity["player_id"],
             "created_at": now,
@@ -18400,7 +18400,7 @@ def reset_turn_branch(campaign: Dict[str, Any], turn: Dict[str, Any], new_status
 
 
 class CampaignCreateIn(BaseModel):
-    title: str = "Neue Isekai-Kampagne"
+    title: str = "Neue Aelunor-Kampagne"
     display_name: str
 
 
@@ -18545,7 +18545,7 @@ class FactionJoinIn(BaseModel):
     visual_modifiers: List[Dict[str, Any]] = Field(default_factory=list)
 
 
-app = FastAPI(title="Isekai GM MVP")
+app = FastAPI(title="Aelunor")
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 ensure_campaign_storage()
 

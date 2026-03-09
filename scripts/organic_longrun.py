@@ -790,7 +790,7 @@ def run_long_campaign(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Organischer Langlauf für Isekai GM MVP")
+    parser = argparse.ArgumentParser(description="Organischer Langlauf für Aelunor")
     parser.add_argument("--turns", type=int, default=300)
     parser.add_argument("--seed", type=int, default=20260304)
     parser.add_argument("--profile", default=DEFAULT_PROFILE)
