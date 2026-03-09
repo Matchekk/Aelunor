@@ -11,8 +11,14 @@ node_modules/
 .idea/
 *.tmp
 
-data/campaigns/
-data/state.json
-data/*.json
-data/automation_runs/
 *.log
+
+07_runtime/campaigns/
+07_runtime/cache/
+07_runtime/temp/
+07_runtime/queues/
+07_runtime/crash_dumps/
+07_runtime/state.json
+
+14_private/
+99_archive/legacy_data/
