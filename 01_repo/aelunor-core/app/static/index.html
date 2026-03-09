@@ -4,10 +4,18 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Aelunor</title>
+  <meta property="og:title" content="Aelunor" />
+  <meta property="og:image" content="/static/brand/aelunor-social-1200x630.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Aelunor" />
+  <meta name="twitter:image" content="/static/brand/aelunor-social-1200x630.png" />
+  <link rel="icon" href="/static/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600;7..72,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css?v=20260306d" />
+  <link rel="stylesheet" href="/static/style.css?v=20260309b" />
 </head>
 <body>
   <div class="app-shell">
@@ -31,6 +39,9 @@
     <section id="landing-view" class="view landing-view">
       <div class="landing-stage">
         <div class="hero">
+          <div class="hero-brand-lockup">
+            <img class="hero-logo" src="/static/brand/aelunor-logo-horizontal-1200x480.png" alt="Aelunor" />
+          </div>
           <p class="eyebrow">Aelunor</p>
           <h1>Mehrspieler-Story mit kanonischem State</h1>
           <p class="hero-copy">Baue eine Kampagne, teile einen Join-Code und lass den GM erst die Welt und dann jede Spielerfigur Schritt für Schritt definieren, bevor die erste Szene beginnt.</p>
@@ -98,9 +109,12 @@
 
     <section id="claim-view" class="view hidden">
       <header class="topbar">
-        <div>
-          <div class="title" id="claim-campaign-title">Kampagne</div>
-          <div class="meta" id="claim-meta"></div>
+        <div class="topbar-brand">
+          <img class="topbar-brand-icon" src="/static/brand/aelunor-icon-512x512.png" alt="" aria-hidden="true" />
+          <div>
+            <div class="title" id="claim-campaign-title">Kampagne</div>
+            <div class="meta" id="claim-meta"></div>
+          </div>
         </div>
         <button class="btn ghost" id="claimBackBtn" type="button">Zurück zur Startseite</button>
       </header>
@@ -116,9 +130,12 @@
 
     <section id="campaign-view" class="view hidden">
       <header class="topbar">
-        <div>
-          <div class="title" id="campaign-title">Kampagne</div>
-          <div class="meta" id="campaign-meta"></div>
+        <div class="topbar-brand">
+          <img class="topbar-brand-icon" src="/static/brand/aelunor-icon-512x512.png" alt="" aria-hidden="true" />
+          <div>
+            <div class="title" id="campaign-title">Kampagne</div>
+            <div class="meta" id="campaign-meta"></div>
+          </div>
         </div>
         <div class="topbar-actions">
           <div class="join-chip" id="join-code-chip">Code: -</div>
@@ -383,6 +400,6 @@
     </div>
   </div>
 
-    <script src="/static/app.js?v=20260306d"></script>
+    <script src="/static/app.js?v=20260309b"></script>
   </body>
 </html>
