@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&family=Literata:opsz,wght@7..72,400;7..72,500;7..72,600;7..72,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css?v=20260305g" />
+  <link rel="stylesheet" href="/static/style.css?v=20260306d" />
 </head>
 <body>
   <div class="app-shell">
@@ -177,7 +177,7 @@
             <div id="party-overview" class="party-overview"></div>
           </div>
           <div class="sidebar-tabs">
-            <button class="tab active" data-tab="chars" type="button">Charaktere</button>
+            <button class="tab active" data-tab="chars" type="button">Kodex</button>
             <button class="tab" data-tab="diary" type="button">Diary</button>
             <button class="tab" data-tab="map" type="button">Karte</button>
             <button class="tab" data-tab="events" type="button">Events</button>
@@ -323,12 +323,26 @@
         </div>
       </div>
       <div id="setup-progress" class="setup-progress hidden"></div>
+      <div class="setup-onboarding-head hidden" id="setup-onboarding-head">
+        <div class="setup-phase-chip" id="setup-phase-chip"></div>
+        <div class="setup-chapter-line">
+          <div class="setup-chapter-title" id="setup-chapter-title"></div>
+          <div class="small" id="setup-chapter-progress"></div>
+        </div>
+        <div class="setup-progress-grid">
+          <div class="setup-progress-bar"><span id="setup-progress-global-fill"></span></div>
+          <div class="small" id="setup-global-progress"></div>
+        </div>
+      </div>
       <div id="setup-ai-copy" class="setup-ai-copy hidden"></div>
+      <div id="setup-impact-hint" class="setup-impact-hint hidden"></div>
       <div id="setup-question-root" class="setup-question-root hidden"></div>
       <div id="setup-other-root" class="setup-other-root hidden"></div>
+      <div id="setup-review-root" class="setup-review-root hidden"></div>
 
       <div id="setup-waiting" class="hidden">
         <div class="readonly-note">Der Host definiert gerade die Welt. Sobald das abgeschlossen ist, kannst du einen freien Slot claimen und deine Figur bauen.</div>
+        <div id="setup-waiting-status" class="setup-waiting-status"></div>
       </div>
 
       <div id="setup-modal-actions" class="modal-actions hidden">
@@ -369,6 +383,6 @@
     </div>
   </div>
 
-    <script src="/static/app.js?v=20260305g"></script>
+    <script src="/static/app.js?v=20260306d"></script>
   </body>
 </html>

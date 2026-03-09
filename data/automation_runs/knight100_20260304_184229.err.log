@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "c:\Projects\isekai-gm-mvp\scripts\organic_longrun.py", line 640, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "c:\Projects\isekai-gm-mvp\scripts\organic_longrun.py", line 625, in main
+    summary = run_long_campaign(
+        args.turns,
+    ...<6 lines>...
+        profile=args.profile,
+    )
+  File "c:\Projects\isekai-gm-mvp\scripts\organic_longrun.py", line 514, in run_long_campaign
+    raise LongRunError("Der Lauf hat die Adventure-Phase nicht erreicht.")
+LongRunError: Der Lauf hat die Adventure-Phase nicht erreicht.

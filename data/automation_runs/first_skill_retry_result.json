@@ -1,0 +1,39 @@
+{
+  "campaign_id": "camp_783ee7bd1b",
+  "slot": "slot_1",
+  "phase": "active",
+  "found_first_skill": true,
+  "first_skill_event": {
+    "turn_index": 3,
+    "turn_id": null,
+    "skills": [
+      {
+        "id": "skill_glutenherz_formung",
+        "name": "Glutenherz Formung",
+        "level": 1
+      }
+    ],
+    "trace_id": "trace_8b0211270d"
+  },
+  "turns_checked": 3,
+  "turn_trace": [
+    {
+      "i": 1,
+      "turn_id": null,
+      "trace_id": "trace_3ee24418bc",
+      "skill_count": 0
+    },
+    {
+      "i": 2,
+      "turn_id": null,
+      "trace_id": "trace_bb9d5373c5",
+      "skill_count": 0
+    },
+    {
+      "i": 3,
+      "turn_id": null,
+      "trace_id": "trace_8b0211270d",
+      "skill_count": 1
+    }
+  ]
+}

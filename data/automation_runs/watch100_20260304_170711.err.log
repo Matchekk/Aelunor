@@ -1,0 +1,22 @@
+Traceback (most recent call last):
+  File "C:\Projects\isekai-gm-mvp\scripts\watch_longrun.py", line 56, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "C:\Projects\isekai-gm-mvp\scripts\watch_longrun.py", line 33, in main
+    count = turn_count(args.campaign_id)
+  File "C:\Projects\isekai-gm-mvp\scripts\watch_longrun.py", line 21, in turn_count
+    return len((load_json(path).get("turns") or []))
+                ~~~~~~~~~^^^^^^
+  File "C:\Projects\isekai-gm-mvp\scripts\watch_longrun.py", line 14, in load_json
+    return json.loads(path.read_text(encoding="utf-8"))
+           ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\matis\AppData\Local\Programs\Python\Python313\Lib\json\__init__.py", line 346, in loads
+    return _default_decoder.decode(s)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\matis\AppData\Local\Programs\Python\Python313\Lib\json\decoder.py", line 344, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\matis\AppData\Local\Programs\Python\Python313\Lib\json\decoder.py", line 360, in raw_decode
+    obj, end = self.scan_once(s, idx)
+               ~~~~~~~~~~~~~~^^^^^^^^
+json.decoder.JSONDecodeError: Expecting ',' delimiter: line 124019 column 54335 (char 7324901)

@@ -15,9 +15,11 @@
               "phase": {
                 "type": "string",
                 "enum": [
+                  "lobby",
                   "world_setup",
-                  "character_setup",
-                  "adventure"
+                  "character_setup_open",
+                  "ready_to_start",
+                  "active"
                 ]
               },
               "time_advance": {
@@ -1023,7 +1025,7 @@
     "meta": {
       "campaign": "Dark Isekai MVP",
       "turn": 0,
-      "phase": "world_setup",
+      "phase": "lobby",
       "world_time": {
         "day": 1,
         "month": 1,

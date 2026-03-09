@@ -7,7 +7,7 @@ let EDIT_TURN_ID = null;
 let EDITING_STORY_CARD_ID = null;
 let EDITING_WORLD_INFO_ID = null;
 let SESSION_MODAL_ID = null;
-let SETUP_FLOW = { mode: null, slotId: null, stack: [], index: -1 };
+let SETUP_FLOW = { mode: null, slotId: null, stack: [], index: -1, reviewActive: false, reviewPayload: null };
 let PENDING_REQUESTS = 0;
 let LOADING_TIMER = null;
 let CHARACTER_SHEET = null;
@@ -44,6 +44,23 @@ let PARTY_HUD_PREV = {};
 const NOVELTY_STORAGE_KEY = "isekaiNoveltyState";
 let NOVELTY_STATE = loadNoveltyState();
 const CONTINUE_STORY_MARKER = "__CONTINUE_STORY__";
+
+const SETUP_UI_CHAPTERS = {
+  world: {
+    foundations: "Grundton der Welt",
+    laws_power: "Mächte und Gesetze",
+    danger_conflict: "Gefahren und Konflikte",
+    structure: "Weltstruktur",
+    general: "Welt"
+  },
+  character: {
+    identity: "Identität",
+    origin: "Herkunft",
+    class_affinity: "Begabung und Klasse",
+    drive: "Motivation und Einstieg",
+    general: "Figur"
+  }
+};
 
 const ACTION_MODE_CONFIG = {
   do: { label: "TUN", placeholder: "Was tut deine Figur konkret?" },
@@ -852,7 +869,7 @@ function renderActivityBar() {
 function syncSharedBlockingControls() {
   const sharedBlocking = isSharedBlocking();
   const claimed = claimedSlot();
-  const isAdventure = CAMPAIGN?.state?.meta?.phase === "adventure";
+  const isAdventure = CAMPAIGN?.state?.meta?.phase === "active";
   const hasIntro = campaignHasIntro();
   const intro = introState();
 
@@ -994,9 +1011,11 @@ function appearanceEventLabel(value) {
 
 function phaseLabel(phase) {
   return {
+    lobby: "Lobby",
     world_setup: "Welt-Setup",
-    character_setup: "Charakter-Setup",
-    adventure: "Abenteuer"
+    character_setup_open: "Charakter-Setup",
+    ready_to_start: "Bereit zum Start",
+    active: "Abenteuer"
   }[phase] || phase || "-";
 }
 
@@ -1138,7 +1157,7 @@ function renderTurns() {
   const displayTurns = buildDisplayTurns(turns);
   if (!displayTurns.length) {
     const intro = introState();
-    const message = CAMPAIGN?.state?.meta?.phase === "adventure"
+    const message = CAMPAIGN?.state?.meta?.phase === "active"
       ? intro.status === "failed"
         ? "Der Auftakt fehlt noch. Versuche ihn erneut, bevor neue Beiträge gesendet werden."
         : "Die Geschichte wartet auf den ersten GM-Auftakt."
@@ -1183,7 +1202,7 @@ function renderIntroBanner() {
   const text = el("intro-banner-text");
   const button = el("retryIntroBtn");
   const intro = introState();
-  const isAdventure = CAMPAIGN?.state?.meta?.phase === "adventure";
+  const isAdventure = CAMPAIGN?.state?.meta?.phase === "active";
   const hasIntro = campaignHasIntro();
   if (!isAdventure || hasIntro) {
     banner.classList.add("hidden");
@@ -1209,7 +1228,8 @@ function renderClaimView() {
   el("claim-campaign-title").textContent = meta.title;
   const requiredPlayers = CAMPAIGN.setup?.world?.summary?.player_count || 0;
   const finishedCharacters = Object.values(CAMPAIGN.setup?.characters || {}).filter((entry) => entry.completed).length;
-  el("claim-meta").textContent = `Sitzung ${meta.campaign_id} • ${CAMPAIGN.players.length} Spieler • Figuren ${finishedCharacters}/${requiredPlayers || "-"}`;
+  const readyCounter = CAMPAIGN.setup_runtime?.ready_counter || { ready: finishedCharacters, total: requiredPlayers || 0 };
+  el("claim-meta").textContent = `Sitzung ${meta.campaign_id} • ${CAMPAIGN.players.length} Spieler • Figuren ${finishedCharacters}/${requiredPlayers || "-"} • Bereit ${readyCounter.ready || 0}/${readyCounter.total || requiredPlayers || "-"}`;
 
   const mine = claimedSlotId();
   const root = el("claim-cards");
@@ -2344,7 +2364,7 @@ function renderStyleTab() {
         </div>
         <div class="type-preview type-preview-classic">
           <div class="type-preview-title">Die Geschichte fließt ruhig weiter.</div>
-          <div class="type-preview-copy">Kaelen tastet sich durch den Regen, während im Hintergrund das Feuer nur noch glimmt.</div>
+          <div class="type-preview-copy">Eine Gestalt tastet sich durch den Regen, während im Hintergrund das Feuer nur noch glimmt.</div>
         </div>
         <button class="btn ${CURRENT_FONT_PRESET === "classic" ? "ghost" : "primary"}" data-action="set-font-preset" data-font-preset="classic" type="button">
           ${CURRENT_FONT_PRESET === "classic" ? "Aktiv" : "Aktivieren"}
@@ -2360,7 +2380,7 @@ function renderStyleTab() {
         </div>
         <div class="type-preview type-preview-clean">
           <div class="type-preview-title">Die Geschichte fließt ruhig weiter.</div>
-          <div class="type-preview-copy">Kaelen tastet sich durch den Regen, während im Hintergrund das Feuer nur noch glimmt.</div>
+          <div class="type-preview-copy">Eine Gestalt tastet sich durch den Regen, während im Hintergrund das Feuer nur noch glimmt.</div>
         </div>
         <button class="btn ${CURRENT_FONT_PRESET === "clean" ? "ghost" : "primary"}" data-action="set-font-preset" data-font-preset="clean" type="button">
           ${CURRENT_FONT_PRESET === "clean" ? "Aktiv" : "Aktivieren"}
@@ -2376,7 +2396,7 @@ function renderStyleTab() {
         </div>
         <div class="type-preview type-preview-literary">
           <div class="type-preview-title">Die Geschichte fließt ruhig weiter.</div>
-          <div class="type-preview-copy">Kaelen tastet sich durch den Regen, während im Hintergrund das Feuer nur noch glimmt.</div>
+          <div class="type-preview-copy">Eine Gestalt tastet sich durch den Regen, während im Hintergrund das Feuer nur noch glimmt.</div>
         </div>
         <button class="btn ${CURRENT_FONT_PRESET === "literary" ? "ghost" : "primary"}" data-action="set-font-preset" data-font-preset="literary" type="button">
           ${CURRENT_FONT_PRESET === "literary" ? "Aktiv" : "Aktivieren"}
@@ -2685,8 +2705,13 @@ function renderCharactersTab() {
       return Number(b.mention_count || 0) - Number(a.mention_count || 0);
     });
 
-  const raceRows = Object.entries(worldRaces)
-    .filter(([, profile]) => profile && profile.name)
+  const discoveredRaceRows = Object.entries(worldRaces)
+    .filter(([raceId, profile]) => {
+      if (!profile || !profile.name) return false;
+      const entry = codexRaces[raceId] || {};
+      const level = Number(entry.knowledge_level || 0);
+      return Boolean(entry.discovered) || level > 0;
+    })
     .sort((a, b) => {
       const nameA = String(a[1]?.name || a[0]).toLowerCase();
       const nameB = String(b[1]?.name || b[0]).toLowerCase();
@@ -2694,8 +2719,13 @@ function renderCharactersTab() {
       return String(a[0]).localeCompare(String(b[0]), "de");
     });
 
-  const beastRows = Object.entries(worldBeasts)
-    .filter(([, profile]) => profile && profile.name)
+  const discoveredBeastRows = Object.entries(worldBeasts)
+    .filter(([beastId, profile]) => {
+      if (!profile || !profile.name) return false;
+      const entry = codexBeasts[beastId] || {};
+      const level = Number(entry.knowledge_level || 0);
+      return Boolean(entry.discovered) || level > 0;
+    })
     .sort((a, b) => {
       const nameA = String(a[1]?.name || a[0]).toLowerCase();
       const nameB = String(b[1]?.name || b[0]).toLowerCase();
@@ -2728,12 +2758,12 @@ function renderCharactersTab() {
       `;
     }
   } else if (activeTab === "races") {
-    if (!raceRows.length) {
-      bodyHtml = `<div class="empty-state small">Noch keine Rassenprofile vorhanden.</div>`;
+    if (!discoveredRaceRows.length) {
+      bodyHtml = `<div class="empty-state small">Noch keine Rassen entdeckt. Rassen erscheinen hier erst nach erster Begegnung oder klarer Story-Erwähnung.</div>`;
     } else {
       bodyHtml = `
         <div class="info-grid codex-grid">
-          ${raceRows.map(([raceId, race]) => {
+          ${discoveredRaceRows.map(([raceId, race]) => {
             const entry = codexRaces[raceId] || {};
             const level = Number(entry.knowledge_level || 0);
             return `
@@ -2754,12 +2784,12 @@ function renderCharactersTab() {
       `;
     }
   } else {
-    if (!beastRows.length) {
-      bodyHtml = `<div class="empty-state small">Noch keine Bestienprofile vorhanden.</div>`;
+    if (!discoveredBeastRows.length) {
+      bodyHtml = `<div class="empty-state small">Noch keine Bestien entdeckt. Bestien erscheinen hier erst nach Sichtung, Kampf oder klarer Story-Erwähnung.</div>`;
     } else {
       bodyHtml = `
         <div class="info-grid codex-grid">
-          ${beastRows.map(([beastId, beast]) => {
+          ${discoveredBeastRows.map(([beastId, beast]) => {
             const entry = codexBeasts[beastId] || {};
             const level = Number(entry.knowledge_level || 0);
             return `
@@ -2854,24 +2884,49 @@ function closeSettingsModal() {
 
 function closeSetupModal() {
   clearPresenceActivity();
-  SETUP_FLOW = { mode: null, slotId: null, stack: [], index: -1 };
+  SETUP_FLOW = { mode: null, slotId: null, stack: [], index: -1, reviewActive: false, reviewPayload: null };
   el("setup-modal").classList.add("hidden");
   el("setup-progress").classList.add("hidden");
+  el("setup-onboarding-head").classList.add("hidden");
   el("setup-ai-copy").classList.add("hidden");
+  el("setup-impact-hint").classList.add("hidden");
   el("setup-question-root").classList.add("hidden");
   el("setup-other-root").classList.add("hidden");
+  el("setup-review-root").classList.add("hidden");
   el("setup-modal-actions").classList.add("hidden");
   el("setup-waiting").classList.add("hidden");
   el("setup-question-root").innerHTML = "";
   el("setup-other-root").innerHTML = "";
+  el("setup-review-root").innerHTML = "";
+  el("setup-waiting-status").innerHTML = "";
   closeSetupRandomModal();
 }
 
 function openWaitingSetupModal() {
   closeSetupModal();
   el("setup-modal-title").textContent = "Warte auf den Host";
-  el("setup-modal-subtitle").textContent = "Die Session ist noch im Welt-Setup.";
+  el("setup-modal-subtitle").textContent = "Die Session ist noch in der Weltgeburt.";
   el("setup-waiting").classList.remove("hidden");
+  const runtime = CAMPAIGN?.setup_runtime || {};
+  const world = runtime.world || {};
+  const progress = world.global_progress || world.progress || { answered: 0, total: 0 };
+  const ready = runtime.ready_counter || { ready: 0, total: 0 };
+  const slots = runtime.slot_statuses || [];
+  const statusRoot = el("setup-waiting-status");
+  statusRoot.innerHTML = `
+    <div class="setup-waiting-summary small">
+      <strong>Phase:</strong> ${escapeHtml(runtime.phase_display || phaseLabel(runtime.phase))}<br/>
+      <strong>Weltfortschritt:</strong> ${Number(progress.answered || 0)}/${Number(progress.total || 0)}<br/>
+      <strong>Bereit:</strong> ${Number(ready.ready || 0)}/${Number(ready.total || 0)} Figuren
+    </div>
+    ${slots.map((slot) => `
+      <div class="setup-waiting-slot-row">
+        <div><strong>${escapeHtml(slot.display_name || slot.slot_id)}</strong></div>
+        <div class="small">${escapeHtml(setupSlotStatusLabel(slot.status))}</div>
+      </div>
+    `).join("")}
+    <div class="small">Das Abenteuer startet erst, wenn alle vorgesehenen Slots geclaimt und fertig sind.</div>
+  `;
   el("setup-modal").classList.remove("hidden");
 }
 
@@ -2902,6 +2957,72 @@ function getSetupOptionEntries(question) {
   }));
 }
 
+function currentSetupRuntime() {
+  const runtime = CAMPAIGN?.setup_runtime || {};
+  if (SETUP_FLOW.mode === "world") return runtime.world || {};
+  return runtime.character || {};
+}
+
+function setupChapterLabel(runtime) {
+  if (runtime?.chapter_label) return runtime.chapter_label;
+  const key = runtime?.chapter_key || "general";
+  const modeMap = SETUP_UI_CHAPTERS[SETUP_FLOW.mode || "world"] || {};
+  return modeMap[key] || modeMap.general || "Kapitel";
+}
+
+function setupProgressPercent(progress) {
+  const answered = Number(progress?.answered || 0);
+  const total = Number(progress?.total || 0);
+  if (!total) return 0;
+  return Math.max(0, Math.min(100, Math.round((answered / total) * 100)));
+}
+
+function setupSlotStatusLabel(status) {
+  return {
+    unclaimed: "Ungeclaimt",
+    in_progress: "In Arbeit",
+    ready: "Bereit",
+    claimed: "Geclaimt"
+  }[String(status || "").toLowerCase()] || (status || "Unbekannt");
+}
+
+function setupImpactHint(question) {
+  if (!question) return "";
+  const id = String(question.question_id || "");
+  const hints = {
+    campaign_length: "Beeinflusst das Pacing und die geplante Turn-Dichte.",
+    resource_name: "Setzt den weltweiten Namen eurer Hauptkraft für Skills und Status.",
+    tone: "Prägt Stil, Konsequenzen und Schwere der Szenen.",
+    difficulty: "Beeinflusst Härte und Kosten von Entscheidungen.",
+    class_start_mode: "Legt fest, ob die Klasse sofort gesetzt oder später in der Story entsteht.",
+    current_focus: "Bestimmt den frühen Story-Druck und Startprioritäten deiner Figur.",
+    world_structure: "Steuert, wie Reise, Orte und Bedrohungen im Run verteilt werden."
+  };
+  return hints[id] || "";
+}
+
+function renderSetupReview() {
+  const runtime = currentSetupRuntime();
+  const preview = runtime?.summary_preview || {};
+  const root = el("setup-review-root");
+  const rows = Object.entries(preview)
+    .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
+    .slice(0, 8)
+    .map(([key, value]) => `
+      <div class="setup-review-item">
+        <div class="setup-review-title">${escapeHtml(String(key).replaceAll("_", " "))}</div>
+        <div class="setup-review-value">${escapeHtml(Array.isArray(value) ? value.join(", ") : String(value))}</div>
+      </div>
+    `)
+    .join("");
+  root.innerHTML = `
+    <div class="panelTitle">${SETUP_FLOW.mode === "world" ? "Welt-Review" : "Figuren-Review"}</div>
+    <div class="small">Prüfe die wichtigsten Entscheidungen. Danach wird der Abschluss gespeichert.</div>
+    <div class="setup-review-grid">${rows || '<div class="setup-review-item"><div class="setup-review-value">Noch keine Zusammenfassung verfügbar.</div></div>'}</div>
+    <div class="small">Hinweis: Das Abenteuer startet erst, wenn Welt und alle vorgesehenen Figuren bereit sind.</div>
+  `;
+}
+
 function renderSetupQuestionInput(question, answer) {
   if (question.type === "text") {
     return `<label class="field"><span>${escapeHtml(question.label)}</span><input id="setup-answer-text" type="text" value="${escapeHtml(typeof answer === "string" ? answer : "")}" /></label>`;
@@ -2915,8 +3036,14 @@ function renderSetupQuestionInput(question, answer) {
       <div class="field">
         <span>${escapeHtml(question.label)}</span>
         <div class="setup-choice-list">
-          <label class="setup-choice"><input type="radio" name="setup-boolean" value="ja" ${boolValue === "ja" ? "checked" : ""} /><span>Ja</span></label>
-          <label class="setup-choice"><input type="radio" name="setup-boolean" value="nein" ${boolValue === "nein" ? "checked" : ""} /><span>Nein</span></label>
+          <label class="setup-choice ${boolValue === "ja" ? "is-selected" : ""}">
+            <input type="radio" name="setup-boolean" value="ja" ${boolValue === "ja" ? "checked" : ""} />
+            <span class="setup-choice-copy"><strong>Ja</strong></span>
+          </label>
+          <label class="setup-choice ${boolValue === "nein" ? "is-selected" : ""}">
+            <input type="radio" name="setup-boolean" value="nein" ${boolValue === "nein" ? "checked" : ""} />
+            <span class="setup-choice-copy"><strong>Nein</strong></span>
+          </label>
         </div>
       </div>
     `;
@@ -2989,21 +3116,44 @@ function renderSetupModal() {
   if (!promptState?.question) return;
   const question = promptState.question;
   const answer = question.existing_answer;
+  const runtime = currentSetupRuntime();
+  const phaseDisplay = CAMPAIGN?.setup_runtime?.phase_display || phaseLabel(CAMPAIGN?.setup_runtime?.phase);
+  const chapterLabel = setupChapterLabel(runtime);
+  const chapterProgress = runtime?.chapter_progress || { answered: 0, total: 0 };
+  const globalProgress = runtime?.global_progress || promptState.progress || { answered: 0, total: 0 };
+  const globalPercent = setupProgressPercent(globalProgress);
+  const impactHint = setupImpactHint(question);
+  const isReview = Boolean(SETUP_FLOW.reviewActive);
   el("setup-modal-title").textContent = SETUP_FLOW.mode === "world" ? "Welt definieren" : `Figur bauen: ${claimedSlot()?.display_name || claimedSlotId() || ""}`;
   el("setup-modal-subtitle").textContent = SETUP_FLOW.mode === "world"
-    ? "Der GM führt den Run durch die Weltdefinition."
-    : "Der GM führt dich jetzt durch den Charakterbau deines Slots.";
+    ? "Weltgeburt: Definiere den Rahmen für den gesamten Run."
+    : "Charakterwerdung: Schärfe Identität, Motivation und Einstieg.";
   el("setup-progress").classList.remove("hidden");
+  el("setup-onboarding-head").classList.remove("hidden");
   el("setup-ai-copy").classList.remove("hidden");
-  el("setup-question-root").classList.remove("hidden");
-  el("setup-other-root").classList.toggle("hidden", !question.allow_other);
+  el("setup-impact-hint").classList.toggle("hidden", !impactHint || isReview);
+  el("setup-question-root").classList.toggle("hidden", isReview);
+  el("setup-other-root").classList.toggle("hidden", !question.allow_other || isReview);
+  el("setup-review-root").classList.toggle("hidden", !isReview);
   el("setup-modal-actions").classList.remove("hidden");
-  el("setup-progress").textContent = `Frage ${promptState.progress.step}/${promptState.progress.total}`;
-  el("setup-ai-copy").textContent = question.ai_copy || question.label;
-  el("setup-question-root").innerHTML = renderSetupQuestionInput(question, answer);
-  el("setup-other-root").innerHTML = renderOtherInput(question, answer);
-  el("setupSkipBtn").classList.toggle("hidden", question.required);
-  el("setupRandomBtn").classList.toggle("hidden", !promptState?.question);
+  el("setup-progress").textContent = `${phaseDisplay || "Setup"} • Frage ${promptState.progress.step}/${promptState.progress.total}`;
+  el("setup-phase-chip").textContent = phaseDisplay || "Setup";
+  el("setup-chapter-title").textContent = chapterLabel;
+  el("setup-chapter-progress").textContent = `Kapitel ${Number(runtime?.chapter_index || 1)}/${Number(runtime?.chapter_total || 1)} • ${Number(chapterProgress.answered || 0)}/${Number(chapterProgress.total || 0)}`;
+  el("setup-global-progress").textContent = `Gesamt ${Number(globalProgress.answered || 0)}/${Number(globalProgress.total || 0)}`;
+  el("setup-progress-global-fill").style.width = `${globalPercent}%`;
+  el("setup-ai-copy").textContent = isReview
+    ? (SETUP_FLOW.mode === "world" ? "Bestätige die Weltdefinition." : "Bestätige den Charakterabschluss.")
+    : (question.ai_copy || question.label);
+  el("setup-impact-hint").textContent = impactHint;
+  if (!isReview) {
+    el("setup-question-root").innerHTML = renderSetupQuestionInput(question, answer);
+    el("setup-other-root").innerHTML = renderOtherInput(question, answer);
+  } else {
+    renderSetupReview();
+  }
+  el("setupSkipBtn").classList.toggle("hidden", question.required || isReview);
+  el("setupRandomBtn").classList.toggle("hidden", !promptState?.question || isReview);
   el("setupPrevBtn").disabled = SETUP_FLOW.index <= 0;
   if (isSharedBlocking()) {
     el("setupPrevBtn").disabled = true;
@@ -3028,8 +3178,13 @@ function renderSetupModal() {
       node.disabled = false;
     });
   }
-  el("setupSubmitBtn").textContent = promptState.progress.step >= promptState.progress.total
-    ? (SETUP_FLOW.mode === "world" ? "Run definieren" : "Figur abschließen")
+  if (isReview) {
+    el("setupPrevBtn").disabled = false;
+  }
+  el("setupSubmitBtn").textContent = isReview
+    ? "Bestätigen & abschließen"
+    : promptState.progress.step >= promptState.progress.total
+    ? (SETUP_FLOW.mode === "world" ? "Zum Review" : "Zum Review")
     : "Antwort senden";
   el("setup-modal").classList.remove("hidden");
 }
@@ -3043,10 +3198,12 @@ function openSetupFlow(mode, payload, slotId = null) {
 
   if (!sameFlow) {
     closeSetupModal();
-    SETUP_FLOW = { mode, slotId: normalizedSlotId, stack: [], index: -1 };
+    SETUP_FLOW = { mode, slotId: normalizedSlotId, stack: [], index: -1, reviewActive: false, reviewPayload: null };
   } else {
     SETUP_FLOW.mode = mode;
     SETUP_FLOW.slotId = normalizedSlotId;
+    SETUP_FLOW.reviewActive = false;
+    SETUP_FLOW.reviewPayload = null;
     el("setup-waiting").classList.add("hidden");
   }
   if (payload?.question) {
@@ -3057,6 +3214,12 @@ function openSetupFlow(mode, payload, slotId = null) {
 }
 
 function previousSetupStep() {
+  if (SETUP_FLOW.reviewActive) {
+    SETUP_FLOW.reviewActive = false;
+    SETUP_FLOW.reviewPayload = null;
+    renderSetupModal();
+    return;
+  }
   if (SETUP_FLOW.index <= 0) return;
   SETUP_FLOW.index -= 1;
   renderSetupModal();
@@ -3250,9 +3413,12 @@ async function applySetupRandomPreview() {
 async function submitSetupAnswer(skip = false) {
   const promptState = buildCurrentSetupPrompt();
   if (!promptState?.question) return;
-  const payload = skip ? { question_id: promptState.question.question_id, value: "" } : readCurrentSetupAnswer();
+  let payload = skip ? { question_id: promptState.question.question_id, value: "" } : readCurrentSetupAnswer();
+  if (SETUP_FLOW.reviewActive && SETUP_FLOW.reviewPayload) {
+    payload = SETUP_FLOW.reviewPayload;
+  }
   if (!payload) return;
-  if (!skip && promptState.question.required) {
+  if (!skip && !SETUP_FLOW.reviewActive && promptState.question.required) {
     const emptyText = payload.value === "" || payload.value === undefined;
     const emptySelect = Array.isArray(payload.selected) ? !payload.selected.length && !(payload.other_values || []).length : false;
     if ((promptState.question.type === "text" || promptState.question.type === "textarea" || promptState.question.type === "select") && emptyText && !payload.other_text) {
@@ -3264,6 +3430,13 @@ async function submitSetupAnswer(skip = false) {
       return;
     }
   }
+  const isFinalQuestion = promptState.progress.step >= promptState.progress.total;
+  if (!skip && isFinalQuestion && !SETUP_FLOW.reviewActive) {
+    SETUP_FLOW.reviewActive = true;
+    SETUP_FLOW.reviewPayload = payload;
+    renderSetupModal();
+    return;
+  }
   setBusy("setupSubmitBtn", true, "Speichere...");
   try {
     clearPresenceActivity();
@@ -3274,6 +3447,8 @@ async function submitSetupAnswer(skip = false) {
     });
     CAMPAIGN = data.campaign;
     if (data.question) {
+      SETUP_FLOW.reviewActive = false;
+      SETUP_FLOW.reviewPayload = null;
       pushSetupPrompt({ question: data.question, progress: data.progress });
       renderSetupModal();
     } else {
@@ -3294,7 +3469,7 @@ function renderCampaignView() {
   const meta = CAMPAIGN.campaign_meta;
   const state = CAMPAIGN.state;
   const claimed = claimedSlot();
-  const isAdventure = state.meta.phase === "adventure";
+  const isAdventure = state.meta.phase === "active";
   const hasIntro = campaignHasIntro();
   const intro = introState();
   const activeNames = (CAMPAIGN.display_party || []).map((entry) => entry.display_name);

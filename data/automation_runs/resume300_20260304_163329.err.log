@@ -1,0 +1,19 @@
+Traceback (most recent call last):
+  File "C:\Projects\isekai-gm-mvp\scripts\organic_longrun.py", line 581, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "C:\Projects\isekai-gm-mvp\scripts\organic_longrun.py", line 567, in main
+    summary = run_long_campaign(
+        args.turns,
+    ...<5 lines>...
+        resume_slot_id=args.slot_id,
+    )
+  File "C:\Projects\isekai-gm-mvp\scripts\organic_longrun.py", line 488, in run_long_campaign
+    result = api(
+        "POST",
+    ...<3 lines>...
+        timeout=600,
+    )
+  File "C:\Projects\isekai-gm-mvp\scripts\organic_longrun.py", line 52, in api
+    raise LongRunError(f"{method} {path} -> {response.status_code}: {detail}")
+LongRunError: POST /api/campaigns/camp_7bf97e3d7d/turns -> 500: 'list' object has no attribute 'get'
