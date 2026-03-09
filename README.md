@@ -1,65 +1,66 @@
-# Isekai GM MVP (Local, deterministic boards)
+# Isekai GM MVP
 
-## What this is
-A minimal web app that:
-- lets 3 players (Matchek/Abo/Beni) send actions
-- calls a local Ollama model with **Structured Outputs (JSON Schema)**
-- stores a canonical world-state in `./data/state.json`
-- shows a dashboard (Character Cards / Plot / Map) in the browser (phone-friendly)
+Lokales, browserbasiertes Multiplayer-Story-RPG mit KI-GM (Ollama), kanonischem Patch-State und Live-Sync.
 
-## Prereqs
-1) Install Docker Desktop
-2) Install Ollama on your host OS and start it (Windows recommended)
-3) Pull a model:
+## Aktueller Kern
+- FastAPI-Backend in `app/main.py`
+- Frontend in `app/static/` (Vanilla JS/HTML/CSS)
+- Kampagnenbasiertes State-Modell in `data/campaigns/*.json`
+- Setup-Flow (Welt/Charakter) über `setup_catalog.json`
+- Story-Turns mit Modi `TUN`, `SAGEN`, `STORY`, `CANON`, `KONTEXT`
+- Strukturierte Turn-Observability mit `trace_id` und Phasen-Logs
+
+## Voraussetzungen
+1. Docker Desktop
+2. Ollama lokal auf dem Host (Windows empfohlen)
+3. Modell ziehen, z. B.:
    - `ollama pull gemma3:12b`
 
-Then run this app:
-
-```bash
-docker compose up --build
-```
-
-Open:
-- PC: http://localhost:8080
-- Phone (same WiFi): http://<PC-IP>:8080
-
-If you need the PC-IP:
-- Windows: `ipconfig` → IPv4 Address
-
-## Gemma defaults and comparison
-- `docker-compose.yml` now defaults to `gemma3:12b`.
-- Override the model for a run with an environment variable:
-
+## Starten
 ```powershell
-$env:OLLAMA_MODEL = "gemma3:8b"
 docker compose up -d --build
 ```
 
-- Runtime status is available at `GET /api/llm/status`.
-- A reproducible smoke benchmark for the app flow is included:
+App öffnen:
+- Desktop: `http://localhost:8080`
+- Handy im selben WLAN: `http://<DEIN-PC-IP>:8080`
 
+PC-IP unter Windows:
 ```powershell
-python scripts/benchmark_models.py gemma3:12b gemma3:8b
+ipconfig
 ```
 
-The benchmark restarts the app per model, runs world setup, character setup, intro generation and one story turn, then prints timings and a short excerpt.
-
-## If you want Ollama in Docker (CPU only)
-Ollama’s official Docker image exists (CPU only unless you have NVIDIA Container Toolkit on Linux).
-Add this service to docker-compose.yml and change OLLAMA_URL to `http://ollama:11434`:
-
-```yaml
-  ollama:
-    image: ollama/ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama:/root/.ollama
-
-volumes:
-  ollama:
+## Rebuild ohne Cache (empfohlen bei größeren Änderungen)
+```powershell
+docker compose down --remove-orphans
+docker compose build --no-cache gm-app
+docker compose up -d --force-recreate gm-app
 ```
 
-## Notes
-- For more deterministic behavior, keep the seed fixed and temperature lower.
-- The model output is enforced with JSON schema (Structured Outputs).
+Shortcut:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/rebuild_gm_app.ps1
+```
+
+## Konfiguration
+In `docker-compose.yml`:
+- `OLLAMA_URL` (Default: `http://host.docker.internal:11434`)
+- `OLLAMA_MODEL` (Default: `gemma3:12b`)
+- `OLLAMA_TIMEOUT_SEC`, `OLLAMA_TEMPERATURE`, `OLLAMA_NUM_CTX`, `OLLAMA_SEED`
+
+Zur Laufzeit prüfen:
+- `GET /api/llm/status`
+
+## Nützliche Checks
+```powershell
+python -m py_compile app/main.py
+node --check app/static/app.js
+python scripts/check_progression_canon_gate.py
+python scripts/check_codex_system.py
+python scripts/check_element_system.py
+```
+
+## Daten & Repo-Hygiene
+- Laufende Kampagnen liegen lokal in `data/campaigns/`.
+- Automations-/Longrun-Artefakte liegen lokal in `data/automation_runs/`.
+- Diese Datenpfade sind absichtlich in `.gitignore`, damit das Repo sauber bleibt.

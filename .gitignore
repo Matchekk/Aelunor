@@ -7,7 +7,12 @@ __pycache__/
 venv/
 node_modules/
 .DS_Store
+.vscode/
+.idea/
+*.tmp
 
 data/campaigns/
 data/state.json
 data/*.json
+data/automation_runs/
+*.log
