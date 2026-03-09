@@ -1,7 +1,7 @@
 version: "3.9"
 services:
   gm-app:
-    build: ./app
+    build: ./backend
     container_name: isekai-gm-app
     ports:
       - "8080:8080"

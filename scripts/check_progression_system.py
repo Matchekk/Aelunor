@@ -53,7 +53,7 @@ def main() -> None:
     os.environ["DATA_DIR"] = temp_dir
     os.environ["ENABLE_LEGACY_SHADOW_WRITEBACK"] = "false"
 
-    import app.main as main_module
+    import backend.main as main_module
 
     main_module = importlib.reload(main_module)
 

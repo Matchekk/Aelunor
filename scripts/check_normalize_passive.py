@@ -80,7 +80,7 @@ def main() -> None:
     os.environ["DATA_DIR"] = temp_dir
     os.environ["ENABLE_HEURISTIC_NORMALIZE_BACKFILL"] = "false"
 
-    import app.main as main_module
+    import backend.main as main_module
 
     main_module = importlib.reload(main_module)
     campaign = prepare_campaign(main_module)

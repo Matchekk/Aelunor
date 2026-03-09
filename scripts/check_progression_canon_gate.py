@@ -9,7 +9,7 @@ def load_main() -> Any:
     root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     if root not in sys.path:
         sys.path.insert(0, root)
-    return importlib.import_module("app.main")
+    return importlib.import_module("backend.main")
 
 
 def fixture(main_module: Any) -> Dict[str, Any]:
@@ -206,4 +206,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -37,7 +37,7 @@ def main() -> None:
     temp_dir = tempfile.mkdtemp(prefix="isekai_element_checks_")
     os.environ["DATA_DIR"] = temp_dir
 
-    import app.main as main_module
+    import backend.main as main_module
 
     main_module = importlib.reload(main_module)
 

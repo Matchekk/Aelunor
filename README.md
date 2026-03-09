@@ -3,8 +3,8 @@
 Lokales, browserbasiertes Multiplayer-Story-RPG mit KI-GM (Ollama), kanonischem Patch-State und Live-Sync.
 
 ## Aktueller Kern
-- FastAPI-Backend in `app/main.py`
-- Frontend in `app/static/` (Vanilla JS/HTML/CSS)
+- FastAPI-Backend in `backend/main.py`
+- Frontend in `backend/static/` (Vanilla JS/HTML/CSS)
 - Kampagnenbasiertes State-Modell in `data/campaigns/*.json`
 - Setup-Flow (Welt/Charakter) über `setup_catalog.json`
 - Story-Turns mit Modi `TUN`, `SAGEN`, `STORY`, `CANON`, `KONTEXT`
@@ -53,8 +53,8 @@ Zur Laufzeit prüfen:
 
 ## Nützliche Checks
 ```powershell
-python -m py_compile app/main.py
-node --check app/static/app.js
+python -m py_compile backend/main.py
+node --check backend/static/app.js
 python scripts/check_progression_canon_gate.py
 python scripts/check_codex_system.py
 python scripts/check_element_system.py
