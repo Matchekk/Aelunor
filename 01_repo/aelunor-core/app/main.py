@@ -21,6 +21,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 BASE_DIR = os.path.dirname(__file__)
+UI_V1_DIST_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "ui", "dist"))
+UI_V1_ASSETS_DIR = os.path.join(UI_V1_DIST_DIR, "assets")
 DATA_DIR = os.getenv("DATA_DIR", "/data")
 LEGACY_STATE_PATH = os.path.join(DATA_DIR, "state.json")
 CAMPAIGNS_DIR = os.path.join(DATA_DIR, "campaigns")
@@ -3865,6 +3867,14 @@ SKILL_MANIFESTATION_NAME_STOPWORDS = {
     "unter",
     "ueber",
 }
+SKILL_MANIFESTATION_NAME_TOKEN_BLACKLIST = {
+    "klasse",
+    "class",
+    "spieler",
+    "character",
+    "charakter",
+    "npc",
+}
 SKILL_KEYS = (
     "stealth",
     "perception",
@@ -4897,10 +4907,10 @@ def ingest_legacy_resources_into_canonical(
         default_sta_current = sta_res.get("current", character.get("sta_max", 10))
         character["sta_current"] = max(0, int(default_sta_current or 0))
     if "res_max" not in source:
-        default_res_max = progression.get("resource_max", legacy_res.get("max", 5))
+        default_res_max = legacy_res.get("max", progression.get("resource_max", 5))
         character["res_max"] = max(0, int(default_res_max or 5))
     if "res_current" not in source:
-        default_res_current = progression.get("resource_current", legacy_res.get("current", character.get("res_max", 5)))
+        default_res_current = legacy_res.get("current", progression.get("resource_current", character.get("res_max", 5)))
         character["res_current"] = max(0, int(default_res_current or 0))
     if "carry_max" not in source:
         carry_limit = int(((character.get("derived") or {}).get("carry_limit", 10)) or 10)
@@ -4908,9 +4918,9 @@ def ingest_legacy_resources_into_canonical(
     if "carry_current" not in source:
         carry_weight = int(((character.get("derived") or {}).get("carry_weight", 0)) or 0)
         character["carry_current"] = max(0, carry_weight)
-    if "hp" in source and "hp_current" not in source:
+    if "hp" in source and "hp_current" not in source and not isinstance(resources.get("hp"), dict):
         character["hp_current"] = max(0, int(character.get("hp", 0) or 0))
-    if "stamina" in source and "sta_current" not in source:
+    if "stamina" in source and "sta_current" not in source and not isinstance(resources.get("stamina"), dict):
         character["sta_current"] = max(0, int(character.get("stamina", 0) or 0))
     progression["resource_name"] = resource_label
 
@@ -6373,6 +6383,8 @@ def is_skill_manifestation_name_plausible(skill_name: str, actor_name: str) -> b
         return False
     if len(words) >= 3 and any(word in SKILL_MANIFESTATION_NAME_STOPWORDS for word in normalized_words):
         return False
+    if any(fragment in normalized for fragment in SKILL_MANIFESTATION_NAME_TOKEN_BLACKLIST):
+        return False
     if any(char.isdigit() for char in clean):
         return False
     if actor_norm and normalized == actor_norm:
@@ -6473,8 +6485,27 @@ def resolve_skill_id_for_event(character: Dict[str, Any], raw_skill_id: str) -> 
     normalized = normalized_eval_text(raw_skill_id)
     if not normalized:
         return ""
+    normalized_compact = re.sub(r"[^a-z0-9]+", "", normalized)
     for skill_id, skill_value in skill_store.items():
-        if normalized_eval_text(str((skill_value or {}).get("name") or skill_id)) == normalized:
+        skill_name = str((skill_value or {}).get("name") or skill_id)
+        candidate_ids = {
+            normalized_eval_text(skill_id),
+            normalized_eval_text(skill_name),
+            normalized_eval_text(skill_id_from_name(skill_name)),
+        }
+        if normalized in candidate_ids:
+            return skill_id
+        candidate_compact = {re.sub(r"[^a-z0-9]+", "", entry) for entry in candidate_ids if entry}
+        if normalized_compact and normalized_compact in candidate_compact:
+            return skill_id
+        for candidate in candidate_ids:
+            if candidate and normalized and (
+                candidate.startswith(normalized)
+                or normalized.startswith(candidate)
+                or SequenceMatcher(None, candidate, normalized).ratio() >= 0.92
+            ):
+                return skill_id
+        if normalized_eval_text(skill_name) == normalized:
             return skill_id
     return ""
 
@@ -6767,12 +6798,9 @@ def reduce_progression_event_density(
         actor_events = grouped.get(actor, [])
         explicit_events: List[Dict[str, Any]] = []
         inferred_events: List[Dict[str, Any]] = []
-        seen_keys: set[tuple[str, str, str]] = set()
+        seen_keys: set[Tuple[str, str, str, str, str, str]] = set()
         for event in actor_events:
-            event_type = str(event.get("type") or "").strip().lower()
-            target_skill = str(event.get("target_skill_id") or "").strip().lower()
-            target_class = str(event.get("target_class_id") or "").strip().lower()
-            dedupe_key = (event_type, target_skill, target_class)
+            dedupe_key = progression_event_dedupe_key(event) + (_event_origin(event),)
             if dedupe_key in seen_keys:
                 continue
             seen_keys.add(dedupe_key)
@@ -6790,7 +6818,9 @@ def reduce_progression_event_density(
             ),
         )
         selected = explicit_events + inferred_events[: max(0, int(caps["inferred"]))]
-        selected = sorted(selected, key=lambda item: int(item.get("_index", 0) or 0))[: max(1, int(caps["total"]))]
+        selected = sorted(selected, key=lambda item: int(item.get("_index", 0) or 0))
+        if not explicit_events:
+            selected = selected[: max(1, int(caps["total"]))]
         for event in selected:
             event.pop("_index", None)
             reduced.append(event)
@@ -7433,6 +7463,33 @@ def infer_manifested_skill_name_with_llm(
     story_text: str,
     existing_names: Set[str],
 ) -> str:
+    motif_key = str(motif or "").strip().lower()
+    motif_token_gate: Dict[str, Tuple[str, ...]] = {
+        "spore": ("myzel", "spore", "wurzel", "ranke", "pilz", "garten", "moos"),
+        "light": ("licht", "strahl", "glanz", "sonnen", "heilig"),
+        "shadow": ("schatten", "nacht", "finster", "dunkel"),
+        "flame": ("feuer", "flamme", "glut", "asche", "brand"),
+        "frost": ("frost", "eis", "reif", "kälte"),
+        "storm": ("sturm", "wind", "donner", "blitz"),
+        "martial": ("klinge", "stoß", "hieb", "parade", "kampf"),
+    }
+    required_tokens = motif_token_gate.get(motif_key, ())
+
+    def motif_token_match(name: str) -> bool:
+        if not required_tokens:
+            return True
+        normalized_name = normalized_eval_text(name)
+        return any(token in normalized_name for token in required_tokens)
+
+    motif_seed_names: Dict[str, List[str]] = {
+        "spore": ["Myzelgriff", "Sporenfessel", "Wurzelstoß", "Gartenklaue"],
+        "light": ["Lichtlanze", "Strahlenschnitt", "Sonnenimpuls", "Heiligglanz"],
+        "shadow": ["Schattenriss", "Nachtfessel", "Finsterhieb", "Dunkelgriff"],
+        "flame": ["Glutstoß", "Flammenriss", "Aschenklinge", "Feuerschwinge"],
+        "frost": ["Frostriss", "Eisfessel", "Reifstoß", "Kältehieb"],
+        "storm": ["Donnerschnitt", "Sturmimpuls", "Windriss", "Blitzgriff"],
+        "martial": ["Klingenfokus", "Stoßtechnik", "Parierhieb", "Kampftakt"],
+    }
     motif_label = {
         "spore": "Sporen/Natur",
         "light": "Licht",
@@ -7441,7 +7498,7 @@ def infer_manifested_skill_name_with_llm(
         "frost": "Frost/Eis",
         "storm": "Sturm/Wind/Donner",
         "martial": "Klingenkampf/Körpertechnik",
-    }.get(str(motif or "").strip().lower(), "Mystik")
+    }.get(motif_key, "Mystik")
     user_prompt = (
         f"Akteur: {actor_name}\n"
         f"Motiv: {motif_label}\n"
@@ -7470,8 +7527,13 @@ def infer_manifested_skill_name_with_llm(
             and normalized_candidate
             and normalized_candidate not in existing_names
             and is_skill_manifestation_name_plausible(candidate, actor_name)
+            and motif_token_match(candidate)
         ):
             return candidate
+    for fallback_candidate in motif_seed_names.get(motif_key, []):
+        normalized_fallback = normalized_eval_text(fallback_candidate)
+        if normalized_fallback and normalized_fallback not in existing_names and is_skill_manifestation_name_plausible(fallback_candidate, actor_name):
+            return fallback_candidate
     fallback = f"{motif_label} Manifestation".replace("/", " ")
     fallback = re.sub(r"\s+", " ", fallback).strip()
     if normalized_eval_text(fallback) in existing_names or not is_skill_manifestation_name_plausible(fallback, actor_name):
@@ -8075,7 +8137,12 @@ def migrate_effects_from_conditions(character: Dict[str, Any]) -> None:
             )
 
 
-def normalize_character_state(character: Dict[str, Any], slot_name: str, items_db: Dict[str, Any]) -> Dict[str, Any]:
+def normalize_character_state(
+    character: Dict[str, Any],
+    slot_name: str,
+    items_db: Dict[str, Any],
+    world_time: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     base = blank_character_state(slot_name)
     merged = deep_copy(base)
     merged.update(
@@ -8215,7 +8282,8 @@ def normalize_character_state(character: Dict[str, Any], slot_name: str, items_d
     ingest_legacy_resources_into_canonical(merged, source_character=character)
     reconcile_canonical_resources(merged)
     resolve_injury_healing(merged, int(((character.get("meta") or {}).get("turn", 0)) or 0))
-    rebuild_character_derived(merged, items_db)
+    rebuild_character_derived(merged, items_db, world_time)
+    ingest_legacy_resources_into_canonical(merged, source_character=character)
     reconcile_canonical_resources(merged)
     strip_legacy_shadow_fields(merged)
     if ENABLE_LEGACY_SHADOW_WRITEBACK:
@@ -8228,8 +8296,7 @@ def rebuild_all_character_derived(campaign: Dict[str, Any]) -> None:
     items_db = campaign.get("state", {}).get("items", {}) or {}
     world_time = normalize_world_time(campaign.get("state", {}).get("meta", {}))
     for slot_name, character in (campaign.get("state", {}).get("characters") or {}).items():
-        campaign["state"]["characters"][slot_name] = normalize_character_state(character, slot_name, items_db)
-        rebuild_character_derived(campaign["state"]["characters"][slot_name], items_db, world_time)
+        campaign["state"]["characters"][slot_name] = normalize_character_state(character, slot_name, items_db, world_time)
 
 
 def derive_scene_name(campaign: Dict[str, Any], slot_name: str) -> str:
@@ -8376,7 +8443,7 @@ def normalize_extraction_quarantine_meta(meta: Dict[str, Any]) -> Dict[str, Any]
     raw = meta.get("extraction_quarantine")
     quarantine = deep_copy(raw) if isinstance(raw, dict) else default_extraction_quarantine()
     max_entries = int(quarantine.get("max_entries", EXTRACTION_QUARANTINE_DEFAULT_MAX) or EXTRACTION_QUARANTINE_DEFAULT_MAX)
-    max_entries = clamp(max_entries, 50, 1000)
+    max_entries = clamp(max_entries, 1, 1000)
     entries: List[Dict[str, Any]] = []
     for raw_entry in (quarantine.get("entries") or []):
         if not isinstance(raw_entry, dict):
@@ -10763,19 +10830,20 @@ def extract_scene_candidates(text: str, actor_display: str) -> List[Dict[str, st
     if not content.strip():
         return []
     name_pattern = r"([A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9'’\-]+(?:\s+[A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9'’\-]+){0,5})"
+    article_prefix = r"(?:den|die|das|dem|der|ein|eine|einen|einem|einer)\s+"
     arrival_patterns = (
-        (rf"\bDie Gruppe (?:ist jetzt in|erreicht|betritt|gelangt nach|geht nach|zieht nach|kommt in|kommt nach)\s+{name_pattern}", "group"),
-        (rf"\bIhr (?:erreicht|betretet|gelangt nach|geht nach|kommt in|kommt nach|zieht nach)\s+{name_pattern}", "group"),
-        (rf"\bDie Gruppe [^.!?\n]*?\b(?:steht|steht jetzt|befindet sich|lagert|ruht|kämpft)\s+(?:in|an|auf|unter)\s+{name_pattern}", "group"),
-        (rf"\bIhr [^.!?\n]*?\b(?:steht|steht jetzt|befindet euch|seid|lagert|ruht|kämpft)\s+(?:in|an|auf|unter)\s+{name_pattern}", "group"),
-        (rf"\bDie Gruppe [^.!?\n]*?\bin den Ruinen von\s+{name_pattern}", "group"),
-        (rf"\bIhr [^.!?\n]*?\bin den Ruinen von\s+{name_pattern}", "group"),
-        (rf"\b{re.escape(actor_display)} (?:ist jetzt in|erreicht|betritt|gelangt nach|geht nach|zieht nach|kommt in|kommt nach)\s+{name_pattern}", "actor"),
-        (rf"\b{re.escape(actor_display)} [^.!?\n]*?\b(?:steht|steht jetzt|befindet sich|lagert|ruht|kämpft)\s+(?:in|an|auf|unter)\s+{name_pattern}", "actor"),
-        (rf"\b{re.escape(actor_display)} [^.!?\n]*?\bin den Ruinen von\s+{name_pattern}", "actor"),
-        (rf"\b(?:er|sie) (?:ist jetzt in|erreicht|betritt|gelangt nach|geht nach|zieht nach|kommt in|kommt nach)\s+{name_pattern}", "actor"),
-        (rf"\b(?:er|sie) [^.!?\n]*?\b(?:steht|steht jetzt|befindet sich|lagert|ruht|kämpft)\s+(?:in|an|auf|unter)\s+{name_pattern}", "actor"),
-        (rf"\b(?:er|sie) [^.!?\n]*?\bin den Ruinen von\s+{name_pattern}", "actor"),
+        (rf"\bDie Gruppe (?:ist jetzt in|erreicht|betritt|gelangt nach|geht nach|zieht nach|kommt in|kommt nach)\s+(?:{article_prefix})?{name_pattern}", "group"),
+        (rf"\bIhr (?:erreicht|betretet|gelangt nach|geht nach|kommt in|kommt nach|zieht nach)\s+(?:{article_prefix})?{name_pattern}", "group"),
+        (rf"\bDie Gruppe [^.!?\n]*?\b(?:steht|steht jetzt|befindet sich|lagert|ruht|kämpft)\s+(?:in|an|auf|unter)\s+(?:{article_prefix})?{name_pattern}", "group"),
+        (rf"\bIhr [^.!?\n]*?\b(?:steht|steht jetzt|befindet euch|seid|lagert|ruht|kämpft)\s+(?:in|an|auf|unter)\s+(?:{article_prefix})?{name_pattern}", "group"),
+        (rf"\bDie Gruppe [^.!?\n]*?\bin den Ruinen von\s+(?:{article_prefix})?{name_pattern}", "group"),
+        (rf"\bIhr [^.!?\n]*?\bin den Ruinen von\s+(?:{article_prefix})?{name_pattern}", "group"),
+        (rf"\b{re.escape(actor_display)} (?:ist jetzt in|erreicht|betritt|gelangt nach|geht nach|zieht nach|kommt in|kommt nach)\s+(?:{article_prefix})?{name_pattern}", "actor"),
+        (rf"\b{re.escape(actor_display)} [^.!?\n]*?\b(?:steht|steht jetzt|befindet sich|lagert|ruht|kämpft)\s+(?:in|an|auf|unter)\s+(?:{article_prefix})?{name_pattern}", "actor"),
+        (rf"\b{re.escape(actor_display)} [^.!?\n]*?\bin den Ruinen von\s+(?:{article_prefix})?{name_pattern}", "actor"),
+        (rf"\b(?:er|sie) (?:ist jetzt in|erreicht|betritt|gelangt nach|geht nach|zieht nach|kommt in|kommt nach)\s+(?:{article_prefix})?{name_pattern}", "actor"),
+        (rf"\b(?:er|sie) [^.!?\n]*?\b(?:steht|steht jetzt|befindet sich|lagert|ruht|kämpft)\s+(?:in|an|auf|unter)\s+(?:{article_prefix})?{name_pattern}", "actor"),
+        (rf"\b(?:er|sie) [^.!?\n]*?\bin den Ruinen von\s+(?:{article_prefix})?{name_pattern}", "actor"),
     )
     mention_patterns = (
         (rf"\bin den Ruinen von\s+{name_pattern}", "mention"),
@@ -14177,9 +14245,15 @@ def normalize_campaign(campaign: Dict[str, Any]) -> Dict[str, Any]:
     if setup["world"].get("completed"):
         ensure_world_codex_from_setup(state, setup["world"].get("summary") or {})
 
+    effective_world_time = normalize_world_time(state["meta"])
     for slot_name in campaign_slots(campaign):
         state["characters"].setdefault(slot_name, blank_character_state(slot_name))
-        state["characters"][slot_name] = normalize_character_state(state["characters"][slot_name], slot_name, state.get("items", {}))
+        state["characters"][slot_name] = normalize_character_state(
+            state["characters"][slot_name],
+            slot_name,
+            state.get("items", {}),
+            effective_world_time,
+        )
         state["characters"][slot_name]["element_affinities"] = normalize_element_id_list(
             state["characters"][slot_name].get("element_affinities") or [],
             state.get("world") or {},
@@ -14236,7 +14310,6 @@ def normalize_campaign(campaign: Dict[str, Any]) -> Dict[str, Any]:
     # Legacy backfill is explicit opt-in only.
     if ENABLE_HEURISTIC_NORMALIZE_BACKFILL:
         run_legacy_normalize_backfill(campaign)
-    rebuild_all_character_derived(campaign)
     compute_turn_budget_estimates(state)
 
     return campaign
@@ -18547,6 +18620,7 @@ class FactionJoinIn(BaseModel):
 
 app = FastAPI(title="Aelunor")
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+app.mount("/v1/assets", StaticFiles(directory=UI_V1_ASSETS_DIR, check_dir=False), name="v1-assets")
 ensure_campaign_storage()
 
 
@@ -18554,6 +18628,23 @@ ensure_campaign_storage()
 def index() -> str:
     with open(os.path.join(BASE_DIR, "static", "index.html"), "r", encoding="utf-8") as f:
         return f.read()
+
+
+def _v1_index_html() -> str:
+    index_path = os.path.join(UI_V1_DIST_DIR, "index.html")
+    if os.path.isfile(index_path):
+        with open(index_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return (
+        "<!doctype html><html><head><meta charset='utf-8'><title>Aelunor UI v1</title></head>"
+        "<body><h1>Aelunor UI v1 is not built yet.</h1><p>Run the UI build inside the ui directory.</p></body></html>"
+    )
+
+
+@app.get("/v1", response_class=HTMLResponse)
+@app.get("/v1/", response_class=HTMLResponse)
+def index_v1() -> str:
+    return _v1_index_html()
 
 
 @app.get("/api/state")

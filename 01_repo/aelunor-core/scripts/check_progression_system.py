@@ -48,6 +48,25 @@ def apply_patch_and_progress(
     return result
 
 
+def find_skill(module: Any, character: Dict[str, Any], *, skill_id: str = "", skill_name: str = "") -> Dict[str, Any]:
+    skills = character.get("skills") or {}
+    if skill_id and skill_id in skills and isinstance(skills.get(skill_id), dict):
+        return skills.get(skill_id) or {}
+    wanted_id = module.normalized_eval_text(skill_id)
+    wanted_name = module.normalized_eval_text(skill_name)
+    for current_id, payload in skills.items():
+        if not isinstance(payload, dict):
+            continue
+        if wanted_id and (
+            module.normalized_eval_text(current_id) == wanted_id
+            or module.normalized_eval_text(payload.get("id", "")) == wanted_id
+        ):
+            return payload
+        if wanted_name and module.normalized_eval_text(payload.get("name", "")) == wanted_name:
+            return payload
+    return {}
+
+
 def main() -> None:
     temp_dir = tempfile.mkdtemp(prefix="isekai_progression_check_")
     os.environ["DATA_DIR"] = temp_dir
@@ -125,7 +144,12 @@ def main() -> None:
         ]
     }
     apply_patch_and_progress(main_module, campaign, patch, actor=slot_id)
-    skill = (campaign["state"]["characters"][slot_id].get("skills") or {}).get("skill_runenstoss") or {}
+    skill = find_skill(
+        main_module,
+        campaign["state"]["characters"][slot_id],
+        skill_id="skill_runenstoss",
+        skill_name="Runenstoß",
+    )
     assert int(skill.get("xp", 0) or 0) >= 0, "Skill XP fehlt"
     assert int(skill.get("level", 1) or 1) > 1, "Skill Level-Up blieb aus"
 
