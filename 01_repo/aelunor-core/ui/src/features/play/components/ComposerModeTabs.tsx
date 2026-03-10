@@ -9,20 +9,22 @@ interface ComposerModeTabsProps {
 
 export function ComposerModeTabs({ current_mode, disabled, on_change }: ComposerModeTabsProps) {
   return (
-    <div className="composer-mode-tabs" role="tablist" aria-label="Turn mode">
-      {PLAY_MODE_CONFIG.map((mode) => (
-        <button
-          key={mode.id}
-          type="button"
-          role="tab"
-          aria-selected={current_mode === mode.id}
-          className={current_mode === mode.id ? "is-active" : ""}
-          disabled={disabled}
-          onClick={() => on_change(mode.id)}
-        >
-          {mode.label}
-        </button>
-      ))}
-    </div>
+    <section className="composer-mode-cluster" aria-label="Turn mode">
+      <div className="composer-mode-tabs action-switch" role="tablist" aria-label="Turn modes">
+        {PLAY_MODE_CONFIG.map((mode) => (
+          <button
+            key={mode.id}
+            type="button"
+            role="tab"
+            aria-selected={current_mode === mode.id}
+            className={current_mode === mode.id ? "is-active action-mode" : "action-mode"}
+            disabled={disabled}
+            onClick={() => on_change(mode.id)}
+          >
+            {mode.label}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }

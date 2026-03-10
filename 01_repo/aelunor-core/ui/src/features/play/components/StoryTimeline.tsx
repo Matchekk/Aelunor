@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import type { TimelineEntry } from "../selectors";
-import { deriveTurnLead, deriveTurnOutcome, formatTimelineTimestamp } from "../selectors";
+import { deriveTurnDeltaRows, deriveTurnLead, deriveTurnOutcome, formatTimelineTimestamp } from "../selectors";
 import {
   deriveInitialVisibleCount,
   deriveNextVisibleCount,
@@ -25,8 +25,10 @@ interface TimelineItemProps {
 }
 
 const TimelineItem = memo(function TimelineItem({ entry, character_sheet_slots, on_open_character }: TimelineItemProps) {
+  const deltaRows = useMemo(() => deriveTurnDeltaRows(entry), [entry]);
+
   return (
-    <li className="timeline-item">
+    <li className="timeline-item story-turn-card">
       <div className="timeline-item-head">
         <div className="timeline-item-title">
           <strong>Turn {entry.turn_number ?? "?"}</strong>
@@ -35,7 +37,7 @@ const TimelineItem = memo(function TimelineItem({ entry, character_sheet_slots, 
         </div>
         <span>{formatTimelineTimestamp(entry.created_at)}</span>
       </div>
-      <div className="timeline-item-actor">
+      <div className="timeline-item-actor story-turn-meta">
         {character_sheet_slots.includes(entry.actor_id) ? (
           <button type="button" className="timeline-actor-button" onClick={() => on_open_character(entry.actor_id)}>
             {entry.actor_display}
@@ -44,9 +46,24 @@ const TimelineItem = memo(function TimelineItem({ entry, character_sheet_slots, 
           entry.actor_display
         )}
       </div>
-      <p className="timeline-item-input">{deriveTurnLead(entry)}</p>
-      <p>{deriveTurnOutcome(entry)}</p>
-      {entry.patch_summary_label ? <div className="status-muted">{entry.patch_summary_label}</div> : null}
+      <p className="timeline-item-input story-turn-lead">{deriveTurnLead(entry)}</p>
+      <p className="story-turn-text">{deriveTurnOutcome(entry)}</p>
+      {deltaRows.length > 0 ? (
+        <details className="timeline-delta-block">
+          <summary>
+            <span>State delta</span>
+            <small>{entry.patch_summary_label ?? `${deltaRows.length} changes`}</small>
+          </summary>
+          <ul>
+            {deltaRows.map((row) => (
+              <li key={row.key}>
+                <span>{row.label}</span>
+                <strong>{row.value}</strong>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </li>
   );
 });
@@ -83,9 +100,9 @@ export const StoryTimeline = memo(function StoryTimeline({
   );
 
   return (
-    <section className="v1-panel story-timeline">
-      <div className="v1-panel-head">
-        <h2>Story Timeline</h2>
+    <section className="story-timeline panel timeline-panel">
+      <div className="v1-panel-head timeline-head">
+        <h2 className="panelTitle">Geschichte</h2>
         <span>{selected_scene_name ? `${selected_scene_name} • ${entries.length} turns` : `${entries.length} turns`}</span>
       </div>
       {windowState.hidden_count > 0 ? (

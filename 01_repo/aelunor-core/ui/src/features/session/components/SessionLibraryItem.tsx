@@ -11,13 +11,13 @@ interface SessionLibraryItemProps {
 
 export function SessionLibraryItem({ entry, resume_pending, on_resume, on_edit, on_forget }: SessionLibraryItemProps) {
   return (
-    <article className="session-library-item">
+    <article className="session-library-item hub-campaign-item">
       <div>
         <h3>{entry.label}</h3>
         <p className="status-muted">{deriveSessionSubtitle(entry)}</p>
       </div>
       <div className="session-library-item-actions">
-        <button type="button" onClick={() => on_resume(entry)} disabled={resume_pending}>
+        <button type="button" className="hub-primary-cta" onClick={() => on_resume(entry)} disabled={resume_pending}>
           {resume_pending ? "Resuming..." : "Resume"}
         </button>
         <button type="button" onClick={() => on_edit(entry)}>

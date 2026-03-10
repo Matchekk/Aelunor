@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import { createCampaignFixture } from "../../test/campaignFixture";
-import { deriveFilteredTimelineEntries, deriveSceneOptions, hasMeaningfulSceneData } from "./selectors";
+import { deriveFilteredTimelineEntries, deriveSceneOptions } from "./selectors";
 
 describe("scene selectors", () => {
   it("returns meaningful scene options when scene data exists", () => {
     const campaign = createCampaignFixture();
 
     const options = deriveSceneOptions(campaign);
-    expect(hasMeaningfulSceneData(campaign)).toBe(true);
+    expect(options.length).toBeGreaterThan(1);
     expect(options.map((entry) => entry.scene_id)).toEqual(["all", "scene_forest", "scene_square"]);
   });
 

@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import "./sessionHub.css";
 
 import type { SessionBootstrap } from "../../app/bootstrap/sessionStorage";
 import { clearSessionBootstrap, readSessionBootstrap, writeSessionBootstrap } from "../../app/bootstrap/sessionStorage";
@@ -19,7 +20,8 @@ import {
 } from "./sessionLibrary";
 import { hasActiveSession, toSessionBootstrap } from "./selectors";
 import { CreateCampaignCard } from "./components/CreateCampaignCard";
-import { HeroPanel } from "./components/HeroPanel";
+import { HubContinuationPanel } from "./components/HubContinuationPanel";
+import { HubTopBar } from "./components/HubTopBar";
 import { JoinCampaignCard } from "./components/JoinCampaignCard";
 import { LlmStatusPanel } from "./components/LlmStatusPanel";
 import { SessionEditorDialog } from "./components/SessionEditorDialog";
@@ -110,7 +112,14 @@ export function SessionHubWorkspace({
   const joinMutation = useJoinCampaignMutation();
 
   const libraryEntries = useMemo(() => readSessionLibrary(), [libraryVersion]);
+  const latestLibraryEntry = libraryEntries[0] ?? null;
   const currentSessionIsActive = hasActiveSession(active_session);
+  const suggestedDisplayName = useMemo(() => {
+    if (latestLibraryEntry?.display_name) {
+      return latestLibraryEntry.display_name;
+    }
+    return null;
+  }, [latestLibraryEntry]);
 
   const refreshLibrary = useCallback(() => {
     setLibraryVersion((prev) => prev + 1);
@@ -294,33 +303,14 @@ export function SessionHubWorkspace({
 
   const createError = createMutation.isError ? asErrorMessage(createMutation.error) : null;
   const joinError = joinMutation.isError ? asErrorMessage(joinMutation.error) : null;
+  const globalErrorMessage = resumeError ?? route_error_message;
 
   return (
-    <main className="v1-app-shell session-hub-shell">
-      <HeroPanel
-        has_active_session={currentSessionIsActive}
-        active_campaign_id={active_session.campaign_id}
-        active_join_code={active_session.join_code}
-        resume_pending={Boolean(resumePendingCampaignId && currentSessionIsActive)}
-        status_message={statusMessage}
-        resume_error={resumeError ?? route_error_message}
-        on_resume_current={() => {
-          const libraryEntry = readSessionLibrary().find((entry) => entry.campaign_id === active_session.campaign_id);
-          void bootstrapSession(
-            active_session,
-            "Resume current session",
-            buildLocalMeta({
-              label: libraryEntry?.label,
-              campaign_title: libraryEntry?.campaign_title ?? null,
-              display_name: libraryEntry?.display_name ?? null,
-            }),
-          );
-        }}
-        on_clear_current={clearCurrentSession}
-      />
+    <main className="v1-app-shell session-hub-shell gateway-shell">
+      <HubTopBar session_count={libraryEntries.length} has_active_session={currentSessionIsActive} />
 
       {lastFailedCampaignId ? (
-        <section className="v1-panel session-card">
+        <section className="v1-panel session-card hub-alert-card">
           <div className="v1-panel-head">
             <h2>Stale local credentials</h2>
           </div>
@@ -336,16 +326,53 @@ export function SessionHubWorkspace({
         </section>
       ) : null}
 
-      <section className="session-action-grid">
-        <CreateCampaignCard
-          is_pending={createMutation.isPending}
-          error_message={createError}
-          on_submit={handleCreateSubmit}
+      <section className="hub-primary-grid">
+        <HubContinuationPanel
+          has_active_session={currentSessionIsActive}
+          active_campaign_id={active_session.campaign_id}
+          active_join_code={active_session.join_code}
+          latest_entry={latestLibraryEntry}
+          resume_pending_campaign_id={resumePendingCampaignId}
+          status_message={statusMessage}
+          resume_error={globalErrorMessage}
+          on_resume_current={() => {
+            const libraryEntry = readSessionLibrary().find((entry) => entry.campaign_id === active_session.campaign_id);
+            void bootstrapSession(
+              active_session,
+              "Resume current session",
+              buildLocalMeta({
+                label: libraryEntry?.label,
+                campaign_title: libraryEntry?.campaign_title ?? null,
+                display_name: libraryEntry?.display_name ?? null,
+              }),
+            );
+          }}
+          on_resume_latest={() => {
+            if (!latestLibraryEntry) {
+              return;
+            }
+            void handleResumeEntry(latestLibraryEntry);
+          }}
+          on_clear_current={clearCurrentSession}
         />
-        <JoinCampaignCard is_pending={joinMutation.isPending} error_message={joinError} on_submit={handleJoinSubmit} />
+
+        <section className="hub-actions-grid">
+          <CreateCampaignCard
+            is_pending={createMutation.isPending}
+            error_message={createError}
+            default_display_name={suggestedDisplayName}
+            on_submit={handleCreateSubmit}
+          />
+          <JoinCampaignCard
+            is_pending={joinMutation.isPending}
+            error_message={joinError}
+            default_display_name={suggestedDisplayName}
+            on_submit={handleJoinSubmit}
+          />
+        </section>
       </section>
 
-      <section className="session-support-grid">
+      <section className="hub-campaigns-main">
         <SessionLibraryPanel
           entries={libraryEntries}
           resume_pending_campaign_id={resumePendingCampaignId}
@@ -356,8 +383,12 @@ export function SessionHubWorkspace({
           }}
           on_forget={handleForgetEntry}
         />
-        <LlmStatusPanel />
       </section>
+
+      <details className="hub-diagnostics">
+        <summary>System / Diagnose (optional)</summary>
+        <LlmStatusPanel />
+      </details>
 
       <SessionEditorDialog
         open={Boolean(editingEntry)}

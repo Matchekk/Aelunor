@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, type NavigateOptions } from "react-router-dom";
 
-import { buildCampaignPath, buildSurfaceHistoryState, normalizePlayRouteState, serializePlayRouteState, withBoardsRouteState, withContextRouteState, withDrawerRouteState, withSceneRouteState } from "../../app/routing/routes";
+import { buildCampaignPath, buildSurfaceHistoryState, buildV1HubPath, normalizePlayRouteState, serializePlayRouteState, withBoardsRouteState, withContextRouteState, withDrawerRouteState, withSceneRouteState } from "../../app/routing/routes";
 import type { SessionBootstrap } from "../../app/bootstrap/sessionStorage";
 import type { CampaignSnapshot, ContextQueryResponse } from "../../shared/api/contracts";
 import { BoardsModal } from "../boards/BoardsModal";
@@ -12,17 +12,16 @@ import { readContextCache, writeContextCache } from "../context/cache";
 import { useContextStore } from "../context/contextStore";
 import { DrawerHost } from "../drawers/DrawerHost";
 import { useDrawerStore } from "../drawers/drawerStore";
-import { SceneSwitcher } from "../scenes/SceneSwitcher";
-import { deriveFilteredTimelineEntries, deriveSceneOptions, type SceneFilterId } from "../scenes/selectors";
+import { deriveFilteredTimelineEntries, deriveSceneMembership, deriveSceneOptions, type SceneFilterId } from "../scenes/selectors";
 import { clearBoardNovelty, trackCampaignNovelty } from "./novelty";
 import { readSessionLibrary, deleteSessionLibraryEntry } from "../session/sessionLibrary";
 import { useLayoutStore } from "../../state/layoutStore";
-import { PresenceBar } from "./components/PresenceBar";
 import { RightRail } from "./components/RightRail";
 import { StoryTimeline } from "./components/StoryTimeline";
 import { TopBar } from "./components/TopBar";
 import { Composer } from "./components/Composer";
-import { derivePartySummary } from "./selectors";
+import { derivePartySummary, deriveViewerSummary } from "./selectors";
+import { useUnclaimSlotMutation } from "../claim/mutations";
 
 interface CampaignWorkspaceProps {
   campaign: CampaignSnapshot;
@@ -48,6 +47,7 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
   const contextReturnFocusRef = useRef<HTMLElement | null>(null);
   const playRouteState = useMemo(() => normalizePlayRouteState(campaign, location.search), [campaign, location.search]);
   const selectedSceneId = playRouteState.scene_id as SceneFilterId;
+  const claimedSlotId = campaign.viewer_context.claimed_slot_id || null;
   const boardsOpen = playRouteState.boards_tab !== null;
   const activeBoardTab: BoardTabId = playRouteState.boards_tab ?? "plot";
   const openCharacter = useDrawerStore((state) => state.open_character);
@@ -62,6 +62,7 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
   const contextOpen = useContextStore((state) => state.open);
   const openContextStore = useContextStore((state) => state.open_context);
   const closeContextStore = useContextStore((state) => state.close_context);
+  const unclaimMutation = useUnclaimSlotMutation(campaign.campaign_meta.campaign_id);
 
   useEffect(() => {
     setSessionRenameValue(campaign.campaign_meta.title || "");
@@ -85,6 +86,11 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
     () => sceneOptions.find((entry) => entry.scene_id === selectedSceneId) ?? null,
     [sceneOptions, selectedSceneId],
   );
+  const selectedSceneMembers = useMemo(
+    () => deriveSceneMembership(campaign, selectedSceneId).slice(0, 5),
+    [campaign, selectedSceneId],
+  );
+  const viewerSummary = useMemo(() => deriveViewerSummary(campaign), [campaign.viewer_context]);
   const visibleTimelineEntries = useMemo(
     () => deriveFilteredTimelineEntries(campaign, selectedSceneId),
     [campaign.active_turns, campaign.state, selectedSceneId],
@@ -230,34 +236,53 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
         campaign={campaign}
         session={session}
         boards_novelty_label={boardsNoveltyLabel}
+        selected_scene_id={selectedSceneId}
+        scene_options={sceneOptions}
+        on_scene_change={(scene_id) => {
+          navigatePlayState(withSceneRouteState(playRouteState, scene_id), {
+            state: buildSurfaceHistoryState("scene", location.pathname, location.search),
+          });
+        }}
         on_open_boards={openBoards}
+        can_unclaim={Boolean(claimedSlotId)}
+        unclaim_pending={unclaimMutation.isPending}
+        on_unclaim={() => {
+          if (!claimedSlotId) {
+            return;
+          }
+          void unclaimMutation.mutateAsync(claimedSlotId);
+        }}
+        on_go_hub={() => {
+          navigate(buildV1HubPath());
+        }}
+        on_leave_session={() => {
+          on_clear_active_session();
+          navigate(buildV1HubPath(), { replace: true });
+        }}
       />
-      <PresenceBar />
-      <section className="v1-panel campaign-play-banner">
-        <div className="v1-panel-head">
-          <h2>Campaign Play</h2>
-          <span>Phase J</span>
-        </div>
-        <p className="status-muted">
-          Story flow stays primary. The timeline now keeps long visible histories collapsed by default so scene filters,
-          composer work, and contextual surfaces remain stable under larger campaign loads.
-        </p>
-        <div className="campaign-readonly-banner-meta">
-          <span className="status-pill">{partySummary}</span>
-          <span className="status-pill">Playable story mode</span>
-        </div>
-      </section>
-      <section className={rightRailOpen ? "workspace-grid" : "workspace-grid no-rail"}>
-        <section className="campaign-main-column">
-          <SceneSwitcher
-            campaign={campaign}
-            selected_scene_id={selectedSceneId}
-            on_change={(scene_id) => {
-              navigatePlayState(withSceneRouteState(playRouteState, scene_id), {
-                state: buildSurfaceHistoryState("scene", location.pathname, location.search),
-              });
-            }}
-          />
+      <section className={rightRailOpen ? "workspace-grid play-workspace-grid layout" : "workspace-grid play-workspace-grid layout no-rail"}>
+        <section className="campaign-main-column story-workspace story-surface timeline-column">
+          <section className="story-context-row">
+            <div className="story-context-main">
+              <span className="status-pill">Viewer {viewerSummary}</span>
+              <span className="status-pill">
+                Scene {selectedScene?.scene_name ?? (selectedSceneId === "all" ? "All scenes" : selectedSceneId)}
+              </span>
+              <span className="status-pill">{partySummary}</span>
+            </div>
+            <div className="story-context-members">
+              {selectedSceneMembers.length === 0 ? (
+                <span className="status-muted">No known scene membership right now.</span>
+              ) : (
+                selectedSceneMembers.map((entry) => (
+                  <span key={entry.slot_id} className="story-member-chip">
+                    {entry.display_name}
+                    {entry.scene_name ? <small>{entry.scene_name}</small> : null}
+                  </span>
+                ))
+              )}
+            </div>
+          </section>
           <StoryTimeline
             entries={visibleTimelineEntries}
             character_sheet_slots={campaign.character_sheet_slots}
@@ -270,7 +295,6 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
         {rightRailOpen ? (
           <RightRail
             campaign={campaign}
-            session={session}
             selected_scene_id={selectedSceneId}
             on_open_character={openCharacterDrawer}
             on_open_npc={openNpcDrawer}

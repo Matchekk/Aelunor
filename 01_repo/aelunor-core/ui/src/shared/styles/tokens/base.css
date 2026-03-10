@@ -25,6 +25,13 @@
   --v1-surface-inset: rgba(8, 12, 19, 0.82);
   --v1-surface-backdrop: rgba(5, 8, 13, 0.72);
   --v1-surface-backdrop-strong: rgba(4, 6, 10, 0.84);
+  --v1-surface-story: rgba(20, 23, 29, 0.94);
+  --v1-surface-story-alt: rgba(27, 31, 38, 0.96);
+  --v1-surface-hud: rgba(13, 19, 30, 0.94);
+  --v1-surface-system: rgba(10, 15, 24, 0.95);
+  --v1-surface-line-story: rgba(198, 177, 132, 0.26);
+  --v1-surface-line-hud: rgba(124, 172, 219, 0.25);
+  --v1-surface-line-system: rgba(108, 137, 173, 0.3);
 
   --v1-text-strong: #fbf6eb;
   --v1-text-base: var(--v1-text);

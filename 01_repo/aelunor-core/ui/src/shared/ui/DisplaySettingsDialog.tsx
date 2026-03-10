@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import type { CSSProperties } from "react";
 
 import type { FontPresetId, FontSizeId, ThemeId } from "../types/domain";
 import { useThemeStore } from "../../entities/theme/store";
@@ -12,11 +13,46 @@ interface DisplaySettingsDialogProps {
 
 type SettingsSubpoint = "display" | "session";
 
-const THEME_OPTIONS: Array<{ id: ThemeId; label: string; swatches: [string, string, string] }> = [
-  { id: "arcane", label: "Arcane", swatches: ["#0f1520", "#1b2a3d", "#7bcaff"] },
-  { id: "tavern", label: "Tavern", swatches: ["#1e1510", "#3b291d", "#d99c48"] },
-  { id: "glade", label: "Glade", swatches: ["#0e1c18", "#1b3a31", "#66d49b"] },
-  { id: "hybrid", label: "Hybrid", swatches: ["#111923", "#2d2a39", "#86d2cb"] },
+const THEME_OPTIONS: Array<{
+  id: ThemeId;
+  label: string;
+  description: string;
+  preview_title: string;
+  preview_mode: string;
+  swatches: [string, string, string];
+}> = [
+  {
+    id: "arcane",
+    label: "Nachtblau",
+    description: "Der kühle klare GM-Look.",
+    preview_title: "Geschichtsfluss",
+    preview_mode: "Story",
+    swatches: ["#0f1520", "#1b2a3d", "#7bcaff"],
+  },
+  {
+    id: "tavern",
+    label: "Taverne",
+    description: "Warmes Holz, Messing und Kerzenlicht.",
+    preview_title: "Abend am Kamin",
+    preview_mode: "Tun",
+    swatches: ["#1e1510", "#3b291d", "#d99c48"],
+  },
+  {
+    id: "glade",
+    label: "Waldlichtung",
+    description: "Moosgrün, Nebel und ruhige Wildnis.",
+    preview_title: "Spuren im Farn",
+    preview_mode: "Sagen",
+    swatches: ["#0e1c18", "#1b3a31", "#66d49b"],
+  },
+  {
+    id: "hybrid",
+    label: "Aelunor (Hybrid)",
+    description: "Mittelalter trifft Tech-Magie mit klarem Kontrast.",
+    preview_title: "Relikt-Schnittstelle",
+    preview_mode: "Tun",
+    swatches: ["#111923", "#2d2a39", "#86d2cb"],
+  },
 ];
 
 const FONT_OPTIONS: Array<{ id: FontPresetId; label: string; sample_font: string }> = [
@@ -77,7 +113,10 @@ export function DisplaySettingsDialog({ open, on_close, return_focus_element = n
         onClick={(event) => event.stopPropagation()}
       >
         <header className="v1-panel-head">
-          <h2>Einstellungen</h2>
+          <h2 className="settings-dialog-title">
+            <img className="settings-dialog-logo" src="/static/brand/aelunor-icon-512x512.png" alt="" aria-hidden="true" />
+            <span>Einstellungen</span>
+          </h2>
           <button type="button" className="btn ghost" onClick={on_close}>
             Schließen
           </button>
@@ -112,24 +151,54 @@ export function DisplaySettingsDialog({ open, on_close, return_focus_element = n
                     <h3>Theme</h3>
                     <p className="status-muted">Farbstil mit Vorschau auswählen.</p>
                   </header>
-                  <div className="settings-option-grid">
+                  <div className="settings-theme-grid">
                     {THEME_OPTIONS.map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        className={theme === option.id ? "settings-option-card is-active" : "settings-option-card"}
-                        onClick={() => {
-                          setTheme(option.id);
-                        }}
-                      >
-                        <span className="settings-option-title">{option.label}</span>
-                        <span className="settings-swatch-row" aria-hidden="true">
-                          <span style={{ background: option.swatches[0] }} />
-                          <span style={{ background: option.swatches[1] }} />
-                          <span style={{ background: option.swatches[2] }} />
-                        </span>
-                        <span className="settings-option-preview">Kampagne fortsetzen</span>
-                      </button>
+                      <article key={option.id} className={theme === option.id ? "settings-theme-card is-active" : "settings-theme-card"}>
+                        <header className="settings-theme-head">
+                          <div>
+                            <h4>{option.label}</h4>
+                            <p>{option.description}</p>
+                          </div>
+                          <span className="settings-theme-status">{theme === option.id ? "Aktiv" : "Verfügbar"}</span>
+                        </header>
+
+                        <div
+                          className="settings-theme-preview-window"
+                          style={
+                            {
+                              "--preview-base": option.swatches[0],
+                              "--preview-mid": option.swatches[1],
+                              "--preview-accent": option.swatches[2],
+                            } as CSSProperties
+                          }
+                          aria-hidden="true"
+                        >
+                          <div className="settings-theme-preview-surface">
+                            <div className="settings-theme-preview-top">
+                              <span className="settings-theme-preview-chip">Code: AB6LXG</span>
+                              <span className="settings-theme-preview-menu">
+                                <span />
+                                <span />
+                                <span />
+                              </span>
+                            </div>
+                            <div className="settings-theme-preview-title">{option.preview_title}</div>
+                            <div className="settings-theme-preview-mode">{option.preview_mode}</div>
+                            <div className="settings-theme-preview-line is-long" />
+                            <div className="settings-theme-preview-line is-short" />
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          className={theme === option.id ? "settings-theme-action is-active" : "settings-theme-action"}
+                          onClick={() => {
+                            setTheme(option.id);
+                          }}
+                        >
+                          {theme === option.id ? "Aktiv" : "Aktivieren"}
+                        </button>
+                      </article>
                     ))}
                   </div>
                 </section>

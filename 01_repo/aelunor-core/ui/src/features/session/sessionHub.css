@@ -17,10 +17,38 @@
 }
 
 .hub-topbar-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.52rem;
   font-size: 0.72rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--v1-text-faint);
+  color: color-mix(in srgb, var(--v1-text-muted-strong) 82%, var(--v1-text-faint));
+}
+
+.hub-brand-badge {
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 0.42rem;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--v1-accent) 42%, var(--v1-border-soft));
+  background:
+    radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--v1-accent-soft) 72%, transparent), transparent 70%),
+    linear-gradient(180deg, color-mix(in srgb, var(--v1-surface-card) 90%, white 1%), color-mix(in srgb, var(--v1-surface-inset) 96%, black 6%));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--v1-accent) 14%, transparent),
+    0 8px 20px rgba(0, 0, 0, 0.28);
+}
+
+.hub-brand-icon {
+  width: 1.12rem;
+  height: 1.12rem;
+  filter: saturate(1.22) contrast(1.08) brightness(1.08);
+}
+
+.hub-brand-word {
+  color: var(--v1-text-muted-strong);
 }
 
 .hub-topbar-brand h1 {

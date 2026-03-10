@@ -18,6 +18,7 @@ export interface TimelineEntry {
   gm_text_display: string;
   created_at: string;
   patch_summary_label: string | null;
+  patch_summary: Record<string, number>;
   scene_id: string | null;
   scene_name: string | null;
 }
@@ -28,10 +29,6 @@ function readRecord(value: unknown): Record<string, unknown> {
 
 function readString(value: unknown): string {
   return typeof value === "string" ? value : "";
-}
-
-function readNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function sceneNameFromState(campaign: CampaignSnapshot, scene_id: string): string | null {
@@ -102,10 +99,23 @@ function sumPatchChanges(value: unknown): number {
   }, 0);
 }
 
+function normalizePatchSummary(value: unknown): Record<string, number> {
+  const patch = readRecord(value);
+  const normalized: Record<string, number> = {};
+  for (const [key, rawValue] of Object.entries(patch)) {
+    if (typeof rawValue !== "number" || !Number.isFinite(rawValue) || rawValue <= 0) {
+      continue;
+    }
+    normalized[key] = Math.round(rawValue);
+  }
+  return normalized;
+}
+
 export function deriveTimelineEntries(campaign: CampaignSnapshot): TimelineEntry[] {
   return (campaign.active_turns ?? [])
     .map((turn) => {
-      const patchChangeCount = sumPatchChanges(turn.patch_summary);
+      const patch_summary = normalizePatchSummary(turn.patch_summary);
+      const patchChangeCount = sumPatchChanges(patch_summary);
       const scene = deriveTurnScene(turn, campaign);
       return {
         turn_id: turn.turn_id,
@@ -117,6 +127,7 @@ export function deriveTimelineEntries(campaign: CampaignSnapshot): TimelineEntry
         gm_text_display: turn.gm_text_display || "",
         created_at: turn.created_at,
         patch_summary_label: patchChangeCount > 0 ? `${patchChangeCount} state changes` : null,
+        patch_summary,
         scene_id: scene.scene_id,
         scene_name: scene.scene_name,
       };
@@ -126,6 +137,31 @@ export function deriveTimelineEntries(campaign: CampaignSnapshot): TimelineEntry
       const rightNumber = right.turn_number ?? 0;
       return rightNumber - leftNumber;
     });
+}
+
+const PATCH_SUMMARY_LABELS: Record<string, string> = {
+  characters_changed: "Characters changed",
+  items_added: "Items added",
+  plot_updates: "Plot updates",
+  map_updates: "Map updates",
+  events_added: "Events added",
+};
+
+export interface TurnDeltaRow {
+  key: string;
+  label: string;
+  value: number;
+}
+
+export function deriveTurnDeltaRows(entry: TimelineEntry): TurnDeltaRow[] {
+  return Object.entries(entry.patch_summary)
+    .filter(([, value]) => value > 0)
+    .sort((left, right) => right[1] - left[1])
+    .map(([key, value]) => ({
+      key,
+      label: PATCH_SUMMARY_LABELS[key] ?? key.replace(/_/g, " "),
+      value,
+    }));
 }
 
 export function deriveViewerSummary(campaign: CampaignSnapshot): string {
@@ -141,70 +177,6 @@ export function deriveViewerSummary(campaign: CampaignSnapshot): string {
     parts.push("No claim yet");
   }
   return parts.join(" • ");
-}
-
-export function deriveTopBarMeta(campaign: CampaignSnapshot, join_code: string | null): string[] {
-  const items: string[] = [];
-  const phase = campaign.viewer_context.phase || campaign.campaign_meta.status || "unknown";
-  items.push(`Phase ${phase}`);
-
-  const latestTurn = campaign.active_turns.length > 0 ? campaign.active_turns[campaign.active_turns.length - 1]?.turn_number : null;
-  if (typeof latestTurn === "number") {
-    items.push(`Turn ${latestTurn}`);
-  }
-
-  if (join_code) {
-    items.push(`Code ${join_code}`);
-  }
-
-  const worldBits = deriveWorldSummary(campaign);
-  if (worldBits) {
-    items.push(worldBits);
-  }
-
-  const pacingBits = derivePacingSummary(campaign);
-  if (pacingBits) {
-    items.push(pacingBits);
-  }
-
-  return items;
-}
-
-export function deriveWorldSummary(campaign: CampaignSnapshot): string | null {
-  const parts: string[] = [];
-  if (campaign.world_time.day != null) {
-    parts.push(`Day ${campaign.world_time.day}`);
-  }
-  if (campaign.world_time.time_of_day) {
-    parts.push(campaign.world_time.time_of_day);
-  }
-  if (campaign.world_time.weather) {
-    parts.push(campaign.world_time.weather);
-  }
-  return parts.length > 0 ? parts.join(" • ") : null;
-}
-
-export function derivePacingSummary(campaign: CampaignSnapshot): string | null {
-  const timing = readRecord(readRecord(campaign.state).meta).timing;
-  const normalizedTiming = readRecord(timing);
-  const parts: string[] = [];
-
-  const turnsTarget = readNumber(normalizedTiming.turns_target_est);
-  if (turnsTarget !== null) {
-    parts.push(`Target ${turnsTarget}`);
-  }
-
-  const turnsLeft = readNumber(normalizedTiming.turns_left_est);
-  if (turnsLeft !== null) {
-    parts.push(`Left ${turnsLeft}`);
-  }
-
-  const cycleSeconds = readNumber(normalizedTiming.cycle_ema_sec);
-  if (cycleSeconds !== null) {
-    parts.push(`Cycle ${Math.round(cycleSeconds)}s`);
-  }
-
-  return parts.length > 0 ? parts.join(" • ") : null;
 }
 
 export function derivePartySummary(campaign: CampaignSnapshot): string {
@@ -233,21 +205,6 @@ export function derivePresenceSummary(
 
 export function formatTimelineTimestamp(value: string): string {
   return formatDateTime(value) ?? "Unknown time";
-}
-
-export function deriveRightRailItems(campaign: CampaignSnapshot): Array<{ label: string; value: string }> {
-  const items = [
-    { label: "Campaign", value: campaign.campaign_meta.campaign_id },
-    { label: "Viewer", value: deriveViewerSummary(campaign) },
-    { label: "Party", value: derivePartySummary(campaign) },
-    { label: "Status", value: campaign.campaign_meta.status || "unknown" },
-  ];
-
-  if (campaign.available_slots.length > 0) {
-    items.push({ label: "Available slots", value: String(campaign.available_slots.length) });
-  }
-
-  return items;
 }
 
 export function deriveTurnLead(entry: TimelineEntry): string {

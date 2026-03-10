@@ -142,7 +142,7 @@ export const TopBar = memo(function TopBar({
           <button
             ref={settingsButtonRef}
             type="button"
-            className="btn ghost"
+            className="menu-icon-button"
             aria-label="Einstellungen öffnen"
             onClick={() => {
               setSettingsOpen(true);

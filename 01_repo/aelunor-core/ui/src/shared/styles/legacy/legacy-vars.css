@@ -1,0 +1,64 @@
+:root {
+  --legacy-bg: #071019;
+  --legacy-bg-ornament-1: #1d2b3f;
+  --legacy-bg-ornament-2: #0d1522;
+  --legacy-text: #eef2ff;
+  --legacy-text-muted: #c5cfe8;
+  --legacy-panel-top: rgba(15, 21, 31, 0.92);
+  --legacy-panel-bottom: rgba(9, 14, 22, 0.96);
+  --legacy-panel-soft: rgba(255, 255, 255, 0.03);
+  --legacy-panel-deep: rgba(8, 12, 18, 0.62);
+  --legacy-border: rgba(173, 195, 240, 0.13);
+  --legacy-border-strong: rgba(173, 195, 240, 0.18);
+  --legacy-button: #152234;
+  --legacy-button-ghost: #0c1520;
+  --legacy-button-active: #52637d;
+  --legacy-button-primary: #45566e;
+  --legacy-chip: rgba(255, 255, 255, 0.04);
+  --legacy-accent: #f4c26c;
+  --legacy-shadow: 0 22px 70px rgba(0, 0, 0, 0.32);
+  --legacy-font-ui: Georgia, "Times New Roman", serif;
+  --legacy-font-stats: "JetBrains Mono", "Fira Code", "Consolas", "Menlo", monospace;
+}
+
+[data-theme="tavern"] {
+  --legacy-bg: #140d09;
+  --legacy-bg-ornament-1: #5e3926;
+  --legacy-bg-ornament-2: #291912;
+  --legacy-text: #f5ead2;
+  --legacy-text-muted: #d8c4a0;
+  --legacy-panel-top: rgba(49, 30, 20, 0.94);
+  --legacy-panel-bottom: rgba(25, 15, 10, 0.97);
+  --legacy-panel-soft: rgba(255, 241, 214, 0.05);
+  --legacy-panel-deep: rgba(28, 17, 12, 0.78);
+  --legacy-border: rgba(178, 125, 72, 0.22);
+  --legacy-border-strong: rgba(211, 160, 98, 0.28);
+  --legacy-button: #573621;
+  --legacy-button-ghost: #2d1b13;
+  --legacy-button-active: #8e5f37;
+  --legacy-button-primary: #a36d3d;
+  --legacy-chip: rgba(255, 242, 210, 0.06);
+  --legacy-accent: #efbb68;
+}
+
+[data-theme="glade"] {
+  --legacy-bg: #0d1710;
+  --legacy-bg-ornament-1: #2f4f3d;
+  --legacy-bg-ornament-2: #1a2a20;
+  --legacy-text: #ecf5e8;
+  --legacy-text-muted: #c6d8c4;
+  --legacy-panel-top: rgba(20, 33, 24, 0.94);
+  --legacy-panel-bottom: rgba(10, 18, 13, 0.97);
+  --legacy-panel-soft: rgba(226, 243, 214, 0.05);
+  --legacy-panel-deep: rgba(14, 24, 17, 0.72);
+  --legacy-border: rgba(133, 171, 132, 0.2);
+  --legacy-border-strong: rgba(160, 196, 157, 0.26);
+  --legacy-button: #294235;
+  --legacy-button-ghost: #17271d;
+  --legacy-button-active: #4e6a56;
+  --legacy-button-primary: #5e7c61;
+}
+
+[data-theme="hybrid"] {
+  --legacy-font-ui: "Inter", "Segoe UI", "Trebuchet MS", sans-serif;
+}

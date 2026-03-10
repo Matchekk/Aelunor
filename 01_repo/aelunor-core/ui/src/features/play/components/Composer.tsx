@@ -97,14 +97,14 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
   };
 
   return (
-    <section className="v1-panel composer-panel">
-      <div className="v1-panel-head">
-        <h2>Composer</h2>
+    <section className="composer-dock hud-surface panel composer-panel">
+      <div className="v1-panel-head composer-dock-head">
+        <h2 className="panelTitle">Dein Beitrag</h2>
         <span>{modeConfig.label}</span>
       </div>
 
-      <IntroBanner message={introMessage} />
-      <RequestsBlock requests={latestRequests} />
+      {introMessage ? <IntroBanner message={introMessage} /> : null}
+      {latestRequests.length > 0 ? <RequestsBlock requests={latestRequests} /> : null}
 
       <ComposerModeTabs
         current_mode={currentMode}
@@ -117,7 +117,7 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
       <ComposerStatusBar
         actor={access.actor}
         mode_label={modeConfig.label}
-        helper_text={access.helper_text}
+        helper_text={modeConfig.hint}
         disabled_reason={access.disabled_reason}
       />
 
@@ -129,7 +129,7 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
             setDraft(event.target.value);
           }}
           placeholder={modeConfig.placeholder}
-          rows={6}
+          rows={4}
           disabled={submitPending}
           onKeyDown={(event) => {
             if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
@@ -139,6 +139,7 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
           }}
         />
       </label>
+      <p className="status-muted composer-helper">{access.helper_text}</p>
 
       <SubmitBar
         submit_label={access.submit_label}

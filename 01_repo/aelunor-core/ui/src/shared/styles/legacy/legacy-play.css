@@ -1,0 +1,229 @@
+.campaign-play-shell {
+  max-width: 1420px;
+}
+
+.campaign-play-shell .topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 22px;
+  margin-bottom: 4px;
+}
+
+.campaign-play-shell .topbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.82;
+}
+
+.campaign-play-shell .topbar-brand-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.campaign-play-shell .title {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.campaign-play-shell .meta {
+  margin-top: 4px;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.76;
+}
+
+.campaign-play-shell .command-bar {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1.05fr);
+}
+
+.campaign-play-shell .command-bar-center {
+  justify-content: flex-start;
+  align-content: center;
+  gap: 8px;
+}
+
+.campaign-play-shell .command-scene-chip {
+  min-height: 34px;
+  border-radius: 999px;
+  background: var(--legacy-chip);
+  border: 1px solid var(--legacy-border);
+  padding: 6px 10px;
+}
+
+.campaign-play-shell .command-scene-chip.is-active {
+  border-color: rgba(244, 194, 108, 0.58);
+  color: var(--legacy-accent);
+}
+
+.campaign-play-shell .topbar-actions {
+  align-items: flex-end;
+}
+
+.campaign-play-shell .join-chip {
+  border-radius: 999px;
+  padding: 8px 12px;
+}
+
+.campaign-play-shell .layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.9fr);
+  gap: 18px;
+}
+
+.campaign-play-shell .timeline-column,
+.campaign-play-shell .sidebar-column {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.campaign-play-shell .story-context-row {
+  border: 1px solid var(--legacy-border);
+  background: var(--legacy-panel-soft);
+  border-radius: 18px;
+  padding: 12px 14px;
+}
+
+.campaign-play-shell .timeline-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 560px;
+  border-radius: 24px;
+  padding: 18px;
+}
+
+.campaign-play-shell .timeline-head {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.campaign-play-shell .timeline-list {
+  gap: 24px;
+  overflow-y: auto;
+  padding: 8px 8px 24px;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 900px;
+}
+
+.campaign-play-shell .story-turn-card {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.campaign-play-shell .story-turn-card::before {
+  display: none;
+}
+
+.campaign-play-shell .timeline-item-head > span:last-child {
+  opacity: 0.72;
+  color: var(--legacy-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.campaign-play-shell .story-turn-lead {
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  border-left: 2px solid var(--legacy-border-strong);
+  color: var(--legacy-text-muted);
+  line-height: 1.65;
+}
+
+.campaign-play-shell .story-turn-text {
+  font-size: 20px;
+  line-height: 1.85;
+  max-width: 78ch;
+}
+
+.campaign-play-shell .timeline-delta-block {
+  margin-top: 14px;
+  border-radius: 16px;
+  background: var(--legacy-panel-soft);
+  border: 1px solid var(--legacy-border);
+}
+
+.campaign-play-shell .composer-panel {
+  padding: 18px;
+  border-radius: 24px;
+}
+
+.campaign-play-shell .composer-mode-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.campaign-play-shell .composer-mode-tabs .action-mode.is-active {
+  background: var(--legacy-button-active);
+}
+
+.campaign-play-shell .composer-textarea-wrap textarea {
+  min-height: 120px;
+  font-size: 22px;
+  line-height: 1.35;
+}
+
+.campaign-play-shell .right-rail {
+  padding: 18px;
+  border-radius: 24px;
+}
+
+.campaign-play-shell .sidebar-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.campaign-play-shell .party-overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.campaign-play-shell .party-card {
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--legacy-border);
+  background: var(--legacy-panel-soft);
+  min-height: 0;
+}
+
+.campaign-play-shell .party-card-name {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.campaign-play-shell .party-class-badge {
+  border-radius: 999px;
+  padding: 4px 8px;
+}
+
+.campaign-play-shell .tabPanel {
+  min-height: 180px;
+}
+
+@media (max-width: 1200px) {
+  .campaign-play-shell .command-bar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .campaign-play-shell .layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

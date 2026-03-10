@@ -1,0 +1,79 @@
+.v1-app-shell {
+  color: var(--legacy-text);
+  font-family: var(--legacy-font-ui);
+}
+
+.v1-app-shell::before {
+  background:
+    radial-gradient(circle at top, var(--legacy-bg-ornament-1) 0, var(--legacy-bg-ornament-2) 36%, var(--legacy-bg) 100%),
+    linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.12));
+  opacity: 0.92;
+}
+
+.v1-app-shell .v1-panel,
+.v1-app-shell .topbar,
+.v1-app-shell .panel {
+  border: 1px solid var(--legacy-border);
+  background: linear-gradient(180deg, var(--legacy-panel-top), var(--legacy-panel-bottom));
+  box-shadow: var(--legacy-shadow);
+  border-radius: 22px;
+}
+
+.v1-app-shell button.btn,
+.v1-app-shell .tab,
+.v1-app-shell .action-mode,
+.v1-app-shell .menu-btn,
+.v1-app-shell .drawer-tab,
+.v1-app-shell .settings-tab,
+.v1-app-shell .command-actions-row > button,
+.v1-app-shell .command-utility-row > button,
+.v1-app-shell .timeline-window-actions > button,
+.v1-app-shell .submit-bar > button {
+  border: 1px solid var(--legacy-border-strong);
+  background: var(--legacy-button);
+  color: var(--legacy-text);
+  border-radius: 14px;
+  font-weight: 700;
+}
+
+.v1-app-shell button.btn.ghost,
+.v1-app-shell .command-actions-row > button,
+.v1-app-shell .command-utility-row > button {
+  background: var(--legacy-button-ghost);
+}
+
+.v1-app-shell button.btn.primary,
+.v1-app-shell .submit-bar > button:first-child {
+  background: var(--legacy-button-primary);
+}
+
+.v1-app-shell .status-muted {
+  color: var(--legacy-text-muted);
+}
+
+.v1-app-shell .status-pill {
+  background: var(--legacy-chip);
+  border-color: var(--legacy-border-strong);
+  color: var(--legacy-text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.v1-app-shell input,
+.v1-app-shell textarea,
+.v1-app-shell select {
+  border: 1px solid var(--legacy-border-strong);
+  background: var(--legacy-panel-deep);
+  color: var(--legacy-text);
+  border-radius: 16px;
+}
+
+.v1-app-shell .panelTitle {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 700;
+  opacity: 0.76;
+}

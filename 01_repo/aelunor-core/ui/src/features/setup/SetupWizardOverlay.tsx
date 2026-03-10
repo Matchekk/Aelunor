@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { CampaignSnapshot, SetupAnswerPayload, SetupPromptState, SetupRandomResponse } from "../../shared/api/contracts";
+import type {
+  CampaignSnapshot,
+  SetupAnswerPayload,
+  SetupPromptState,
+  SetupQuestionPayload,
+  SetupRandomResponse,
+} from "../../shared/api/contracts";
 import { usePresenceStore } from "../../entities/presence/store";
 import { useSurfaceLayer } from "../../shared/ui/useSurfaceLayer";
 import { useSetupAnswerMutation, useSetupNextMutation, useSetupRandomApplyMutation, useSetupRandomMutation } from "./mutations";
@@ -72,6 +78,58 @@ function pushPrompt(stack: SetupPromptState[], index: number, prompt: SetupPromp
   };
 }
 
+function selectOptionValue(question: SetupQuestionPayload): string {
+  if (question.option_entries && question.option_entries.length > 0) {
+    return question.option_entries[0]?.value ?? "";
+  }
+  if (question.options && question.options.length > 0) {
+    return question.options[0] ?? "";
+  }
+  return "";
+}
+
+function buildTurboFallbackAnswer(question: SetupQuestionPayload): SetupAnswerPayload {
+  const timestamp = new Date().toISOString().slice(11, 19).replace(/:/g, "");
+  if (question.type === "text" || question.type === "textarea") {
+    return {
+      question_id: question.question_id,
+      value: `Auto-${timestamp} ${question.label || "Antwort"}`,
+    };
+  }
+
+  if (question.type === "boolean") {
+    return {
+      question_id: question.question_id,
+      value: Math.random() > 0.35,
+    };
+  }
+
+  if (question.type === "select") {
+    const optionValues =
+      question.option_entries && question.option_entries.length > 0
+        ? question.option_entries.map((entry) => entry.value).filter((value) => value.length > 0)
+        : question.options ?? [];
+    const selected = optionValues.length > 0 ? optionValues[Math.floor(Math.random() * optionValues.length)] ?? "" : "";
+    return {
+      question_id: question.question_id,
+      value: selected,
+      other_text: selected ? "" : "Auto-Auswahl",
+    };
+  }
+
+  const multiValues =
+    question.option_entries && question.option_entries.length > 0
+      ? question.option_entries.map((entry) => entry.value).filter((value) => value.length > 0)
+      : question.options ?? [];
+  const shuffled = [...multiValues].sort(() => Math.random() - 0.5);
+  const selected = shuffled.slice(0, Math.max(1, Math.min(2, shuffled.length)));
+  return {
+    question_id: question.question_id,
+    selected,
+    other_values: selected.length > 0 ? [] : ["Auto-Auswahl"],
+  };
+}
+
 export function SetupWizardOverlay({ campaign }: SetupWizardOverlayProps) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const gate = useMemo(() => deriveSetupGateState(campaign), [campaign]);
@@ -85,6 +143,7 @@ export function SetupWizardOverlay({ campaign }: SetupWizardOverlayProps) {
   const [randomOpen, setRandomOpen] = useState(false);
   const [randomMode, setRandomMode] = useState<"single" | "all">("single");
   const [randomPreview, setRandomPreview] = useState<SetupRandomResponse | null>(null);
+  const [turboPending, setTurboPending] = useState(false);
 
   const flowKey = `${campaign.campaign_meta.campaign_id}:${gate.mode ?? "none"}:${gate.slot_id ?? ""}`;
 
@@ -98,6 +157,7 @@ export function SetupWizardOverlay({ campaign }: SetupWizardOverlayProps) {
     setRandomOpen(false);
     setRandomMode("single");
     setRandomPreview(null);
+    setTurboPending(false);
   }, [flowKey]);
 
   useEffect(() => {
@@ -149,7 +209,7 @@ export function SetupWizardOverlay({ campaign }: SetupWizardOverlayProps) {
   const randomPending = randomMutation.isPending;
   const applyPending = randomApplyMutation.isPending;
   const sharedBlocked = Boolean(blockingAction);
-  const disabledByBlocking = sharedBlocked && !submitPending && !randomPending && !applyPending;
+  const disabledByBlocking = sharedBlocked && !submitPending && !randomPending && !applyPending && !turboPending;
   useSurfaceLayer({
     open: gate.requires_overlay,
     kind: "modal",
@@ -248,6 +308,46 @@ export function SetupWizardOverlay({ campaign }: SetupWizardOverlayProps) {
     });
     setRandomOpen(false);
     setRandomPreview(null);
+  };
+
+  const runTurboRandom = async () => {
+    if (!gate.can_interact || sharedBlocked || turboPending || submitPending || randomPending || applyPending) {
+      return;
+    }
+
+    setLocalError(null);
+    setRandomOpen(false);
+    setRandomPreview(null);
+    setTurboPending(true);
+
+    try {
+      let pendingQuestion: SetupQuestionPayload | null = currentPrompt?.question ?? null;
+      let attempts = 0;
+      while (attempts < 32) {
+        if (!pendingQuestion) {
+          const next = await nextMutation.mutateAsync();
+          if (next.completed) {
+            break;
+          }
+          pendingQuestion = next.question ?? null;
+          if (!pendingQuestion) {
+            break;
+          }
+        }
+
+        attempts += 1;
+        const fallbackPayload = buildTurboFallbackAnswer(pendingQuestion);
+        const answered = await answerMutation.mutateAsync(fallbackPayload);
+        if (answered.completed) {
+          break;
+        }
+        pendingQuestion = answered.question ?? null;
+      }
+    } catch (error) {
+      setLocalError(asErrorMessage(error));
+    } finally {
+      setTurboPending(false);
+    }
   };
 
   return (
@@ -370,15 +470,18 @@ export function SetupWizardOverlay({ campaign }: SetupWizardOverlayProps) {
           </aside>
         </div>
 
-        {!gate.is_waiting && currentPrompt?.question ? (
+        {!gate.is_waiting && gate.can_interact ? (
           <SetupActionBar
             can_go_prev={canGoPrev}
             can_skip={canSkip && !reviewActive}
             can_randomize={gate.is_random_available && !reviewActive}
-            disabled={!canInteractWithPrompt || sharedBlocked}
+            can_turbo={!reviewActive}
+            can_submit={Boolean((reviewActive && reviewPayload) || currentPrompt?.question)}
+            disabled={sharedBlocked}
             submit_pending={submitPending}
             random_pending={randomPending}
             apply_pending={applyPending}
+            turbo_pending={turboPending}
             blocking_hint={disabledByBlocking ? blockingAction?.label ?? "A shared action is still running." : null}
             disabled_reason={!canInteractWithPrompt ? disabledReason : null}
             submit_label={reviewActive ? "Confirm and save" : "Submit answer"}
@@ -397,6 +500,9 @@ export function SetupWizardOverlay({ campaign }: SetupWizardOverlayProps) {
             on_randomize={() => {
               setRandomOpen(true);
               void refreshRandomPreview(randomMode);
+            }}
+            on_turbo={() => {
+              void runTurboRandom();
             }}
             on_submit={() => {
               void submitAnswer(false);

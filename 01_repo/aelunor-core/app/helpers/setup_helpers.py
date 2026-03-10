@@ -1,5 +1,6 @@
 import json
 import random
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
@@ -7,6 +8,28 @@ from fastapi import HTTPException
 
 
 CampaignState = Dict[str, Any]
+
+
+def _coerce_player_count(value: Any, *, default: int = 1) -> int:
+    """Best-effort parser for setup player count to avoid finalize-time 500s."""
+    if isinstance(value, (int, float)):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+    text = str(value or "").strip()
+    if not text:
+        return default
+    try:
+        return int(text)
+    except ValueError:
+        match = re.search(r"\d+", text)
+        if not match:
+            return default
+        try:
+            return int(match.group(0))
+        except (TypeError, ValueError):
+            return default
 
 
 @dataclass(frozen=True)
@@ -427,7 +450,7 @@ def build_world_summary(campaign: CampaignState, *, deps: SetupHelperDependencie
         world_laws.extend(laws_answer.get("other_values", []))
     central_conflict = deps.extract_text_answer(answers.get("central_conflict"))
     factions = deps.parse_factions(deps.extract_text_answer(answers.get("factions")))
-    player_count = int(deps.extract_text_answer(answers.get("player_count")) or 1)
+    player_count = _coerce_player_count(deps.extract_text_answer(answers.get("player_count")), default=1)
     attribute_range = deps.parse_attribute_range(answers.get("attribute_range"))
     summary = deps.normalize_answer_summary_defaults()
     resource_name = deps.normalize_resource_name(

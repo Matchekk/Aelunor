@@ -98,14 +98,6 @@ export function deriveSceneOptions(campaign: CampaignSnapshot): SceneOption[] {
   ];
 }
 
-export function hasMeaningfulSceneData(campaign: CampaignSnapshot): boolean {
-  return deriveSceneOptions(campaign).length > 1;
-}
-
-export function deriveSelectedScene(campaign: CampaignSnapshot, selected_scene_id: SceneFilterId): SceneOption | null {
-  return deriveSceneOptions(campaign).find((entry) => entry.scene_id === selected_scene_id) ?? null;
-}
-
 export function deriveSceneMembership(campaign: CampaignSnapshot, selected_scene_id: SceneFilterId): SceneMember[] {
   const members = campaign.party_overview.map((entry) => ({
     slot_id: entry.slot_id,
@@ -122,35 +114,10 @@ export function deriveSceneMembership(campaign: CampaignSnapshot, selected_scene
   return members.filter((entry) => entry.scene_id === selected_scene_id);
 }
 
-export function deriveSceneSummary(campaign: CampaignSnapshot, selected_scene_id: SceneFilterId): string {
-  const sceneCount = deriveSceneOptions(campaign).length - 1;
-  if (selected_scene_id === "all") {
-    return `${campaign.party_overview.length} party members across ${Math.max(sceneCount, 1)} known scenes`;
-  }
-
-  const selected = deriveSelectedScene(campaign, selected_scene_id);
-  if (!selected) {
-    return "Scene context is no longer available.";
-  }
-
-  if (selected.member_count === 0) {
-    return "No active party members are currently in this scene.";
-  }
-
-  return `${selected.member_count} party member${selected.member_count === 1 ? "" : "s"} currently here`;
-}
-
 export function deriveFilteredTimelineEntries(campaign: CampaignSnapshot, selected_scene_id: SceneFilterId): TimelineEntry[] {
   const entries = deriveTimelineEntries(campaign);
   if (selected_scene_id === "all") {
     return entries;
   }
   return entries.filter((entry) => entry.scene_id === selected_scene_id);
-}
-
-export function deriveSceneFilteringNote(selected_scene_id: SceneFilterId): string | null {
-  if (selected_scene_id === "all") {
-    return null;
-  }
-  return "Turns without an explicit scene marker remain visible only in All scenes.";
 }

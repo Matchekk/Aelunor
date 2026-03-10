@@ -11,30 +11,30 @@ interface SessionLibraryPanelProps {
 
 export function SessionLibraryPanel(props: SessionLibraryPanelProps) {
   return (
-    <section className="v1-panel session-library-panel">
-      <details open>
-        <summary>
-          Session Library <span className="status-muted">({props.entries.length})</span>
-        </summary>
-        <div className="session-library-body">
-          {props.entries.length === 0 ? (
-            <div className="session-empty">
-              No local sessions saved yet. Create or join one to add it automatically.
-            </div>
-          ) : (
-            props.entries.map((entry) => (
-              <SessionLibraryItem
-                key={entry.campaign_id}
-                entry={entry}
-                resume_pending={props.resume_pending_campaign_id === entry.campaign_id}
-                on_resume={props.on_resume}
-                on_edit={props.on_edit}
-                on_forget={props.on_forget}
-              />
-            ))
-          )}
-        </div>
-      </details>
+    <section className="v1-panel session-library-panel hub-campaigns-panel">
+      <div className="v1-panel-head">
+        <h2>Meine Kampagnen</h2>
+        <span>{props.entries.length} gespeichert</span>
+      </div>
+      <p className="status-muted">Fortsetzen ist die Standardaktion. Bearbeiten/Entfernen bleiben sekundär.</p>
+      <div className="session-library-body">
+        {props.entries.length === 0 ? (
+          <div className="session-empty">
+            Noch keine gespeicherten Sessions. Erstelle eine Kampagne oder tritt einem Raum bei.
+          </div>
+        ) : (
+          props.entries.map((entry) => (
+            <SessionLibraryItem
+              key={entry.campaign_id}
+              entry={entry}
+              resume_pending={props.resume_pending_campaign_id === entry.campaign_id}
+              on_resume={props.on_resume}
+              on_edit={props.on_edit}
+              on_forget={props.on_forget}
+            />
+          ))
+        )}
+      </div>
     </section>
   );
 }

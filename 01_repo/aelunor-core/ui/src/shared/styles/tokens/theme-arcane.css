@@ -22,6 +22,13 @@
   --v1-surface-overlay: rgba(13, 19, 29, 0.97);
   --v1-surface-card: rgba(11, 16, 25, 0.94);
   --v1-surface-inset: rgba(7, 11, 17, 0.84);
+  --v1-surface-story: rgba(27, 27, 31, 0.95);
+  --v1-surface-story-alt: rgba(33, 33, 39, 0.97);
+  --v1-surface-hud: rgba(11, 17, 27, 0.95);
+  --v1-surface-system: rgba(9, 14, 22, 0.96);
+  --v1-surface-line-story: rgba(188, 164, 120, 0.28);
+  --v1-surface-line-hud: rgba(123, 202, 255, 0.26);
+  --v1-surface-line-system: rgba(108, 154, 203, 0.3);
   --v1-surface-backdrop: rgba(3, 6, 10, 0.72);
   --v1-surface-backdrop-strong: rgba(2, 4, 8, 0.84);
   --v1-text-strong: #fbf7f0;
