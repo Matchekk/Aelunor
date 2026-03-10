@@ -78,16 +78,6 @@ function pushPrompt(stack: SetupPromptState[], index: number, prompt: SetupPromp
   };
 }
 
-function selectOptionValue(question: SetupQuestionPayload): string {
-  if (question.option_entries && question.option_entries.length > 0) {
-    return question.option_entries[0]?.value ?? "";
-  }
-  if (question.options && question.options.length > 0) {
-    return question.options[0] ?? "";
-  }
-  return "";
-}
-
 function buildTurboFallbackAnswer(question: SetupQuestionPayload): SetupAnswerPayload {
   const timestamp = new Date().toISOString().slice(11, 19).replace(/:/g, "");
   if (question.type === "text" || question.type === "textarea") {
@@ -110,10 +100,11 @@ function buildTurboFallbackAnswer(question: SetupQuestionPayload): SetupAnswerPa
         ? question.option_entries.map((entry) => entry.value).filter((value) => value.length > 0)
         : question.options ?? [];
     const selected = optionValues.length > 0 ? optionValues[Math.floor(Math.random() * optionValues.length)] ?? "" : "";
+    const canUseOther = Boolean(question.allow_other);
     return {
       question_id: question.question_id,
       value: selected,
-      other_text: selected ? "" : "Auto-Auswahl",
+      other_text: selected ? "" : canUseOther ? "Auto-Auswahl" : "",
     };
   }
 
@@ -122,11 +113,19 @@ function buildTurboFallbackAnswer(question: SetupQuestionPayload): SetupAnswerPa
       ? question.option_entries.map((entry) => entry.value).filter((value) => value.length > 0)
       : question.options ?? [];
   const shuffled = [...multiValues].sort(() => Math.random() - 0.5);
-  const selected = shuffled.slice(0, Math.max(1, Math.min(2, shuffled.length)));
+  const minSelected = Number.isFinite(question.min_selected as number) ? Math.max(0, Number(question.min_selected)) : 1;
+  const maxSelected = Number.isFinite(question.max_selected as number)
+    ? Math.max(1, Number(question.max_selected))
+    : Math.max(1, shuffled.length);
+  const preferredCount = Math.max(minSelected, 1);
+  const boundedCount = Math.max(1, Math.min(preferredCount, maxSelected, shuffled.length));
+  const selected = shuffled.slice(0, boundedCount);
+  const canUseOther = Boolean(question.allow_other);
+
   return {
     question_id: question.question_id,
     selected,
-    other_values: selected.length > 0 ? [] : ["Auto-Auswahl"],
+    other_values: selected.length > 0 ? [] : canUseOther ? ["Auto-Auswahl"] : [],
   };
 }
 

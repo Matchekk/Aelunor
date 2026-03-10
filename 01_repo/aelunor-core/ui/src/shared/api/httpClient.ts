@@ -27,6 +27,10 @@ async function parseResponse<T>(response: Response): Promise<T> {
       if (typeof detailValue === "string" && detailValue.trim().length > 0) {
         message = detailValue;
       }
+    } else if (typeof payload === "string" && payload.trim().length > 0) {
+      const compact = payload.replace(/\s+/g, " ").trim();
+      const clipped = compact.length > 220 ? `${compact.slice(0, 220)}...` : compact;
+      message = `${message}: ${clipped}`;
     }
     throw new HttpClientError(message, response.status, payload);
   }

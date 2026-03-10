@@ -11529,7 +11529,12 @@ def build_character_summary(campaign: Dict[str, Any], slot_name: str) -> Dict[st
 
 def apply_world_summary_to_boards(campaign: Dict[str, Any], updated_by: Optional[str]) -> None:
     summary = campaign["setup"]["world"]["summary"]
-    campaign["boards"]["plot_essentials"] = {
+    boards = campaign.setdefault("boards", {})
+    if not isinstance(boards, dict):
+        boards = {}
+        campaign["boards"] = boards
+
+    boards["plot_essentials"] = {
         "premise": summary.get("premise", ""),
         "current_goal": "",
         "current_threat": summary.get("central_conflict", ""),
@@ -11556,12 +11561,12 @@ def apply_world_summary_to_boards(campaign: Dict[str, Any], updated_by: Optional
         f"Zentraler Konflikt: {summary.get('central_conflict', '')}",
         f"Tabus/Notizen: {summary.get('taboos', '')}",
     ]
-    campaign["boards"]["authors_note"] = {
+    boards["authors_note"] = {
         "content": "\n".join(line for line in authors_lines if line.split(": ", 1)[1]),
         "updated_at": utc_now(),
         "updated_by": updated_by,
     }
-    campaign["boards"]["world_info"] = [
+    world_info_entries: List[Dict[str, Any]] = [
         {
             "entry_id": make_id("world"),
             "title": "Weltstruktur",
@@ -11608,8 +11613,13 @@ def apply_world_summary_to_boards(campaign: Dict[str, Any], updated_by: Optional
             "updated_by": updated_by,
         },
     ]
-    for faction in summary.get("factions", []):
-        campaign["boards"]["world_info"].append(
+    factions = summary.get("factions", [])
+    if not isinstance(factions, list):
+        factions = []
+    for faction in factions:
+        if not isinstance(faction, dict):
+            continue
+        world_info_entries.append(
             {
                 "entry_id": make_id("world"),
                 "title": faction.get("name", "Fraktion"),
@@ -11620,6 +11630,7 @@ def apply_world_summary_to_boards(campaign: Dict[str, Any], updated_by: Optional
                 "updated_by": updated_by,
             }
         )
+    boards["world_info"] = world_info_entries
 
 def initialize_dynamic_slots(campaign: Dict[str, Any], player_count: int) -> None:
     player_count = max(1, min(MAX_PLAYERS, int(player_count)))
