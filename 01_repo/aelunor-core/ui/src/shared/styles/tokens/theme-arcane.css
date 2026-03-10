@@ -1,0 +1,36 @@
+:root[data-theme="arcane"] {
+  --v1-bg: #0f1520;
+  --v1-bg-elevated: #182131;
+  --v1-bg-muted: #0b111a;
+  --v1-surface-border: #3b4d67;
+  --v1-text: #ede6d8;
+  --v1-text-muted: #aea698;
+  --v1-accent: #7bcaff;
+  --v1-success: #55c68f;
+  --v1-warning: #d6a35b;
+  --v1-danger: #d36f72;
+  --v1-novelty: #8fe0ff;
+
+  --v1-bg-app:
+    radial-gradient(circle at top, rgba(123, 202, 255, 0.1), transparent 32%),
+    radial-gradient(circle at 20% 10%, rgba(155, 197, 255, 0.05), transparent 20%),
+    linear-gradient(180deg, #121926 0%, #0b1119 100%);
+  --v1-bg-shell: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0));
+  --v1-surface-1: rgba(17, 24, 36, 0.92);
+  --v1-surface-2: rgba(23, 32, 47, 0.96);
+  --v1-surface-3: rgba(31, 42, 60, 0.98);
+  --v1-surface-overlay: rgba(13, 19, 29, 0.97);
+  --v1-surface-card: rgba(11, 16, 25, 0.94);
+  --v1-surface-inset: rgba(7, 11, 17, 0.84);
+  --v1-surface-backdrop: rgba(3, 6, 10, 0.72);
+  --v1-surface-backdrop-strong: rgba(2, 4, 8, 0.84);
+  --v1-text-strong: #fbf7f0;
+  --v1-text-muted-strong: #cbc2b3;
+  --v1-text-faint: #89837b;
+  --v1-border-soft: rgba(146, 171, 208, 0.18);
+  --v1-border-strong: rgba(146, 171, 208, 0.34);
+  --v1-border-focus: rgba(123, 202, 255, 0.52);
+  --v1-accent-soft: rgba(123, 202, 255, 0.16);
+  --v1-accent-glow: rgba(123, 202, 255, 0.2);
+  --v1-gold-soft: rgba(210, 175, 104, 0.12);
+}

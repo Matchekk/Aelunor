@@ -1,0 +1,110 @@
+:root {
+  --v1-bg: #101620;
+  --v1-bg-elevated: #182130;
+  --v1-bg-muted: #0c121b;
+  --v1-surface-border: #3e4f67;
+  --v1-text: #efe7d7;
+  --v1-text-muted: #b0a898;
+  --v1-accent: #78c8ff;
+  --v1-success: #2fc67a;
+  --v1-warning: #f0a24c;
+  --v1-danger: #d66c63;
+  --v1-novelty: #7fd8ff;
+
+  --v1-font-display: "Palatino Linotype", "Book Antiqua", Palatino, serif;
+  --v1-font-body: "Trebuchet MS", "Segoe UI", Tahoma, sans-serif;
+  --v1-font-size-base: 16px;
+
+  --v1-bg-app: radial-gradient(circle at top, rgba(120, 200, 255, 0.08), transparent 32%), #101620;
+  --v1-bg-shell: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
+  --v1-surface-1: rgba(18, 25, 36, 0.9);
+  --v1-surface-2: rgba(24, 33, 48, 0.95);
+  --v1-surface-3: rgba(31, 42, 60, 0.98);
+  --v1-surface-overlay: rgba(16, 22, 33, 0.96);
+  --v1-surface-card: rgba(13, 19, 29, 0.92);
+  --v1-surface-inset: rgba(8, 12, 19, 0.82);
+  --v1-surface-backdrop: rgba(5, 8, 13, 0.72);
+  --v1-surface-backdrop-strong: rgba(4, 6, 10, 0.84);
+
+  --v1-text-strong: #fbf6eb;
+  --v1-text-base: var(--v1-text);
+  --v1-text-muted-strong: #cac0b0;
+  --v1-text-faint: #8b857c;
+
+  --v1-border-soft: rgba(150, 172, 208, 0.18);
+  --v1-border-strong: rgba(150, 172, 208, 0.34);
+  --v1-border-focus: rgba(120, 200, 255, 0.54);
+  --v1-border-accent: color-mix(in srgb, var(--v1-accent) 52%, var(--v1-surface-border));
+
+  --v1-accent-soft: color-mix(in srgb, var(--v1-accent) 18%, transparent);
+  --v1-accent-strong: color-mix(in srgb, var(--v1-accent) 70%, white 8%);
+  --v1-accent-glow: rgba(120, 200, 255, 0.22);
+  --v1-gold-soft: rgba(210, 175, 104, 0.14);
+
+  --v1-shadow-xs: 0 4px 12px rgba(0, 0, 0, 0.18);
+  --v1-shadow-sm: 0 10px 30px rgba(0, 0, 0, 0.24);
+  --v1-shadow-md: 0 18px 48px rgba(0, 0, 0, 0.3);
+  --v1-shadow-lg: 0 28px 80px rgba(0, 0, 0, 0.4);
+  --v1-shadow-glow: 0 0 0 1px rgba(120, 200, 255, 0.06), 0 18px 48px rgba(0, 0, 0, 0.32);
+  --v1-shadow: var(--v1-shadow-sm);
+
+  --v1-radius-xs: 8px;
+  --v1-radius-sm: 12px;
+  --v1-radius-md: 16px;
+  --v1-radius-lg: 22px;
+  --v1-radius-xl: 30px;
+  --v1-radius: var(--v1-radius-md);
+
+  --v1-space-2xs: 0.25rem;
+  --v1-space-xs: 0.5rem;
+  --v1-space-sm: 0.75rem;
+  --v1-space-md: 1rem;
+  --v1-space-lg: 1.5rem;
+  --v1-space-xl: 2rem;
+  --v1-space-2xl: 3rem;
+
+  --v1-text-display-size: clamp(1.9rem, 2vw + 1rem, 3rem);
+  --v1-text-h1-size: clamp(1.5rem, 1.2vw + 1rem, 2.2rem);
+  --v1-text-h2-size: clamp(1.15rem, 0.7vw + 0.95rem, 1.45rem);
+  --v1-text-h3-size: 1.05rem;
+  --v1-text-body-size: var(--v1-font-size-base);
+  --v1-text-meta-size: 0.88rem;
+  --v1-line-body: 1.6;
+  --v1-line-tight: 1.24;
+
+  --v1-control-height: 2.75rem;
+  --v1-control-padding-x: 0.9rem;
+  --v1-control-padding-y: 0.7rem;
+
+  --v1-ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --v1-duration-fast: 140ms;
+  --v1-duration-base: 220ms;
+  --v1-duration-slow: 320ms;
+}
+
+:root[data-font-preset="classic"] {
+  --v1-font-display: "Palatino Linotype", "Book Antiqua", Palatino, serif;
+  --v1-font-body: "Trebuchet MS", "Segoe UI", Tahoma, sans-serif;
+}
+
+:root[data-font-preset="clean"] {
+  --v1-font-display: "Segoe UI Semibold", "Trebuchet MS", Tahoma, sans-serif;
+  --v1-font-body: "Segoe UI", "Trebuchet MS", Tahoma, sans-serif;
+}
+
+:root[data-font-preset="literary"] {
+  --v1-font-display: "Garamond", "Times New Roman", serif;
+  --v1-font-body: "Book Antiqua", "Palatino Linotype", serif;
+}
+
+:root[data-font-size="small"] {
+  --v1-font-size-base: 14px;
+}
+
+:root[data-font-size="medium"] {
+  --v1-font-size-base: 16px;
+}
+
+:root[data-font-size="large"] {
+  --v1-font-size-base: 18px;
+}

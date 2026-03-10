@@ -1,0 +1,35 @@
+:root[data-theme="tavern"] {
+  --v1-bg: #1e1510;
+  --v1-bg-elevated: #2a1e15;
+  --v1-bg-muted: #160f0b;
+  --v1-surface-border: #6a4b31;
+  --v1-text: #f3e1cc;
+  --v1-text-muted: #c7ab8d;
+  --v1-accent: #d99c48;
+  --v1-success: #74be77;
+  --v1-warning: #e0b062;
+  --v1-danger: #cf7b68;
+  --v1-novelty: #e0bb6c;
+
+  --v1-bg-app:
+    radial-gradient(circle at top, rgba(217, 156, 72, 0.08), transparent 34%),
+    linear-gradient(180deg, #241912 0%, #130d09 100%);
+  --v1-bg-shell: linear-gradient(180deg, rgba(255, 244, 224, 0.03), rgba(255, 244, 224, 0));
+  --v1-surface-1: rgba(30, 21, 16, 0.92);
+  --v1-surface-2: rgba(39, 28, 20, 0.96);
+  --v1-surface-3: rgba(48, 35, 25, 0.98);
+  --v1-surface-overlay: rgba(23, 16, 12, 0.97);
+  --v1-surface-card: rgba(18, 12, 9, 0.94);
+  --v1-surface-inset: rgba(12, 8, 6, 0.84);
+  --v1-surface-backdrop: rgba(8, 5, 4, 0.72);
+  --v1-surface-backdrop-strong: rgba(6, 4, 3, 0.84);
+  --v1-text-strong: #fcf0df;
+  --v1-text-muted-strong: #d6bc9d;
+  --v1-text-faint: #9d856d;
+  --v1-border-soft: rgba(176, 137, 96, 0.22);
+  --v1-border-strong: rgba(176, 137, 96, 0.38);
+  --v1-border-focus: rgba(217, 156, 72, 0.52);
+  --v1-accent-soft: rgba(217, 156, 72, 0.16);
+  --v1-accent-glow: rgba(217, 156, 72, 0.18);
+  --v1-gold-soft: rgba(217, 156, 72, 0.14);
+}

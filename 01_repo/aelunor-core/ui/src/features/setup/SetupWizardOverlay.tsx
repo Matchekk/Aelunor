@@ -1,0 +1,409 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+
+import type { CampaignSnapshot, SetupAnswerPayload, SetupPromptState, SetupRandomResponse } from "../../shared/api/contracts";
+import { usePresenceStore } from "../../entities/presence/store";
+import { useSurfaceLayer } from "../../shared/ui/useSurfaceLayer";
+import { useSetupAnswerMutation, useSetupNextMutation, useSetupRandomApplyMutation, useSetupRandomMutation } from "./mutations";
+import {
+  buildSetupAnswerPayload,
+  createInitialSetupDraft,
+  draftHasAnswer,
+  type SetupDraftState,
+} from "./questionRegistry";
+import {
+  canSkipQuestion,
+  deriveSetupGateState,
+  deriveSetupProgressSummary,
+  deriveSetupReviewEntries,
+  deriveSetupWaitingMessage,
+} from "./selectors";
+import { RandomSuggestionPanel } from "./components/RandomSuggestionPanel";
+import { ReviewPanel } from "./components/ReviewPanel";
+import { SetupActionBar } from "./components/SetupActionBar";
+import { SetupHeader } from "./components/SetupHeader";
+import { SetupProgress } from "./components/SetupProgress";
+import { SetupQuestionRenderer } from "./components/SetupQuestionRenderer";
+
+interface SetupWizardOverlayProps {
+  campaign: CampaignSnapshot;
+}
+
+function asErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return "Unexpected setup error.";
+}
+
+function samePrompt(left: SetupPromptState | null, right: SetupPromptState | null): boolean {
+  if (!left || !right) {
+    return false;
+  }
+  return (
+    left.question.question_id === right.question.question_id &&
+    left.progress.step === right.progress.step &&
+    left.progress.total === right.progress.total
+  );
+}
+
+function pushPrompt(stack: SetupPromptState[], index: number, prompt: SetupPromptState) {
+  const current = stack[index] ?? null;
+  if (samePrompt(current, prompt)) {
+    if (current === prompt) {
+      return {
+        stack,
+        index,
+      };
+    }
+
+    const next = [...stack];
+    next[index] = prompt;
+    return {
+      stack: next,
+      index,
+    };
+  }
+
+  const next = stack.slice(0, Math.max(index + 1, 0));
+  next.push(prompt);
+  return {
+    stack: next,
+    index: next.length - 1,
+  };
+}
+
+export function SetupWizardOverlay({ campaign }: SetupWizardOverlayProps) {
+  const dialogRef = useRef<HTMLElement | null>(null);
+  const gate = useMemo(() => deriveSetupGateState(campaign), [campaign]);
+  const blockingAction = usePresenceStore((state) => state.blockingAction);
+  const [promptStack, setPromptStack] = useState<SetupPromptState[]>([]);
+  const [promptIndex, setPromptIndex] = useState(-1);
+  const [draft, setDraft] = useState<SetupDraftState | null>(null);
+  const [reviewActive, setReviewActive] = useState(false);
+  const [reviewPayload, setReviewPayload] = useState<SetupAnswerPayload | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [randomOpen, setRandomOpen] = useState(false);
+  const [randomMode, setRandomMode] = useState<"single" | "all">("single");
+  const [randomPreview, setRandomPreview] = useState<SetupRandomResponse | null>(null);
+
+  const flowKey = `${campaign.campaign_meta.campaign_id}:${gate.mode ?? "none"}:${gate.slot_id ?? ""}`;
+
+  useEffect(() => {
+    setPromptStack([]);
+    setPromptIndex(-1);
+    setDraft(null);
+    setReviewActive(false);
+    setReviewPayload(null);
+    setLocalError(null);
+    setRandomOpen(false);
+    setRandomMode("single");
+    setRandomPreview(null);
+  }, [flowKey]);
+
+  useEffect(() => {
+    if (!gate.current_prompt) {
+      return;
+    }
+
+    const next = pushPrompt(promptStack, promptIndex, gate.current_prompt);
+    if (next.stack !== promptStack || next.index !== promptIndex) {
+      setPromptStack(next.stack);
+      setPromptIndex(next.index);
+    }
+  }, [gate.current_prompt, promptIndex, promptStack]);
+
+  const currentPrompt = promptStack[promptIndex] ?? gate.current_prompt;
+
+  useEffect(() => {
+    if (!currentPrompt?.question) {
+      setDraft(null);
+      return;
+    }
+    setDraft(createInitialSetupDraft(currentPrompt.question));
+    setLocalError(null);
+    setReviewActive(false);
+    setReviewPayload(null);
+    setRandomOpen(false);
+    setRandomPreview(null);
+  }, [currentPrompt?.question.question_id]);
+
+  const scope =
+    gate.mode !== null
+      ? {
+          campaign_id: campaign.campaign_meta.campaign_id,
+          mode: gate.mode,
+          slot_id: gate.slot_id,
+        }
+      : {
+          campaign_id: campaign.campaign_meta.campaign_id,
+          mode: "world" as const,
+          slot_id: null,
+        };
+
+  const nextMutation = useSetupNextMutation(scope);
+  const answerMutation = useSetupAnswerMutation(scope);
+  const randomMutation = useSetupRandomMutation(scope);
+  const randomApplyMutation = useSetupRandomApplyMutation(scope);
+
+  const submitPending = nextMutation.isPending || answerMutation.isPending;
+  const randomPending = randomMutation.isPending;
+  const applyPending = randomApplyMutation.isPending;
+  const sharedBlocked = Boolean(blockingAction);
+  const disabledByBlocking = sharedBlocked && !submitPending && !randomPending && !applyPending;
+  useSurfaceLayer({
+    open: gate.requires_overlay,
+    kind: "modal",
+    priority: 60,
+    container: dialogRef.current,
+    close_on_escape: false,
+    trap_focus: true,
+  });
+
+  if (!gate.requires_overlay || !gate.mode) {
+    return null;
+  }
+
+  const mutationError = answerMutation.isError
+    ? asErrorMessage(answerMutation.error)
+    : nextMutation.isError
+      ? asErrorMessage(nextMutation.error)
+      : randomMutation.isError
+        ? asErrorMessage(randomMutation.error)
+        : randomApplyMutation.isError
+          ? asErrorMessage(randomApplyMutation.error)
+          : null;
+
+  const waitingMessage = deriveSetupWaitingMessage(campaign);
+  const canInteractWithPrompt = gate.can_interact && Boolean(currentPrompt?.question) && Boolean(draft);
+  const canSkip = canSkipQuestion(currentPrompt?.question ?? null);
+  const canGoPrev = reviewActive || promptIndex > 0;
+  const reviewEntries = deriveSetupReviewEntries(gate.summary_preview);
+  const disabledReason = gate.is_waiting
+    ? waitingMessage
+    : gate.current_question
+      ? deriveSetupProgressSummary(currentPrompt?.progress ?? gate.progress)
+      : "Load the current setup step to continue.";
+
+  const submitAnswer = async (skip = false) => {
+    if (!currentPrompt?.question) {
+      return;
+    }
+    if (!draft && !reviewPayload) {
+      return;
+    }
+
+    const payload =
+      reviewActive && reviewPayload
+        ? reviewPayload
+        : skip
+          ? { question_id: currentPrompt.question.question_id, value: "" }
+          : buildSetupAnswerPayload(currentPrompt.question, draft as SetupDraftState);
+
+    if (!skip && !reviewActive && currentPrompt.question.required && !draftHasAnswer(currentPrompt.question, draft as SetupDraftState)) {
+      setLocalError("Answer this question before continuing.");
+      return;
+    }
+
+    const isFinalQuestion = currentPrompt.progress.total > 0 && currentPrompt.progress.step >= currentPrompt.progress.total;
+    if (!skip && !reviewActive && isFinalQuestion) {
+      setReviewActive(true);
+      setReviewPayload(payload);
+      setLocalError(null);
+      return;
+    }
+
+    setLocalError(null);
+    setRandomOpen(false);
+    await answerMutation.mutateAsync(payload);
+    setReviewActive(false);
+    setReviewPayload(null);
+  };
+
+  const loadCurrentStep = async () => {
+    setLocalError(null);
+    await nextMutation.mutateAsync();
+  };
+
+  const refreshRandomPreview = async (mode: "single" | "all" = randomMode) => {
+    if (!currentPrompt?.question) {
+      return;
+    }
+    const response = await randomMutation.mutateAsync({
+      mode,
+      question_id: currentPrompt.question.question_id,
+      preview_answers: [],
+    });
+    setRandomPreview(response);
+    setRandomOpen(true);
+  };
+
+  const applyRandomPreview = async () => {
+    if (!randomPreview) {
+      return;
+    }
+    await randomApplyMutation.mutateAsync({
+      mode: randomPreview.mode,
+      question_id: randomPreview.question_id ?? null,
+      preview_answers: randomPreview.preview_answers.map((entry) => entry.answer),
+    });
+    setRandomOpen(false);
+    setRandomPreview(null);
+  };
+
+  return (
+    <div className="setup-overlay-backdrop" role="presentation">
+      <section ref={dialogRef} className="setup-overlay" role="dialog" aria-modal="true" aria-label="Setup wizard">
+        <SetupHeader
+          title={gate.title}
+          subtitle={gate.subtitle}
+          phase_display={gate.phase_display}
+          campaign_title={campaign.campaign_meta.title || "Campaign"}
+        />
+
+        <div className="setup-overlay-grid">
+          <section className="setup-main-column">
+            <SetupProgress
+              chapter_label={gate.chapter_label}
+              chapter_index={gate.chapter_index}
+              chapter_total={gate.chapter_total}
+              chapter_progress={gate.chapter_progress}
+              global_progress={gate.global_progress}
+              ready_counter={gate.ready_counter}
+            />
+
+            <section className="v1-panel setup-question-panel">
+              <div className="v1-panel-head">
+                <h2>{reviewActive ? "Review" : "Current Step"}</h2>
+                <span>{gate.phase_display}</span>
+              </div>
+
+              {mutationError ? <div className="session-feedback error">{mutationError}</div> : null}
+              {localError ? <div className="session-feedback error">{localError}</div> : null}
+
+              {gate.is_waiting ? (
+                <div className="setup-empty-state">
+                  <p>{waitingMessage}</p>
+                  <p className="status-muted">
+                    The host must finish the shared world questions before slot claims and character setup can continue.
+                  </p>
+                </div>
+              ) : !currentPrompt?.question ? (
+                <div className="setup-empty-state">
+                  <p>No setup question is currently loaded for this step.</p>
+                  <div className="setup-inline-actions">
+                    <button type="button" onClick={() => void loadCurrentStep()} disabled={submitPending || sharedBlocked}>
+                      {nextMutation.isPending ? "Loading..." : "Load current setup question"}
+                    </button>
+                  </div>
+                </div>
+              ) : reviewActive ? (
+                <ReviewPanel mode={gate.mode} entries={reviewEntries} />
+              ) : (
+                <div className="setup-question-body">
+                  <div className="setup-question-copy">
+                    <p className="setup-ai-copy">{currentPrompt.question.ai_copy || currentPrompt.question.label}</p>
+                    <p className="status-muted">
+                      {currentPrompt.question.required ? "Required" : "Optional"} • {deriveSetupProgressSummary(currentPrompt.progress)}
+                    </p>
+                  </div>
+                  {draft ? (
+                    <SetupQuestionRenderer
+                      question={currentPrompt.question}
+                      draft={draft}
+                      disabled={submitPending || randomPending || applyPending || sharedBlocked}
+                      on_change={setDraft}
+                    />
+                  ) : null}
+                </div>
+              )}
+            </section>
+          </section>
+
+          <aside className="setup-side-column">
+            <RandomSuggestionPanel
+              open={randomOpen}
+              preview={randomPreview}
+              mode={randomMode}
+              loading={randomPending}
+              apply_pending={applyPending}
+              disabled={sharedBlocked}
+              on_mode_change={(mode) => {
+                setRandomMode(mode);
+                void refreshRandomPreview(mode);
+              }}
+              on_refresh={() => {
+                void refreshRandomPreview(randomMode);
+              }}
+              on_apply={() => {
+                void applyRandomPreview();
+              }}
+              on_close={() => {
+                if (!randomPending && !applyPending) {
+                  setRandomOpen(false);
+                }
+              }}
+            />
+            {!randomOpen ? (
+              <section className="v1-panel setup-side-note">
+                <div className="v1-panel-head">
+                  <h2>Summary</h2>
+                </div>
+                <p className="status-muted">
+                  {gate.is_waiting
+                    ? waitingMessage
+                    : reviewEntries.length > 0
+                      ? `${reviewEntries.length} summary item${reviewEntries.length === 1 ? "" : "s"} available for review.`
+                      : "The backend has not exposed a review summary for this step yet."}
+                </p>
+                {reviewEntries.length > 0 ? (
+                  <div className="setup-review-grid compact">
+                    {reviewEntries.slice(0, 4).map((entry) => (
+                      <article key={entry.label} className="setup-review-item">
+                        <strong>{entry.label}</strong>
+                        <p>{entry.value}</p>
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
+          </aside>
+        </div>
+
+        {!gate.is_waiting && currentPrompt?.question ? (
+          <SetupActionBar
+            can_go_prev={canGoPrev}
+            can_skip={canSkip && !reviewActive}
+            can_randomize={gate.is_random_available && !reviewActive}
+            disabled={!canInteractWithPrompt || sharedBlocked}
+            submit_pending={submitPending}
+            random_pending={randomPending}
+            apply_pending={applyPending}
+            blocking_hint={disabledByBlocking ? blockingAction?.label ?? "A shared action is still running." : null}
+            disabled_reason={!canInteractWithPrompt ? disabledReason : null}
+            submit_label={reviewActive ? "Confirm and save" : "Submit answer"}
+            on_prev={() => {
+              setLocalError(null);
+              setRandomOpen(false);
+              if (reviewActive) {
+                setReviewActive(false);
+                return;
+              }
+              setPromptIndex((current) => Math.max(0, current - 1));
+            }}
+            on_skip={() => {
+              void submitAnswer(true);
+            }}
+            on_randomize={() => {
+              setRandomOpen(true);
+              void refreshRandomPreview(randomMode);
+            }}
+            on_submit={() => {
+              void submitAnswer(false);
+            }}
+          />
+        ) : null}
+      </section>
+    </div>
+  );
+}

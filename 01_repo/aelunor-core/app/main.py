@@ -18647,6 +18647,11 @@ def index_v1() -> str:
     return _v1_index_html()
 
 
+@app.get("/v1/{path:path}", response_class=HTMLResponse)
+def index_v1_routes(path: str) -> str:
+    return _v1_index_html()
+
+
 @app.get("/api/state")
 def get_state() -> Dict[str, Any]:
     ensure_campaign_storage()

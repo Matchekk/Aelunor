@@ -1,0 +1,34 @@
+:root[data-theme="glade"] {
+  --v1-bg: #0e1c18;
+  --v1-bg-elevated: #153028;
+  --v1-bg-muted: #091510;
+  --v1-surface-border: #3f6f5c;
+  --v1-text: #e6f1df;
+  --v1-text-muted: #a5bea8;
+  --v1-accent: #66d49b;
+  --v1-success: #61ca88;
+  --v1-warning: #d7a85f;
+  --v1-danger: #cf7770;
+  --v1-novelty: #70dfaf;
+
+  --v1-bg-app:
+    radial-gradient(circle at top, rgba(102, 212, 155, 0.08), transparent 32%),
+    linear-gradient(180deg, #10201a 0%, #07110d 100%);
+  --v1-bg-shell: linear-gradient(180deg, rgba(235, 255, 245, 0.03), rgba(235, 255, 245, 0));
+  --v1-surface-1: rgba(13, 25, 20, 0.92);
+  --v1-surface-2: rgba(19, 37, 31, 0.96);
+  --v1-surface-3: rgba(24, 46, 38, 0.98);
+  --v1-surface-overlay: rgba(10, 18, 14, 0.97);
+  --v1-surface-card: rgba(8, 15, 12, 0.94);
+  --v1-surface-inset: rgba(6, 10, 8, 0.84);
+  --v1-surface-backdrop: rgba(3, 7, 5, 0.72);
+  --v1-surface-backdrop-strong: rgba(2, 5, 3, 0.84);
+  --v1-text-strong: #f3fbef;
+  --v1-text-muted-strong: #bfd5c0;
+  --v1-text-faint: #819687;
+  --v1-border-soft: rgba(109, 168, 142, 0.22);
+  --v1-border-strong: rgba(109, 168, 142, 0.38);
+  --v1-border-focus: rgba(102, 212, 155, 0.52);
+  --v1-accent-soft: rgba(102, 212, 155, 0.16);
+  --v1-accent-glow: rgba(102, 212, 155, 0.18);
+}
