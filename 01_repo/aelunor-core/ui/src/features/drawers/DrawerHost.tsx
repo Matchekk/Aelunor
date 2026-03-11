@@ -183,7 +183,7 @@ export function DrawerHost({ campaign, on_novelty_change, on_close }: DrawerHost
     } else {
       title = characterQuery.data.display_name;
       subtitle = deriveCharacterDrawerSubtitle(characterQuery.data);
-      body = <CharacterDrawer sheet={characterQuery.data} active_tab={active_drawer_tab} />;
+      body = <CharacterDrawer sheet={characterQuery.data} active_tab={active_drawer_tab} on_tab_change={set_active_tab} />;
     }
   } else if (drawer_type === "npc") {
     if (npcQuery.isPending) {

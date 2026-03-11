@@ -84,6 +84,10 @@
   opacity: 1 !important;
 }
 
+.legacy-character-drawer-shell .character-inline-body-tabs {
+  margin: 2px 0 4px;
+}
+
 .legacy-character-drawer-shell .drawer-tab.active,
 .legacy-character-drawer-shell .drawer-tab.is-active {
   border-color: var(--v1-border-accent);

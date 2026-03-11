@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import type { CharacterSheetResponse, CharacterSkillSnapshot } from "../../../shared/api/contracts";
 import "../styles/legacyCharacterSheet.css";
@@ -6,6 +6,7 @@ import "../styles/legacyCharacterSheet.css";
 interface CharacterDrawerProps {
   sheet: CharacterSheetResponse;
   active_tab: string;
+  on_tab_change: (tab_id: string) => void;
 }
 
 interface AttributeScaleMeta {
@@ -413,7 +414,38 @@ function readResourcePair(resources: Record<string, unknown>, key: string, curre
   };
 }
 
-export function CharacterDrawer({ sheet, active_tab }: CharacterDrawerProps) {
+const CHARACTER_BODY_TABS = [
+  { id: "overview", label: "Übersicht" },
+  { id: "class", label: "Klasse" },
+  { id: "attributes", label: "Attribute" },
+  { id: "skills", label: "Fertigkeiten" },
+  { id: "injuries", label: "Verletzungen & Narben" },
+  { id: "gear", label: "Inventar" },
+] as const;
+
+function withCharacterTabs(active_tab: string, on_tab_change: (tab_id: string) => void, content: ReactNode): ReactNode {
+  return (
+    <>
+      <div className="drawer-tabs character-inline-body-tabs" role="tablist" aria-label="Charakterbogen-Reiter">
+        {CHARACTER_BODY_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={active_tab === tab.id}
+            className={active_tab === tab.id ? "drawer-tab active is-active" : "drawer-tab"}
+            onClick={() => on_tab_change(tab.id)}
+          >
+            <span>{tab.label}</span>
+          </button>
+        ))}
+      </div>
+      {content}
+    </>
+  );
+}
+
+export function CharacterDrawer({ sheet, active_tab, on_tab_change }: CharacterDrawerProps) {
   const [exportError, setExportError] = useState<string | null>(null);
   const overview = sheet.sheet.overview || {};
   const stats = sheet.sheet.stats || {};
@@ -456,7 +488,9 @@ export function CharacterDrawer({ sheet, active_tab }: CharacterDrawerProps) {
       ? joinList(readArray(ascensionPlotpoint.requirements))
       : joinList(readArray(ascension.requirements));
 
-    return (
+    return withCharacterTabs(
+      active_tab,
+      on_tab_change,
       <section className="drawer-panel legacy-character-sheet">
         <details className="accordion" open>
           <summary>Klasse</summary>
@@ -477,12 +511,14 @@ export function CharacterDrawer({ sheet, active_tab }: CharacterDrawerProps) {
             </div>
           </div>
         </details>
-      </section>
+      </section>,
     );
   }
 
   if (active_tab === "attributes") {
-    return (
+    return withCharacterTabs(
+      active_tab,
+      on_tab_change,
       <section className="drawer-panel legacy-character-sheet">
         <details className="accordion" open>
           <summary>Attribute</summary>
@@ -507,7 +543,7 @@ export function CharacterDrawer({ sheet, active_tab }: CharacterDrawerProps) {
             {exportError ? <div className="session-feedback error">{exportError}</div> : null}
           </div>
         </details>
-      </section>
+      </section>,
     );
   }
 
@@ -515,7 +551,9 @@ export function CharacterDrawer({ sheet, active_tab }: CharacterDrawerProps) {
     const skills = sheet.sheet.skills || [];
     const fusionHints = sheet.sheet.skill_meta?.fusion_hints || [];
 
-    return (
+    return withCharacterTabs(
+      active_tab,
+      on_tab_change,
       <section className="drawer-panel legacy-character-sheet">
         <details className="accordion" open>
           <summary>Fertigkeiten</summary>
@@ -587,12 +625,14 @@ export function CharacterDrawer({ sheet, active_tab }: CharacterDrawerProps) {
             ) : null}
           </div>
         </details>
-      </section>
+      </section>,
     );
   }
 
   if (active_tab === "injuries") {
-    return (
+    return withCharacterTabs(
+      active_tab,
+      on_tab_change,
       <section className="drawer-panel legacy-character-sheet">
         <details className="accordion" open>
           <summary>Verletzungen</summary>
@@ -632,7 +672,7 @@ export function CharacterDrawer({ sheet, active_tab }: CharacterDrawerProps) {
             )}
           </div>
         </details>
-      </section>
+      </section>,
     );
   }
 
@@ -640,7 +680,9 @@ export function CharacterDrawer({ sheet, active_tab }: CharacterDrawerProps) {
     const equipment = Object.entries(sheet.sheet.gear_inventory?.equipment || {});
     const inventoryItems = sheet.sheet.gear_inventory?.inventory_items || [];
 
-    return (
+    return withCharacterTabs(
+      active_tab,
+      on_tab_change,
       <section className="drawer-panel legacy-character-sheet">
         <details className="accordion" open>
           <summary>Ausrüstung</summary>
@@ -678,7 +720,7 @@ export function CharacterDrawer({ sheet, active_tab }: CharacterDrawerProps) {
             </div>
           </div>
         </details>
-      </section>
+      </section>,
     );
   }
 
@@ -698,7 +740,9 @@ export function CharacterDrawer({ sheet, active_tab }: CharacterDrawerProps) {
     .map((entry) => readString(entry.name) || readString(entry.faction_id))
     .filter(Boolean);
 
-  return (
+  return withCharacterTabs(
+    active_tab,
+    on_tab_change,
     <section className="drawer-panel legacy-character-sheet">
       <details className="accordion" open>
         <summary>Übersicht</summary>
@@ -811,6 +855,6 @@ export function CharacterDrawer({ sheet, active_tab }: CharacterDrawerProps) {
           </div>
         </div>
       </details>
-    </section>
+    </section>,
   );
 }
