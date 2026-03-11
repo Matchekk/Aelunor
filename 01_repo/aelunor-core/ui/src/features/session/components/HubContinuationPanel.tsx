@@ -1,4 +1,5 @@
 import type { SessionLibraryEntry } from "../../../shared/api/contracts";
+import { WaitingInline, WaitingSectionOverlay } from "../../../shared/waiting/components";
 
 interface HubContinuationPanelProps {
   has_active_session: boolean;
@@ -30,10 +31,12 @@ export function HubContinuationPanel({
 
   return (
     <section className="v1-panel hub-continuation">
+      <WaitingSectionOverlay target="hub_resume" />
       <div className="v1-panel-head">
         <h2>Weiter spielen</h2>
         <span>Primäraktion</span>
       </div>
+      <WaitingInline target="hub_resume" className="hub-waiting-inline" />
       {has_active_session ? (
         <div className="hub-continuation-block">
           <strong>Aktive lokale Session</strong>

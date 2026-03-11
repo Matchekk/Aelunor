@@ -8483,12 +8483,14 @@ def setup_global_progress(setup_node: Dict[str, Any]) -> Dict[str, int]:
 def setup_phase_display(phase: str) -> str:
     phase = str(phase or "").strip().lower()
     if phase == "world_setup":
-        return "Weltgeburt"
-    if phase in {"character_setup_open", "ready_to_start"}:
+        return "Weltaufbau"
+    if phase == "character_setup_open":
         return "Charakterwerdung"
+    if phase == "ready_to_start":
+        return "Bereit zum Start"
     if phase == "active":
-        return "Bestätigung"
-    return "Weltgeburt"
+        return "Aktive Spielphase"
+    return "Kampagne"
 
 def setup_summary_preview(campaign: Dict[str, Any], setup_type: str, slot_name: Optional[str] = None) -> Dict[str, Any]:
     if setup_type == "world":

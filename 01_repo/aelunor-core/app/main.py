@@ -1224,6 +1224,10 @@ def hash_secret(value: str) -> str:
 def make_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex[:10]}"
 
+# Configure extracted turn engine early so cross-domain flows (e.g. setup finalize)
+# can safely call turn helpers before the turns router is hit.
+turn_engine.configure(globals())
+
 # Extracted turn engine pipeline cluster
 TurnFlowError = turn_engine.TurnFlowError
 user_message_for_error_code = turn_engine.user_message_for_error_code
@@ -1925,6 +1929,11 @@ def boards_service_dependencies() -> boards_service.BoardsServiceDependencies:
         default_player_diary_entry=default_player_diary_entry,
         make_id=make_id,
     )
+
+# Reconfigure once after all constants are declared so extracted state-engine
+# functions receive the complete symbol set (e.g. SKILL_RANK_ORDER).
+state_engine.configure(globals())
+turn_engine.configure(globals())
 
 app.include_router(
     campaigns_router_module.build_campaigns_router(

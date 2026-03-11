@@ -1,9 +1,15 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { derivePresenceKindForContext, usePresenceActivityClient } from "../../../entities/presence/activity";
 import type { CampaignSnapshot, ContextQueryResponse } from "../../../shared/api/contracts";
 import { usePresenceStore } from "../../../entities/presence/store";
+import { resolveInitialComposerMode } from "../../../entities/settings/interaction";
+import { useUserSettingsStore } from "../../../entities/settings/store";
+import { deriveUserFacingErrorMessage } from "../../../shared/errors/userFacing";
 import { getPlayModeConfig, type PlayModeId, PLAY_MODE_CONFIG } from "../modeConfig";
 import { useContextQueryMutation, useSubmitTurnMutation } from "../mutations";
+import { useWaitingSignal } from "../../../shared/waiting/hooks";
+import { WaitingInline, WaitingSurface } from "../../../shared/waiting/components";
 import {
   deriveComposerAccessState,
   deriveIntroBannerMessage,
@@ -21,10 +27,7 @@ interface ComposerProps {
 }
 
 function asErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-  return "Unexpected error";
+  return deriveUserFacingErrorMessage(error, "Die Aktion konnte gerade nicht abgeschlossen werden.");
 }
 
 function initialDrafts(): Record<PlayModeId, string> {
@@ -39,10 +42,14 @@ function activeElement(): HTMLElement | null {
 }
 
 export function Composer({ campaign, on_open_context }: ComposerProps) {
-  const [currentMode, setCurrentMode] = useState<PlayModeId>("do");
+  const composerModePreference = useUserSettingsStore((state) => state.interaction.composer_mode_preference);
+  const setComposerModePreference = useUserSettingsStore((state) => state.set_composer_mode_preference);
+  const [currentMode, setCurrentMode] = useState<PlayModeId>(() => resolveInitialComposerMode(composerModePreference));
   const [drafts, setDrafts] = useState<Record<PlayModeId, string>>(() => initialDrafts());
+  const typingTimerRef = useRef<number | null>(null);
 
   const blockingAction = usePresenceStore((state) => state.blockingAction);
+  const presenceActivity = usePresenceActivityClient(campaign.campaign_meta.campaign_id);
   const submitTurnMutation = useSubmitTurnMutation(campaign.campaign_meta.campaign_id);
   const contextQueryMutation = useContextQueryMutation(campaign.campaign_meta.campaign_id);
 
@@ -58,6 +65,46 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
     : contextQueryMutation.isError
       ? asErrorMessage(contextQueryMutation.error)
       : null;
+
+  useEffect(() => {
+    setCurrentMode(resolveInitialComposerMode(composerModePreference));
+  }, [composerModePreference]);
+
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current) {
+        window.clearTimeout(typingTimerRef.current);
+      }
+      void presenceActivity.clear_activity();
+    };
+  }, [presenceActivity]);
+
+  useWaitingSignal({
+    key: `composer-turn-timeline:${campaign.campaign_meta.campaign_id}`,
+    active: submitTurnMutation.isPending,
+    context: "story_turn",
+    scope: "inline",
+    blocking_level: "non_blocking",
+    surface_target: "timeline",
+  });
+
+  useWaitingSignal({
+    key: `composer-turn-surface:${campaign.campaign_meta.campaign_id}`,
+    active: submitTurnMutation.isPending,
+    context: "story_turn",
+    scope: "surface",
+    blocking_level: "local_blocking",
+    surface_target: "composer",
+  });
+
+  useWaitingSignal({
+    key: `composer-context:${campaign.campaign_meta.campaign_id}`,
+    active: contextQueryMutation.isPending,
+    context: "context_query",
+    scope: "inline",
+    blocking_level: "local_blocking",
+    surface_target: "composer",
+  });
 
   const setDraft = (value: string) => {
     setDrafts((prev) => ({
@@ -84,6 +131,7 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
         text,
       });
       setDraft("");
+      void presenceActivity.clear_activity();
       on_open_context(response, returnFocus);
       return;
     }
@@ -94,10 +142,12 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
       text,
     });
     setDraft("");
+    void presenceActivity.clear_activity();
   };
 
   return (
     <section className="composer-dock hud-surface panel composer-panel">
+      <WaitingSurface target="composer" />
       <div className="v1-panel-head composer-dock-head">
         <h2 className="panelTitle">Dein Beitrag</h2>
         <span>{modeConfig.label}</span>
@@ -111,6 +161,9 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
         disabled={submitPending}
         on_change={(mode) => {
           setCurrentMode(mode);
+          if (mode === "do" || mode === "say" || mode === "story") {
+            setComposerModePreference(mode);
+          }
         }}
       />
 
@@ -120,17 +173,47 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
         helper_text={modeConfig.hint}
         disabled_reason={access.disabled_reason}
       />
+      <WaitingInline target="composer" className="composer-waiting-inline" />
 
       <label className="composer-textarea-wrap">
-        <span className="status-muted">Draft</span>
+        <span className="status-muted">Entwurf</span>
         <textarea
           value={currentDraft}
           onChange={(event) => {
-            setDraft(event.target.value);
+            const nextValue = event.target.value;
+            setDraft(nextValue);
+
+            if (!access.actor || modeConfig.is_contextual) {
+              return;
+            }
+
+            if (typingTimerRef.current) {
+              window.clearTimeout(typingTimerRef.current);
+              typingTimerRef.current = null;
+            }
+
+            if (!nextValue.trim()) {
+              void presenceActivity.clear_activity();
+              return;
+            }
+
+            typingTimerRef.current = window.setTimeout(() => {
+              void presenceActivity.set_activity({
+                kind: derivePresenceKindForContext("typing"),
+                slot_id: access.actor,
+              });
+            }, 700);
           }}
           placeholder={modeConfig.placeholder}
           rows={4}
           disabled={submitPending}
+          onBlur={() => {
+            if (typingTimerRef.current) {
+              window.clearTimeout(typingTimerRef.current);
+              typingTimerRef.current = null;
+            }
+            void presenceActivity.clear_activity();
+          }}
           onKeyDown={(event) => {
             if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
               event.preventDefault();

@@ -91,7 +91,7 @@ export function deriveSceneOptions(campaign: CampaignSnapshot): SceneOption[] {
   return [
     {
       scene_id: "all",
-      scene_name: "All scenes",
+      scene_name: "Alle Szenen",
       member_count: campaign.party_overview.length,
     },
     ...rows,

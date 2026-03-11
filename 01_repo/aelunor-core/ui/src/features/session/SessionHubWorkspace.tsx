@@ -8,6 +8,7 @@ import { clearSessionBootstrap, readSessionBootstrap, writeSessionBootstrap } fr
 import { buildCampaignPath } from "../../app/routing/routes";
 import { deriveRouteRenderState } from "../../app/routing/selectors";
 import { campaignQueryOptions } from "../../entities/campaign/queries";
+import { useWaitingSignal } from "../../shared/waiting/hooks";
 import type { CreateCampaignRequest, JoinCampaignRequest, SessionLibraryEntry } from "../../shared/api/contracts";
 import { useCreateCampaignMutation, useJoinCampaignMutation } from "./mutations";
 import {
@@ -304,6 +305,33 @@ export function SessionHubWorkspace({
   const createError = createMutation.isError ? asErrorMessage(createMutation.error) : null;
   const joinError = joinMutation.isError ? asErrorMessage(joinMutation.error) : null;
   const globalErrorMessage = resumeError ?? route_error_message;
+
+  useWaitingSignal({
+    key: "hub-create-campaign",
+    active: createMutation.isPending,
+    context: "campaign_create",
+    scope: "surface",
+    blocking_level: "local_blocking",
+    surface_target: "hub_create",
+  });
+
+  useWaitingSignal({
+    key: "hub-join-campaign",
+    active: joinMutation.isPending,
+    context: "campaign_join",
+    scope: "surface",
+    blocking_level: "local_blocking",
+    surface_target: "hub_join",
+  });
+
+  useWaitingSignal({
+    key: "hub-resume-session",
+    active: resumePendingCampaignId !== null,
+    context: "session_resume",
+    scope: "section",
+    blocking_level: "major_blocking",
+    surface_target: "hub_resume",
+  });
 
   return (
     <main className="v1-app-shell session-hub-shell gateway-shell">

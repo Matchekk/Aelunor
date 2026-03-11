@@ -1,5 +1,6 @@
 import type { SessionBootstrap } from "../../app/bootstrap/sessionStorage";
 import type { CampaignSnapshot, SessionLibraryEntry } from "../../shared/api/contracts";
+import { formatDateTime } from "../../shared/formatting/locale";
 
 export function normalizeJoinCode(value: string): string {
   return value.toUpperCase().replace(/\s+/g, "").trim();
@@ -22,11 +23,11 @@ export function validateJoinInput(join_code: string, display_name: string): stri
 }
 
 export function formatUpdatedAtLabel(value: string): string {
-  const ts = Date.parse(value);
-  if (!Number.isFinite(ts)) {
+  const formatted = formatDateTime(value);
+  if (!formatted) {
     return "Unknown";
   }
-  return new Date(ts).toLocaleString();
+  return formatted;
 }
 
 export function deriveSessionSubtitle(entry: SessionLibraryEntry): string {

@@ -9,11 +9,11 @@ export function ComposerStatusBar({ actor, mode_label, helper_text, disabled_rea
   return (
     <div className="composer-status-bar">
       <div className="composer-status-pills">
-        <span className="status-pill">Mode {mode_label}</span>
-        <span className="status-pill">{actor ? `Actor ${actor}` : "No actor"}</span>
+        <span className="status-pill">Modus {mode_label}</span>
+        <span className="status-pill">{actor ? `Akteur ${actor}` : "Kein aktiver Slot"}</span>
       </div>
-      <p className="status-muted composer-mode-hint">{helper_text}</p>
-      {disabled_reason ? <div className="session-feedback error">{disabled_reason}</div> : null}
+      {!disabled_reason ? <p className="status-muted composer-mode-hint">{helper_text}</p> : null}
+      {disabled_reason ? <div className="composer-inline-note">{disabled_reason}</div> : null}
     </div>
   );
 }

@@ -1,0 +1,303 @@
+.waiting-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.58rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.6rem 0.4rem;
+  border-radius: var(--v1-radius-sm);
+  border: 1px solid color-mix(in srgb, var(--v1-border-soft) 78%, transparent);
+  background: color-mix(in srgb, var(--v1-surface-card) 88%, transparent);
+}
+
+.waiting-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.waiting-copy strong {
+  color: var(--v1-text-strong);
+  font-size: 0.86rem;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+}
+
+.waiting-copy small {
+  color: var(--v1-text-muted-strong);
+  font-size: 0.77rem;
+  line-height: 1.3;
+}
+
+.waiting-surface-layer,
+.waiting-section-layer {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 0.7rem;
+  border-radius: inherit;
+  z-index: 8;
+}
+
+.waiting-surface-layer {
+  background: color-mix(in srgb, var(--v1-surface-backdrop) 72%, transparent);
+}
+
+.waiting-surface-layer.is-passive {
+  pointer-events: none;
+}
+
+.waiting-surface-layer.is-blocking {
+  pointer-events: auto;
+}
+
+.waiting-section-layer {
+  background: color-mix(in srgb, var(--v1-surface-backdrop-strong) 80%, transparent);
+  pointer-events: auto;
+  z-index: 12;
+}
+
+.waiting-surface-card,
+.waiting-section-card {
+  display: flex;
+  align-items: center;
+  gap: 0.72rem;
+  border: 1px solid color-mix(in srgb, var(--v1-border-strong) 80%, transparent);
+  border-radius: var(--v1-radius-md);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--v1-surface-overlay) 97%, white 1%), color-mix(in srgb, var(--v1-surface-card) 96%, black 5%));
+  box-shadow: var(--v1-shadow-sm);
+  padding: 0.62rem 0.75rem;
+  max-width: min(560px, 100%);
+}
+
+.waiting-section-card {
+  padding: 0.85rem 1rem;
+  gap: 0.8rem;
+}
+
+.waiting-stage-2 .waiting-copy small,
+.waiting-stage-3 .waiting-copy small {
+  color: var(--v1-text-base);
+}
+
+.waiting-full-stage {
+  max-width: none;
+  width: 100%;
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 1.2rem;
+}
+
+.waiting-full-card {
+  width: min(720px, 100%);
+  display: grid;
+  place-items: center;
+  gap: 1rem;
+  padding: 1.2rem 1.35rem;
+  text-align: center;
+  border: 1px solid color-mix(in srgb, var(--v1-border-accent) 80%, var(--v1-border-soft));
+  background:
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--v1-accent-soft) 68%, transparent), transparent 55%),
+    linear-gradient(180deg, color-mix(in srgb, var(--v1-surface-overlay) 97%, white 1%), color-mix(in srgb, var(--v1-surface-2) 96%, black 5%));
+}
+
+.waiting-full-card .waiting-copy {
+  align-items: center;
+}
+
+.waiting-full-card .waiting-copy h2 {
+  margin: 0;
+  font-family: var(--v1-font-display);
+  color: var(--v1-text-strong);
+  font-size: clamp(1.3rem, 1.4vw + 0.95rem, 1.9rem);
+  line-height: 1.08;
+}
+
+.waiting-full-card .waiting-copy p {
+  margin: 0;
+  color: var(--v1-text-muted-strong);
+  max-width: 60ch;
+}
+
+.waiting-motif {
+  --waiting-size: 1.6rem;
+  position: relative;
+  width: var(--waiting-size);
+  height: var(--waiting-size);
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+}
+
+.waiting-motif-sm {
+  --waiting-size: 1.05rem;
+}
+
+.waiting-motif-md {
+  --waiting-size: 1.45rem;
+}
+
+.waiting-motif-lg {
+  --waiting-size: 2.2rem;
+}
+
+.waiting-motif-arcane .motif-ring,
+.waiting-motif-arcane .motif-core,
+.waiting-motif-hybrid .motif-flame-core,
+.waiting-motif-hybrid .motif-flame-halo,
+.waiting-motif-glade .motif-leaf {
+  position: absolute;
+  display: block;
+}
+
+.waiting-motif-arcane .motif-ring {
+  border: 1px solid color-mix(in srgb, var(--v1-accent) 60%, var(--v1-border-soft));
+  border-radius: 999px;
+  opacity: 0.75;
+}
+
+.waiting-motif-arcane .motif-ring-a {
+  inset: 8%;
+  animation: waitingPulse 2200ms ease-in-out infinite;
+}
+
+.waiting-motif-arcane .motif-ring-b {
+  inset: 20%;
+  animation: waitingPulse 1700ms ease-in-out infinite reverse;
+}
+
+.waiting-motif-arcane .motif-core {
+  width: 34%;
+  height: 34%;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--v1-accent) 72%, white 10%);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--v1-accent-glow) 88%, transparent);
+}
+
+.waiting-motif-hybrid .motif-flame-core {
+  width: 54%;
+  height: 70%;
+  border-radius: 52% 52% 58% 58% / 62% 62% 38% 38%;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--v1-accent) 86%, white 14%), color-mix(in srgb, var(--v1-accent) 62%, transparent));
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--v1-accent) 46%, transparent));
+  animation: waitingFlame 2100ms ease-in-out infinite;
+}
+
+.waiting-motif-hybrid .motif-flame-halo {
+  width: 86%;
+  height: 86%;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--v1-accent) 58%, var(--v1-border-soft));
+  opacity: 0.72;
+  animation: waitingPulse 1800ms ease-in-out infinite;
+}
+
+.waiting-motif-glade .motif-leaf {
+  width: 35%;
+  height: 50%;
+  border-radius: 62% 42% 62% 42%;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--v1-success) 84%, white 8%), color-mix(in srgb, var(--v1-accent) 56%, transparent));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--v1-success) 22%, transparent);
+  transform-origin: bottom center;
+}
+
+.waiting-motif-glade .motif-leaf-a {
+  transform: translateY(-4%) rotate(-18deg);
+  animation: waitingLeafA 2300ms ease-in-out infinite;
+}
+
+.waiting-motif-glade .motif-leaf-b {
+  transform: translateX(20%) translateY(10%) rotate(14deg);
+  animation: waitingLeafB 2500ms ease-in-out infinite;
+}
+
+.waiting-motif-glade .motif-leaf-c {
+  transform: translateX(-25%) translateY(12%) rotate(-32deg);
+  animation: waitingLeafC 2100ms ease-in-out infinite;
+}
+
+.waiting-stage-3 .waiting-motif {
+  filter: saturate(1.18);
+}
+
+.timeline-waiting-inline {
+  align-self: flex-start;
+}
+
+.composer-waiting-inline {
+  align-self: flex-start;
+}
+
+.hub-waiting-inline {
+  margin-top: 0.2rem;
+}
+
+.setup-waiting-overlay {
+  z-index: 14;
+}
+
+@keyframes waitingPulse {
+  0%,
+  100% {
+    transform: scale(0.95);
+    opacity: 0.52;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 0.9;
+  }
+}
+
+@keyframes waitingFlame {
+  0%,
+  100% {
+    transform: scaleY(0.94) translateY(1%);
+  }
+  50% {
+    transform: scaleY(1.06) translateY(-2%);
+  }
+}
+
+@keyframes waitingLeafA {
+  0%,
+  100% {
+    transform: translateY(-4%) rotate(-18deg);
+  }
+  50% {
+    transform: translateY(-10%) rotate(-10deg);
+  }
+}
+
+@keyframes waitingLeafB {
+  0%,
+  100% {
+    transform: translateX(20%) translateY(10%) rotate(14deg);
+  }
+  50% {
+    transform: translateX(26%) translateY(0%) rotate(20deg);
+  }
+}
+
+@keyframes waitingLeafC {
+  0%,
+  100% {
+    transform: translateX(-25%) translateY(12%) rotate(-32deg);
+  }
+  50% {
+    transform: translateX(-18%) translateY(2%) rotate(-22deg);
+  }
+}
+
+@media (max-width: 720px) {
+  .waiting-surface-card,
+  .waiting-section-card {
+    width: 100%;
+  }
+
+  .waiting-full-stage {
+    padding: 0.65rem;
+  }
+}

@@ -82,6 +82,8 @@
   --v1-control-height: 2.75rem;
   --v1-control-padding-x: 0.9rem;
   --v1-control-padding-y: 0.7rem;
+  --v1-story-text-max-width: 76ch;
+  --v1-focus-ring-size: 4px;
 
   --v1-ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
   --v1-duration-fast: 140ms;
@@ -114,4 +116,50 @@
 
 :root[data-font-size="large"] {
   --v1-font-size-base: 18px;
+}
+
+:root[data-density="compact"] {
+  --v1-control-height: 2.45rem;
+  --v1-control-padding-y: 0.58rem;
+  --v1-space-md: 0.88rem;
+  --v1-space-lg: 1.25rem;
+}
+
+:root[data-density="standard"] {
+  --v1-control-height: 2.75rem;
+  --v1-control-padding-y: 0.7rem;
+}
+
+:root[data-density="comfortable"] {
+  --v1-control-height: 2.95rem;
+  --v1-control-padding-y: 0.8rem;
+  --v1-space-md: 1.08rem;
+  --v1-space-lg: 1.65rem;
+}
+
+:root[data-story-width="focused"] {
+  --v1-story-text-max-width: 68ch;
+}
+
+:root[data-story-width="standard"] {
+  --v1-story-text-max-width: 76ch;
+}
+
+:root[data-story-width="wide"] {
+  --v1-story-text-max-width: 88ch;
+}
+
+:root[data-larger-targets="true"] {
+  --v1-control-height: 3.08rem;
+  --v1-control-padding-y: 0.82rem;
+  --v1-focus-ring-size: 5px;
+}
+
+:root[data-high-contrast="true"] {
+  --v1-text-base: #f3f7ff;
+  --v1-text-muted-strong: #d7deec;
+  --v1-text-faint: #a8b1c6;
+  --v1-border-soft: rgba(197, 217, 255, 0.36);
+  --v1-border-strong: rgba(197, 217, 255, 0.56);
+  --v1-border-focus: rgba(150, 226, 255, 0.88);
 }

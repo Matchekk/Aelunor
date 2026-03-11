@@ -10,12 +10,12 @@ export function NpcDrawer({ sheet, active_tab }: NpcDrawerProps) {
     return (
       <section className="drawer-panel drawer-grid">
         <article className="drawer-card">
-          <strong>Goal</strong>
-          <p>{sheet.goal || "No primary goal recorded."}</p>
+          <strong>Ziel</strong>
+          <p>{sheet.goal || "Kein primäres Ziel erfasst."}</p>
         </article>
         <article className="drawer-card">
-          <strong>Backstory</strong>
-          <p>{sheet.backstory_short || "No short backstory is available yet."}</p>
+          <strong>Hintergrund</strong>
+          <p>{sheet.backstory_short || "Noch keine kurze Hintergrundbeschreibung verfügbar."}</p>
         </article>
       </section>
     );
@@ -25,7 +25,7 @@ export function NpcDrawer({ sheet, active_tab }: NpcDrawerProps) {
     return (
       <section className="drawer-panel">
         <article className="drawer-card">
-          <strong>History</strong>
+          <strong>Historie</strong>
           {(sheet.history_notes ?? []).length > 0 ? (
             <ul className="rail-list">
               {sheet.history_notes?.map((entry) => (
@@ -35,7 +35,7 @@ export function NpcDrawer({ sheet, active_tab }: NpcDrawerProps) {
               ))}
             </ul>
           ) : (
-            <p className="status-muted">No history notes are available yet.</p>
+            <p className="status-muted">Noch keine Historien-Notizen vorhanden.</p>
           )}
         </article>
       </section>
@@ -46,10 +46,10 @@ export function NpcDrawer({ sheet, active_tab }: NpcDrawerProps) {
     return (
       <section className="drawer-panel drawer-grid">
         <article className="drawer-card">
-          <strong>Links</strong>
-          <p>Faction: {sheet.faction || "None"}</p>
-          <p>Role hint: {sheet.role_hint || "Unknown"}</p>
-          <p>Last seen: {sheet.last_seen_scene_name || sheet.last_seen_scene_id || "Unknown"}</p>
+          <strong>Verbindungen</strong>
+          <p>Fraktion: {sheet.faction || "Keine"}</p>
+          <p>Rollenhinweis: {sheet.role_hint || "Unbekannt"}</p>
+          <p>Zuletzt gesehen: {sheet.last_seen_scene_name || sheet.last_seen_scene_id || "Unbekannt"}</p>
         </article>
       </section>
     );
@@ -59,14 +59,14 @@ export function NpcDrawer({ sheet, active_tab }: NpcDrawerProps) {
     <section className="drawer-panel drawer-grid">
       <article className="drawer-card">
         <strong>{sheet.name}</strong>
-        <p>{sheet.race || "Unknown race"}</p>
-        <p>{sheet.status || "No status summary"}</p>
+        <p>{sheet.race || "Unbekannte Rasse"}</p>
+        <p>{sheet.status || "Keine Statuszusammenfassung"}</p>
       </article>
       <article className="drawer-card">
-        <strong>Signals</strong>
-        <p>Mentions: {sheet.mention_count ?? 0}</p>
-        <p>Relevance: {sheet.relevance_score ?? 0}</p>
-        <p>Tags: {(sheet.tags ?? []).join(", ") || "None"}</p>
+        <strong>Signale</strong>
+        <p>Erwähnungen: {sheet.mention_count ?? 0}</p>
+        <p>Relevanz: {sheet.relevance_score ?? 0}</p>
+        <p>Tags: {(sheet.tags ?? []).join(", ") || "Keine"}</p>
       </article>
     </section>
   );

@@ -51,6 +51,12 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(merged["events_add"], ["e1", "e2"])
         self.assertEqual(merged["characters"]["slot_1"]["inventory_add"], ["item_a", "item_b"])
 
+    def test_setup_phase_display_distinguishes_ready_and_active(self) -> None:
+        self.assertEqual(state_engine.setup_phase_display("world_setup"), "Weltaufbau")
+        self.assertEqual(state_engine.setup_phase_display("character_setup_open"), "Charakterwerdung")
+        self.assertEqual(state_engine.setup_phase_display("ready_to_start"), "Bereit zum Start")
+        self.assertEqual(state_engine.setup_phase_display("active"), "Aktive Spielphase")
+
 
 if __name__ == "__main__":
     unittest.main()

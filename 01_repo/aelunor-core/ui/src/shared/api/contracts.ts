@@ -347,6 +347,29 @@ export interface CampaignMutationResponse {
   campaign: CampaignSnapshot;
 }
 
+export interface PresenceActivitySetRequest {
+  kind: string;
+  slot_id?: string | null;
+  target_turn_id?: string | null;
+}
+
+export interface PresenceActivitySetResponse {
+  ok: boolean;
+  activity?: PresenceActivity;
+  live: PresenceState;
+}
+
+export interface PresenceActivityClearResponse {
+  ok: boolean;
+  live: PresenceState;
+}
+
+export interface RetryIntroResponse {
+  turn: CampaignTurn | null;
+  intro_state: IntroStateSnapshot;
+  campaign: CampaignSnapshot;
+}
+
 export interface CampaignExportPayload extends CampaignSnapshot {}
 
 export interface CampaignDeleteResponse {
@@ -398,6 +421,28 @@ export interface WorldInfoPatchRequest {
 
 export interface CampaignMetaPatchRequest {
   title: string;
+}
+
+export interface PlayerDiaryPatchRequest {
+  content: string;
+}
+
+export interface TurnEditRequest {
+  input_text_display: string;
+  gm_text_display: string;
+}
+
+export interface TurnEditResponse {
+  campaign: CampaignSnapshot;
+}
+
+export interface TurnUndoResponse {
+  campaign: CampaignSnapshot;
+}
+
+export interface TurnRetryResponse {
+  turn_id: string;
+  campaign: CampaignSnapshot;
 }
 
 export interface CharacterResourceBar {

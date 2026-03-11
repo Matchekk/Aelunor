@@ -9,7 +9,7 @@ export function IntroBanner({ message }: IntroBannerProps) {
 
   return (
     <section className="composer-intro-banner">
-      <div className="session-feedback error">{message}</div>
+      <div className="composer-inline-note">{message}</div>
     </section>
   );
 }

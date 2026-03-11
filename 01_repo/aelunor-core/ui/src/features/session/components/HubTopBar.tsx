@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import { DisplaySettingsDialog } from "../../../shared/ui/DisplaySettingsDialog";
+import { SettingsDialog } from "../../../shared/ui/SettingsDialog";
 
 interface HubTopBarProps {
   session_count: number;
@@ -42,7 +42,7 @@ export function HubTopBar({ session_count, has_active_session }: HubTopBarProps)
           </span>
         </button>
       </div>
-      <DisplaySettingsDialog
+      <SettingsDialog
         open={settingsOpen}
         on_close={() => {
           setSettingsOpen(false);

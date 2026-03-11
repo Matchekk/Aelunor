@@ -12,14 +12,14 @@ export function RequestsBlock({ requests }: RequestsBlockProps) {
   return (
     <section className="requests-block">
       <div className="v1-panel-head">
-        <h2>Active Requests</h2>
+        <h2>Offene Rückfragen</h2>
         <span>{requests.length}</span>
       </div>
       <div className="requests-list">
         {requests.map((request, index) => (
           <article key={`${request.type}-${request.actor || "actor"}-${index}`} className="requests-item">
-            <strong>{request.type === "choice" ? "Choice" : request.type === "clarify" ? "Clarify" : "Request"}</strong>
-            <p className="status-muted">{request.question || "The GM expects extra input on the next contribution."}</p>
+            <strong>{request.type === "choice" ? "Auswahl" : request.type === "clarify" ? "Klärung" : "Rückfrage"}</strong>
+            <p className="status-muted">{request.question || "Der GM erwartet vor dem nächsten Zug zusätzliche Eingaben."}</p>
             {request.options && request.options.length > 0 ? (
               <div className="requests-options">
                 {request.options.map((option) => (

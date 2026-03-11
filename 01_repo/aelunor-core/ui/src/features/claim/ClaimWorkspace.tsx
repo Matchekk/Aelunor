@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import type { CampaignSnapshot } from "../../shared/api/contracts";
+import { derivePresenceKindForContext, usePresenceActivityClient } from "../../entities/presence/activity";
 import { usePresenceStore } from "../../entities/presence/store";
 import { ClaimHeader } from "./components/ClaimHeader";
 import { ClaimStatusBar } from "./components/ClaimStatusBar";
@@ -39,6 +40,7 @@ export function ClaimWorkspace({ campaign, join_code, on_leave_session }: ClaimW
   const readySummary = useMemo(() => deriveReadyProgressSummary(campaign), [campaign]);
   const message = useMemo(() => deriveClaimStatusMessage(campaign), [campaign]);
   const blockingAction = usePresenceStore((state) => state.blockingAction);
+  const presenceActivity = usePresenceActivityClient(campaign.campaign_meta.campaign_id);
 
   const claimMutation = useClaimSlotMutation(campaign.campaign_meta.campaign_id);
   const takeoverMutation = useTakeoverSlotMutation(campaign.campaign_meta.campaign_id);
@@ -56,6 +58,12 @@ export function ClaimWorkspace({ campaign, join_code, on_leave_session }: ClaimW
       : unclaimMutation.isError
         ? asErrorMessage(unclaimMutation.error)
         : null;
+
+  useEffect(() => {
+    return () => {
+      void presenceActivity.clear_activity();
+    };
+  }, [presenceActivity]);
 
   return (
     <main className="v1-app-shell session-hub-shell claim-workspace-shell">
@@ -104,7 +112,17 @@ export function ClaimWorkspace({ campaign, join_code, on_leave_session }: ClaimW
                 disabled={anyMutationPending || Boolean(blockingAction)}
                 pending_action={pendingAction}
                 on_claim={(slot_id) => {
-                  void claimMutation.mutateAsync(slot_id);
+                  void (async () => {
+                    void presenceActivity.set_activity({
+                      kind: derivePresenceKindForContext("slot_claim"),
+                      slot_id,
+                    });
+                    try {
+                      await claimMutation.mutateAsync(slot_id);
+                    } finally {
+                      void presenceActivity.clear_activity();
+                    }
+                  })();
                 }}
                 on_takeover={(nextSlot) => {
                   setTakeoverReturnFocus(activeElement());
@@ -131,11 +149,21 @@ export function ClaimWorkspace({ campaign, join_code, on_leave_session }: ClaimW
           }
         }}
         on_confirm={(slot_id) => {
-          void takeoverMutation.mutateAsync(slot_id, {
-            onSuccess: () => {
-              setTakeoverTarget(null);
-            },
-          });
+          void (async () => {
+            void presenceActivity.set_activity({
+              kind: derivePresenceKindForContext("slot_claim"),
+              slot_id,
+            });
+            try {
+              await takeoverMutation.mutateAsync(slot_id, {
+                onSuccess: () => {
+                  setTakeoverTarget(null);
+                },
+              });
+            } finally {
+              void presenceActivity.clear_activity();
+            }
+          })();
         }}
       />
     </main>

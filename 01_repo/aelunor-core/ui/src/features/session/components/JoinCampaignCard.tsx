@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { JoinCampaignRequest } from "../../../shared/api/contracts";
+import { WaitingInline, WaitingSurface } from "../../../shared/waiting/components";
 import { normalizeJoinCode, validateJoinInput } from "../selectors";
 
 interface JoinCampaignCardProps {
@@ -37,10 +38,12 @@ export function JoinCampaignCard({ is_pending, error_message, default_display_na
 
   return (
     <section className="v1-panel session-card hub-action-card">
+      <WaitingSurface target="hub_join" />
       <div className="v1-panel-head">
         <h2>Join Campaign</h2>
         <span>Code eingeben</span>
       </div>
+      <WaitingInline target="hub_join" className="hub-waiting-inline" />
       <p className="status-muted">Schneller Einstieg in einen bestehenden Raum über Join-Code.</p>
       <form
         className="session-card-form"

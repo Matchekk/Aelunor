@@ -4,6 +4,7 @@ import { Navigate, useLocation } from "react-router-dom";
 
 import type { SessionBootstrap } from "../bootstrap/sessionStorage";
 import { HttpClientError } from "../../shared/api/httpClient";
+import { deriveUserFacingErrorMessage } from "../../shared/errors/userFacing";
 import { useCampaignQuery } from "../../entities/campaign/queries";
 import { PresenceProvider } from "../providers/PresenceProvider";
 import { ClaimWorkspace } from "../../features/claim/ClaimWorkspace";
@@ -11,6 +12,7 @@ import { CampaignWorkspace } from "../../features/play/CampaignWorkspace";
 import { SessionHubWorkspace } from "../../features/session/SessionHubWorkspace";
 import { hasActiveSession } from "../../features/session/selectors";
 import { SetupWizardOverlay } from "../../features/setup/SetupWizardOverlay";
+import { WaitingFullStage } from "../../shared/waiting/components";
 import { buildCampaignPath, buildV1HubPath, buildV1RootPath, normalizePlayRouteState, parseV1RouteIntent, serializePlayRouteState } from "./routes";
 import { deriveRootRedirectTarget, deriveRouteIntentResolution, deriveRouteRenderState } from "./selectors";
 
@@ -29,24 +31,7 @@ function isStaleSessionError(error: unknown): boolean {
 }
 
 function asErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-  return "Unable to load campaign state.";
-}
-
-function renderLoadingScreen(): ReactElement {
-  return (
-    <main className="v1-app-shell session-hub-shell">
-      <section className="v1-panel session-route-banner">
-        <div className="v1-panel-head">
-          <h2>Loading Campaign</h2>
-          <span>Snapshot bootstrap</span>
-        </div>
-        <p className="status-muted">Fetching the latest campaign snapshot for the requested v1 route.</p>
-      </section>
-    </main>
-  );
+  return deriveUserFacingErrorMessage(error, "Der Kampagnenstatus konnte gerade nicht geladen werden.");
 }
 
 function renderCampaignLoadFailure(on_clear_active_session: () => void, on_retry: () => void, error: unknown): ReactElement {
@@ -54,19 +39,19 @@ function renderCampaignLoadFailure(on_clear_active_session: () => void, on_retry
     <main className="v1-app-shell session-hub-shell">
       <section className="v1-panel session-route-banner">
         <div className="v1-panel-head">
-          <h2>Campaign Load Failed</h2>
-          <span>Route recovery</span>
+          <h2>Kampagne konnte nicht geladen werden</h2>
+          <span>Wiederherstellung</span>
         </div>
         <div className="session-feedback error">{asErrorMessage(error)}</div>
         <p className="status-muted">
-          The current session exists, but the campaign snapshot could not be loaded for this route right now.
+          Deine Sitzung ist vorhanden, aber der Kampagnen-Snapshot ist aktuell nicht verfügbar.
         </p>
         <div className="session-inline-actions">
           <button type="button" onClick={on_retry}>
-            Retry fetch
+            Erneut versuchen
           </button>
           <button type="button" onClick={on_clear_active_session}>
-            Clear active session
+            Sitzung zurücksetzen
           </button>
         </div>
       </section>
@@ -85,6 +70,8 @@ export function RouteGate({
   const sessionIsActive = hasActiveSession(active_session);
   const shouldFetchCampaign = sessionIsActive && (intent.kind === "root" || intent.kind === "campaign");
   const campaignQuery = useCampaignQuery(shouldFetchCampaign ? active_session.campaign_id : null);
+  const campaignLoading =
+    shouldFetchCampaign && (campaignQuery.isPending || (intent.kind === "root" && !campaignQuery.data && !campaignQuery.isError));
 
   if (intent.kind === "unknown") {
     return <Navigate to={sessionIsActive ? buildV1RootPath() : buildV1HubPath()} replace />;
@@ -108,7 +95,8 @@ export function RouteGate({
         state={
           intent.kind === "campaign"
             ? {
-                hub_error_message: "This campaign URL requires a valid local session. Resume or join the campaign from Session Hub.",
+                hub_error_message:
+                  "Diese Kampagnen-URL braucht eine gültige lokale Sitzung. Bitte im Hub fortsetzen oder erneut beitreten.",
               }
             : undefined
         }
@@ -116,8 +104,16 @@ export function RouteGate({
     );
   }
 
-  if (campaignQuery.isPending || (intent.kind === "root" && !campaignQuery.data && !campaignQuery.isError)) {
-    return renderLoadingScreen();
+  if (campaignLoading) {
+    return (
+      <WaitingFullStage
+        target="route_gate"
+        context="campaign_open"
+        active={true}
+        heading="Kampagne wird geöffnet"
+        detail="Der aktuelle Snapshot wird vorbereitet."
+      />
+    );
   }
 
   if (campaignQuery.isError || !campaignQuery.data) {
@@ -128,7 +124,7 @@ export function RouteGate({
           replace
           state={{
             hub_error_message:
-              "Stored credentials no longer match a loadable campaign session. Clear or recover the local session from the library.",
+              "Die gespeicherten Zugangsdaten passen nicht mehr zu einer ladbaren Kampagne. Bitte im Hub die Sitzung neu verbinden.",
           }}
         />
       );

@@ -1,4 +1,5 @@
 import type { CampaignSnapshot, StoryCardEntry, WorldInfoEntry } from "../../shared/api/contracts";
+import { formatDateTime as formatLocaleDateTime } from "../../shared/formatting/locale";
 import { deriveBoardNoveltyCount, getNoveltyCount, noveltyLabel } from "../play/novelty";
 
 export type BoardTabId = "plot" | "note" | "cards" | "world" | "memory" | "session";
@@ -17,15 +18,15 @@ export const BOARD_TABS: BoardTabConfig[] = [
   { id: "session", label: "Session" },
 ];
 
-function formatDateTime(value: string | null | undefined): string {
+function formatBoardDateTime(value: string | null | undefined): string {
   if (!value) {
     return "Unknown";
   }
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) {
+  const formatted = formatLocaleDateTime(value);
+  if (!formatted) {
     return "Unknown";
   }
-  return new Date(timestamp).toLocaleString();
+  return formatted;
 }
 
 export function deriveBoardTabs(campaign_id: string): Array<BoardTabConfig & { novelty_label: string | null }> {
@@ -53,7 +54,7 @@ export function canEditBoards(campaign: CampaignSnapshot): boolean {
 }
 
 export function formatBoardTimestamp(value: string | null | undefined): string {
-  return formatDateTime(value);
+  return formatBoardDateTime(value);
 }
 
 export function deriveStoryCardSubtitle(card: StoryCardEntry): string {

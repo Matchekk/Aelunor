@@ -7,8 +7,11 @@ import type {
   SetupQuestionPayload,
   SetupRandomResponse,
 } from "../../shared/api/contracts";
+import { deriveSetupPresenceKind, usePresenceActivityHeartbeat } from "../../entities/presence/activity";
 import { usePresenceStore } from "../../entities/presence/store";
 import { useSurfaceLayer } from "../../shared/ui/useSurfaceLayer";
+import { useWaitingSignal } from "../../shared/waiting/hooks";
+import { WaitingInline, WaitingSectionOverlay, WaitingSurface } from "../../shared/waiting/components";
 import { useSetupAnswerMutation, useSetupNextMutation, useSetupRandomApplyMutation, useSetupRandomMutation } from "./mutations";
 import {
   buildSetupAnswerPayload,
@@ -209,6 +212,35 @@ export function SetupWizardOverlay({ campaign }: SetupWizardOverlayProps) {
   const applyPending = randomApplyMutation.isPending;
   const sharedBlocked = Boolean(blockingAction);
   const disabledByBlocking = sharedBlocked && !submitPending && !randomPending && !applyPending && !turboPending;
+
+  useWaitingSignal({
+    key: `setup-host-wait:${campaign.campaign_meta.campaign_id}`,
+    active: gate.requires_overlay && gate.is_waiting,
+    context: "setup_waiting_host",
+    scope: "section",
+    blocking_level: "major_blocking",
+    surface_target: "setup_overlay",
+    detail_override: deriveSetupWaitingMessage(campaign),
+  });
+
+  useWaitingSignal({
+    key: `setup-question-pending:${campaign.campaign_meta.campaign_id}`,
+    active: gate.requires_overlay && submitPending && !gate.is_waiting,
+    context: "setup_step",
+    scope: "surface",
+    blocking_level: "local_blocking",
+    surface_target: "setup_question",
+  });
+
+  useWaitingSignal({
+    key: `setup-side-pending:${campaign.campaign_meta.campaign_id}`,
+    active: gate.requires_overlay && (randomPending || applyPending || turboPending) && !gate.is_waiting,
+    context: randomPending || applyPending ? "setup_random" : "setup_step",
+    scope: "surface",
+    blocking_level: "local_blocking",
+    surface_target: "setup_side",
+  });
+
   useSurfaceLayer({
     open: gate.requires_overlay,
     kind: "modal",
@@ -242,6 +274,13 @@ export function SetupWizardOverlay({ campaign }: SetupWizardOverlayProps) {
     : gate.current_question
       ? deriveSetupProgressSummary(currentPrompt?.progress ?? gate.progress)
       : "Load the current setup step to continue.";
+
+  usePresenceActivityHeartbeat({
+    active: gate.requires_overlay && gate.can_interact && !gate.is_waiting && !submitPending && !randomPending && !applyPending,
+    campaign_id: campaign.campaign_meta.campaign_id,
+    kind: deriveSetupPresenceKind(gate.mode ?? "world"),
+    slot_id: gate.mode === "character" ? gate.slot_id : null,
+  });
 
   const submitAnswer = async (skip = false) => {
     if (!currentPrompt?.question) {
@@ -352,6 +391,7 @@ export function SetupWizardOverlay({ campaign }: SetupWizardOverlayProps) {
   return (
     <div className="setup-overlay-backdrop" role="presentation">
       <section ref={dialogRef} className="setup-overlay" role="dialog" aria-modal="true" aria-label="Setup wizard">
+        <WaitingSectionOverlay target="setup_overlay" className="setup-waiting-overlay" />
         <SetupHeader
           title={gate.title}
           subtitle={gate.subtitle}
@@ -371,10 +411,12 @@ export function SetupWizardOverlay({ campaign }: SetupWizardOverlayProps) {
             />
 
             <section className="v1-panel setup-question-panel">
+              <WaitingSurface target="setup_question" />
               <div className="v1-panel-head">
                 <h2>{reviewActive ? "Review" : "Current Step"}</h2>
                 <span>{gate.phase_display}</span>
               </div>
+              <WaitingInline target="setup_question" className="hub-waiting-inline" />
 
               {mutationError ? <div className="session-feedback error">{mutationError}</div> : null}
               {localError ? <div className="session-feedback error">{localError}</div> : null}
@@ -419,6 +461,8 @@ export function SetupWizardOverlay({ campaign }: SetupWizardOverlayProps) {
           </section>
 
           <aside className="setup-side-column">
+            <WaitingSurface target="setup_side" />
+            <WaitingInline target="setup_side" className="hub-waiting-inline" />
             <RandomSuggestionPanel
               open={randomOpen}
               preview={randomPreview}

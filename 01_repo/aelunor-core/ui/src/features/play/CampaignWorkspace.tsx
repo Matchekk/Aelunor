@@ -4,9 +4,10 @@ import { useLocation, useNavigate, type NavigateOptions } from "react-router-dom
 import { buildCampaignPath, buildSurfaceHistoryState, buildV1HubPath, normalizePlayRouteState, serializePlayRouteState, withBoardsRouteState, withContextRouteState, withDrawerRouteState, withSceneRouteState } from "../../app/routing/routes";
 import type { SessionBootstrap } from "../../app/bootstrap/sessionStorage";
 import type { CampaignSnapshot, ContextQueryResponse } from "../../shared/api/contracts";
+import { usePresenceStore } from "../../entities/presence/store";
+import { deriveUserFacingErrorMessage } from "../../shared/errors/userFacing";
 import { BoardsModal } from "../boards/BoardsModal";
 import type { BoardTabId } from "../boards/selectors";
-import { deriveBoardsTriggerNovelty } from "../boards/selectors";
 import { ContextModal } from "../context/ContextModal";
 import { readContextCache, writeContextCache } from "../context/cache";
 import { useContextStore } from "../context/contextStore";
@@ -16,12 +17,20 @@ import { deriveFilteredTimelineEntries, deriveSceneMembership, deriveSceneOption
 import { clearBoardNovelty, trackCampaignNovelty } from "./novelty";
 import { readSessionLibrary, deleteSessionLibraryEntry } from "../session/sessionLibrary";
 import { useLayoutStore } from "../../state/layoutStore";
+import { useUserSettingsStore } from "../../entities/settings/store";
 import { RightRail } from "./components/RightRail";
 import { StoryTimeline } from "./components/StoryTimeline";
 import { TopBar } from "./components/TopBar";
 import { Composer } from "./components/Composer";
-import { derivePartySummary, deriveViewerSummary } from "./selectors";
+import { TurnEditModal } from "./components/TurnEditModal";
+import { derivePartySummary, derivePlayPhaseState, deriveViewerSummary } from "./selectors";
+import type { TimelineEntry } from "./selectors";
+import { useEditTurnMutation, useRetryIntroMutation, useRetryTurnMutation, useSubmitTurnMutation, useUndoTurnMutation } from "./mutations";
+import { buildContinueTurnPayload, shouldShowContinueAction } from "./turnActions";
 import { useUnclaimSlotMutation } from "../claim/mutations";
+import { PrePlayOverview } from "./components/PrePlayOverview";
+import { PrePlayComposerHint } from "./components/PrePlayComposerHint";
+import { readPlayUiMemory, writePlayUiMemory } from "./uiMemory";
 
 interface CampaignWorkspaceProps {
   campaign: CampaignSnapshot;
@@ -37,12 +46,18 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
   const location = useLocation();
   const navigate = useNavigate();
   const rightRailOpen = useLayoutStore((state) => state.rightRailOpen);
+  const setRightRailOpen = useLayoutStore((state) => state.setRightRailOpen);
+  const rememberFilters = useUserSettingsStore((state) => state.interaction.remember_filters);
   const partySummary = derivePartySummary(campaign);
+  const phaseState = useMemo(() => derivePlayPhaseState(campaign), [campaign]);
   const [boardsDeleteConfirmOpen, setBoardsDeleteConfirmOpen] = useState(false);
   const [boardsReturnFocus, setBoardsReturnFocus] = useState<HTMLElement | null>(null);
+  const [editTurnEntry, setEditTurnEntry] = useState<TimelineEntry | null>(null);
+  const [editTurnReturnFocus, setEditTurnReturnFocus] = useState<HTMLElement | null>(null);
   const [sessionRenameValue, setSessionRenameValue] = useState(campaign.campaign_meta.title || "");
   const [noveltyVersion, setNoveltyVersion] = useState(0);
   const previousCampaignRef = useRef<CampaignSnapshot | null>(null);
+  const rememberedUiHydratedRef = useRef<string | null>(null);
   const drawerReturnFocusRef = useRef<HTMLElement | null>(null);
   const contextReturnFocusRef = useRef<HTMLElement | null>(null);
   const playRouteState = useMemo(() => normalizePlayRouteState(campaign, location.search), [campaign, location.search]);
@@ -62,7 +77,13 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
   const contextOpen = useContextStore((state) => state.open);
   const openContextStore = useContextStore((state) => state.open_context);
   const closeContextStore = useContextStore((state) => state.close_context);
+  const blockingAction = usePresenceStore((state) => state.blockingAction);
   const unclaimMutation = useUnclaimSlotMutation(campaign.campaign_meta.campaign_id);
+  const retryIntroMutation = useRetryIntroMutation(campaign.campaign_meta.campaign_id);
+  const continueTurnMutation = useSubmitTurnMutation(campaign.campaign_meta.campaign_id);
+  const editTurnMutation = useEditTurnMutation(campaign.campaign_meta.campaign_id);
+  const undoTurnMutation = useUndoTurnMutation(campaign.campaign_meta.campaign_id);
+  const retryTurnMutation = useRetryTurnMutation(campaign.campaign_meta.campaign_id);
 
   useEffect(() => {
     setSessionRenameValue(campaign.campaign_meta.title || "");
@@ -80,7 +101,6 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
     () => readSessionLibrary().find((entry) => entry.campaign_id === campaign.campaign_meta.campaign_id) ?? null,
     [campaign.campaign_meta.campaign_id, noveltyVersion],
   );
-  const boardsNoveltyLabel = useMemo(() => deriveBoardsTriggerNovelty(campaign), [campaign, noveltyVersion]);
   const sceneOptions = useMemo(() => deriveSceneOptions(campaign), [campaign]);
   const selectedScene = useMemo(
     () => sceneOptions.find((entry) => entry.scene_id === selectedSceneId) ?? null,
@@ -91,10 +111,33 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
     [campaign, selectedSceneId],
   );
   const viewerSummary = useMemo(() => deriveViewerSummary(campaign), [campaign.viewer_context]);
+  const isPreplay = !phaseState.is_active_play;
+  const activeSceneLabel = selectedScene?.scene_name ?? (selectedSceneId === "all" ? "Alle Szenen" : selectedSceneId);
   const visibleTimelineEntries = useMemo(
     () => deriveFilteredTimelineEntries(campaign, selectedSceneId),
     [campaign.active_turns, campaign.state, selectedSceneId],
   );
+  const canContinueTurn = shouldShowContinueAction({
+    is_active_play: phaseState.is_active_play,
+    is_latest_turn: visibleTimelineEntries.length > 0,
+    claimed_slot_id: claimedSlotId,
+  });
+  const turnActionsPending =
+    continueTurnMutation.isPending || editTurnMutation.isPending || undoTurnMutation.isPending || retryTurnMutation.isPending;
+  const turnActionPendingId =
+    undoTurnMutation.variables ?? retryTurnMutation.variables ?? editTurnMutation.variables?.turn_id ?? null;
+  const turnActionError = continueTurnMutation.isError
+    ? deriveUserFacingErrorMessage(continueTurnMutation.error, "Der Fortsetzen-Zug konnte nicht erstellt werden.")
+    : editTurnMutation.isError
+      ? deriveUserFacingErrorMessage(editTurnMutation.error, "Der Zug konnte nicht gespeichert werden.")
+      : undoTurnMutation.isError
+        ? deriveUserFacingErrorMessage(undoTurnMutation.error, "Der Zug konnte nicht zurückgenommen werden.")
+        : retryTurnMutation.isError
+          ? deriveUserFacingErrorMessage(retryTurnMutation.error, "Der Zug konnte nicht erneut ausgeführt werden.")
+          : null;
+  const editTurnError = editTurnMutation.isError
+    ? deriveUserFacingErrorMessage(editTurnMutation.error, "Der Zug konnte nicht gespeichert werden.")
+    : null;
 
   const navigatePlayState = useCallback(
     (nextState: typeof playRouteState, options?: NavigateOptions) => {
@@ -114,6 +157,52 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
     },
     [location.state, navigate, navigatePlayState],
   );
+
+  useEffect(() => {
+    if (!rememberFilters) {
+      rememberedUiHydratedRef.current = null;
+      return;
+    }
+
+    const campaignId = campaign.campaign_meta.campaign_id;
+    if (rememberedUiHydratedRef.current === campaignId) {
+      return;
+    }
+
+    const remembered = readPlayUiMemory(campaignId);
+    if (typeof remembered.right_rail_open === "boolean") {
+      setRightRailOpen(remembered.right_rail_open);
+    }
+
+    const hasExplicitScene = new URLSearchParams(location.search).has("scene");
+    if (!hasExplicitScene && remembered.scene_id && remembered.scene_id !== "all") {
+      const hasRememberedScene = sceneOptions.some((entry) => entry.scene_id === remembered.scene_id);
+      if (hasRememberedScene) {
+        const nextState = withSceneRouteState(playRouteState, remembered.scene_id as SceneFilterId);
+        navigatePlayState(nextState, { replace: true });
+      }
+    }
+
+    rememberedUiHydratedRef.current = campaignId;
+  }, [
+    campaign.campaign_meta.campaign_id,
+    location.search,
+    navigatePlayState,
+    playRouteState,
+    rememberFilters,
+    sceneOptions,
+    setRightRailOpen,
+  ]);
+
+  useEffect(() => {
+    if (!rememberFilters) {
+      return;
+    }
+    writePlayUiMemory(campaign.campaign_meta.campaign_id, {
+      scene_id: selectedSceneId,
+      right_rail_open: rightRailOpen,
+    });
+  }, [campaign.campaign_meta.campaign_id, rememberFilters, rightRailOpen, selectedSceneId]);
 
   const openCharacterDrawer = useCallback(
     (slot_id: string, tab_id?: string) => {
@@ -235,15 +324,7 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
       <TopBar
         campaign={campaign}
         session={session}
-        boards_novelty_label={boardsNoveltyLabel}
-        selected_scene_id={selectedSceneId}
-        scene_options={sceneOptions}
-        on_scene_change={(scene_id) => {
-          navigatePlayState(withSceneRouteState(playRouteState, scene_id), {
-            state: buildSurfaceHistoryState("scene", location.pathname, location.search),
-          });
-        }}
-        on_open_boards={openBoards}
+        active_scene_label={activeSceneLabel}
         can_unclaim={Boolean(claimedSlotId)}
         unclaim_pending={unclaimMutation.isPending}
         on_unclaim={() => {
@@ -252,27 +333,25 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
           }
           void unclaimMutation.mutateAsync(claimedSlotId);
         }}
-        on_go_hub={() => {
-          navigate(buildV1HubPath());
-        }}
         on_leave_session={() => {
           on_clear_active_session();
           navigate(buildV1HubPath(), { replace: true });
         }}
       />
       <section className={rightRailOpen ? "workspace-grid play-workspace-grid layout" : "workspace-grid play-workspace-grid layout no-rail"}>
-        <section className="campaign-main-column story-workspace story-surface timeline-column">
+        <section className={`campaign-main-column story-workspace story-surface timeline-column${isPreplay ? " is-preplay" : " is-active-play"}`}>
           <section className="story-context-row">
             <div className="story-context-main">
-              <span className="status-pill">Viewer {viewerSummary}</span>
+              <span className="status-pill">{phaseState.phase_display}</span>
+              <span className="status-pill">Blickwinkel {viewerSummary}</span>
               <span className="status-pill">
-                Scene {selectedScene?.scene_name ?? (selectedSceneId === "all" ? "All scenes" : selectedSceneId)}
+                Szene {activeSceneLabel}
               </span>
               <span className="status-pill">{partySummary}</span>
             </div>
             <div className="story-context-members">
               {selectedSceneMembers.length === 0 ? (
-                <span className="status-muted">No known scene membership right now.</span>
+                <span className="status-muted">Aktuell keine zugeordnete Szenenmitgliedschaft.</span>
               ) : (
                 selectedSceneMembers.map((entry) => (
                   <span key={entry.slot_id} className="story-member-chip">
@@ -283,14 +362,55 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
               )}
             </div>
           </section>
+          {isPreplay ? (
+            <PrePlayOverview
+              campaign={campaign}
+              on_open_boards={openBoards}
+              on_retry_intro={() => {
+                void retryIntroMutation.mutateAsync();
+              }}
+              intro_retry_pending={retryIntroMutation.isPending}
+            />
+          ) : null}
           <StoryTimeline
             entries={visibleTimelineEntries}
             character_sheet_slots={campaign.character_sheet_slots}
             selected_scene_id={selectedSceneId}
             selected_scene_name={selectedSceneId === "all" ? null : selectedScene?.scene_name ?? selectedSceneId}
+            scene_options={sceneOptions}
+            is_preplay={isPreplay}
+            can_continue_turn={canContinueTurn}
+            turn_actions_pending={turnActionsPending || Boolean(blockingAction)}
+            turn_action_pending_id={turnActionPendingId}
+            turn_action_error={turnActionError}
+            on_scene_change={(scene_id) => {
+              navigatePlayState(withSceneRouteState(playRouteState, scene_id), {
+                state: buildSurfaceHistoryState("scene", location.pathname, location.search),
+              });
+            }}
             on_open_character={openCharacterDrawer}
+            on_edit_turn={(entry) => {
+              setEditTurnReturnFocus(activeElement());
+              setEditTurnEntry(entry);
+            }}
+            on_undo_turn={(turn_id) => {
+              void undoTurnMutation.mutateAsync(turn_id);
+            }}
+            on_retry_turn={(turn_id) => {
+              void retryTurnMutation.mutateAsync(turn_id);
+            }}
+            on_continue_turn={() => {
+              if (!claimedSlotId || !phaseState.is_active_play) {
+                return;
+              }
+              void continueTurnMutation.mutateAsync(buildContinueTurnPayload(claimedSlotId));
+            }}
           />
-          <Composer campaign={campaign} on_open_context={openContextModal} />
+          {isPreplay ? (
+            <PrePlayComposerHint phase_display={phaseState.phase_display} />
+          ) : (
+            <Composer campaign={campaign} on_open_context={openContextModal} />
+          )}
         </section>
         {rightRailOpen ? (
           <RightRail
@@ -345,6 +465,46 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
         campaign={campaign}
         on_close={() => {
           closeSurface("context", { ...playRouteState, context_open: false });
+        }}
+      />
+      <TurnEditModal
+        campaign_id={campaign.campaign_meta.campaign_id}
+        open={Boolean(editTurnEntry)}
+        turn={
+          editTurnEntry
+            ? {
+                turn_id: editTurnEntry.turn_id,
+                turn_number: editTurnEntry.turn_number,
+                actor_display: editTurnEntry.actor_display,
+                input_text_display: editTurnEntry.input_text_display,
+                gm_text_display: editTurnEntry.gm_text_display,
+                slot_id: claimedSlotId,
+              }
+            : null
+        }
+        pending={editTurnMutation.isPending}
+        error_message={editTurnError}
+        return_focus_element={editTurnReturnFocus}
+        on_close={() => {
+          if (!editTurnMutation.isPending) {
+            setEditTurnEntry(null);
+          }
+        }}
+        on_save={({ turn_id, input_text_display, gm_text_display }) => {
+          void editTurnMutation.mutateAsync(
+            {
+              turn_id,
+              payload: {
+                input_text_display,
+                gm_text_display,
+              },
+            },
+            {
+              onSuccess: () => {
+                setEditTurnEntry(null);
+              },
+            },
+          );
         }}
       />
     </main>

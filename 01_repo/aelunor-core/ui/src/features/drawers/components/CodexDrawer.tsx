@@ -23,7 +23,7 @@ export function CodexDrawer({ payload, active_tab }: CodexDrawerProps) {
     return (
       <section className="drawer-panel drawer-grid">
         <article className="drawer-card">
-          <strong>Identity</strong>
+          <strong>Identität</strong>
           <p>{text(profile.description_short || profile.category)}</p>
           <p>{text(profile.appearance)}</p>
         </article>
@@ -35,7 +35,7 @@ export function CodexDrawer({ payload, active_tab }: CodexDrawerProps) {
     return (
       <section className="drawer-panel drawer-grid">
         <article className="drawer-card">
-          <strong>Origin</strong>
+          <strong>Herkunft</strong>
           <p>{text(profile.homeland || profile.habitat)}</p>
           <p>{text(profile.culture || profile.behavior)}</p>
         </article>
@@ -47,10 +47,10 @@ export function CodexDrawer({ payload, active_tab }: CodexDrawerProps) {
     return (
       <section className="drawer-panel drawer-grid">
         <article className="drawer-card">
-          <strong>Traits</strong>
-          <p>Strengths: {list(profile.strength_tags) || "None"}</p>
-          <p>Weaknesses: {list(profile.weakness_tags) || "None"}</p>
-          {kind === "race" ? <p>Class affinities: {list(profile.class_affinities) || "None"}</p> : null}
+          <strong>Merkmale</strong>
+          <p>Stärken: {list(profile.strength_tags) || "Keine"}</p>
+          <p>Schwächen: {list(profile.weakness_tags) || "Keine"}</p>
+          {kind === "race" ? <p>Klassenaffinitäten: {list(profile.class_affinities) || "Keine"}</p> : null}
         </article>
       </section>
     );
@@ -60,8 +60,8 @@ export function CodexDrawer({ payload, active_tab }: CodexDrawerProps) {
     return (
       <section className="drawer-panel drawer-grid">
         <article className="drawer-card">
-          <strong>Abilities</strong>
-          <p>{kind === "race" ? `Known individuals: ${list(entry.known_individuals) || "None"}` : `Observed: ${list(entry.observed_abilities) || "None"}`}</p>
+          <strong>Fähigkeiten</strong>
+          <p>{kind === "race" ? `Bekannte Individuen: ${list(entry.known_individuals) || "Keine"}` : `Beobachtet: ${list(entry.observed_abilities) || "Keine"}`}</p>
         </article>
       </section>
     );
@@ -71,7 +71,7 @@ export function CodexDrawer({ payload, active_tab }: CodexDrawerProps) {
     return (
       <section className="drawer-panel drawer-grid">
         <article className="drawer-card">
-          <strong>Lore</strong>
+          <strong>Wissen</strong>
           <p>{list(entry.known_facts) || text(profile.lore_notes || profile.notable_traits)}</p>
         </article>
       </section>
@@ -82,16 +82,16 @@ export function CodexDrawer({ payload, active_tab }: CodexDrawerProps) {
     <section className="drawer-panel drawer-grid">
       <article className="drawer-card">
         <strong>{payload.name}</strong>
-        <p>{kind === "race" ? "Race" : "Beast"} codex entry</p>
-        <p>Knowledge level {payload.knowledge_level}/4</p>
+        <p>{kind === "race" ? "Rassen-" : "Bestien-"}Codexeintrag</p>
+        <p>Wissensstufe {payload.knowledge_level}/4</p>
         <div className="composer-status-pills">
           <ScopeLabel scope={partyScopeLabel()} />
         </div>
       </article>
       <article className="drawer-card">
-        <strong>Evidence</strong>
-        <p>Encounters: {Number(entry.encounter_count || 0)}</p>
-        <p>Known facts: {Array.isArray(entry.known_facts) ? entry.known_facts.length : 0}</p>
+        <strong>Belege</strong>
+        <p>Begegnungen: {Number(entry.encounter_count || 0)}</p>
+        <p>Bekannte Fakten: {Array.isArray(entry.known_facts) ? entry.known_facts.length : 0}</p>
       </article>
     </section>
   );

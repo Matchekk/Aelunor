@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { CreateCampaignRequest } from "../../../shared/api/contracts";
+import { WaitingInline, WaitingSurface } from "../../../shared/waiting/components";
 
 interface CreateCampaignCardProps {
   is_pending: boolean;
@@ -35,10 +36,12 @@ export function CreateCampaignCard({ is_pending, error_message, default_display_
 
   return (
     <section className="v1-panel session-card hub-action-card">
+      <WaitingSurface target="hub_create" />
       <div className="v1-panel-head">
         <h2>Create Campaign</h2>
         <span>Neue Runde starten</span>
       </div>
+      <WaitingInline target="hub_create" className="hub-waiting-inline" />
       <p className="status-muted">Du wirst Host und landest direkt im passenden Kampagnen-Flow.</p>
       <form
         className="session-card-form"

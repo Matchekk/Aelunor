@@ -5,6 +5,8 @@ import type {
   PresenceBlockingAction,
   TurnRequest,
 } from "../../shared/api/contracts";
+import { deriveUserFacingErrorMessage } from "../../shared/errors/userFacing";
+import { formatDateTime as formatLocaleDateTime } from "../../shared/formatting/locale";
 import type { PlayModeId } from "./modeConfig";
 import { getPlayModeConfig } from "./modeConfig";
 
@@ -21,6 +23,9 @@ export interface TimelineEntry {
   patch_summary: Record<string, number>;
   scene_id: string | null;
   scene_name: string | null;
+  can_edit: boolean;
+  can_undo: boolean;
+  can_retry: boolean;
 }
 
 function readRecord(value: unknown): Record<string, unknown> {
@@ -84,11 +89,7 @@ function deriveTurnScene(turn: CampaignSnapshot["active_turns"][number], campaig
 }
 
 function formatDateTime(value: string): string | null {
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) {
-    return null;
-  }
-  return new Date(timestamp).toLocaleString();
+  return formatLocaleDateTime(value);
 }
 
 function sumPatchChanges(value: unknown): number {
@@ -121,15 +122,18 @@ export function deriveTimelineEntries(campaign: CampaignSnapshot): TimelineEntry
         turn_id: turn.turn_id,
         turn_number: turn.turn_number,
         actor_id: turn.actor || "",
-        actor_display: turn.actor_display || turn.actor || "Unknown actor",
+        actor_display: turn.actor_display || turn.actor || "Unbekannter Akteur",
         mode: turn.mode || turn.action_type || "TURN",
         input_text_display: turn.input_text_display || "",
         gm_text_display: turn.gm_text_display || "",
         created_at: turn.created_at,
-        patch_summary_label: patchChangeCount > 0 ? `${patchChangeCount} state changes` : null,
+        patch_summary_label: patchChangeCount > 0 ? `${patchChangeCount} Änderungen` : null,
         patch_summary,
         scene_id: scene.scene_id,
         scene_name: scene.scene_name,
+        can_edit: turn.can_edit === true,
+        can_undo: turn.can_undo === true,
+        can_retry: turn.can_retry === true,
       };
     })
     .sort((left, right) => {
@@ -140,11 +144,11 @@ export function deriveTimelineEntries(campaign: CampaignSnapshot): TimelineEntry
 }
 
 const PATCH_SUMMARY_LABELS: Record<string, string> = {
-  characters_changed: "Characters changed",
-  items_added: "Items added",
-  plot_updates: "Plot updates",
-  map_updates: "Map updates",
-  events_added: "Events added",
+  characters_changed: "Charaktere geändert",
+  items_added: "Items hinzugefügt",
+  plot_updates: "Plot aktualisiert",
+  map_updates: "Karte aktualisiert",
+  events_added: "Ereignisse hinzugefügt",
 };
 
 export interface TurnDeltaRow {
@@ -170,11 +174,11 @@ export function deriveViewerSummary(campaign: CampaignSnapshot): string {
   if (display_name) {
     parts.push(display_name);
   }
-  parts.push(campaign.viewer_context.is_host ? "Host" : "Player");
+  parts.push(campaign.viewer_context.is_host ? "Spielleitung" : "Spieler");
   if (campaign.viewer_context.claimed_slot_id) {
-    parts.push(`Claim ${campaign.viewer_context.claimed_slot_id}`);
+    parts.push(`Slot ${campaign.viewer_context.claimed_slot_id}`);
   } else {
-    parts.push("No claim yet");
+    parts.push("Kein Slot beansprucht");
   }
   return parts.join(" • ");
 }
@@ -182,7 +186,7 @@ export function deriveViewerSummary(campaign: CampaignSnapshot): string {
 export function derivePartySummary(campaign: CampaignSnapshot): string {
   const party_count = campaign.display_party.length;
   const total_slots = campaign.character_sheet_slots.length;
-  return `${party_count} active of ${total_slots} slots`;
+  return `${party_count}/${total_slots} Slots aktiv`;
 }
 
 export function derivePresenceSummary(
@@ -195,35 +199,54 @@ export function derivePresenceSummary(
   }
   const activityCount = Object.keys(activities).length;
   if (!sse_connected) {
-    return "Live presence is reconnecting.";
+    return "Live-Sync verbindet neu.";
   }
   if (activityCount === 0) {
-    return "No live activity yet.";
+    return "Noch keine Live-Aktivität.";
   }
-  return `${activityCount} live presence event${activityCount === 1 ? "" : "s"}`;
+  return `${activityCount} aktive Präsenz${activityCount === 1 ? "-Spur" : "-Spuren"}`;
 }
 
 export function formatTimelineTimestamp(value: string): string {
-  return formatDateTime(value) ?? "Unknown time";
+  return formatDateTime(value) ?? "Unbekannte Zeit";
 }
 
 export function deriveTurnLead(entry: TimelineEntry): string {
   if (entry.input_text_display) {
     return entry.input_text_display;
   }
-  return "No player-facing input text.";
+  return "Kein sichtbarer Spielerbeitrag.";
 }
 
 export function deriveTurnOutcome(entry: TimelineEntry): string {
   if (entry.gm_text_display) {
     return entry.gm_text_display;
   }
-  return "No GM response text yet.";
+  return "Noch keine GM-Antwort.";
 }
 
 function deriveCampaignPhase(campaign: CampaignSnapshot): string {
   const meta = readRecord(campaign.state).meta;
   return readString(readRecord(meta).phase) || campaign.viewer_context.phase || campaign.campaign_meta.status || "unknown";
+}
+
+export interface PlayPhaseState {
+  phase: string;
+  phase_display: string;
+  is_active_play: boolean;
+  is_ready_to_start: boolean;
+}
+
+export function derivePlayPhaseState(campaign: CampaignSnapshot): PlayPhaseState {
+  const phase = deriveCampaignPhase(campaign);
+  const phase_display = campaign.setup_runtime.phase_display || campaign.viewer_context.phase || campaign.campaign_meta.status || phase;
+  const normalized = phase.toLowerCase();
+  return {
+    phase,
+    phase_display,
+    is_active_play: normalized === "active",
+    is_ready_to_start: normalized === "ready_to_start" || campaign.setup_runtime.is_ready_to_start === true,
+  };
 }
 
 function latestTurn(campaign: CampaignSnapshot) {
@@ -271,7 +294,7 @@ export function deriveComposerAccessState(
 ): ComposerAccessState {
   const actor = campaign.viewer_context.claimed_slot_id ?? null;
   const config = getPlayModeConfig(mode);
-  const phase = deriveCampaignPhase(campaign);
+  const phaseState = derivePlayPhaseState(campaign);
   const intro = deriveIntroState(campaign);
   const hasIntro = campaignHasIntro(campaign);
   const normalizedDraft = draft.trim();
@@ -280,17 +303,17 @@ export function deriveComposerAccessState(
   let requires_input = false;
 
   if (!actor) {
-    disabled_reason = "Without a claimed slot you can read, but you cannot submit.";
+    disabled_reason = "Ohne beanspruchten Slot kannst du lesen, aber keinen Zug senden.";
   } else if (submit_pending) {
-    disabled_reason = config.is_contextual ? "Context query is running." : "Your turn is being submitted.";
+    disabled_reason = config.is_contextual ? "Kontextabfrage läuft." : "Dein Zug wird verarbeitet.";
   } else if (blocking_action?.label) {
-    disabled_reason = "A shared campaign action is still processing. Wait for it to finish before sending anything new.";
-  } else if (phase !== "active") {
-    disabled_reason = "Turns only open once the campaign phase is active.";
+    disabled_reason = "Eine gemeinsame Kampagnenaktion läuft noch. Bitte kurz warten.";
+  } else if (!phaseState.is_active_play) {
+    disabled_reason = "Züge sind erst in der aktiven Spielphase möglich.";
   } else if (!hasIntro && intro.status === "failed") {
-    disabled_reason = "The campaign intro failed and needs to be retried before turns can be sent.";
+    disabled_reason = "Der Kampagnen-Introzug ist fehlgeschlagen und blockiert neue Züge.";
   } else if (!hasIntro) {
-    disabled_reason = "The opening GM intro has not appeared yet.";
+    disabled_reason = "Der eröffnende GM-Zug ist noch nicht verfügbar.";
   } else if (!normalizedDraft) {
     requires_input = true;
   }
@@ -298,17 +321,17 @@ export function deriveComposerAccessState(
   const helper_text = disabled_reason
     ? disabled_reason
     : requires_input
-      ? "Write a draft before submitting."
+      ? "Schreibe zuerst einen Entwurf."
     : config.id === "canon"
-      ? "This contribution will be treated as canon and should change the world deliberately."
+      ? "Dieser Beitrag wird als Kanon verarbeitet und sollte gezielt Weltzustand ändern."
       : config.id === "context"
-        ? "This asks a canon/context question and does not create a new story turn."
-        : `The GM will interpret this ${config.label.toLowerCase()} contribution inside the current scene.`;
+        ? "Diese Anfrage fragt nur Kontext ab und erzeugt keinen Story-Turn."
+        : `Der GM verarbeitet diesen ${config.label.toLowerCase()}-Beitrag in der aktuellen Szene.`;
 
   return {
     actor,
     can_submit: disabled_reason === null && !requires_input,
-    submit_label: config.is_contextual ? "Ask context" : "Send turn",
+    submit_label: config.is_contextual ? "Kontext fragen" : "Zug senden",
     disabled_reason,
     helper_text,
     requires_input,
@@ -321,10 +344,13 @@ export function deriveIntroBannerMessage(campaign: CampaignSnapshot): string | n
     return null;
   }
   if (intro.status === "failed") {
-    return intro.last_error || "The campaign intro failed. Retry is still handled in the legacy UI.";
+    return deriveUserFacingErrorMessage(
+      intro.last_error ? new Error(intro.last_error) : null,
+      "Der Kampagnen-Introzug konnte nicht erstellt werden. Bitte erneut versuchen.",
+    );
   }
   if (intro.status === "pending") {
-    return "The GM intro is still being prepared.";
+    return "Der GM bereitet gerade den Eröffnungszug vor.";
   }
-  return "The campaign is waiting for its first GM intro turn.";
+  return "Die Kampagne wartet auf den ersten Eröffnungszug.";
 }

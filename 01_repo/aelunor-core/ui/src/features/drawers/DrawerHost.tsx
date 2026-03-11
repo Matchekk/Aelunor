@@ -6,6 +6,7 @@ import type { CampaignSnapshot, CharacterSheetResponse, NpcSheetResponse } from 
 import { endpoints } from "../../shared/api/endpoints";
 import { getJson } from "../../shared/api/httpClient";
 import { useSurfaceLayer } from "../../shared/ui/useSurfaceLayer";
+import { useWaitingSignal } from "../../shared/waiting/hooks";
 import { clearCharacterNovelty, clearCodexNovelty } from "../play/novelty";
 import { useDrawerStore } from "./drawerStore";
 import { buildCodexDrawerPayload, deriveCharacterDrawerSubtitle, deriveDrawerTabs, deriveNpcDrawerSubtitle } from "./selectors";
@@ -27,7 +28,7 @@ function asErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
   }
-  return "Unexpected drawer error.";
+  return "Unerwarteter Fehler im Charakterbogen.";
 }
 
 export function DrawerHost({ campaign, on_novelty_change, on_close }: DrawerHostProps) {
@@ -75,6 +76,24 @@ export function DrawerHost({ campaign, on_novelty_change, on_close }: DrawerHost
       ? deriveDrawerTabs(drawer_type, campaign.campaign_meta.campaign_id, drawer_entity_id, drawer_codex_kind)
       : [];
 
+  useWaitingSignal({
+    key: `drawer-load:${campaign.campaign_meta.campaign_id}:character`,
+    active: drawer_open && drawer_type === "character" && characterQuery.isPending,
+    context: "panel_load",
+    scope: "surface",
+    blocking_level: "local_blocking",
+    surface_target: "drawer",
+  });
+
+  useWaitingSignal({
+    key: `drawer-load:${campaign.campaign_meta.campaign_id}:npc`,
+    active: drawer_open && drawer_type === "npc" && npcQuery.isPending,
+    context: "panel_load",
+    scope: "surface",
+    blocking_level: "local_blocking",
+    surface_target: "drawer",
+  });
+
   useEffect(() => {
     if (!drawer_open || !drawer_type || !drawer_entity_id) {
       return;
@@ -96,8 +115,10 @@ export function DrawerHost({ campaign, on_novelty_change, on_close }: DrawerHost
     return null;
   }
 
-  let title = "Drawer";
-  let subtitle = "Read-only";
+  const is_character_drawer = drawer_type === "character";
+
+  let title = "Charakterbogen";
+  let subtitle = "Nur Leseansicht";
   let body: ReactNode = null;
 
   if (drawer_type === "character") {
@@ -122,22 +143,26 @@ export function DrawerHost({ campaign, on_novelty_change, on_close }: DrawerHost
     }
   } else {
     if (!codexPayload) {
-      body = <DrawerErrorState message="Codex entry could not be derived from the current snapshot." on_close={on_close} />;
+      body = <DrawerErrorState message="Codex-Eintrag konnte aus dem aktuellen Snapshot nicht abgeleitet werden." on_close={on_close} />;
     } else {
       title = codexPayload.name;
-      subtitle = `${codexPayload.kind === "race" ? "Race" : "Beast"} • knowledge ${codexPayload.knowledge_level}/4`;
+      subtitle = `${codexPayload.kind === "race" ? "Rasse" : "Bestie"} • Wissen ${codexPayload.knowledge_level}/4`;
       body = <CodexDrawer payload={codexPayload} active_tab={active_drawer_tab} />;
     }
   }
 
   return (
-    <div className="drawer-backdrop" role="presentation" onClick={on_close}>
+    <div
+      className={is_character_drawer ? "drawer-backdrop legacy-character-drawer-backdrop" : "drawer-backdrop"}
+      role="presentation"
+      onClick={on_close}
+    >
       <aside
         ref={dialogRef}
-        className="drawer-shell"
+        className={is_character_drawer ? "drawer-shell legacy-character-drawer-shell" : "drawer-shell"}
         role="dialog"
         aria-modal="true"
-        aria-label="Campaign drawer"
+        aria-label="Charakterbogen"
         onClick={(event) => event.stopPropagation()}
       >
         <DrawerHeader title={title} subtitle={subtitle} on_close={on_close} />

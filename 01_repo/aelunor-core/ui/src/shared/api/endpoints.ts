@@ -7,7 +7,14 @@ export const endpoints = {
     by_id: (campaign_id: string) => `/api/campaigns/${encodePath(campaign_id)}`,
     create: () => "/api/campaigns",
     join: () => "/api/campaigns/join",
+    retry_intro: (campaign_id: string) => `/api/campaigns/${encodePath(campaign_id)}/intro/retry`,
     create_turn: (campaign_id: string) => `/api/campaigns/${encodePath(campaign_id)}/turns`,
+    edit_turn: (campaign_id: string, turn_id: string) =>
+      `/api/campaigns/${encodePath(campaign_id)}/turns/${encodePath(turn_id)}`,
+    undo_turn: (campaign_id: string, turn_id: string) =>
+      `/api/campaigns/${encodePath(campaign_id)}/turns/${encodePath(turn_id)}/undo`,
+    retry_turn: (campaign_id: string, turn_id: string) =>
+      `/api/campaigns/${encodePath(campaign_id)}/turns/${encodePath(turn_id)}/retry`,
     context_query: (campaign_id: string) => `/api/campaigns/${encodePath(campaign_id)}/context/query`,
     character_sheet: (campaign_id: string, slot_id: string) =>
       `/api/campaigns/${encodePath(campaign_id)}/characters/${encodePath(slot_id)}`,
@@ -20,6 +27,8 @@ export const endpoints = {
       `/api/campaigns/${encodePath(campaign_id)}/boards/plot-essentials`,
     patch_authors_note: (campaign_id: string) =>
       `/api/campaigns/${encodePath(campaign_id)}/boards/authors-note`,
+    patch_player_diary: (campaign_id: string, player_id: string) =>
+      `/api/campaigns/${encodePath(campaign_id)}/boards/diary/${encodePath(player_id)}`,
     create_story_card: (campaign_id: string) =>
       `/api/campaigns/${encodePath(campaign_id)}/boards/story-cards`,
     patch_story_card: (campaign_id: string, card_id: string) =>
@@ -53,6 +62,10 @@ export const endpoints = {
       });
       return `/api/campaigns/${encodePath(campaign_id)}/events?${params.toString()}`;
     },
+    presence_activity: (campaign_id: string) =>
+      `/api/campaigns/${encodePath(campaign_id)}/presence/activity`,
+    presence_clear: (campaign_id: string) =>
+      `/api/campaigns/${encodePath(campaign_id)}/presence/clear`,
   },
   system: {
     llm_status: () => "/api/llm/status",

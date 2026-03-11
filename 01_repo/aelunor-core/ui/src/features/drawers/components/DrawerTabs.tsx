@@ -6,18 +6,18 @@ interface DrawerTabsProps {
 
 export function DrawerTabs({ tabs, active_tab, on_change }: DrawerTabsProps) {
   return (
-    <div className="drawer-tabs" role="tablist" aria-label="Drawer tabs">
+    <div className="drawer-tabs" role="tablist" aria-label="Charakterbogen-Reiter">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           type="button"
           role="tab"
           aria-selected={active_tab === tab.id}
-          className={active_tab === tab.id ? "is-active" : ""}
+          className={active_tab === tab.id ? "drawer-tab active is-active" : "drawer-tab"}
           onClick={() => on_change(tab.id)}
         >
           <span>{tab.label}</span>
-          {tab.novelty_label ? <span className="status-pill warning">{tab.novelty_label}</span> : null}
+          {tab.novelty_label ? <span className="mini-pill">{tab.novelty_label}</span> : null}
         </button>
       ))}
     </div>

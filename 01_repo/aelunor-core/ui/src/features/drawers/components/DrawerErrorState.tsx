@@ -8,17 +8,17 @@ export function DrawerErrorState({ message, on_retry, on_close }: DrawerErrorSta
   return (
     <section className="drawer-state">
       <div className="v1-panel-head">
-        <h2>Drawer load failed</h2>
+        <h2>Charakterbogen konnte nicht geladen werden</h2>
       </div>
       <div className="session-feedback error">{message}</div>
       <div className="session-inline-actions">
         {on_retry ? (
           <button type="button" onClick={on_retry}>
-            Retry load
+            Erneut laden
           </button>
         ) : null}
         <button type="button" onClick={on_close}>
-          Close drawer
+          Schließen
         </button>
       </div>
     </section>

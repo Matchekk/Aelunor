@@ -29,27 +29,27 @@ export function deriveDrawerTabs(
   const tabs =
     drawer_type === "npc"
       ? [
-          { id: "overview", label: "Overview" },
-          { id: "class", label: "Goal" },
-          { id: "attributes", label: "History" },
-          { id: "skills", label: "Links" },
+          { id: "overview", label: "Übersicht" },
+          { id: "class", label: "Ziel" },
+          { id: "attributes", label: "Historie" },
+          { id: "skills", label: "Verbindungen" },
         ]
       : drawer_type === "codex"
         ? [
-            { id: "overview", label: "Overview" },
-            { id: "class", label: "Identity" },
-            { id: "attributes", label: "Origin" },
-            { id: "skills", label: "Traits" },
-            { id: "injuries", label: "Abilities" },
-            { id: "gear", label: "Lore" },
+            { id: "overview", label: "Übersicht" },
+            { id: "class", label: "Identität" },
+            { id: "attributes", label: "Herkunft" },
+            { id: "skills", label: "Merkmale" },
+            { id: "injuries", label: "Fähigkeiten" },
+            { id: "gear", label: "Wissen" },
           ]
         : [
-            { id: "overview", label: "Overview" },
-            { id: "class", label: "Class" },
-            { id: "attributes", label: "Attributes" },
-            { id: "skills", label: "Skills" },
-            { id: "injuries", label: "Injuries" },
-            { id: "gear", label: "Gear" },
+            { id: "overview", label: "Übersicht" },
+            { id: "class", label: "Klasse" },
+            { id: "attributes", label: "Attribute" },
+            { id: "skills", label: "Fertigkeiten" },
+            { id: "injuries", label: "Verletzungen" },
+            { id: "gear", label: "Ausrüstung" },
           ];
 
   return tabs.map((tab) => {
@@ -78,14 +78,14 @@ export function deriveDrawerTabs(
 }
 
 export function deriveCharacterDrawerSubtitle(sheet: CharacterSheetResponse): string {
-  const scene = sheet.scene_name || sheet.scene_id || "Unknown scene";
+  const scene = sheet.scene_name || sheet.scene_id || "Unbekannte Szene";
   const claim = sheet.claimed_by_name ? ` • ${sheet.claimed_by_name}` : "";
   return `${scene}${claim}`;
 }
 
 export function deriveNpcDrawerSubtitle(sheet: NpcSheetResponse): string {
-  const race = sheet.race || "Unknown";
-  const level = typeof sheet.level === "number" ? ` • Lv ${sheet.level}` : "";
+  const race = sheet.race || "Unbekannt";
+  const level = typeof sheet.level === "number" ? ` • St. ${sheet.level}` : "";
   return `${race}${level}`;
 }
 
