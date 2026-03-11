@@ -19,6 +19,18 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
+  flex-wrap: nowrap;
+}
+
+.legacy-character-drawer-shell .drawer-head > div {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.legacy-character-drawer-shell .drawer-head > button {
+  margin-left: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .legacy-character-drawer-shell .panelTitle {
@@ -28,7 +40,8 @@
 .legacy-character-drawer-shell .drawer-tabs {
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
 }
 
 .legacy-character-drawer-shell .drawer-tab {
@@ -43,6 +56,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .legacy-character-drawer-shell .drawer-tab.active,

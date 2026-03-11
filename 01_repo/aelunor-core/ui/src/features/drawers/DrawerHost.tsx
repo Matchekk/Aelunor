@@ -71,10 +71,42 @@ export function DrawerHost({ campaign, on_novelty_change, on_close }: DrawerHost
     [campaign, drawer_codex_kind, drawer_entity_id, drawer_open, drawer_type],
   );
 
-  const tabs =
-    drawer_open && drawer_type && drawer_entity_id
-      ? deriveDrawerTabs(drawer_type, campaign.campaign_meta.campaign_id, drawer_entity_id, drawer_codex_kind)
-      : [];
+  const tabs = useMemo(() => {
+    if (!drawer_open || !drawer_type || !drawer_entity_id) {
+      return [];
+    }
+    const derived = deriveDrawerTabs(drawer_type, campaign.campaign_meta.campaign_id, drawer_entity_id, drawer_codex_kind);
+    if (derived.length > 0) {
+      return derived;
+    }
+    // Defensive fallback to avoid an empty tab row in case upstream data/routing is inconsistent.
+    if (drawer_type === "npc") {
+      return [
+        { id: "overview", label: "Übersicht", novelty_label: null },
+        { id: "class", label: "Ziel", novelty_label: null },
+        { id: "attributes", label: "Historie", novelty_label: null },
+        { id: "skills", label: "Verbindungen", novelty_label: null },
+      ];
+    }
+    if (drawer_type === "codex") {
+      return [
+        { id: "overview", label: "Übersicht", novelty_label: null },
+        { id: "class", label: "Identität", novelty_label: null },
+        { id: "attributes", label: "Herkunft", novelty_label: null },
+        { id: "skills", label: "Merkmale", novelty_label: null },
+        { id: "injuries", label: "Fähigkeiten", novelty_label: null },
+        { id: "gear", label: "Wissen", novelty_label: null },
+      ];
+    }
+    return [
+      { id: "overview", label: "Übersicht", novelty_label: null },
+      { id: "class", label: "Klasse", novelty_label: null },
+      { id: "attributes", label: "Attribute", novelty_label: null },
+      { id: "skills", label: "Fertigkeiten", novelty_label: null },
+      { id: "injuries", label: "Verletzungen", novelty_label: null },
+      { id: "gear", label: "Ausrüstung", novelty_label: null },
+    ];
+  }, [campaign.campaign_meta.campaign_id, drawer_codex_kind, drawer_entity_id, drawer_open, drawer_type]);
 
   useWaitingSignal({
     key: `drawer-load:${campaign.campaign_meta.campaign_id}:character`,
@@ -110,6 +142,19 @@ export function DrawerHost({ campaign, on_novelty_change, on_close }: DrawerHost
       }
     }
   }, [active_drawer_tab, campaign.campaign_meta.campaign_id, drawer_codex_kind, drawer_entity_id, drawer_open, drawer_type, on_novelty_change]);
+
+  useEffect(() => {
+    if (!tabs.length) {
+      return;
+    }
+    const firstTab = tabs[0];
+    if (!firstTab) {
+      return;
+    }
+    if (!tabs.some((tab) => tab.id === active_drawer_tab)) {
+      set_active_tab(firstTab.id);
+    }
+  }, [active_drawer_tab, set_active_tab, tabs]);
 
   if (!drawer_open || !drawer_type || !drawer_entity_id) {
     return null;
