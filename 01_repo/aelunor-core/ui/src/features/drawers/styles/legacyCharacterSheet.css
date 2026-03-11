@@ -22,6 +22,14 @@
   flex-wrap: nowrap;
 }
 
+.legacy-character-drawer-shell .drawer-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: nowrap;
+}
+
 .legacy-character-drawer-shell .drawer-head > div {
   min-width: 0;
   flex: 1 1 auto;
@@ -31,6 +39,12 @@
   margin-left: auto;
   flex: 0 0 auto;
   white-space: nowrap;
+}
+
+.legacy-character-drawer-shell .drawer-header > button {
+  margin-left: auto;
+  white-space: nowrap;
+  align-self: flex-start;
 }
 
 .legacy-character-drawer-shell .panelTitle {
@@ -58,6 +72,16 @@
   gap: 0.4rem;
   flex: 0 0 auto;
   white-space: nowrap;
+}
+
+.legacy-character-drawer-shell .character-inline-host-tabs {
+  margin-top: 2px;
+}
+
+.legacy-character-drawer-shell .character-inline-host-tabs .drawer-tab {
+  display: inline-flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 .legacy-character-drawer-shell .drawer-tab.active,

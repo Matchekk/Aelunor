@@ -24,6 +24,15 @@ interface DrawerHostProps {
   on_close: () => void;
 }
 
+const CHARACTER_DRAWER_TABS = [
+  { id: "overview", label: "Übersicht" },
+  { id: "class", label: "Klasse" },
+  { id: "attributes", label: "Attribute" },
+  { id: "skills", label: "Fertigkeiten" },
+  { id: "injuries", label: "Verletzungen & Narben" },
+  { id: "gear", label: "Inventar" },
+] as const;
+
 function asErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -211,7 +220,24 @@ export function DrawerHost({ campaign, on_novelty_change, on_close }: DrawerHost
         onClick={(event) => event.stopPropagation()}
       >
         <DrawerHeader title={title} subtitle={subtitle} on_close={on_close} />
-        <DrawerTabs tabs={tabs} active_tab={active_drawer_tab} on_change={set_active_tab} />
+        {is_character_drawer ? (
+          <div className="drawer-tabs character-inline-host-tabs" role="tablist" aria-label="Charakterbogen-Reiter">
+            {CHARACTER_DRAWER_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={active_drawer_tab === tab.id}
+                className={active_drawer_tab === tab.id ? "drawer-tab active is-active" : "drawer-tab"}
+                onClick={() => set_active_tab(tab.id)}
+              >
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <DrawerTabs tabs={tabs} active_tab={active_drawer_tab} on_change={set_active_tab} />
+        )}
         <div className="drawer-body">{body}</div>
       </aside>
     </div>
