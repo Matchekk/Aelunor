@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { derivePresenceKindForContext, usePresenceActivityClient } from "../../../entities/presence/activity";
 import type { CampaignSnapshot, ContextQueryResponse } from "../../../shared/api/contracts";
@@ -15,6 +15,12 @@ import {
   deriveIntroBannerMessage,
   deriveLatestRequests,
 } from "../selectors";
+import {
+  buildComposerDraftScope,
+  clearComposerDrafts,
+  readComposerDrafts,
+  writeComposerDrafts,
+} from "../composerDraftStorage";
 import { ComposerModeTabs } from "./ComposerModeTabs";
 import { ComposerStatusBar } from "./ComposerStatusBar";
 import { IntroBanner } from "./IntroBanner";
@@ -47,11 +53,22 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
   const [currentMode, setCurrentMode] = useState<PlayModeId>(() => resolveInitialComposerMode(composerModePreference));
   const [drafts, setDrafts] = useState<Record<PlayModeId, string>>(() => initialDrafts());
   const typingTimerRef = useRef<number | null>(null);
+  const draftScopeRef = useRef<string | null>(null);
 
   const blockingAction = usePresenceStore((state) => state.blockingAction);
   const presenceActivity = usePresenceActivityClient(campaign.campaign_meta.campaign_id);
   const submitTurnMutation = useSubmitTurnMutation(campaign.campaign_meta.campaign_id);
   const contextQueryMutation = useContextQueryMutation(campaign.campaign_meta.campaign_id);
+
+  const draftScope = useMemo(
+    () =>
+      buildComposerDraftScope(
+        campaign.campaign_meta.campaign_id,
+        campaign.viewer_context.claimed_slot_id,
+        campaign.viewer_context.player_id,
+      ),
+    [campaign.campaign_meta.campaign_id, campaign.viewer_context.claimed_slot_id, campaign.viewer_context.player_id],
+  );
 
   const currentDraft = drafts[currentMode];
   const submitPending = submitTurnMutation.isPending || contextQueryMutation.isPending;
@@ -69,6 +86,18 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
   useEffect(() => {
     setCurrentMode(resolveInitialComposerMode(composerModePreference));
   }, [composerModePreference]);
+
+  useEffect(() => {
+    draftScopeRef.current = draftScope;
+    setDrafts(readComposerDrafts(draftScope));
+  }, [draftScope]);
+
+  useEffect(() => {
+    if (draftScopeRef.current !== draftScope) {
+      return;
+    }
+    writeComposerDrafts(draftScope, drafts);
+  }, [draftScope, drafts]);
 
   useEffect(() => {
     return () => {
@@ -113,6 +142,11 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
     }));
   };
 
+  const clearCurrentDraftScope = () => {
+    clearComposerDrafts(draftScope);
+    setDrafts(initialDrafts());
+  };
+
   const submit = async () => {
     if (!access.can_submit || !access.actor) {
       return;
@@ -130,7 +164,7 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
         actor: access.actor,
         text,
       });
-      setDraft("");
+      clearCurrentDraftScope();
       void presenceActivity.clear_activity();
       on_open_context(response, returnFocus);
       return;
@@ -141,7 +175,7 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
       mode: modeConfig.backend_mode ?? modeConfig.label,
       text,
     });
-    setDraft("");
+    clearCurrentDraftScope();
     void presenceActivity.clear_activity();
   };
 
