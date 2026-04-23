@@ -52,8 +52,8 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
   const setComposerModePreference = useUserSettingsStore((state) => state.set_composer_mode_preference);
   const [currentMode, setCurrentMode] = useState<PlayModeId>(() => resolveInitialComposerMode(composerModePreference));
   const [drafts, setDrafts] = useState<Record<PlayModeId, string>>(() => initialDrafts());
+  const [hydratedDraftScope, setHydratedDraftScope] = useState<string | null>(null);
   const typingTimerRef = useRef<number | null>(null);
-  const draftScopeRef = useRef<string | null>(null);
 
   const blockingAction = usePresenceStore((state) => state.blockingAction);
   const presenceActivity = usePresenceActivityClient(campaign.campaign_meta.campaign_id);
@@ -88,16 +88,17 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
   }, [composerModePreference]);
 
   useEffect(() => {
-    draftScopeRef.current = draftScope;
+    setHydratedDraftScope(null);
     setDrafts(readComposerDrafts(draftScope));
+    setHydratedDraftScope(draftScope);
   }, [draftScope]);
 
   useEffect(() => {
-    if (draftScopeRef.current !== draftScope) {
+    if (hydratedDraftScope !== draftScope) {
       return;
     }
     writeComposerDrafts(draftScope, drafts);
-  }, [draftScope, drafts]);
+  }, [draftScope, drafts, hydratedDraftScope]);
 
   useEffect(() => {
     return () => {
