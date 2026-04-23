@@ -1,6 +1,7 @@
 import type { SessionLibraryEntry } from "../../shared/api/contracts";
 
 const SESSION_LIBRARY_KEY = "isekaiSessionLibrary";
+const MAX_LIBRARY_ENTRIES = 25;
 
 interface LegacySessionLibraryEntry {
   campaignId?: unknown;
@@ -27,11 +28,19 @@ function getStorage(): Storage | null {
   if (typeof window === "undefined") {
     return null;
   }
-  return window.localStorage;
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeString(value: unknown): string {
   return String(value ?? "").trim();
+}
+
+function normalizeJoinCode(value: unknown): string {
+  return normalizeString(value).toUpperCase().replace(/\s+/g, "");
 }
 
 function normalizeNullableString(value: unknown): string | null {
@@ -41,7 +50,8 @@ function normalizeNullableString(value: unknown): string | null {
 
 function normalizeTimestamp(value: unknown): string {
   const normalized = normalizeString(value);
-  return normalized || new Date().toISOString();
+  const parsed = Date.parse(normalized);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : new Date().toISOString();
 }
 
 function defaultLabel(campaign_id: string): string {
@@ -59,14 +69,14 @@ function asSessionLibraryEntry(raw: unknown): SessionLibraryEntry | null {
   const campaign_id = normalizeString(item.campaign_id ?? legacy.campaignId);
   const player_id = normalizeString(item.player_id ?? legacy.playerId);
   const player_token = normalizeString(item.player_token ?? legacy.playerToken);
-  const join_code = normalizeString(item.join_code ?? legacy.joinCode);
+  const join_code = normalizeJoinCode(item.join_code ?? legacy.joinCode);
 
   if (!campaign_id || !player_id || !player_token) {
     return null;
   }
 
-  const label_source = item.label ?? item.campaign_title ?? legacy.title ?? `Session ${campaign_id.slice(0, 8)}`;
-  const label = normalizeString(label_source);
+  const label_source = item.label ?? item.campaign_title ?? legacy.title ?? defaultLabel(campaign_id);
+  const label = normalizeString(label_source) || defaultLabel(campaign_id);
   const campaign_title = normalizeNullableString(item.campaign_title ?? legacy.campaignTitle ?? legacy.title);
   const display_name = normalizeNullableString(item.display_name ?? legacy.displayName);
   const updated_at = normalizeTimestamp(item.updated_at ?? legacy.lastUsedAt);
@@ -112,10 +122,26 @@ function saveSessionLibrary(entries: SessionLibraryEntry[]): void {
   if (!storage) {
     return;
   }
-  storage.setItem(
-    SESSION_LIBRARY_KEY,
-    JSON.stringify(entries.map((entry) => toPersistedEntry(entry))),
-  );
+  try {
+    storage.setItem(
+      SESSION_LIBRARY_KEY,
+      JSON.stringify(entries.slice(0, MAX_LIBRARY_ENTRIES).map((entry) => toPersistedEntry(entry))),
+    );
+  } catch {
+    // Local session history is a convenience feature. Never block the app if storage is unavailable or full.
+  }
+}
+
+function clearCorruptSessionLibrary(): void {
+  const storage = getStorage();
+  if (!storage) {
+    return;
+  }
+  try {
+    storage.removeItem(SESSION_LIBRARY_KEY);
+  } catch {
+    // Ignore storage failures during recovery.
+  }
 }
 
 export function normalizeSessionLibraryEntries(parsed: unknown): SessionLibraryEntry[] {
@@ -135,7 +161,9 @@ export function normalizeSessionLibraryEntries(parsed: unknown): SessionLibraryE
     }
   }
 
-  return Array.from(deduped.values()).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+  return Array.from(deduped.values())
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .slice(0, MAX_LIBRARY_ENTRIES);
 }
 
 export function readSessionLibrary(): SessionLibraryEntry[] {
@@ -145,17 +173,20 @@ export function readSessionLibrary(): SessionLibraryEntry[] {
   }
 
   let parsed: unknown = [];
+  let shouldHeal = false;
   try {
     const raw = storage.getItem(SESSION_LIBRARY_KEY);
     parsed = raw ? JSON.parse(raw) : [];
+    shouldHeal = raw !== null;
   } catch (_error) {
-    parsed = [];
+    clearCorruptSessionLibrary();
+    return [];
   }
 
   const entries = normalizeSessionLibraryEntries(parsed);
 
-  // Heal malformed legacy payloads once they are successfully normalized.
-  if (Array.isArray(parsed) && parsed.length !== entries.length) {
+  // Heal malformed legacy payloads, invalid rows, duplicates, non-array payloads and overlong lists.
+  if (shouldHeal) {
     saveSessionLibrary(entries);
   }
 
@@ -166,12 +197,20 @@ export function upsertSessionLibraryEntry(input: SessionLibraryUpsertInput): Ses
   const entries = readSessionLibrary();
   const now = new Date().toISOString();
 
+  const campaign_id = normalizeString(input.campaign_id);
+  const player_id = normalizeString(input.player_id);
+  const player_token = normalizeString(input.player_token);
+
+  if (!campaign_id || !player_id || !player_token) {
+    throw new Error("Cannot store incomplete session credentials.");
+  }
+
   const nextEntry: SessionLibraryEntry = {
-    campaign_id: normalizeString(input.campaign_id),
-    player_id: normalizeString(input.player_id),
-    player_token: normalizeString(input.player_token),
-    join_code: normalizeString(input.join_code).toUpperCase(),
-    label: normalizeString(input.label) || defaultLabel(input.campaign_id),
+    campaign_id,
+    player_id,
+    player_token,
+    join_code: normalizeJoinCode(input.join_code),
+    label: normalizeString(input.label) || defaultLabel(campaign_id),
     updated_at: now,
     campaign_title: normalizeNullableString(input.campaign_title),
     display_name: normalizeNullableString(input.display_name),
