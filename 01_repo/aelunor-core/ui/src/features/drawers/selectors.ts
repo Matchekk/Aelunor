@@ -1,5 +1,6 @@
 import type { CampaignSnapshot, CharacterSheetResponse, NpcSheetResponse } from "../../shared/api/contracts";
 import { getNoveltyCount, noveltyLabel } from "../play/novelty";
+import { CHARACTER_DRAWER_TABS } from "./characterTabs";
 import type { CodexKind, DrawerType } from "./drawerStore";
 
 export interface DrawerTabConfig {
@@ -43,14 +44,7 @@ export function deriveDrawerTabs(
             { id: "injuries", label: "Fähigkeiten" },
             { id: "gear", label: "Wissen" },
           ]
-        : [
-            { id: "overview", label: "Übersicht" },
-            { id: "class", label: "Klasse" },
-            { id: "attributes", label: "Attribute" },
-            { id: "skills", label: "Fertigkeiten" },
-            { id: "injuries", label: "Verletzungen" },
-            { id: "gear", label: "Ausrüstung" },
-          ];
+        : CHARACTER_DRAWER_TABS;
 
   return tabs.map((tab) => {
     let noveltyCount = 0;

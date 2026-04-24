@@ -14099,8 +14099,16 @@ def ensure_campaign_storage() -> None:
 def find_campaign_by_join_code(join_code: str) -> Optional[Dict[str, Any]]:
     join_hash = hash_secret(join_code.strip().upper())
     for campaign_id in list_campaign_ids():
+        path = campaign_path(campaign_id)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                if join_hash not in f.read():
+                    continue
+        except OSError:
+            continue
+
         campaign = load_campaign(campaign_id)
-        if campaign["campaign_meta"]["join_code_hash"] == join_hash:
+        if campaign.get("campaign_meta", {}).get("join_code_hash") == join_hash:
             return campaign
     return None
 

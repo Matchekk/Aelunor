@@ -4,7 +4,7 @@
 }
 
 .legacy-character-drawer-shell {
-  width: min(760px, 100vw);
+  width: min(940px, 100vw);
   padding: 20px 18px 18px;
   border-left: 1px solid color-mix(in srgb, var(--v1-border-strong) 88%, transparent);
   background: linear-gradient(180deg, color-mix(in srgb, var(--v1-surface-overlay) 96%, white 1%), color-mix(in srgb, var(--v1-surface-system) 95%, black 6%));
@@ -12,6 +12,7 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-x: hidden;
 }
 
 .legacy-character-drawer-shell .drawer-head {
@@ -53,23 +54,25 @@
 
 .legacy-character-drawer-shell .drawer-tabs {
   display: flex;
-  gap: 8px;
-  flex-wrap: nowrap;
-  overflow-x: auto;
+  gap: 6px;
+  flex-wrap: wrap;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .legacy-character-drawer-shell .drawer-tab {
   border: 1px solid color-mix(in srgb, var(--v1-border-strong) 82%, transparent);
   background: color-mix(in srgb, var(--v1-surface-card) 90%, transparent);
   color: var(--v1-text-base);
-  padding: 10px 12px;
-  border-radius: 14px;
-  font-weight: 700;
+  padding: 7px 10px;
+  border-radius: 12px;
+  font-weight: 650;
+  font-size: 0.93rem;
   cursor: pointer;
-  min-height: 2.3rem;
+  min-height: 2rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.3rem;
   flex: 0 0 auto;
   white-space: nowrap;
 }
@@ -86,6 +89,7 @@
 
 .legacy-character-drawer-shell .character-inline-body-tabs {
   margin: 2px 0 4px;
+  padding-bottom: 2px;
 }
 
 .legacy-character-drawer-shell .drawer-tab.active,

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import type { CharacterSheetResponse, CharacterSkillSnapshot } from "../../../shared/api/contracts";
+import { CHARACTER_DRAWER_TABS } from "../characterTabs";
 import "../styles/legacyCharacterSheet.css";
 
 interface CharacterDrawerProps {
@@ -318,7 +319,7 @@ function buildAttributeExportSvgMarkup(characterSheet: CharacterSheetResponse): 
   const infoLines = [
     { label: "Name", value: characterSheet.display_name || characterSheet.slot_id || "-" },
     { label: "Klasse", value: classText },
-    { label: "Top-Fertigkeiten", value: topSkills },
+    { label: "Top-Skills", value: topSkills },
   ];
   const infoRows = infoLines
     .map(
@@ -414,20 +415,11 @@ function readResourcePair(resources: Record<string, unknown>, key: string, curre
   };
 }
 
-const CHARACTER_BODY_TABS = [
-  { id: "overview", label: "Übersicht" },
-  { id: "class", label: "Klasse" },
-  { id: "attributes", label: "Attribute" },
-  { id: "skills", label: "Fertigkeiten" },
-  { id: "injuries", label: "Verletzungen & Narben" },
-  { id: "gear", label: "Inventar" },
-] as const;
-
 function withCharacterTabs(active_tab: string, on_tab_change: (tab_id: string) => void, content: ReactNode): ReactNode {
   return (
     <>
       <div className="drawer-tabs character-inline-body-tabs" role="tablist" aria-label="Charakterbogen-Reiter">
-        {CHARACTER_BODY_TABS.map((tab) => (
+        {CHARACTER_DRAWER_TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
@@ -556,7 +548,7 @@ export function CharacterDrawer({ sheet, active_tab, on_tab_change }: CharacterD
       on_tab_change,
       <section className="drawer-panel legacy-character-sheet">
         <details className="accordion" open>
-          <summary>Fertigkeiten</summary>
+          <summary>Skills</summary>
           <div className="accordion-body skill-list">
             {skills.length > 0 ? (
               skills.map((skill, index) => {
@@ -613,7 +605,7 @@ export function CharacterDrawer({ sheet, active_tab, on_tab_change }: CharacterD
                 );
               })
             ) : (
-              <div className="small">Noch keine gelernten Fertigkeiten.</div>
+              <div className="small">Noch keine gelernten Skills.</div>
             )}
             {fusionHints.length > 0 ? (
               <div className="readonly-note">

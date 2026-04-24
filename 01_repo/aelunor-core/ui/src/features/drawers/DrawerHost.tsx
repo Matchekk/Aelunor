@@ -8,6 +8,7 @@ import { getJson } from "../../shared/api/httpClient";
 import { useSurfaceLayer } from "../../shared/ui/useSurfaceLayer";
 import { useWaitingSignal } from "../../shared/waiting/hooks";
 import { clearCharacterNovelty, clearCodexNovelty } from "../play/novelty";
+import { CHARACTER_DRAWER_TABS } from "./characterTabs";
 import { useDrawerStore } from "./drawerStore";
 import { buildCodexDrawerPayload, deriveCharacterDrawerSubtitle, deriveDrawerTabs, deriveNpcDrawerSubtitle } from "./selectors";
 import { CharacterDrawer } from "./components/CharacterDrawer";
@@ -23,15 +24,6 @@ interface DrawerHostProps {
   on_novelty_change: () => void;
   on_close: () => void;
 }
-
-const CHARACTER_DRAWER_TABS = [
-  { id: "overview", label: "Übersicht" },
-  { id: "class", label: "Klasse" },
-  { id: "attributes", label: "Attribute" },
-  { id: "skills", label: "Fertigkeiten" },
-  { id: "injuries", label: "Verletzungen & Narben" },
-  { id: "gear", label: "Inventar" },
-] as const;
 
 function asErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
@@ -107,14 +99,7 @@ export function DrawerHost({ campaign, on_novelty_change, on_close }: DrawerHost
         { id: "gear", label: "Wissen", novelty_label: null },
       ];
     }
-    return [
-      { id: "overview", label: "Übersicht", novelty_label: null },
-      { id: "class", label: "Klasse", novelty_label: null },
-      { id: "attributes", label: "Attribute", novelty_label: null },
-      { id: "skills", label: "Fertigkeiten", novelty_label: null },
-      { id: "injuries", label: "Verletzungen", novelty_label: null },
-      { id: "gear", label: "Ausrüstung", novelty_label: null },
-    ];
+    return CHARACTER_DRAWER_TABS.map((tab) => ({ ...tab, novelty_label: null }));
   }, [campaign.campaign_meta.campaign_id, drawer_codex_kind, drawer_entity_id, drawer_open, drawer_type]);
 
   useWaitingSignal({
@@ -220,24 +205,7 @@ export function DrawerHost({ campaign, on_novelty_change, on_close }: DrawerHost
         onClick={(event) => event.stopPropagation()}
       >
         <DrawerHeader title={title} subtitle={subtitle} on_close={on_close} />
-        {is_character_drawer ? (
-          <div className="drawer-tabs character-inline-host-tabs" role="tablist" aria-label="Charakterbogen-Reiter">
-            {CHARACTER_DRAWER_TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                role="tab"
-                aria-selected={active_drawer_tab === tab.id}
-                className={active_drawer_tab === tab.id ? "drawer-tab active is-active" : "drawer-tab"}
-                onClick={() => set_active_tab(tab.id)}
-              >
-                <span>{tab.label}</span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <DrawerTabs tabs={tabs} active_tab={active_drawer_tab} on_change={set_active_tab} />
-        )}
+        {!is_character_drawer ? <DrawerTabs tabs={tabs} active_tab={active_drawer_tab} on_change={set_active_tab} /> : null}
         <div className="drawer-body">{body}</div>
       </aside>
     </div>
