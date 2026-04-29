@@ -67,7 +67,10 @@ export function HubContinuationPanel({
         </div>
       ) : (
         <div className="hub-continuation-empty">
-          <p>Noch keine gespeicherten Sessions. Starte eine neue Kampagne oder tritt per Code bei.</p>
+          <p>
+            <strong>Keine gespeicherten Sessions</strong>
+          </p>
+          <p>Starte eine neue Kampagne oder tritt per Code bei, um deine Chronik zu beginnen.</p>
         </div>
       )}
       {status_message ? <div className="session-feedback success">{status_message}</div> : null}

@@ -38,7 +38,7 @@ export function CreateCampaignCard({ is_pending, error_message, default_display_
     <section className="v1-panel session-card hub-action-card">
       <WaitingSurface target="hub_create" />
       <div className="v1-panel-head">
-        <h2>Create Campaign</h2>
+        <h2>Kampagne erstellen</h2>
         <span>Neue Runde starten</span>
       </div>
       <WaitingInline target="hub_create" className="hub-waiting-inline" />
@@ -51,7 +51,7 @@ export function CreateCampaignCard({ is_pending, error_message, default_display_
         }}
       >
         <label>
-          Campaign title
+          <span>Kampagnen-Titel</span>
           <input
             value={title}
             onChange={(event) => {
@@ -61,7 +61,7 @@ export function CreateCampaignCard({ is_pending, error_message, default_display_
           />
         </label>
         <label>
-          Your display name
+          <span>Dein Name</span>
           <input
             value={displayName}
             onChange={(event) => {
@@ -71,11 +71,11 @@ export function CreateCampaignCard({ is_pending, error_message, default_display_
               }
             }}
             maxLength={60}
-            placeholder="e.g. Matchek"
+            placeholder="z.B. Matchek"
           />
         </label>
-        <button type="submit" className="hub-secondary-cta" disabled={is_pending}>
-          {is_pending ? "Creating..." : "Create campaign"}
+        <button type="submit" className="hub-primary-cta" disabled={is_pending}>
+          {is_pending ? "Erstelle..." : "Kampagne starten"}
         </button>
       </form>
       {localError ? <div className="session-feedback error">{localError}</div> : null}

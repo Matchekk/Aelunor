@@ -40,7 +40,7 @@ export function JoinCampaignCard({ is_pending, error_message, default_display_na
     <section className="v1-panel session-card hub-action-card">
       <WaitingSurface target="hub_join" />
       <div className="v1-panel-head">
-        <h2>Join Campaign</h2>
+        <h2>Kampagne beitreten</h2>
         <span>Code eingeben</span>
       </div>
       <WaitingInline target="hub_join" className="hub-waiting-inline" />
@@ -53,7 +53,7 @@ export function JoinCampaignCard({ is_pending, error_message, default_display_na
         }}
       >
         <label>
-          Join code / campaign code
+          <span>Join-Code / Kampagnen-Code</span>
           <input
             value={joinCode}
             onChange={(event) => {
@@ -67,7 +67,7 @@ export function JoinCampaignCard({ is_pending, error_message, default_display_na
           />
         </label>
         <label>
-          Your display name
+          <span>Dein Name</span>
           <input
             value={displayName}
             onChange={(event) => {
@@ -77,11 +77,11 @@ export function JoinCampaignCard({ is_pending, error_message, default_display_na
               }
             }}
             maxLength={60}
-            placeholder="e.g. Abo"
+            placeholder="z.B. Abo"
           />
         </label>
-        <button type="submit" className="hub-secondary-cta" disabled={is_pending}>
-          {is_pending ? "Joining..." : "Join campaign"}
+        <button type="submit" className="hub-primary-cta" disabled={is_pending}>
+          {is_pending ? "Trete bei..." : "Kampagne beitreten"}
         </button>
       </form>
       {localError ? <div className="session-feedback error">{localError}</div> : null}
