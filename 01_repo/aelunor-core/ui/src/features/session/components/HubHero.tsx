@@ -36,7 +36,7 @@ export function HubHero({
   return (
     <section className="hub-hero-panel" aria-labelledby="hub-hero-title">
       <div className="hub-hero-watermark" aria-hidden="true">
-        <img src="/brand/aelunor-icon-512x512.png" alt="" />
+        <img src="/static/brand/aelunor-icon-512x512.png" alt="" />
       </div>
       <div className="hub-hero-copy">
         <p className="hub-hero-chapter">Campaign Control</p>

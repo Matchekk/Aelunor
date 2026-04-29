@@ -17,7 +17,7 @@ export function HubTopBar({ session_count, has_active_session, campaign_title = 
       <div className="hub-topbar-brand">
         <div className="hub-topbar-kicker">
           <span className="hub-brand-badge" aria-hidden="true">
-            <img className="hub-brand-icon" src="/brand/aelunor-icon-512x512.png" alt="" />
+            <img className="hub-brand-icon" src="/static/brand/aelunor-icon-512x512.png" alt="" />
           </span>
         </div>
         <div className="hub-topbar-title">
@@ -51,7 +51,7 @@ export function HubTopBar({ session_count, has_active_session, campaign_title = 
           }}
         >
           <span className="hub-profile-orb" aria-hidden="true">
-            <img src="/brand/aelunor-icon-512x512.png" alt="" />
+            <img src="/static/brand/aelunor-icon-512x512.png" alt="" />
           </span>
         </button>
       </div>
