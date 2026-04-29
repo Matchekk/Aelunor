@@ -68,7 +68,7 @@ describe("settings store migration helpers", () => {
     storage.setItem("aelunorUserSettingsV1", "{");
 
     const settings = resolveInitialSettingsFromStorage(storage);
-    expect(settings.appearance.theme).toBe("arcane");
+    expect(settings.appearance.theme).toBe("hybrid");
     expect(settings.locale.language).toBe("de");
   });
 });

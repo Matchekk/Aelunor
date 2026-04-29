@@ -7,7 +7,7 @@ describe("settings schema", () => {
     const defaults = resolveSettingsDefaults();
 
     expect(defaults.meta.schema_version).toBe(USER_SETTINGS_SCHEMA_VERSION);
-    expect(defaults.appearance.theme).toBe("arcane");
+    expect(defaults.appearance.theme).toBe("hybrid");
     expect(defaults.interaction.timeline_detail_default).toBe("collapsed");
     expect(defaults.accessibility.reduced_motion).toBe(false);
     expect(defaults.locale.language).toBe("de");
@@ -31,7 +31,7 @@ describe("settings schema", () => {
       },
     });
 
-    expect(normalized.appearance.theme).toBe("arcane");
+    expect(normalized.appearance.theme).toBe("hybrid");
     expect(normalized.interaction.auto_scroll).toBe(true);
     expect(normalized.interaction.timeline_detail_default).toBe("collapsed");
     expect(normalized.notifications.sound_volume).toBe(100);
