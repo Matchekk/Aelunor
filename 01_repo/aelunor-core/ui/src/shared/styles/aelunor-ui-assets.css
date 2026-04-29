@@ -1,0 +1,170 @@
+.aelunor-frame-host {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.aelunor-frame-host > :not(.aelunor-frame-overlay):not(.aelunor-divider):not(.aelunor-arcane-texture-layer) {
+  position: relative;
+  z-index: 2;
+}
+
+.aelunor-frame-overlay,
+.aelunor-divider,
+.aelunor-arcane-texture-layer {
+  pointer-events: none;
+  user-select: none;
+}
+
+.aelunor-frame-overlay {
+  position: absolute;
+  inset: 0.18rem;
+  z-index: 1;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 100% 100%;
+  opacity: 0.38;
+  mix-blend-mode: screen;
+  filter:
+    drop-shadow(0 0 14px rgba(125, 220, 255, 0.16))
+    drop-shadow(0 0 1px rgba(242, 245, 247, 0.32));
+}
+
+.aelunor-frame-overlay.is-card {
+  background-image: url("/static/brand/ui-kit/frame-card.png");
+}
+
+.aelunor-frame-overlay.is-hero {
+  inset: 0.45rem;
+  opacity: 0.5;
+  background-image: url("/static/brand/ui-kit/frame-hero.png");
+  filter:
+    drop-shadow(0 0 20px rgba(125, 220, 255, 0.22))
+    drop-shadow(0 0 2px rgba(242, 245, 247, 0.34));
+}
+
+.aelunor-divider {
+  display: block;
+  width: min(100%, 34rem);
+  height: 2.65rem;
+  margin: 0.15rem 0 0.35rem;
+  background: url("/static/brand/ui-kit/divider-arcane-wide.png") center / contain no-repeat;
+  opacity: 0.68;
+  filter: drop-shadow(0 0 10px rgba(125, 220, 255, 0.2));
+}
+
+.aelunor-divider.is-small {
+  width: min(100%, 15rem);
+  height: 1.55rem;
+  margin: 0.25rem 0 0.1rem;
+  background-image: url("/static/brand/ui-kit/divider-arcane-small.png");
+  opacity: 0.6;
+}
+
+.aelunor-divider.is-centered {
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.aelunor-arcane-texture-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.16;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(125, 220, 255, 0.2), transparent 16rem),
+    url("/static/brand/ui-kit/texture-arcane-noise.webp") center / 18rem auto repeat;
+  mix-blend-mode: screen;
+}
+
+.aelunor-button-ornate {
+  overflow: hidden;
+}
+
+.aelunor-button-ornate::before,
+.aelunor-button-ornate::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.aelunor-button-ornate::before {
+  inset: 0.12rem;
+  border-radius: inherit;
+  background: url("/static/brand/ui-kit/frame-button-primary.png") center / 100% 100% no-repeat;
+  opacity: 0.38;
+  mix-blend-mode: screen;
+}
+
+.aelunor-button-ornate::after {
+  inset: auto 18% 0.15rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(216, 184, 106, 0.72), transparent);
+  opacity: 0.7;
+}
+
+.aelunor-button-ornate.is-secondary::before {
+  background-image: url("/static/brand/ui-kit/frame-button-secondary.png");
+  opacity: 0.3;
+}
+
+.aelunor-icon-frame {
+  position: relative;
+}
+
+.hub-sidebar-link.is-active .hub-sidebar-icon.has-image {
+  position: relative;
+  z-index: 0;
+}
+
+.hub-sidebar-link.is-active .hub-sidebar-icon.has-image img {
+  position: relative;
+  z-index: 1;
+}
+
+.aelunor-icon-frame::before,
+.hub-sidebar-link.is-active .hub-sidebar-icon.has-image::before {
+  content: "";
+  position: absolute;
+  inset: -0.3rem;
+  z-index: 0;
+  pointer-events: none;
+  background: url("/static/brand/ui-kit/icon-frame-circle.png") center / contain no-repeat;
+  opacity: 0.72;
+  filter: drop-shadow(0 0 14px rgba(125, 220, 255, 0.3));
+}
+
+.aelunor-empty-state {
+  position: relative;
+}
+
+.aelunor-empty-state::after {
+  content: "";
+  position: absolute;
+  right: 1rem;
+  bottom: 0.65rem;
+  left: 1rem;
+  height: 1.8rem;
+  pointer-events: none;
+  background: url("/static/brand/ui-kit/divider-arcane-small.png") center / contain no-repeat;
+  opacity: 0.32;
+}
+
+@media (max-width: 780px) {
+  .aelunor-frame-overlay.is-hero {
+    opacity: 0.35;
+  }
+
+  .aelunor-divider {
+    height: 2.1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aelunor-frame-overlay,
+  .aelunor-divider,
+  .aelunor-arcane-texture-layer,
+  .aelunor-button-ornate::before {
+    transition: none;
+  }
+}

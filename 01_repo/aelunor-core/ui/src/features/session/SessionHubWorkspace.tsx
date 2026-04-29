@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import "./sessionHub.css";
+import "../../shared/styles/aelunor-ui-assets.css";
 
 import type { SessionBootstrap } from "../../app/bootstrap/sessionStorage";
 import { clearSessionBootstrap, readSessionBootstrap, writeSessionBootstrap } from "../../app/bootstrap/sessionStorage";

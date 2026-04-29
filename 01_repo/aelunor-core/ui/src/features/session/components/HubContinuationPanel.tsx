@@ -30,12 +30,14 @@ export function HubContinuationPanel({
   const latestPending = latest_entry ? resume_pending_campaign_id === latest_entry.campaign_id : false;
 
   return (
-    <section className="v1-panel hub-continuation">
+    <section className="v1-panel hub-continuation aelunor-frame-host">
+      <span className="aelunor-frame-overlay is-card" aria-hidden="true" />
       <WaitingSectionOverlay target="hub_resume" />
       <div className="v1-panel-head">
         <h2>Weiter spielen</h2>
         <span>Primäraktion</span>
       </div>
+      <span className="aelunor-divider is-small" aria-hidden="true" />
       <WaitingInline target="hub_resume" className="hub-waiting-inline" />
       {has_active_session ? (
         <div className="hub-continuation-block">
@@ -45,7 +47,7 @@ export function HubContinuationPanel({
             {active_join_code ? ` • code ${active_join_code}` : ""}
           </p>
           <div className="hub-continuation-actions">
-            <button type="button" className="hub-primary-cta" onClick={on_resume_current} disabled={activePending}>
+            <button type="button" className="hub-primary-cta aelunor-button-ornate" onClick={on_resume_current} disabled={activePending}>
               {activePending ? "Prüfe Session..." : "Fortsetzen"}
             </button>
             <button type="button" onClick={on_clear_current}>
@@ -60,13 +62,13 @@ export function HubContinuationPanel({
             {latest_entry.campaign_title ? `${latest_entry.campaign_title} • ` : ""}Code {latest_entry.join_code || "n/a"}
           </p>
           <div className="hub-continuation-actions">
-            <button type="button" className="hub-primary-cta" onClick={on_resume_latest} disabled={latestPending}>
+            <button type="button" className="hub-primary-cta aelunor-button-ornate" onClick={on_resume_latest} disabled={latestPending}>
               {latestPending ? "Prüfe Session..." : "Zuletzt gespielte Session öffnen"}
             </button>
           </div>
         </div>
       ) : (
-        <div className="hub-continuation-empty">
+        <div className="hub-continuation-empty aelunor-empty-state">
           <p>
             <strong>Keine gespeicherten Sessions</strong>
           </p>

@@ -37,12 +37,14 @@ export function JoinCampaignCard({ is_pending, error_message, default_display_na
   };
 
   return (
-    <section className="v1-panel session-card hub-action-card">
+    <section className="v1-panel session-card hub-action-card aelunor-frame-host">
+      <span className="aelunor-frame-overlay is-card" aria-hidden="true" />
       <WaitingSurface target="hub_join" />
       <div className="v1-panel-head">
         <h2>Kampagne beitreten</h2>
         <span>Code eingeben</span>
       </div>
+      <span className="aelunor-divider is-small" aria-hidden="true" />
       <WaitingInline target="hub_join" className="hub-waiting-inline" />
       <p className="status-muted">Schneller Einstieg in einen bestehenden Raum über Join-Code.</p>
       <form
@@ -80,7 +82,7 @@ export function JoinCampaignCard({ is_pending, error_message, default_display_na
             placeholder="z.B. Abo"
           />
         </label>
-        <button type="submit" className="hub-primary-cta" disabled={is_pending}>
+        <button type="submit" className="hub-primary-cta aelunor-button-ornate" disabled={is_pending}>
           {is_pending ? "Trete bei..." : "Kampagne beitreten"}
         </button>
       </form>

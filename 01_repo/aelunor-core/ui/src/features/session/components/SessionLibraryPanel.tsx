@@ -11,15 +11,17 @@ interface SessionLibraryPanelProps {
 
 export function SessionLibraryPanel(props: SessionLibraryPanelProps) {
   return (
-    <section className="v1-panel session-library-panel hub-campaigns-panel">
+    <section className="v1-panel session-library-panel hub-campaigns-panel aelunor-frame-host">
+      <span className="aelunor-frame-overlay is-card" aria-hidden="true" />
       <div className="v1-panel-head">
         <h2>Meine Kampagnen</h2>
         <span>{props.entries.length} gespeichert</span>
       </div>
+      <span className="aelunor-divider is-small" aria-hidden="true" />
       <p className="status-muted">Fortsetzen ist die Standardaktion. Bearbeiten/Entfernen bleiben sekundär.</p>
       <div className="session-library-body">
         {props.entries.length === 0 ? (
-          <div className="session-empty">
+          <div className="session-empty aelunor-empty-state">
             Noch keine gespeicherten Sessions. Erstelle eine Kampagne oder tritt einem Raum bei.
           </div>
         ) : (

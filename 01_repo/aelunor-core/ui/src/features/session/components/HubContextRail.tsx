@@ -45,7 +45,8 @@ export function HubContextRail({
 }: HubContextRailProps) {
   return (
     <aside className="hub-context-rail" aria-label="Campaign Kontext">
-      <section className="hub-context-panel">
+      <section className="hub-context-panel aelunor-frame-host">
+        <span className="aelunor-frame-overlay is-card" aria-hidden="true" />
         <div className="hub-context-head">
           <span>Campaign Status</span>
           <strong>{has_active_session ? "Session Active" : "Standby"}</strong>
@@ -60,7 +61,8 @@ export function HubContextRail({
         </div>
       </section>
 
-      <section className="hub-context-panel">
+      <section className="hub-context-panel aelunor-frame-host">
+        <span className="aelunor-frame-overlay is-card" aria-hidden="true" />
         <div className="hub-context-head">
           <span>Current Chronicle</span>
           <strong>{latest_entry?.campaign_title ?? latest_entry?.label ?? "Noch keine Chronik"}</strong>
@@ -73,7 +75,8 @@ export function HubContextRail({
         <div className="hub-mini-map" aria-hidden="true" />
       </section>
 
-      <section className="hub-context-panel">
+      <section className="hub-context-panel aelunor-frame-host">
+        <span className="aelunor-frame-overlay is-card" aria-hidden="true" />
         <div className="hub-context-head">
           <span>Active Objective</span>
           <strong>{active_campaign_id ? "Campaign State laden" : "Erste Kampagne erstellen"}</strong>
@@ -85,7 +88,8 @@ export function HubContextRail({
         </p>
       </section>
 
-      <section className="hub-context-panel">
+      <section className="hub-context-panel aelunor-frame-host">
+        <span className="aelunor-frame-overlay is-card" aria-hidden="true" />
         <ArcaneStatusWidget has_active_session={has_active_session} />
       </section>
     </aside>

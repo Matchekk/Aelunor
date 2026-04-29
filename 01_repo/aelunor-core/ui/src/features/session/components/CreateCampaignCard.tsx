@@ -35,12 +35,14 @@ export function CreateCampaignCard({ is_pending, error_message, default_display_
   };
 
   return (
-    <section className="v1-panel session-card hub-action-card">
+    <section className="v1-panel session-card hub-action-card aelunor-frame-host">
+      <span className="aelunor-frame-overlay is-card" aria-hidden="true" />
       <WaitingSurface target="hub_create" />
       <div className="v1-panel-head">
         <h2>Kampagne erstellen</h2>
         <span>Neue Runde starten</span>
       </div>
+      <span className="aelunor-divider is-small" aria-hidden="true" />
       <WaitingInline target="hub_create" className="hub-waiting-inline" />
       <p className="status-muted">Du wirst Host und landest direkt im passenden Kampagnen-Flow.</p>
       <form
@@ -74,7 +76,7 @@ export function CreateCampaignCard({ is_pending, error_message, default_display_
             placeholder="z.B. Matchek"
           />
         </label>
-        <button type="submit" className="hub-primary-cta" disabled={is_pending}>
+        <button type="submit" className="hub-primary-cta aelunor-button-ornate" disabled={is_pending}>
           {is_pending ? "Erstelle..." : "Kampagne starten"}
         </button>
       </form>

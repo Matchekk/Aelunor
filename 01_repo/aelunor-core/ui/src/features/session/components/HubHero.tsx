@@ -34,12 +34,15 @@ export function HubHero({
   const heroCode = active_join_code || latest_entry?.join_code || "kein Code";
 
   return (
-    <section className="hub-hero-panel" aria-labelledby="hub-hero-title">
+    <section className="hub-hero-panel aelunor-frame-host" aria-labelledby="hub-hero-title">
+      <span className="aelunor-arcane-texture-layer" aria-hidden="true" />
+      <span className="aelunor-frame-overlay is-hero" aria-hidden="true" />
       <div className="hub-hero-watermark" aria-hidden="true">
         <img src="/static/brand/aelunor-icon-512x512.png" alt="" />
       </div>
       <div className="hub-hero-copy">
         <p className="hub-hero-chapter">Campaign Control</p>
+        <span className="aelunor-divider is-small" aria-hidden="true" />
         <h1 id="hub-hero-title">{heroTitle}</h1>
         <p className="hub-hero-subtitle">Öffne deine laufende Chronik, gründe eine neue Runde oder tritt per Code an den Spieltisch.</p>
         <p className="hub-hero-description">
@@ -47,19 +50,19 @@ export function HubHero({
         </p>
         <div className="hub-hero-actions">
           {canResumeCurrent ? (
-            <button type="button" className="hub-hero-primary" onClick={on_resume_current} disabled={activePending}>
+            <button type="button" className="hub-hero-primary aelunor-button-ornate" onClick={on_resume_current} disabled={activePending}>
               {activePending ? "Session wird geprüft" : "Continue Campaign"}
             </button>
           ) : canResumeLatest ? (
-            <button type="button" className="hub-hero-primary" onClick={on_resume_latest} disabled={latestPending}>
+            <button type="button" className="hub-hero-primary aelunor-button-ornate" onClick={on_resume_latest} disabled={latestPending}>
               {latestPending ? "Session wird geprüft" : "Continue Campaign"}
             </button>
           ) : (
-            <a className="hub-hero-primary" href="#hub-create-panel">
+            <a className="hub-hero-primary aelunor-button-ornate" href="#hub-create-panel">
               Create Campaign
             </a>
           )}
-          <a className="hub-hero-secondary" href="#hub-join-panel">
+          <a className="hub-hero-secondary aelunor-button-ornate is-secondary" href="#hub-join-panel">
             Join Campaign
           </a>
         </div>
