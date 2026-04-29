@@ -101,7 +101,7 @@ export const TopBar = memo(function TopBar({
     <header className="v1-topbar command-bar topbar">
       <div className="v1-topbar-block command-bar-left">
         <div className="v1-topbar-kicker topbar-brand">
-          <img className="topbar-brand-icon" src="/static/brand/aelunor-icon-512x512.png" alt="Aelunor" />
+          <img className="topbar-brand-icon" src="/brand/aelunor-icon-512x512.png" alt="Aelunor" />
           <span>Aelunor</span>
         </div>
         <h1 className="v1-topbar-title title">{title}</h1>

@@ -1,8 +1,8 @@
 :root {
-  --aelunor-wallpaper-hybrid: url("/static/brand/wallpapers/aelunor-hybrid.png");
-  --aelunor-wallpaper-night: url("/static/brand/wallpapers/nachtblau.png");
-  --aelunor-wallpaper-tavern: url("/static/brand/wallpapers/tavern.png");
-  --aelunor-wallpaper-glade: url("/static/brand/wallpapers/waldlichtung.png");
+  --aelunor-wallpaper-hybrid: url("/brand/wallpapers/aelunor-hybrid.png");
+  --aelunor-wallpaper-night: url("/brand/wallpapers/Nachtblau.png");
+  --aelunor-wallpaper-tavern: url("/brand/wallpapers/tavern.png");
+  --aelunor-wallpaper-glade: url("/brand/wallpapers/waldlichtung.png");
 
   --v1-bg: #071018;
   --v1-bg-elevated: #101a25;

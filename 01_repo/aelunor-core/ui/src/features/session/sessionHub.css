@@ -103,7 +103,7 @@
   border-radius: 0;
   background:
     linear-gradient(180deg, transparent, rgba(3, 7, 13, 0.9) 62%),
-    url("/static/brand/wallpapers/nachtblau.png") center bottom / cover no-repeat;
+    url("/brand/wallpapers/Nachtblau.png") center bottom / cover no-repeat;
   opacity: 0.42;
 }
 
@@ -397,7 +397,7 @@
   background:
     linear-gradient(90deg, rgba(3, 7, 13, 0.98) 0%, rgba(3, 7, 13, 0.78) 42%, rgba(3, 7, 13, 0.52) 72%),
     linear-gradient(180deg, rgba(3, 7, 13, 0.48), rgba(3, 7, 13, 0.92)),
-    url("/static/brand/wallpapers/hub-reference.png") center 10% / 1540px auto no-repeat;
+    url("/brand/wallpapers/hub-reference.png") center 10% / 1540px auto no-repeat;
   box-shadow: var(--hub-shadow), inset 0 1px rgba(255, 255, 255, 0.08);
 }
 
@@ -867,7 +867,7 @@
   border-radius: 0.5rem;
   background:
     linear-gradient(180deg, rgba(3, 7, 13, 0), rgba(3, 7, 13, 0.42)),
-    url("/static/brand/wallpapers/hub-reference.png") center 35% / cover no-repeat;
+    url("/brand/wallpapers/hub-reference.png") center 35% / cover no-repeat;
 }
 
 .hub-arcane-widget {

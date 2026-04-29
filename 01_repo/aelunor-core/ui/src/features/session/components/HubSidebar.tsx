@@ -21,7 +21,7 @@ export function HubSidebar() {
     <aside className="hub-sidebar" aria-label="Aelunor Navigation">
       <div className="hub-sidebar-brand">
         <span className="hub-sidebar-mark" aria-hidden="true">
-          <img src="/static/brand/aelunor-icon-512x512.png" alt="" />
+          <img src="/brand/aelunor-icon-512x512.png" alt="" />
         </span>
         <strong>AELUNOR</strong>
       </div>

@@ -188,7 +188,7 @@ export function SettingsDialog({ open, on_close, return_focus_element = null }: 
       >
         <header className="v1-panel-head">
           <h2 className="settings-dialog-title">
-            <img className="settings-dialog-logo" src="/static/brand/aelunor-icon-512x512.png" alt="" aria-hidden="true" />
+            <img className="settings-dialog-logo" src="/brand/aelunor-icon-512x512.png" alt="" aria-hidden="true" />
             <span>Einstellungen</span>
           </h2>
           <button type="button" className="btn ghost" onClick={on_close}>
