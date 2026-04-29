@@ -31,6 +31,7 @@ import { useUnclaimSlotMutation } from "../claim/mutations";
 import { PrePlayOverview } from "./components/PrePlayOverview";
 import { PrePlayComposerHint } from "./components/PrePlayComposerHint";
 import { readPlayUiMemory, writePlayUiMemory } from "./uiMemory";
+import { GameSidebar, StatusBadge } from "../../shared/ui/fantasy/FantasyChrome";
 
 interface CampaignWorkspaceProps {
   campaign: CampaignSnapshot;
@@ -320,108 +321,120 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
   }, [campaign.campaign_meta.campaign_id, closeContextStore, contextOpen, navigatePlayState, openContextStore, playRouteState]);
 
   return (
-    <main className="v1-app-shell campaign-play-shell">
-      <TopBar
-        campaign={campaign}
-        session={session}
-        active_scene_label={activeSceneLabel}
-        can_unclaim={Boolean(claimedSlotId)}
-        unclaim_pending={unclaimMutation.isPending}
-        on_unclaim={() => {
-          if (!claimedSlotId) {
-            return;
-          }
-          void unclaimMutation.mutateAsync(claimedSlotId);
-        }}
-        on_leave_session={() => {
-          on_clear_active_session();
-          navigate(buildV1HubPath(), { replace: true });
-        }}
+    <main className="v1-app-shell campaign-play-shell aelunor-game-shell">
+      <GameSidebar
+        items={[
+          { id: "journal", label: "Journal", detail: "Story", active: true, on_select: openBoards },
+          { id: "quests", label: "Quests", detail: "Plot", on_select: openBoards },
+          { id: "party", label: "Party", detail: partySummary, active: rightRailOpen, on_select: () => setRightRailOpen(!rightRailOpen) },
+          { id: "map", label: "Map", detail: activeSceneLabel, on_select: openBoards },
+          { id: "codex", label: "Codex", detail: "Welt", on_select: openBoards },
+        ]}
+        footer={<StatusBadge label={phaseState.is_active_play ? "Session live" : phaseState.phase_display} tone={phaseState.is_active_play ? "success" : "arcane"} />}
       />
-      <section className={rightRailOpen ? "workspace-grid play-workspace-grid layout" : "workspace-grid play-workspace-grid layout no-rail"}>
-        <section className={`campaign-main-column story-workspace story-surface timeline-column${isPreplay ? " is-preplay" : " is-active-play"}`}>
-          <section className="story-context-row">
-            <div className="story-context-main">
-              <span className="status-pill">{phaseState.phase_display}</span>
-              <span className="status-pill">Blickwinkel {viewerSummary}</span>
-              <span className="status-pill">
-                Szene {activeSceneLabel}
-              </span>
-              <span className="status-pill">{partySummary}</span>
-            </div>
-            <div className="story-context-members">
-              {selectedSceneMembers.length === 0 ? (
-                <span className="status-muted">Aktuell keine zugeordnete Szenenmitgliedschaft.</span>
-              ) : (
-                selectedSceneMembers.map((entry) => (
-                  <span key={entry.slot_id} className="story-member-chip">
-                    {entry.display_name}
-                    {entry.scene_name ? <small>{entry.scene_name}</small> : null}
-                  </span>
-                ))
-              )}
-            </div>
-          </section>
-          {isPreplay ? (
-            <PrePlayOverview
-              campaign={campaign}
-              on_open_boards={openBoards}
-              on_retry_intro={() => {
-                void retryIntroMutation.mutateAsync();
+      <div className="game-shell-content">
+        <TopBar
+          campaign={campaign}
+          session={session}
+          active_scene_label={activeSceneLabel}
+          can_unclaim={Boolean(claimedSlotId)}
+          unclaim_pending={unclaimMutation.isPending}
+          on_unclaim={() => {
+            if (!claimedSlotId) {
+              return;
+            }
+            void unclaimMutation.mutateAsync(claimedSlotId);
+          }}
+          on_leave_session={() => {
+            on_clear_active_session();
+            navigate(buildV1HubPath(), { replace: true });
+          }}
+        />
+        <section className={rightRailOpen ? "workspace-grid play-workspace-grid layout" : "workspace-grid play-workspace-grid layout no-rail"}>
+          <section className={`campaign-main-column story-workspace story-surface timeline-column${isPreplay ? " is-preplay" : " is-active-play"}`}>
+            <section className="story-context-row">
+              <div className="story-context-main">
+                <span className="status-pill">{phaseState.phase_display}</span>
+                <span className="status-pill">Blickwinkel {viewerSummary}</span>
+                <span className="status-pill">
+                  Szene {activeSceneLabel}
+                </span>
+                <span className="status-pill">{partySummary}</span>
+              </div>
+              <div className="story-context-members">
+                {selectedSceneMembers.length === 0 ? (
+                  <span className="status-muted">Aktuell keine zugeordnete Szenenmitgliedschaft.</span>
+                ) : (
+                  selectedSceneMembers.map((entry) => (
+                    <span key={entry.slot_id} className="story-member-chip">
+                      {entry.display_name}
+                      {entry.scene_name ? <small>{entry.scene_name}</small> : null}
+                    </span>
+                  ))
+                )}
+              </div>
+            </section>
+            {isPreplay ? (
+              <PrePlayOverview
+                campaign={campaign}
+                on_open_boards={openBoards}
+                on_retry_intro={() => {
+                  void retryIntroMutation.mutateAsync();
+                }}
+                intro_retry_pending={retryIntroMutation.isPending}
+              />
+            ) : null}
+            <StoryTimeline
+              entries={visibleTimelineEntries}
+              character_sheet_slots={campaign.character_sheet_slots}
+              selected_scene_id={selectedSceneId}
+              selected_scene_name={selectedSceneId === "all" ? null : selectedScene?.scene_name ?? selectedSceneId}
+              scene_options={sceneOptions}
+              is_preplay={isPreplay}
+              can_continue_turn={canContinueTurn}
+              turn_actions_pending={turnActionsPending || Boolean(blockingAction)}
+              turn_action_pending_id={turnActionPendingId}
+              turn_action_error={turnActionError}
+              on_scene_change={(scene_id) => {
+                navigatePlayState(withSceneRouteState(playRouteState, scene_id), {
+                  state: buildSurfaceHistoryState("scene", location.pathname, location.search),
+                });
               }}
-              intro_retry_pending={retryIntroMutation.isPending}
+              on_open_character={openCharacterDrawer}
+              on_edit_turn={(entry) => {
+                setEditTurnReturnFocus(activeElement());
+                setEditTurnEntry(entry);
+              }}
+              on_undo_turn={(turn_id) => {
+                void undoTurnMutation.mutateAsync(turn_id);
+              }}
+              on_retry_turn={(turn_id) => {
+                void retryTurnMutation.mutateAsync(turn_id);
+              }}
+              on_continue_turn={() => {
+                if (!claimedSlotId || !phaseState.is_active_play) {
+                  return;
+                }
+                void continueTurnMutation.mutateAsync(buildContinueTurnPayload(claimedSlotId));
+              }}
+            />
+            {isPreplay ? (
+              <PrePlayComposerHint phase_display={phaseState.phase_display} />
+            ) : (
+              <Composer campaign={campaign} on_open_context={openContextModal} />
+            )}
+          </section>
+          {rightRailOpen ? (
+            <RightRail
+              campaign={campaign}
+              selected_scene_id={selectedSceneId}
+              on_open_character={openCharacterDrawer}
+              on_open_npc={openNpcDrawer}
+              on_open_codex={openCodexDrawer}
             />
           ) : null}
-          <StoryTimeline
-            entries={visibleTimelineEntries}
-            character_sheet_slots={campaign.character_sheet_slots}
-            selected_scene_id={selectedSceneId}
-            selected_scene_name={selectedSceneId === "all" ? null : selectedScene?.scene_name ?? selectedSceneId}
-            scene_options={sceneOptions}
-            is_preplay={isPreplay}
-            can_continue_turn={canContinueTurn}
-            turn_actions_pending={turnActionsPending || Boolean(blockingAction)}
-            turn_action_pending_id={turnActionPendingId}
-            turn_action_error={turnActionError}
-            on_scene_change={(scene_id) => {
-              navigatePlayState(withSceneRouteState(playRouteState, scene_id), {
-                state: buildSurfaceHistoryState("scene", location.pathname, location.search),
-              });
-            }}
-            on_open_character={openCharacterDrawer}
-            on_edit_turn={(entry) => {
-              setEditTurnReturnFocus(activeElement());
-              setEditTurnEntry(entry);
-            }}
-            on_undo_turn={(turn_id) => {
-              void undoTurnMutation.mutateAsync(turn_id);
-            }}
-            on_retry_turn={(turn_id) => {
-              void retryTurnMutation.mutateAsync(turn_id);
-            }}
-            on_continue_turn={() => {
-              if (!claimedSlotId || !phaseState.is_active_play) {
-                return;
-              }
-              void continueTurnMutation.mutateAsync(buildContinueTurnPayload(claimedSlotId));
-            }}
-          />
-          {isPreplay ? (
-            <PrePlayComposerHint phase_display={phaseState.phase_display} />
-          ) : (
-            <Composer campaign={campaign} on_open_context={openContextModal} />
-          )}
         </section>
-        {rightRailOpen ? (
-          <RightRail
-            campaign={campaign}
-            selected_scene_id={selectedSceneId}
-            on_open_character={openCharacterDrawer}
-            on_open_npc={openNpcDrawer}
-            on_open_codex={openCodexDrawer}
-          />
-        ) : null}
-      </section>
+      </div>
       <BoardsModal
         campaign={campaign}
         session={session}

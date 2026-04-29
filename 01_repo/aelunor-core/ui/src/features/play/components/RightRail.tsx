@@ -5,6 +5,7 @@ import { deriveUserFacingErrorMessage } from "../../../shared/errors/userFacing"
 import { deriveCodexPreview, deriveNpcPreview } from "../../drawers/selectors";
 import { usePatchPlayerDiaryMutation } from "../mutations";
 import { deriveSceneMembership } from "../../scenes/selectors";
+import { FantasyPanel, StatusBadge } from "../../../shared/ui/fantasy/FantasyChrome";
 
 interface RightRailProps {
   campaign: CampaignSnapshot;
@@ -18,6 +19,14 @@ type RailTabId = "codex" | "diary" | "map" | "events";
 
 function readRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function readString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function readNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function codexKindLabel(kind: "race" | "beast"): string {
@@ -75,6 +84,29 @@ export const RightRail = memo(function RightRail({
       };
     });
   }, [campaign.players, diaries, viewerPlayerId]);
+  const worldState = useMemo(() => {
+    const state = readRecord(campaign.state);
+    const meta = readRecord(state.meta);
+    const canon = readRecord(state.canon);
+    const patch = readRecord(state.patch_state);
+    const threat = readString(campaign.boards.plot_essentials.current_threat) || "Noch keine Bedrohung markiert";
+    const goal = readString(campaign.boards.plot_essentials.current_goal) || "Noch kein Ziel festgelegt";
+    const turn = readNumber(meta.turn) ?? campaign.active_turns.length;
+    const phase = readString(meta.phase) || campaign.viewer_context.phase || campaign.campaign_meta.status;
+    const canonMode = readString(canon.mode) || readString(patch.mode) || "Balanced";
+    const weather = campaign.world_time.weather || campaign.world_time.time_of_day || "Unbekannt";
+
+    return { threat, goal, turn, phase, canonMode, weather };
+  }, [
+    campaign.active_turns.length,
+    campaign.boards.plot_essentials.current_goal,
+    campaign.boards.plot_essentials.current_threat,
+    campaign.campaign_meta.status,
+    campaign.state,
+    campaign.viewer_context.phase,
+    campaign.world_time.time_of_day,
+    campaign.world_time.weather,
+  ]);
 
   return (
     <aside className="v1-panel right-rail hud-surface panel sidebar-column">
@@ -114,6 +146,35 @@ export const RightRail = memo(function RightRail({
           </ul>
         )}
       </section>
+      <FantasyPanel title="Scene & World" meta={sceneLabel} className="world-state-panel">
+        <div className="world-state-hero">
+          <div>
+            <strong>{sceneLabel}</strong>
+            <span>{worldState.weather}</span>
+          </div>
+          <StatusBadge label={worldState.phase} tone={worldState.phase === "active" ? "success" : "arcane"} />
+        </div>
+        <dl className="world-state-grid">
+          <div>
+            <dt>Turn</dt>
+            <dd>{worldState.turn}</dd>
+          </div>
+          <div>
+            <dt>Canon</dt>
+            <dd>{worldState.canonMode}</dd>
+          </div>
+        </dl>
+        <div className="world-objective-list">
+          <article>
+            <span>Ziel</span>
+            <p>{worldState.goal}</p>
+          </article>
+          <article>
+            <span>Bedrohung</span>
+            <p>{worldState.threat}</p>
+          </article>
+        </div>
+      </FantasyPanel>
       <div className="rail-tab-row sidebar-tabs" role="tablist" aria-label="Taktische Bereiche">
         <button type="button" role="tab" className={activeTab === "codex" ? "is-active tab" : "tab"} onClick={() => setActiveTab("codex")}>
           Kodex

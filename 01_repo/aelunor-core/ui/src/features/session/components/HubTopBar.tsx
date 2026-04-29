@@ -21,7 +21,7 @@ export function HubTopBar({ session_count, has_active_session }: HubTopBarProps)
           <span className="hub-brand-word">Aelunor</span>
         </div>
         <h1>Campaign Hub</h1>
-        <p>Fortsetzen, neue Kampagne starten oder per Code beitreten.</p>
+        <p>Öffne deine laufende Chronik, gründe eine neue Runde oder tritt per Code an den Spieltisch.</p>
       </div>
       <div className="hub-topbar-meta">
         <span className="status-pill">{session_count} gespeicherte Sessions</span>

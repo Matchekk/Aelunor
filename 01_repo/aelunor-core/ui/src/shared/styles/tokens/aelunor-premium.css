@@ -1,0 +1,73 @@
+:root {
+  --aelunor-wallpaper-hybrid: url("/static/brand/wallpapers/aelunor-hybrid.png");
+  --aelunor-wallpaper-night: url("/static/brand/wallpapers/nachtblau.png");
+  --aelunor-wallpaper-tavern: url("/static/brand/wallpapers/tavern.png");
+  --aelunor-wallpaper-glade: url("/static/brand/wallpapers/waldlichtung.png");
+
+  --v1-bg: #071018;
+  --v1-bg-elevated: #101a25;
+  --v1-bg-muted: #05090f;
+  --v1-bg-app:
+    radial-gradient(circle at 22% 8%, rgba(99, 147, 178, 0.22), transparent 24rem),
+    radial-gradient(circle at 92% 18%, rgba(197, 152, 75, 0.14), transparent 28rem),
+    linear-gradient(135deg, #05090f 0%, #07121b 42%, #03070c 100%);
+
+  --v1-surface-1: rgba(8, 13, 20, 0.9);
+  --v1-surface-2: rgba(12, 19, 29, 0.92);
+  --v1-surface-3: rgba(18, 28, 41, 0.94);
+  --v1-surface-card: rgba(8, 13, 20, 0.82);
+  --v1-surface-inset: rgba(4, 7, 12, 0.78);
+  --v1-surface-overlay: rgba(8, 12, 18, 0.94);
+  --v1-surface-story: rgba(24, 22, 19, 0.9);
+  --v1-surface-story-alt: rgba(38, 34, 28, 0.92);
+  --v1-surface-hud: rgba(7, 13, 20, 0.88);
+  --v1-surface-system: rgba(7, 12, 18, 0.92);
+  --v1-surface-border: #574831;
+  --v1-surface-line-story: rgba(209, 177, 113, 0.42);
+  --v1-surface-line-hud: rgba(117, 171, 207, 0.32);
+  --v1-surface-line-system: rgba(193, 151, 81, 0.28);
+
+  --v1-text: #eee3cf;
+  --v1-text-strong: #fff4dc;
+  --v1-text-base: #eadfcf;
+  --v1-text-muted-strong: #cdbd9d;
+  --v1-text-muted: #a99f8d;
+  --v1-text-faint: #7f786b;
+
+  --v1-accent: #8ab9d8;
+  --v1-accent-strong: #b6d8ef;
+  --v1-accent-soft: rgba(74, 132, 168, 0.22);
+  --v1-accent-glow: rgba(96, 158, 206, 0.2);
+  --v1-gold: #d7b26c;
+  --v1-gold-soft: rgba(215, 178, 108, 0.16);
+  --v1-green: #91c878;
+
+  --v1-success: #83c77a;
+  --v1-warning: #d8a157;
+  --v1-danger: #c46b62;
+  --v1-novelty: #9bd0ea;
+
+  --v1-border-soft: rgba(214, 182, 118, 0.19);
+  --v1-border-strong: rgba(221, 190, 126, 0.36);
+  --v1-border-focus: rgba(177, 219, 242, 0.7);
+  --v1-border-accent: rgba(215, 178, 108, 0.58);
+
+  --v1-shadow-xs: 0 4px 16px rgba(0, 0, 0, 0.26);
+  --v1-shadow-sm: 0 14px 38px rgba(0, 0, 0, 0.34);
+  --v1-shadow-md: 0 22px 58px rgba(0, 0, 0, 0.44);
+  --v1-shadow-lg: 0 34px 90px rgba(0, 0, 0, 0.56);
+  --v1-shadow-glow:
+    inset 0 1px 0 rgba(255, 244, 214, 0.06),
+    0 0 0 1px rgba(215, 178, 108, 0.05),
+    0 18px 52px rgba(0, 0, 0, 0.42);
+
+  --v1-radius-xs: 6px;
+  --v1-radius-sm: 9px;
+  --v1-radius-md: 13px;
+  --v1-radius-lg: 18px;
+  --v1-radius-xl: 24px;
+
+  --v1-font-display: "Cinzel", "Palatino Linotype", "Book Antiqua", Palatino, serif;
+  --v1-font-body: "Aptos", "Segoe UI", "Trebuchet MS", sans-serif;
+  --v1-font-ui: "Segoe UI", "Aptos", sans-serif;
+}
