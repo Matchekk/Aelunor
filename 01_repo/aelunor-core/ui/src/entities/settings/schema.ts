@@ -1,5 +1,6 @@
 import type { FontPresetId, FontSizeId, ThemeId } from "../../shared/types/domain";
 import type {
+  AccessibilitySettings,
   AppearanceSettings,
   ComposerModePreference,
   DateFormatId,
@@ -65,7 +66,7 @@ function normalizeVolume(value: unknown, fallback: number): number {
 
 export function resolveSettingsDefaults(): UserSettings {
   const appearance: AppearanceSettings = {
-    theme: "arcane",
+    theme: "hybrid",
     font_preset: "classic",
     font_size: "medium",
     density: "standard",
