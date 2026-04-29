@@ -1,5 +1,7 @@
 # AELUNOR STATUS AUDIT
 
+> Aktualisierung 2026-04-27: Dieses Audit ist eine historische Momentaufnahme. Einige Befunde wurden inzwischen korrigiert. Gesichert aktualisiert sind: Composer-Drafts persistieren lokal in `ui/src/features/play/composerDraftStorage.ts`, Backend-Unit- und Integrationstests liegen unter `tests/`, Frontend-Tests liegen unter `ui/src/**/*.test.ts`, und die README dokumentiert `/v1` als React/Vite-Pfad neben der Legacy-UI unter `/`.
+
 Stand: 2026-04-23  
 Scope: `Matchekk/Aelunor`, Projektwurzel `01_repo/aelunor-core`  
 Ziel: ehrliche repo-basierte Einschätzung ohne Feature-Implementierung.
@@ -32,7 +34,7 @@ Wichtigste Erkenntnis: Aelunor hat bereits eine erstaunlich breite technische Fo
 | UX-/Produkt-Reifegrad | 43% | Flow existiert, aber Play Screen ist noch zu stark Panel-/Card-/Admin-orientiert. Story, Status, Utility, Setup und Meta konkurrieren visuell. | mittel |
 | Story-/Narrator-Reifegrad | 55% | Turn-Service, Narrator-/Canon-/Extractor-Schemata, Intro-Retry, Patch-Zusammenfassung und Memory-Ansätze sind vorhanden. Stabilität, Widerspruchsschutz und saubere Trennung sichtbar vs. intern bleiben kritisch. | mittel |
 | Multiplayer-/Presence-Reifegrad | 45% | SSE, Presence Activity, Blocking Actions und Live Snapshot existieren. In-memory Live-State, Token in Query-URL, unklare Multi-Tab- und Reconnect-Härtung. | mittel |
-| Test-/Stabilitäts-Reifegrad | 22% | Frontend-Skripte für Vitest existieren, README nennt manuelle Checks. Konkrete Testdateien/CI konnten über Suche nicht belegt werden. Lokaler Lauf nicht möglich. | niedrig |
+| Test-/Stabilitäts-Reifegrad | aktualisiert: mittel | Frontend-Tests unter `ui/src/**/*.test.ts`, Backend-Tests unter `tests/unit/` und `tests/integration/`. CI und Browser-/HTTP-E2E bleiben nicht belegt. | mittel |
 | MVP-Reifegrad insgesamt | 50% | Ein vertikaler spielbarer Kern scheint erreichbar, aber noch nicht belastbar genug. Größte Lücken: E2E-Stabilität, State-Härtung, Story-first UX, Tests, Presence-Sicherheit. | mittel |
 
 ---
@@ -55,7 +57,7 @@ Wichtigste Erkenntnis: Aelunor hat bereits eine erstaunlich breite technische Fo
 | Claim | Party/Slot Claim State | vorhanden | `claim_service.py`, `ClaimWorkspace.tsx`, `claim/selectors.ts` | Takeover erlaubt auch belegte Slots; produktseitig muss klar sein, wann das okay ist. | Takeover-Regeln und Texte schärfen. | S |
 | Party | Party State | teilweise | `CampaignSnapshot.party_overview`, `RightRail.tsx`, `sheets.py` | Anzeige vorhanden, aber Party-Logik und Konflikte bei Multi-User unklar. | Party-Zustände als Domain-View definieren und testen. | M |
 | Story | Story Timeline | vorhanden | `StoryTimeline.tsx`, `play/selectors.ts` | Card-Liste funktioniert, ist aber noch nicht stark genug als Story-Bühne. | Timeline visuell als Hauptlesefläche priorisieren. | M |
-| Story | Composer | vorhanden | `Composer.tsx`, `useSubmitTurnMutation`, `deriveComposerAccessState` | Drafts sind nur lokaler React-State; Refresh/Tab-Wechsel verlieren Eingaben. | Draft-Persistenz pro Campaign/Mode mit Recovery. | M |
+| Story | Composer | vorhanden | `Composer.tsx`, `composerDraftStorage.ts`, `useSubmitTurnMutation`, `deriveComposerAccessState` | Drafts persistieren lokal per `aelunorComposerDraftsV1:` pro Campaign/Actor/Player-Scope und Mode. Serverseitige Draft-Synchronisierung gibt es nicht. | Recovery-Verhalten testen und UX für lokale Speicherfehler beobachten. | S |
 | Story | Narrator Response Flow | teilweise | `turn_service.py`, `create_turn_record` über Dependencies, `main.py` Narrator-/Schema-Konstanten | Echte Logik ist vorhanden, aber stark in `main.py`/Dependencies versteckt. | Turn Engine Boundary dokumentieren und mit Integrationstest sichern. | L |
 | Canon | Canon State | teilweise | `main.py` Canon Extractor Schema/Prompt, `CANON_GATE_ACTIVE_DOMAINS={"progression"}` | Nur Progression-Gate aktiv; Widerspruchsschutz für Orte/Items/Factions nicht ausreichend belegt. | Canon-Gate-Domänen priorisieren und Testmatrix bauen. | L |
 | Codex/Lore | Codex/Lore | teilweise | Codex-Konstanten in `main.py`, `RightRail.tsx`, `DrawerHost.tsx`, `drawers/selectors.ts` | Race/Beast sichtbar, breiter Lore-/World-Codex noch nicht klar als stabiles Produktmodell. | Codex Entry Domain Contract stabilisieren. | M |
@@ -68,9 +70,9 @@ Wichtigste Erkenntnis: Aelunor hat bereits eine erstaunlich breite technische Fo
 | Error Handling | Error States | teilweise | RouteGate Failure UI, Composer/Boards/Drawer errors, `turn_service` Trace/Error-Code | Backend hat Error-Codes, UI nutzt teils generische Meldungen. | Fehlerkatalog Frontend/Backend mappen. | M |
 | Empty States | Empty States | teilweise | Timeline empty, Claim empty, Setup no-question, RightRail empty | Vorhanden, aber noch nicht überall story-/produktgeführt. | Empty-State Copy story-first überarbeiten. | S |
 | Responsive Layout | Responsive Verhalten | unklar | CSS nicht vollständig auditiert; Komponenten nutzen Grids/Panels | Ohne visuellen Lauf nicht belegbar. | Responsive Smoke-Test für Hub/Setup/Play/Drawer. | M |
-| Tests | Frontend Tests | unklar bis fehlt | `package.json` hat `vitest run`; Suche fand keine eindeutigen Testdateien | Testskript ohne Tests ist falsche Sicherheit. | Minimaler Selector-/Route-/Flow-Test-Satz. | M |
-| Tests | Backend Tests | unklar bis fehlt | README nennt manuelle Checks/Skripte, keine klare pytest-Struktur gefunden | Kernlogik ohne Regression-Schutz. | Backend-Service-Tests für Campaign/Setup/Turn. | L |
-| Dokumentation | README/Runbook | teilweise | `README.md` dokumentiert Docker/Ollama/Checks | Neue `/v1` UI und Migration nicht ausreichend als Produkt-/Dev-Guide sichtbar. | `docs/DEV_RUNBOOK.md` und `docs/MVP_FLOW.md`. | S |
+| Tests | Frontend Tests | vorhanden | `ui/package.json`, `ui/src/**/*.test.ts` | Vitest-Tests decken Routing, Settings, Presence, Play-Utilities, Session Library, Setup- und Waiting-Logik ab. Kein Browser-E2E belegt. | Bei UI-Flow-Änderungen gezielte Route-/Surface-Tests ergänzen. | M |
+| Tests | Backend Tests | vorhanden | `tests/unit/*`, `tests/integration/test_core_flow_smoke.py` | Service-Tests und ein Fake-Narrator-Kernflow-Smoke-Test sind vorhanden. Kein echter HTTP-E2E-Test belegt. | Bei Turn-/Canon-Änderungen Service- oder Integrationstest ergänzen. | M |
+| Dokumentation | README/Runbook | teilweise | `README.md` dokumentiert Docker/Ollama/Checks und `/v1`/Legacy-Pfade | Grundlegende Dev-Kommandos sind sichtbar; ein separates Runbook für Fehlerfälle fehlt. | Optional `docs/DEV_RUNBOOK.md` für Betrieb/Fehlerfälle ergänzen. | S |
 | Legacy | Legacy UI aktiv | vorhanden | `app/static/index.html`, README nennt Frontend in `app/static/`; neue UI zusätzlich unter `/ui` | Zwei UIs können UX, State und Wartung auseinanderziehen. | Legacy Freeze Plan und Removal Criteria definieren. | M |
 | Legacy | Legacy-Migration | teilweise | Neue UI unter `/v1`, Legacy unter `/` laut Kontext/README | Alte und neue Patterns existieren parallel. | Migration-Checkliste und Feature-Parität definieren. | M |
 
@@ -85,7 +87,7 @@ Wichtigste Erkenntnis: Aelunor hat bereits eine erstaunlich breite technische Fo
 | 3. Nutzer erstellt oder resumed Session | teilweise | Create/Join/Resume sind implementiert. Resume hängt an localStorage und GET Campaign. Kaputte lokale Daten werden teilweise behandelt, aber nicht ausreichend testbelegt. |
 | 4. Nutzer macht Setup | teilweise | Setup Overlay und Backend-Endpunkte sind vorhanden. Komplexe Halbzustände, Host-Warten und Turbo-Random brauchen E2E-Absicherung. |
 | 5. Nutzer landet im Campaign Workspace | funktioniert | RouteGate leitet anhand Claim/Setup-State in Claim oder Play. |
-| 6. Nutzer schreibt in Composer | funktioniert | Composer kann Modi, Drafts, Submit, Context Query und Presence Typing. Draft-Persistenz fehlt. |
+| 6. Nutzer schreibt in Composer | funktioniert | Composer kann Modi, lokale Draft-Persistenz, Submit, Context Query und Presence Typing. |
 | 7. Narrator antwortet | teilweise | Turn-Service und Narrator-/Canon-Infrastruktur existieren. Ob Ollama/Schema/Retry im realen Lauf stabil genug ist, wurde nicht lokal validiert. |
 | 8. Story Timeline aktualisiert sich | teilweise | Mutation invalidiert Campaign Query; SSE `campaign_sync` invalidiert ebenfalls. Kein realer Run geprüft. |
 | 9. Party/Presence/State bleiben konsistent | teilweise | Party Overview und Presence existieren. Multi-Tab, Race Conditions und Prozessneustart sind nicht ausreichend gehärtet. |
@@ -122,7 +124,7 @@ Wichtigste Erkenntnis: Aelunor hat bereits eine erstaunlich breite technische Fo
 **Was kritisch ist**
 - Der Play Screen hat weiterhin ein hohes Risiko, wie Admin-Software statt Story-Oberfläche zu wirken. Viele Chips, Cards, Panels, Tabs und Utility-Flächen konkurrieren.
 - URL-State, Zustand Store und lokale UI-Memory laufen parallel. Das ist mächtig, aber fragil.
-- Drafts im Composer sind nur React-State. Ein Refresh verliert Eingaben.
+- Drafts im Composer werden lokal in `localStorage` persistiert. Recovery ist client-lokal; es gibt keine serverseitige Draft-Synchronisierung.
 - RightRail behauptet, Tagebuchzeilen mit `//` blieben lokal privat, sendet aber den gesamten Tagebuchinhalt über `patch_player_diary`. Das ist ein Produkt-/Vertrauensproblem und muss geklärt werden.
 
 ### State und Datenfluss
@@ -143,9 +145,10 @@ Wichtigste Erkenntnis: Aelunor hat bereits eine erstaunlich breite technische Fo
 
 - Frontend-Testskript existiert: `vitest run`.
 - Backend-README nennt manuelle Checks und einzelne Script-Checks.
-- Konkrete Testdateien oder CI konnten über Repository-Suche nicht belastbar belegt werden.
-- Lokale Ausführung war nicht möglich.
-- Konsequenz: Stabilitätsreife bleibt niedrig, egal wie viel Code bereits vorhanden ist.
+- Backend-Testdateien sind unter `tests/unit/` und `tests/integration/` vorhanden.
+- Frontend-Testdateien sind unter `ui/src/**/*.test.ts` vorhanden.
+- CI wurde in diesem Audit nicht verifiziert.
+- Konsequenz: Es gibt Regression-Schutz für Services und UI-Utilities; echte Browser-/HTTP-End-to-End-Abdeckung bleibt offen.
 
 ### Legacy
 
@@ -220,7 +223,7 @@ Ein einzelner Nutzer kann zuverlässig von `/v1/hub` bis zum ersten echten Story
 - Minimalen E2E-Happy-Path definieren und als Test/Script absichern.
 - LocalStorage Session Bootstrap validieren, reparieren oder sauber resetten.
 - Setup-Halbzustände testen: keine Frage geladen, World Setup halb fertig, Character Setup halb fertig.
-- Composer-Drafts lokal persistieren.
+- Composer-Draft-Recovery erhalten und testen; Drafts persistieren lokal, aber nicht serverseitig.
 - Backend nicht erreichbar, 401/403/404 und kaputte Session UX hart prüfen.
 - Legacy bewusst einfrieren: keine neuen Features mehr in Legacy.
 
@@ -340,7 +343,7 @@ Legacy zu früh entfernen kann Debugging/Fallback erschweren.
 1. **MVP-Happy-Path als automatisierten Smoke-Test definieren**: create campaign, setup world, claim, setup character, enter play, fake turn, resume.
 2. **Build/Test-Kommandos real laufen lassen und Ergebnis dokumentieren**: `npm run typecheck`, `npm run test`, `npm run build`, Python checks, Docker start.
 3. **Session Storage Validator bauen**: ungültige localStorage/sessionStorage Daten erkennen, migrieren, löschen oder Nutzer führen.
-4. **Composer Draft Recovery einführen**: pro Campaign, Slot und Mode lokal speichern.
+4. **Composer Draft Recovery absichern**: lokale Speicherung pro Campaign, Actor/Viewer und Mode ist vorhanden; gezielte Tests/UX für Speicherfehler ergänzen.
 5. **Turn Engine Boundary dokumentieren und testen**: Fake Narrator statt Ollama für stabile Tests.
 6. **SSE-Auth-Risiko beheben oder bewusst dokumentieren**: Token in Query-URL ist für ein Multiplayer-System nicht sauber.
 7. **RightRail Diary Privacy Bug klären**: `//` lokal privat ist aktuell nicht belegt und wahrscheinlich falsch.

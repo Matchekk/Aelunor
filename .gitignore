@@ -12,6 +12,7 @@ node_modules/
 *.tmp
 
 *.log
+01_repo/aelunor-core/.tmp-check/
 
 07_runtime/campaigns/
 07_runtime/cache/

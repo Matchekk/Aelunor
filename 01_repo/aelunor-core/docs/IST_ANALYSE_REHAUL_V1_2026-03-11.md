@@ -1,5 +1,7 @@
 # Aelunor IST-Analyse: Codezustand + Rehaul v1
 
+> Aktualisierung 2026-04-27: Dieses Dokument bleibt als historische IST-Analyse erhalten. Inzwischen belegte Ergänzungen: Composer-Drafts persistieren lokal über `ui/src/features/play/composerDraftStorage.ts`; Backend-Tests umfassen Unit-Tests und einen Kernflow-Smoke-Test unter `tests/integration/`; README und Root-README benennen `/v1` als aktiven React/Vite-Pfad und `/` als Legacy-UI.
+
 Stand: 11.03.2026  
 Repo: `01_repo/aelunor-core`  
 Analysemodus: technischer Audit (IST, nicht Soll)
@@ -186,6 +188,7 @@ Analysemodus: technischer Audit (IST, nicht Soll)
   - Session Library: `isekaiSessionLibrary`
   - Novelty: `isekaiNoveltyState`
   - Play UI Memory: `aelunorPlayUiMemoryV1`
+  - Composer Drafts: `aelunorComposerDraftsV1:<campaign/actor/player scope>`
   - User Settings: `aelunorUserSettingsV1`
   - Context Cache: `aelunorV1ContextCache` (sessionStorage)
 - `[GESICHERT]` Settings-Store migriert Legacy-Theme-Keys (`isekaiTheme*`).
@@ -338,7 +341,7 @@ Unsicherheiten:
 
 7. **Dokumentationsdrift**
 - Risiko: Onboarding-/Betriebsfehler.
-- Evidenz: README fokussiert Legacy-Frontend, v1-Laufzeitpfad nicht gleichwertig dokumentiert.
+- Evidenz aktualisiert 2026-04-27: README benennt `/v1` als React/Vite-Produktpfad und `/` als Legacy-UI. Ein separates Runbook für Fehlerfälle fehlt weiterhin.
 
 ---
 
@@ -365,7 +368,7 @@ Unsicherheiten:
 
 ## 14) Test- und Stabilitätsindikatoren
 
-- `[GESICHERT]` Backend Unit-Tests: `34 passed` (`pytest -q tests/unit`).
+- `[GESICHERT]` Backend Tests: Unit-Tests und ein Integration-Smoke-Test sind vorhanden (`python -m pytest tests -q`).
 - `[GESICHERT]` Frontend Tests: `15 files, 43 tests passed` (`vitest run`).
 - `[ABGELEITET]` Gute Basis für Kernservices und Utility-Layer; End-to-End-Integrationstests über Legacy/v1-Parallelbetrieb sind nicht sichtbar.
 
