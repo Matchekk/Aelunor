@@ -336,6 +336,20 @@ export function SessionHubWorkspace({
   return (
     <main className="v1-app-shell session-hub-shell gateway-shell">
       <HubTopBar session_count={libraryEntries.length} has_active_session={currentSessionIsActive} />
+      <section className="hub-atmosphere-strip" aria-label="Aelunor Überblick">
+        <article>
+          <span>Story-first</span>
+          <strong>Kampagnen, Figuren und Weltzustand bleiben im Fokus.</strong>
+        </article>
+        <article>
+          <span>Live Table</span>
+          <strong>Presence, Claims und Sessionwechsel sind direkt erreichbar.</strong>
+        </article>
+        <article>
+          <span>Canon Ready</span>
+          <strong>Boards, Timeline und Setup führen zur spielbaren Szene.</strong>
+        </article>
+      </section>
 
       {lastFailedCampaignId ? (
         <section className="v1-panel session-card hub-alert-card">
