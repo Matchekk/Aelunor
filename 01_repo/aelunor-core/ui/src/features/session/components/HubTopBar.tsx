@@ -5,40 +5,53 @@ import { SettingsDialog } from "../../../shared/ui/SettingsDialog";
 interface HubTopBarProps {
   session_count: number;
   has_active_session: boolean;
+  campaign_title?: string | null;
 }
 
-export function HubTopBar({ session_count, has_active_session }: HubTopBarProps) {
+export function HubTopBar({ session_count, has_active_session, campaign_title = null }: HubTopBarProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement | null>(null);
 
   return (
-    <header className="v1-panel hub-topbar">
+    <header className="hub-topbar">
       <div className="hub-topbar-brand">
         <div className="hub-topbar-kicker">
           <span className="hub-brand-badge" aria-hidden="true">
             <img className="hub-brand-icon" src="/static/brand/aelunor-icon-512x512.png" alt="" />
           </span>
-          <span className="hub-brand-word">Aelunor</span>
         </div>
-        <h1>Campaign Hub</h1>
-        <p>Öffne deine laufende Chronik, gründe eine neue Runde oder tritt per Code an den Spieltisch.</p>
+        <div className="hub-topbar-title">
+          <span className="hub-brand-word">{campaign_title ? "Current Campaign" : "Aelunor"}</span>
+          <h1>{campaign_title ?? "Campaign Hub"}</h1>
+          <p>Campaign Control</p>
+        </div>
       </div>
       <div className="hub-topbar-meta">
-        <span className="status-pill">{session_count} gespeicherte Sessions</span>
-        <span className="status-pill">{has_active_session ? "Aktive Session erkannt" : "Keine aktive Session"}</span>
+        <span className={`hub-status-badge${has_active_session ? " is-active" : ""}`}>
+          {has_active_session ? "Session Active" : "Keine aktive Session"}
+        </span>
+        <span className="hub-resource-pill">
+          <span aria-hidden="true" />
+          {session_count} Sessions
+        </span>
+        <span className="hub-resource-pill">
+          <span aria-hidden="true" />
+          Runestones
+        </span>
+        <button type="button" className="hub-icon-button" aria-label="Benachrichtigungen">
+          <span aria-hidden="true">N</span>
+        </button>
         <button
           ref={settingsButtonRef}
           type="button"
-          className="menu-icon-button"
+          className="hub-profile-button"
           aria-label="Einstellungen öffnen"
           onClick={() => {
             setSettingsOpen(true);
           }}
         >
-          <span className="menu-icon-lines" aria-hidden="true">
-            <span />
-            <span />
-            <span />
+          <span className="hub-profile-orb" aria-hidden="true">
+            <img src="/static/brand/aelunor-icon-512x512.png" alt="" />
           </span>
         </button>
       </div>

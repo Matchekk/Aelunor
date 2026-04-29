@@ -21,7 +21,11 @@ import {
 } from "./sessionLibrary";
 import { hasActiveSession, toSessionBootstrap } from "./selectors";
 import { CreateCampaignCard } from "./components/CreateCampaignCard";
+import { HubContextRail } from "./components/HubContextRail";
 import { HubContinuationPanel } from "./components/HubContinuationPanel";
+import { HubFeatureCards } from "./components/HubFeatureCards";
+import { HubHero } from "./components/HubHero";
+import { HubSidebar } from "./components/HubSidebar";
 import { HubTopBar } from "./components/HubTopBar";
 import { JoinCampaignCard } from "./components/JoinCampaignCard";
 import { LlmStatusPanel } from "./components/LlmStatusPanel";
@@ -333,114 +337,134 @@ export function SessionHubWorkspace({
     surface_target: "hub_resume",
   });
 
+  const resumeCurrentSession = useCallback(() => {
+    const libraryEntry = readSessionLibrary().find((entry) => entry.campaign_id === active_session.campaign_id);
+    void bootstrapSession(
+      active_session,
+      "Resume current session",
+      buildLocalMeta({
+        label: libraryEntry?.label,
+        campaign_title: libraryEntry?.campaign_title ?? null,
+        display_name: libraryEntry?.display_name ?? null,
+      }),
+    );
+  }, [active_session, bootstrapSession]);
+
+  const resumeLatestSession = useCallback(() => {
+    if (!latestLibraryEntry) {
+      return;
+    }
+    void handleResumeEntry(latestLibraryEntry);
+  }, [handleResumeEntry, latestLibraryEntry]);
+
   return (
-    <main className="v1-app-shell session-hub-shell gateway-shell">
-      <HubTopBar session_count={libraryEntries.length} has_active_session={currentSessionIsActive} />
-      <section className="hub-atmosphere-strip" aria-label="Aelunor Überblick">
-        <article>
-          <span>Story-first</span>
-          <strong>Kampagnen, Figuren und Weltzustand bleiben im Fokus.</strong>
-        </article>
-        <article>
-          <span>Live Table</span>
-          <strong>Presence, Claims und Sessionwechsel sind direkt erreichbar.</strong>
-        </article>
-        <article>
-          <span>Canon Ready</span>
-          <strong>Boards, Timeline und Setup führen zur spielbaren Szene.</strong>
-        </article>
-      </section>
-
-      {lastFailedCampaignId ? (
-        <section className="v1-panel session-card hub-alert-card">
-          <div className="v1-panel-head">
-            <h2>Stale local credentials</h2>
-          </div>
-          <p className="status-muted">The stored credentials could not load campaign state from the server.</p>
-          <div className="session-inline-actions">
-            <button type="button" onClick={() => handleForgetEntry(lastFailedCampaignId)}>
-              Forget failed local session
-            </button>
-            <button type="button" onClick={clearCurrentSession}>
-              Clear active credentials
-            </button>
-          </div>
-        </section>
-      ) : null}
-
-      <section className="hub-primary-grid">
-        <HubContinuationPanel
+    <main className="v1-app-shell session-hub-shell gateway-shell aelunor-hud-hub">
+      <HubSidebar />
+      <div className="hub-main-frame">
+        <HubTopBar
+          session_count={libraryEntries.length}
+          has_active_session={currentSessionIsActive}
+          campaign_title={latestLibraryEntry?.campaign_title ?? latestLibraryEntry?.label ?? null}
+        />
+        <HubHero
           has_active_session={currentSessionIsActive}
           active_campaign_id={active_session.campaign_id}
           active_join_code={active_session.join_code}
           latest_entry={latestLibraryEntry}
           resume_pending_campaign_id={resumePendingCampaignId}
-          status_message={statusMessage}
-          resume_error={globalErrorMessage}
-          on_resume_current={() => {
-            const libraryEntry = readSessionLibrary().find((entry) => entry.campaign_id === active_session.campaign_id);
-            void bootstrapSession(
-              active_session,
-              "Resume current session",
-              buildLocalMeta({
-                label: libraryEntry?.label,
-                campaign_title: libraryEntry?.campaign_title ?? null,
-                display_name: libraryEntry?.display_name ?? null,
-              }),
-            );
-          }}
-          on_resume_latest={() => {
-            if (!latestLibraryEntry) {
-              return;
-            }
-            void handleResumeEntry(latestLibraryEntry);
-          }}
-          on_clear_current={clearCurrentSession}
+          on_resume_current={resumeCurrentSession}
+          on_resume_latest={resumeLatestSession}
         />
+        <HubFeatureCards />
 
-        <section className="hub-actions-grid">
-          <CreateCampaignCard
-            is_pending={createMutation.isPending}
-            error_message={createError}
-            default_display_name={suggestedDisplayName}
-            on_submit={handleCreateSubmit}
-          />
-          <JoinCampaignCard
-            is_pending={joinMutation.isPending}
-            error_message={joinError}
-            default_display_name={suggestedDisplayName}
-            on_submit={handleJoinSubmit}
+        {lastFailedCampaignId ? (
+          <section className="v1-panel session-card hub-alert-card">
+            <div className="v1-panel-head">
+              <h2>Stale local credentials</h2>
+            </div>
+            <p className="status-muted">The stored credentials could not load campaign state from the server.</p>
+            <div className="session-inline-actions">
+              <button type="button" onClick={() => handleForgetEntry(lastFailedCampaignId)}>
+                Forget failed local session
+              </button>
+              <button type="button" onClick={clearCurrentSession}>
+                Clear active credentials
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        <section className="hub-dashboard-grid">
+          <div className="hub-dashboard-main">
+            <HubContinuationPanel
+              has_active_session={currentSessionIsActive}
+              active_campaign_id={active_session.campaign_id}
+              active_join_code={active_session.join_code}
+              latest_entry={latestLibraryEntry}
+              resume_pending_campaign_id={resumePendingCampaignId}
+              status_message={statusMessage}
+              resume_error={globalErrorMessage}
+              on_resume_current={resumeCurrentSession}
+              on_resume_latest={resumeLatestSession}
+              on_clear_current={clearCurrentSession}
+            />
+            <section className="hub-campaigns-main">
+              <SessionLibraryPanel
+                entries={libraryEntries}
+                resume_pending_campaign_id={resumePendingCampaignId}
+                on_resume={handleResumeEntry}
+                on_edit={(entry) => {
+                  setEditorReturnFocus(activeElement());
+                  setEditingEntry(entry);
+                }}
+                on_forget={handleForgetEntry}
+              />
+            </section>
+          </div>
+
+          <section className="hub-actions-grid" aria-label="Campaign Aktionen">
+            <div id="hub-create-panel">
+              <CreateCampaignCard
+                is_pending={createMutation.isPending}
+                error_message={createError}
+                default_display_name={suggestedDisplayName}
+                on_submit={handleCreateSubmit}
+              />
+            </div>
+            <div id="hub-join-panel">
+              <JoinCampaignCard
+                is_pending={joinMutation.isPending}
+                error_message={joinError}
+                default_display_name={suggestedDisplayName}
+                on_submit={handleJoinSubmit}
+              />
+            </div>
+          </section>
+
+          <HubContextRail
+            session_count={libraryEntries.length}
+            has_active_session={currentSessionIsActive}
+            latest_entry={latestLibraryEntry}
+            active_campaign_id={active_session.campaign_id}
+            active_join_code={active_session.join_code}
           />
         </section>
-      </section>
 
-      <section className="hub-campaigns-main">
-        <SessionLibraryPanel
-          entries={libraryEntries}
-          resume_pending_campaign_id={resumePendingCampaignId}
-          on_resume={handleResumeEntry}
-          on_edit={(entry) => {
-            setEditorReturnFocus(activeElement());
-            setEditingEntry(entry);
-          }}
-          on_forget={handleForgetEntry}
+        <details className="hub-diagnostics">
+          <summary>System / Diagnose (optional)</summary>
+          <LlmStatusPanel />
+        </details>
+
+        <SessionEditorDialog
+          open={Boolean(editingEntry)}
+          entry={editingEntry}
+          return_focus_element={editorReturnFocus}
+          on_close={() => setEditingEntry(null)}
+          on_rename={handleRenameEntry}
+          on_export={handleExportEntry}
+          on_delete={handleDeleteEntry}
         />
-      </section>
-
-      <details className="hub-diagnostics">
-        <summary>System / Diagnose (optional)</summary>
-        <LlmStatusPanel />
-      </details>
-
-      <SessionEditorDialog
-        open={Boolean(editingEntry)}
-        entry={editingEntry}
-        return_focus_element={editorReturnFocus}
-        on_close={() => setEditingEntry(null)}
-        on_rename={handleRenameEntry}
-        on_export={handleExportEntry}
-        on_delete={handleDeleteEntry}
-      />
+      </div>
     </main>
   );
 }
