@@ -302,14 +302,14 @@ ELEMENT_GENERATED_NAMES_FALLBACK = [
     "Resonanz",
     "Nebel",
     "Asche",
-    "Sturmkern",
+    "Klangkern",
     "Runenfluss",
     "Sternenfrost",
     "Dornengeist",
     "Leere",
     "Traum",
     "Blut",
-    "Gezeitenstahl",
+    "Eidstahl",
     "Donnerglas",
 ]
 ELEMENT_SIMILARITY_BLACKLIST = {

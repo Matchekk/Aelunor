@@ -55,7 +55,7 @@ describe("normalizeSessionLibraryEntries", () => {
       campaign_id: "cmp-1",
       player_token: "token-b",
       label: "New",
-      join_code: "join-b",
+      join_code: "JOIN-B",
     });
   });
 });

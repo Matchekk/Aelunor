@@ -37,8 +37,15 @@ def fixture(main_module: Any) -> Dict[str, Any]:
 
 def main() -> int:
     m = load_main()
+    from app.services import state_engine
+
     original_extractor = m.call_progression_canon_extractor
+    original_state_engine_extractor = state_engine.call_progression_canon_extractor
     slot = "slot_1"
+
+    def set_extractor(extractor: Any) -> None:
+        m.call_progression_canon_extractor = extractor
+        state_engine.call_progression_canon_extractor = extractor
 
     try:
         # 1) High confidence -> commit
@@ -65,7 +72,7 @@ def main() -> int:
                 "reason": "klar",
             }
 
-        m.call_progression_canon_extractor = extractor_high
+        set_extractor(extractor_high)
         result = m.run_canon_gate(
             data["campaign"],
             state_before=data["state_before"],
@@ -95,7 +102,7 @@ def main() -> int:
                 "reason": "moderat",
             }
 
-        m.call_progression_canon_extractor = extractor_medium
+        set_extractor(extractor_medium)
         result = m.run_canon_gate(
             data["campaign"],
             state_before=data["state_before"],
@@ -124,7 +131,7 @@ def main() -> int:
                 "reason": "unsicher",
             }
 
-        m.call_progression_canon_extractor = extractor_low
+        set_extractor(extractor_low)
         result = m.run_canon_gate(
             data["campaign"],
             state_before=data["state_before"],
@@ -148,7 +155,7 @@ def main() -> int:
             calls["count"] += 1
             return extractor_high()
 
-        m.call_progression_canon_extractor = extractor_counter
+        set_extractor(extractor_counter)
         patch = m.blank_patch()
         patch["characters"][slot] = {
             "skills_set": {
@@ -183,7 +190,7 @@ def main() -> int:
         def extractor_raise(*args: Any, **kwargs: Any) -> Dict[str, Any]:
             raise RuntimeError("simulierter extractor-fehler")
 
-        m.call_progression_canon_extractor = extractor_raise
+        set_extractor(extractor_raise)
         result = m.run_canon_gate(
             data["campaign"],
             state_before=data["state_before"],
@@ -202,6 +209,7 @@ def main() -> int:
         return 0
     finally:
         m.call_progression_canon_extractor = original_extractor
+        state_engine.call_progression_canon_extractor = original_state_engine_extractor
 
 
 if __name__ == "__main__":
