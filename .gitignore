@@ -3,15 +3,29 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+.coverage
+htmlcov/
 .venv/
 venv/
 node_modules/
+dist/
+build/
+.vite/
+coverage/
 .DS_Store
+Thumbs.db
+desktop.ini
 .vscode/
 .idea/
 *.tmp
 
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+/package-lock.json
+**/.runtime/
 01_repo/aelunor-core/.tmp-check/
 
 07_runtime/campaigns/
