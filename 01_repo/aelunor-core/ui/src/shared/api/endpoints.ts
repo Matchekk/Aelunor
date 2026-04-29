@@ -55,10 +55,11 @@ export const endpoints = {
       `/api/campaigns/${encodePath(campaign_id)}/slots/${encodePath(slot_id)}/takeover`,
     unclaim_slot: (campaign_id: string, slot_id: string) =>
       `/api/campaigns/${encodePath(campaign_id)}/slots/${encodePath(slot_id)}/unclaim`,
-    events: (campaign_id: string, player_id: string, player_token: string) => {
+    events_ticket: (campaign_id: string) =>
+      `/api/campaigns/${encodePath(campaign_id)}/events/ticket`,
+    events: (campaign_id: string, stream_token: string) => {
       const params = new URLSearchParams({
-        player_id,
-        player_token,
+        stream_token,
       });
       return `/api/campaigns/${encodePath(campaign_id)}/events?${params.toString()}`;
     },

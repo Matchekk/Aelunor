@@ -1,5 +1,6 @@
-import type { CampaignSyncEvent, PresenceState } from "../api/contracts";
+import type { CampaignSyncEvent, EventStreamTicketResponse, PresenceState } from "../api/contracts";
 import { endpoints } from "../api/endpoints";
+import { postJson } from "../api/httpClient";
 
 export interface CampaignSseClientOptions {
   campaign_id: string;
@@ -27,9 +28,13 @@ function parsePayload<T>(event: MessageEvent): T | null {
   }
 }
 
-export function createCampaignSseClient(options: CampaignSseClientOptions): CampaignSseClient {
-  const { campaign_id, player_id, player_token } = options;
-  const eventSource = new EventSource(endpoints.campaigns.events(campaign_id, player_id, player_token));
+export async function createCampaignSseClient(options: CampaignSseClientOptions): Promise<CampaignSseClient> {
+  const { campaign_id } = options;
+  const ticket = await postJson<EventStreamTicketResponse>(endpoints.campaigns.events_ticket(campaign_id));
+  if (!ticket.stream_token) {
+    throw new Error("SSE stream ticket response did not include a stream token.");
+  }
+  const eventSource = new EventSource(endpoints.campaigns.events(campaign_id, ticket.stream_token));
 
   eventSource.onopen = () => {
     options.onOpen?.();

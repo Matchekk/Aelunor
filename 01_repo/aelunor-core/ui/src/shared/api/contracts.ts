@@ -364,6 +364,11 @@ export interface PresenceActivityClearResponse {
   live: PresenceState;
 }
 
+export interface EventStreamTicketResponse {
+  stream_token: string;
+  expires_in_sec: number;
+}
+
 export interface RetryIntroResponse {
   turn: CampaignTurn | null;
   intro_state: IntroStateSnapshot;

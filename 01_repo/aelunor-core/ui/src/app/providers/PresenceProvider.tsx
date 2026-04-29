@@ -20,7 +20,7 @@ function debugSse(message: string, meta: Record<string, unknown>): void {
 
 export function PresenceProvider({ children, session }: PresenceProviderProps) {
   const queryClient = useQueryClient();
-  const clientRef = useRef<ReturnType<typeof createCampaignSseClient> | null>(null);
+  const clientRef = useRef<Awaited<ReturnType<typeof createCampaignSseClient>> | null>(null);
   const setSseConnected = usePresenceStore((state) => state.setSseConnected);
   const applyPresenceSync = usePresenceStore((state) => state.applyPresenceSync);
   const resetPresence = usePresenceStore((state) => state.resetPresence);
@@ -40,7 +40,9 @@ export function PresenceProvider({ children, session }: PresenceProviderProps) {
     clientRef.current?.close();
     debugSse("connect", { campaign_id, player_id });
 
-    const client = createCampaignSseClient({
+    let cancelled = false;
+
+    void createCampaignSseClient({
       campaign_id,
       player_id,
       player_token,
@@ -65,15 +67,25 @@ export function PresenceProvider({ children, session }: PresenceProviderProps) {
       onPresenceSync: (snapshot) => {
         applyPresenceSync(snapshot);
       },
+    }).then((client) => {
+      if (cancelled) {
+        client.close();
+        return;
+      }
+      clientRef.current = client;
+    }).catch((error) => {
+      debugSse("ticket_failed", {
+        campaign_id,
+        error: error instanceof Error ? error.message : "unknown",
+      });
+      setSseConnected(false);
     });
-    clientRef.current = client;
 
     return () => {
+      cancelled = true;
       debugSse("close", { campaign_id });
-      client.close();
-      if (clientRef.current === client) {
-        clientRef.current = null;
-      }
+      clientRef.current?.close();
+      clientRef.current = null;
       resetPresence();
     };
   }, [
