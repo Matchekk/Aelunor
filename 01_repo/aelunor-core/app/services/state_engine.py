@@ -15,6 +15,7 @@ from app.helpers import setup_helpers
 from app.services.world.collections import stable_sorted_mapping
 from app.services.world.math_utils import clamp
 from app.services.world.naming import strip_name_parenthetical
+from app.services.world.npc import npc_id_from_name, normalize_npc_alias
 from app.services.world.text_normalization import normalized_eval_text
 
 # -- Codex-Subsystem (ausgelagert nach app/services/world/codex.py) --
@@ -55,6 +56,8 @@ def configure(main_globals: Dict[str, Any]) -> None:
 
     # Subsysteme mitinitialisieren
     from app.services.world import codex as _codex_module
+    from app.services.world import npc as _npc_module
+    _npc_module.configure(main_globals)
     _codex_module.configure(main_globals)
 
     _CONFIGURED = True
@@ -597,18 +600,6 @@ def blank_patch() -> Dict[str, Any]:
         "map_add_edges": [],
         "events_add": [],
     }
-
-def npc_id_from_name(name: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "_", normalized_eval_text(name)).strip("_")
-    if not slug:
-        slug = make_id("npc").split("_", 1)[1]
-    return f"npc_{slug[:48]}"
-
-def normalize_npc_alias(text: str) -> str:
-    alias = normalized_eval_text(text)
-    alias = re.sub(r"\b(der|die|das|ein|eine|einen|einem|einer|herr|frau|sir|lady)\b", " ", alias)
-    alias = re.sub(r"\s+", " ", alias).strip()
-    return alias
 
 def race_id_from_name(name: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", normalize_codex_alias_text(name)).strip("_")

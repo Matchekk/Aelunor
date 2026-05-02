@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from app.services.world.collections import stable_sorted_mapping
 from app.services.world.math_utils import clamp
 from app.services.world.naming import strip_name_parenthetical
+from app.services.world.npc import npc_id_from_name, normalize_npc_alias
 from app.services.world.text_normalization import normalized_eval_text
 
 # -- temporaere Global-Injektion (identisch zu state_engine.py Pattern) --
@@ -462,12 +463,10 @@ def normalize_npc_codex_state(campaign: Dict[str, Any]) -> None:
             normalized_skills[skill["id"]] = skill
         normalized_entry["skills"] = normalized_skills
         cleaned_codex[npc_id] = normalized_entry
-        # TODO: externe Abhaengigkeit auf state_engine - nach npc.py auslagern
         alias = normalize_npc_alias(normalized_entry.get("name", ""))
         if alias:
             cleaned_alias[alias] = npc_id
     for raw_alias, raw_npc_id in (state.get("npc_alias_index") or {}).items():
-        # TODO: externe Abhaengigkeit auf state_engine - nach npc.py auslagern
         alias = normalize_npc_alias(str(raw_alias or ""))
         npc_id = str(raw_npc_id or "").strip()
         if alias and npc_id in cleaned_codex:
@@ -481,7 +480,6 @@ def normalize_npc_entry(raw: Any, *, fallback_npc_id: str = "") -> Optional[Dict
     name = str(raw.get("name") or "").strip()
     if not name:
         return None
-    # TODO: externe Abhaengigkeit auf state_engine - nach npc.py auslagern
     npc_id = str(raw.get("npc_id") or fallback_npc_id or npc_id_from_name(name)).strip()
     if not npc_id:
         return None
@@ -539,7 +537,6 @@ def seed_npc_codex_from_story_cards(campaign: Dict[str, Any]) -> None:
         name = str(card.get("title") or "").strip()
         if not name:
             continue
-        # TODO: externe Abhaengigkeit auf state_engine - nach npc.py auslagern
         npc_id = npc_id_from_name(name)
         if npc_id in codex:
             continue
@@ -550,7 +547,6 @@ def seed_npc_codex_from_story_cards(campaign: Dict[str, Any]) -> None:
         entry["relevance_score"] = 2
         entry["history_notes"] = [f"Aus Story-Karte übernommen: {entry['backstory_short'][:120]}"] if entry["backstory_short"] else []
         codex[npc_id] = entry
-        # TODO: externe Abhaengigkeit auf state_engine - nach npc.py auslagern
         alias = normalize_npc_alias(name)
         if alias:
             alias_index[alias] = npc_id
