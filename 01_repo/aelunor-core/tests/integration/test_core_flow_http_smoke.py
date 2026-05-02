@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import os
 import tempfile
 import unittest
@@ -125,6 +126,9 @@ class CoreFlowHttpSmokeTests(unittest.TestCase):
                 main.remember_recent_story(campaign)
                 return turn
 
+            def fail_real_ollama_post(*_args: Any, **_kwargs: Any) -> None:
+                raise AssertionError("MVP smoke test must not call real Ollama over the network")
+
             def fake_finalize_character_setup(campaign: Dict[str, Any], slot_name: str) -> Dict[str, Any]:
                 campaign["setup"]["characters"][slot_name]["completed"] = True
                 intro_turn = fake_turn_record(
@@ -151,9 +155,21 @@ class CoreFlowHttpSmokeTests(unittest.TestCase):
                 patch.object(main, "finalize_world_setup", fake_finalize_world_setup),
                 patch.object(main, "finalize_character_setup", fake_finalize_character_setup),
                 patch.object(main, "create_turn_record", fake_turn_record),
+                patch.object(main.requests, "post", fail_real_ollama_post),
             ]
 
-            with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5], patches[6], patches[7], patches[8]:
+            with (
+                patches[0],
+                patches[1],
+                patches[2],
+                patches[3],
+                patches[4],
+                patches[5],
+                patches[6],
+                patches[7],
+                patches[8],
+                patches[9],
+            ):
                 main.ensure_campaign_storage()
                 with TestClient(main.app) as client:
                     create_response = client.post(
@@ -168,10 +184,24 @@ class CoreFlowHttpSmokeTests(unittest.TestCase):
                     self.assertTrue(campaign_id)
                     self.assertTrue(created["join_code"])
                     headers = {"X-Player-Id": player_id, "X-Player-Token": player_token}
+                    saved_path = Path(campaigns_dir) / f"{campaign_id}.json"
+                    self.assertTrue(saved_path.is_file())
+                    self.assertTrue(str(saved_path).startswith(temp_dir))
 
                     load_response = client.get(f"/api/campaigns/{campaign_id}", headers=headers)
                     self.assertEqual(load_response.status_code, 200, load_response.text)
                     self.assertEqual(load_response.json()["campaign_meta"]["campaign_id"], campaign_id)
+                    self.assertEqual(load_response.json()["state"]["meta"]["phase"], "lobby")
+
+                    join_response = client.post(
+                        "/api/campaigns/join",
+                        json={"join_code": created["join_code"], "display_name": "Second Player"},
+                    )
+                    self.assertEqual(join_response.status_code, 200, join_response.text)
+                    second_player_id = join_response.json()["player_id"]
+                    second_player_token = join_response.json()["player_token"]
+                    self.assertTrue(second_player_id)
+                    self.assertTrue(second_player_token)
 
                     ticket_response = client.post(f"/api/campaigns/{campaign_id}/events/ticket", headers=headers)
                     self.assertEqual(ticket_response.status_code, 200, ticket_response.text)
@@ -202,6 +232,13 @@ class CoreFlowHttpSmokeTests(unittest.TestCase):
                     self.assertEqual(claim_response.status_code, 200, claim_response.text)
                     self.assertEqual(claim_response.json()["campaign"]["claims"][SLOT_ID], player_id)
 
+                    bad_presence_response = client.post(
+                        f"/api/campaigns/{campaign_id}/presence/activity",
+                        headers={"X-Player-Id": second_player_id, "X-Player-Token": second_player_token},
+                        json={"kind": "building_character", "slot_id": SLOT_ID},
+                    )
+                    self.assertEqual(bad_presence_response.status_code, 403)
+
                     character_response = client.post(
                         f"/api/campaigns/{campaign_id}/slots/{SLOT_ID}/setup/random/apply",
                         headers=headers,
@@ -211,6 +248,15 @@ class CoreFlowHttpSmokeTests(unittest.TestCase):
                     character_payload = character_response.json()
                     self.assertTrue(character_payload["started_adventure"])
                     self.assertEqual(character_payload["campaign"]["state"]["meta"]["phase"], "active")
+
+                    presence_response = client.post(
+                        f"/api/campaigns/{campaign_id}/presence/activity",
+                        headers=headers,
+                        json={"kind": "typing_turn", "slot_id": SLOT_ID},
+                    )
+                    self.assertEqual(presence_response.status_code, 200, presence_response.text)
+                    self.assertTrue(presence_response.json()["ok"])
+                    self.assertEqual(presence_response.json()["activity"]["slot_id"], SLOT_ID)
 
                     unauthenticated_turn = client.post(
                         f"/api/campaigns/{campaign_id}/turns",
@@ -231,10 +277,12 @@ class CoreFlowHttpSmokeTests(unittest.TestCase):
                     self.assertEqual(turn_payload["campaign"]["state"]["meta"]["turn"], 2)
                     self.assertEqual(turn_payload["campaign"]["claims"][SLOT_ID], player_id)
                     self.assertEqual(turn_payload["campaign"]["active_turns"][-1]["gm_text_display"], FAKE_NARRATOR_TEXT)
+                    json.dumps(turn_payload["campaign"], ensure_ascii=False)
 
                     reload_response = client.get(f"/api/campaigns/{campaign_id}", headers=headers)
                     self.assertEqual(reload_response.status_code, 200, reload_response.text)
                     reloaded = reload_response.json()
+                    json.dumps(reloaded, ensure_ascii=False)
                     self.assertEqual(reloaded["state"]["meta"]["phase"], "active")
                     self.assertEqual(reloaded["state"]["meta"]["turn"], 2)
                     self.assertEqual(reloaded["claims"][SLOT_ID], player_id)
@@ -242,9 +290,20 @@ class CoreFlowHttpSmokeTests(unittest.TestCase):
                     self.assertEqual(reloaded["active_turns"][-1]["gm_text_display"], FAKE_NARRATOR_TEXT)
                     self.assertIn(FAKE_NARRATOR_TEXT, reloaded["state"]["events"][-1])
 
-                    saved_path = Path(campaigns_dir) / f"{campaign_id}.json"
-                    self.assertTrue(saved_path.is_file())
-                    self.assertTrue(str(saved_path).startswith(temp_dir))
+                    raw_reload = main.load_campaign(campaign_id)
+                    self.assertEqual(raw_reload["claims"][SLOT_ID], player_id)
+                    self.assertEqual(raw_reload["turns"][-1]["turn_id"], turn_payload["turn_id"])
+                    self.assertEqual(raw_reload["turns"][-1]["patch"], main.blank_patch())
+                    self.assertEqual(raw_reload["turns"][-1]["state_after"]["meta"]["turn"], 2)
+                    self.assertEqual(raw_reload["turns"][-1]["prompt_payload"], {"fake_narrator": "http_smoke"})
+
+                    next_turn_response = client.post(
+                        f"/api/campaigns/{campaign_id}/turns",
+                        headers=headers,
+                        json={"actor": SLOT_ID, "mode": "say", "text": "Ich bleibe wachsam."},
+                    )
+                    self.assertEqual(next_turn_response.status_code, 200, next_turn_response.text)
+                    self.assertEqual(next_turn_response.json()["campaign"]["state"]["meta"]["turn"], 3)
 
 
 if __name__ == "__main__":
