@@ -7,12 +7,140 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
 
+from app.services.turn.patch_sanitizer import (
+    PatchSanitizerDependencies,
+    configure as configure_patch_sanitizer,
+    sanitize_patch,
+)
+from app.services.turn.patch_apply_abilities import apply_patch_character_ability_potential_updates
+from app.services.turn.patch_apply_conditions import apply_patch_character_condition_effect_updates
+from app.services.turn.patch_apply_events import apply_patch_event_updates
+from app.services.turn.patch_apply_inventory import apply_patch_character_inventory_equipment_updates
+from app.services.turn.patch_apply_items import apply_patch_item_updates
+from app.services.turn.patch_apply_journal_factions import apply_patch_character_journal_faction_updates
+from app.services.turn.patch_apply_map import apply_patch_map_updates
+from app.services.turn.patch_apply_meta import apply_patch_meta_updates
+from app.services.turn.patch_apply_plotpoints import apply_patch_plotpoint_updates
+from app.services.turn.patch_apply_resources import apply_patch_character_resource_attribute_updates
+from app.services.turn.patch_apply_time import apply_patch_time_advance
+from app.services.turn.patch_validator import (
+    PatchValidatorDependencies,
+    configure as configure_patch_validator,
+    validate_patch,
+)
+
 _CONFIGURED = False
+_PATCH_SANITIZER_DEP_NAMES = (
+    "normalize_patch_semantics",
+    "deep_copy",
+    "clean_auto_item_name",
+    "clean_creator_item_name",
+    "ensure_item_shape",
+    "infer_item_slot_from_definition",
+    "normalize_equipment_slot_key",
+    "normalize_equipment_update_payload",
+    "item_matches_equipment_slot",
+    "normalize_class_current",
+    "skill_id_from_name",
+    "normalize_dynamic_skill_state",
+    "resource_name_for_character",
+    "normalize_skill_elements_for_world",
+    "normalize_progression_event_list",
+    "normalize_injury_state",
+    "normalize_scar_state",
+    "normalize_plotpoint_entry",
+    "normalize_plotpoint_update_entry",
+    "clean_scene_name",
+    "is_plausible_scene_name",
+    "is_generic_scene_identifier",
+    "clamp",
+    "normalize_event_entry",
+)
+_PATCH_VALIDATOR_DEP_NAMES = (
+    "normalize_patch_semantics",
+    "resource_name_for_character",
+    "normalize_dynamic_skill_state",
+    "normalize_skill_elements_for_world",
+    "normalized_eval_text",
+    "normalize_class_current",
+    "resolve_class_element_id",
+    "normalize_skill_rank",
+    "normalize_progression_event_list",
+    "is_skill_manifestation_name_plausible",
+    "normalize_injury_state",
+    "normalize_scar_state",
+    "normalize_equipment_update_payload",
+    "item_matches_equipment_slot",
+    "UNIVERSAL_SKILL_LIKE_NAMES",
+    "INJURY_SEVERITIES",
+    "INJURY_HEALING_STAGES",
+)
+
+
+def _configure_patch_sanitizer_if_ready() -> None:
+    if any(name not in globals() for name in _PATCH_SANITIZER_DEP_NAMES):
+        return
+    configure_patch_sanitizer(
+        PatchSanitizerDependencies(
+            normalize_patch_semantics=normalize_patch_semantics,
+            deep_copy=deep_copy,
+            clean_auto_item_name=clean_auto_item_name,
+            clean_creator_item_name=clean_creator_item_name,
+            ensure_item_shape=ensure_item_shape,
+            infer_item_slot_from_definition=infer_item_slot_from_definition,
+            normalize_equipment_slot_key=normalize_equipment_slot_key,
+            normalize_equipment_update_payload=normalize_equipment_update_payload,
+            item_matches_equipment_slot=item_matches_equipment_slot,
+            normalize_class_current=normalize_class_current,
+            skill_id_from_name=skill_id_from_name,
+            normalize_dynamic_skill_state=normalize_dynamic_skill_state,
+            resource_name_for_character=resource_name_for_character,
+            normalize_skill_elements_for_world=normalize_skill_elements_for_world,
+            normalize_progression_event_list=normalize_progression_event_list,
+            normalize_injury_state=normalize_injury_state,
+            normalize_scar_state=normalize_scar_state,
+            normalize_plotpoint_entry=normalize_plotpoint_entry,
+            normalize_plotpoint_update_entry=normalize_plotpoint_update_entry,
+            clean_scene_name=clean_scene_name,
+            is_plausible_scene_name=is_plausible_scene_name,
+            is_generic_scene_identifier=is_generic_scene_identifier,
+            clamp=clamp,
+            normalize_event_entry=normalize_event_entry,
+        )
+    )
+
+
+def _configure_patch_validator_if_ready() -> None:
+    if any(name not in globals() for name in _PATCH_VALIDATOR_DEP_NAMES):
+        return
+    configure_patch_validator(
+        PatchValidatorDependencies(
+            normalize_patch_semantics=normalize_patch_semantics,
+            resource_name_for_character=resource_name_for_character,
+            normalize_dynamic_skill_state=normalize_dynamic_skill_state,
+            normalize_skill_elements_for_world=normalize_skill_elements_for_world,
+            normalized_eval_text=normalized_eval_text,
+            normalize_class_current=normalize_class_current,
+            resolve_class_element_id=resolve_class_element_id,
+            normalize_skill_rank=normalize_skill_rank,
+            normalize_progression_event_list=normalize_progression_event_list,
+            is_skill_manifestation_name_plausible=is_skill_manifestation_name_plausible,
+            normalize_injury_state=normalize_injury_state,
+            normalize_scar_state=normalize_scar_state,
+            normalize_equipment_update_payload=normalize_equipment_update_payload,
+            item_matches_equipment_slot=item_matches_equipment_slot,
+            universal_skill_like_names=set(UNIVERSAL_SKILL_LIKE_NAMES),
+            injury_severities=set(INJURY_SEVERITIES),
+            injury_healing_stages=set(INJURY_HEALING_STAGES),
+        )
+    )
 
 def configure(main_globals: Dict[str, Any]) -> None:
     """Inject main-module globals needed by extracted turn engine functions."""
     global _CONFIGURED
     globals().update(main_globals)
+    _configure_patch_sanitizer_if_ready()
+    _configure_patch_validator_if_ready()
     _CONFIGURED = True
 
 class TurnFlowError(Exception):
@@ -413,355 +541,21 @@ def inactive_character_refs(campaign: Dict[str, Any], story: str, patch: Dict[st
             refs.append(display or slot_name)
     return refs
 
-def validate_patch(state: Dict[str, Any], patch: Dict[str, Any]) -> None:
-    patch = normalize_patch_semantics(patch)
-    known_scene_ids = set((state.get("scenes") or {}).keys()) | set(((state.get("map") or {}).get("nodes") or {}).keys()) | {
-        str(node.get("id") or "").strip() for node in (patch.get("map_add_nodes") or []) if isinstance(node, dict)
-    }
-    for slot_name, upd in (patch.get("characters") or {}).items():
-        if slot_name not in state["characters"]:
-            raise ValueError(f"Unbekannter Slot im Patch: {slot_name}")
-        if "derived" in upd:
-            raise ValueError(f"Derived stats duerfen nicht direkt gepatcht werden: {slot_name}")
-        if upd.get("scene_id") and upd.get("scene_id") not in known_scene_ids:
-            raise ValueError(f"Unknown scene id for {slot_name}: {upd.get('scene_id')}")
-        resource_name = resource_name_for_character(state["characters"][slot_name], ((state.get("world") or {}).get("settings") or {}))
-        world_model = state.get("world") if isinstance(state.get("world"), dict) else {}
-        for skill_id, skill_value in (upd.get("skills_set") or {}).items():
-            normalized_skill = normalize_dynamic_skill_state(
-                skill_value,
-                skill_id=str(skill_id),
-                skill_name=(skill_value or {}).get("name", skill_id) if isinstance(skill_value, dict) else str(skill_id),
-                resource_name=resource_name,
-            )
-            normalized_skill = normalize_skill_elements_for_world(normalized_skill, world_model)
-            if normalized_skill.get("elements") and not all(
-                element_id in ((world_model.get("elements") or {}).keys())
-                for element_id in (normalized_skill.get("elements") or [])
-            ):
-                raise ValueError(f"Skill mit unbekanntem Element auf {slot_name}: {normalized_skill.get('name')}")
-            cost = normalized_skill.get("cost")
-            if cost and str(cost.get("resource") or "") != resource_name:
-                raise ValueError(f"Skill-Kosten nutzen fuer {slot_name} die falsche Ressource: {normalized_skill.get('name')}")
-            combat_relevant = bool(
-                {
-                    normalized_eval_text(tag)
-                    for tag in (normalized_skill.get("tags") or [])
-                    if normalized_eval_text(tag)
-                }
-                & {"kampf", "magie", "zauber", "waffe", "technik", "rune", "shadow", "holy"}
-            )
-            if combat_relevant and not cost:
-                raise ValueError(f"Kampf-Skill ohne Kostenvertrag auf {slot_name}: {normalized_skill.get('name')}")
-        for skill_id, delta in (upd.get("skills_delta") or {}).items():
-            if isinstance(delta, dict):
-                cost = (delta.get("cost") or {})
-                if cost and str(cost.get("resource") or "") != resource_name:
-                    raise ValueError(f"Skill-Delta nutzt fuer {slot_name} die falsche Ressource: {skill_id}")
-        for ability in upd.get("abilities_add", []) or []:
-            if ability.get("owner") != slot_name:
-                raise ValueError(f"Ability owner mismatch: {ability.get('id')} owner={ability.get('owner')} expected={slot_name}")
-            if normalized_eval_text(ability.get("name", "")) in UNIVERSAL_SKILL_LIKE_NAMES:
-                raise ValueError(f"Ability wirkt wie universelle Fertigkeit auf {slot_name}: {ability.get('name')}")
-        for faction in upd.get("factions_add", []) or []:
-            if not faction.get("faction_id"):
-                raise ValueError(f"Faction membership without faction_id on {slot_name}")
-        class_set = normalize_class_current(upd.get("class_set"))
-        class_update = upd.get("class_update") or {}
-        if upd.get("class_set") and not class_set:
-            raise ValueError(f"class_set ohne gueltige Klasse auf {slot_name}")
-        if class_set and not (class_set.get("affinity_tags") or []):
-            raise ValueError(f"class_set ohne affinity_tags auf {slot_name}")
-        if class_set:
-            resolved_class_element = resolve_class_element_id(class_set, world_model)
-            if class_set.get("element_id") and not resolved_class_element:
-                raise ValueError(f"class_set mit unbekanntem Element auf {slot_name}: {class_set.get('element_id')}")
-        if class_update and not state["characters"][slot_name].get("class_current"):
-            raise ValueError(f"class_update ohne bestehende Klasse auf {slot_name}")
-        if class_update.get("rank") and normalize_skill_rank(class_update.get("rank")) != str(class_update.get("rank")).upper():
-            raise ValueError(f"class_update mit ungueltigem Rank auf {slot_name}")
-        if "progression_events" in upd:
-            normalized_events = normalize_progression_event_list(
-                upd.get("progression_events"),
-                actor=slot_name,
-                source_turn=int((state.get("meta") or {}).get("turn", 0) or 0) + 1,
-            )
-            if len(normalized_events) != len(upd.get("progression_events") or []):
-                raise ValueError(f"ungueltige progression_events auf {slot_name}")
-            for event in normalized_events:
-                if str(event.get("actor") or "").strip() != slot_name:
-                    raise ValueError(f"progression_event actor mismatch auf {slot_name}")
-                if str(event.get("type") or "").strip().lower() == "skill_manifestation":
-                    skill_payload = event.get("skill") if isinstance(event.get("skill"), dict) else {}
-                    if not skill_payload and not str(event.get("target_skill_id") or "").strip():
-                        raise ValueError(f"skill_manifestation ohne Skill-Definition auf {slot_name}")
-                    skill_name = str((skill_payload or {}).get("name") or "").strip()
-                    actor_name = str((((state.get("characters") or {}).get(slot_name) or {}).get("bio") or {}).get("name") or slot_name)
-                    if skill_name and not is_skill_manifestation_name_plausible(skill_name, actor_name):
-                        raise ValueError(f"skill_manifestation mit unplausiblem Skillnamen auf {slot_name}: {skill_name}")
-                    if skill_payload:
-                        normalized_manifest = normalize_dynamic_skill_state(
-                            skill_payload,
-                            skill_id=str((skill_payload or {}).get("id") or ""),
-                            skill_name=str((skill_payload or {}).get("name") or ""),
-                            resource_name=resource_name,
-                        )
-                        normalized_manifest = normalize_skill_elements_for_world(
-                            normalized_manifest,
-                            world_model,
-                        )
-                        if normalized_manifest.get("elements") and not all(
-                            element_id in ((world_model.get("elements") or {}).keys())
-                            for element_id in (normalized_manifest.get("elements") or [])
-                        ):
-                            raise ValueError(f"skill_manifestation mit unbekanntem Element auf {slot_name}")
-        for injury in upd.get("injuries_add", []) or []:
-            if not normalize_injury_state(injury):
-                raise ValueError(f"ungueltige Injury auf {slot_name}")
-        for injury in upd.get("injuries_update", []) or []:
-            if not isinstance(injury, dict) or not str(injury.get("id") or "").strip():
-                raise ValueError(f"injuries_update ohne id auf {slot_name}")
-            if injury.get("severity") and str(injury.get("severity")).strip().lower() not in INJURY_SEVERITIES:
-                raise ValueError(f"injuries_update mit ungueltiger severity auf {slot_name}")
-            if injury.get("healing_stage") and str(injury.get("healing_stage")).strip().lower() not in INJURY_HEALING_STAGES:
-                raise ValueError(f"injuries_update mit ungueltiger healing_stage auf {slot_name}")
-        for scar in upd.get("scars_add", []) or []:
-            if not normalize_scar_state(scar):
-                raise ValueError(f"ungueltige Scar auf {slot_name}")
-        resources_set = upd.get("resources_set") or {}
-        for key in ("hp_current", "hp_max", "sta_current", "sta_max", "res_current", "res_max", "carry_current", "carry_max"):
-            if key in resources_set and int(resources_set.get(key, 0) or 0) < 0:
-                raise ValueError(f"negative Ressource in resources_set fuer {slot_name}: {key}")
-
-    items_new = patch.get("items_new") or {}
-    for item_id, item in (items_new or {}).items():
-        if not isinstance(item, dict):
-            raise ValueError(f"Ungültiges Item für {item_id}")
-        weapon_profile = item.get("weapon_profile") if isinstance(item.get("weapon_profile"), dict) else {}
-        if weapon_profile:
-            for numeric_key in ("attack_bonus", "damage_min", "damage_max"):
-                if numeric_key in weapon_profile and not isinstance(weapon_profile.get(numeric_key), int):
-                    raise ValueError(f"weapon_profile.{numeric_key} muss integer sein ({item_id})")
-    known_items = set(state.get("items", {}).keys()) | set(items_new.keys())
-    for slot_name, upd in (patch.get("characters") or {}).items():
-        for item_id in upd.get("inventory_add", []) or []:
-            if item_id not in known_items:
-                raise ValueError(f"Unknown item id in inventory_add for {slot_name}: {item_id}")
-        eq = normalize_equipment_update_payload(upd.get("equip_set") or upd.get("equipment_set") or {})
-        for equip_slot, value in eq.items():
-            if value and value not in known_items:
-                raise ValueError(f"Unknown item id in equipment_set.{equip_slot} for {slot_name}: {value}")
-            if value:
-                item_ref = (state.get("items", {}) or {}).get(value) or (items_new.get(value) or {})
-                if not item_matches_equipment_slot(item_ref, equip_slot):
-                    raise ValueError(f"Item {value} passt nicht in equipment_set.{equip_slot} fuer {slot_name}")
-
-def sanitize_patch(state: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, Any]:
-    patch = normalize_patch_semantics(patch)
-    sanitized = deep_copy(patch)
-    cleaned_items_new: Dict[str, Any] = {}
-    for item_id, raw_item in ((sanitized.get("items_new") or {}).items()):
-        if not isinstance(raw_item, dict):
-            continue
-        candidate_name = clean_auto_item_name(str(raw_item.get("name") or ""))
-        if not candidate_name:
-            candidate_name = clean_creator_item_name(str(raw_item.get("name") or ""))
-        if not candidate_name:
-            continue
-        normalized_item = ensure_item_shape(item_id, raw_item)
-        normalized_item["name"] = candidate_name[0].upper() + candidate_name[1:] if candidate_name else candidate_name
-        inferred_slot = infer_item_slot_from_definition(normalized_item)
-        if inferred_slot and not normalize_equipment_slot_key(normalized_item.get("slot")):
-            normalized_item["slot"] = inferred_slot
-        cleaned_items_new[item_id] = normalized_item
-    sanitized["items_new"] = cleaned_items_new
-    known_items = set((state.get("items") or {}).keys()) | set(cleaned_items_new.keys())
-    characters = sanitized.get("characters") or {}
-    for slot_name in list(characters.keys()):
-        if slot_name not in state["characters"]:
-            characters.pop(slot_name, None)
-            continue
-        upd = characters[slot_name]
-        upd["inventory_add"] = [item_id for item_id in (upd.get("inventory_add") or []) if item_id in known_items]
-        eq = normalize_equipment_update_payload(upd.get("equip_set") or upd.get("equipment_set") or {})
-        for equip_slot in list(eq.keys()):
-            item_id = eq.get(equip_slot, "")
-            if not item_id or item_id not in known_items:
-                eq.pop(equip_slot, None)
-                continue
-            item_ref = (state.get("items", {}) or {}).get(item_id) or cleaned_items_new.get(item_id) or {}
-            if not item_matches_equipment_slot(item_ref, equip_slot):
-                eq.pop(equip_slot, None)
-        if eq:
-            upd["equipment_set"] = eq
-            upd.pop("equip_set", None)
-        else:
-            upd.pop("equipment_set", None)
-            upd.pop("equip_set", None)
-        upd.pop("derived", None)
-        if "class_set" in upd:
-            normalized_class = normalize_class_current(upd.get("class_set"))
-            if normalized_class:
-                upd["class_set"] = normalized_class
-            else:
-                upd.pop("class_set", None)
-        if upd.get("class_update"):
-            upd["class_update"] = deep_copy(upd["class_update"])
-        if upd.get("skills_set"):
-            normalized_skill_updates = {}
-            for raw_key, raw_value in (upd.get("skills_set") or {}).items():
-                skill_name = (raw_value or {}).get("name", raw_key) if isinstance(raw_value, dict) else raw_key
-                skill_key = skill_id_from_name(str(skill_name or raw_key))
-                normalized_skill_updates[skill_key] = normalize_dynamic_skill_state(
-                    raw_value,
-                    skill_id=skill_key,
-                    skill_name=str(skill_name or raw_key),
-                    resource_name=resource_name_for_character(state["characters"][slot_name], ((state.get("world") or {}).get("settings") or {})),
-                )
-                normalized_skill_updates[skill_key] = normalize_skill_elements_for_world(
-                    normalized_skill_updates[skill_key],
-                    state.get("world") if isinstance(state.get("world"), dict) else {},
-                )
-            upd["skills_set"] = normalized_skill_updates
-        if upd.get("skills_delta"):
-            normalized_skill_deltas = {}
-            for raw_key, raw_value in (upd.get("skills_delta") or {}).items():
-                skill_name = (raw_value or {}).get("name", raw_key) if isinstance(raw_value, dict) else raw_key
-                skill_key = skill_id_from_name(str(skill_name or raw_key))
-                existing_delta = normalized_skill_deltas.get(skill_key)
-                if isinstance(existing_delta, dict) and isinstance(raw_value, dict):
-                    merged_delta = deep_copy(existing_delta)
-                    merged_delta.update(deep_copy(raw_value))
-                    normalized_skill_deltas[skill_key] = merged_delta
-                elif isinstance(existing_delta, int) and isinstance(raw_value, int):
-                    normalized_skill_deltas[skill_key] = existing_delta + raw_value
-                else:
-                    normalized_skill_deltas[skill_key] = deep_copy(raw_value)
-            upd["skills_delta"] = normalized_skill_deltas
-        if "progression_events" in upd:
-            source_turn = int((state.get("meta") or {}).get("turn", 0) or 0) + 1
-            upd["progression_events"] = normalize_progression_event_list(
-                upd.get("progression_events"),
-                actor=slot_name,
-                source_turn=source_turn,
-            )
-        if upd.get("injuries_add"):
-            upd["injuries_add"] = [entry for entry in (normalize_injury_state(raw) for raw in (upd.get("injuries_add") or [])) if entry]
-        if upd.get("injuries_update"):
-            cleaned_updates = []
-            for raw in (upd.get("injuries_update") or []):
-                if isinstance(raw, dict) and str(raw.get("id") or "").strip():
-                    cleaned_updates.append(deep_copy(raw))
-            upd["injuries_update"] = cleaned_updates
-        if upd.get("injuries_heal"):
-            upd["injuries_heal"] = [str(entry).strip() for entry in (upd.get("injuries_heal") or []) if str(entry).strip()]
-        if upd.get("scars_add"):
-            upd["scars_add"] = [entry for entry in (normalize_scar_state(raw) for raw in (upd.get("scars_add") or [])) if entry]
-    sanitized["characters"] = characters
-    sanitized["plotpoints_add"] = [
-        entry
-        for entry in (normalize_plotpoint_entry(raw) for raw in (sanitized.get("plotpoints_add") or []))
-        if entry
-    ]
-    sanitized["plotpoints_update"] = [
-        entry
-        for entry in (normalize_plotpoint_update_entry(raw) for raw in (sanitized.get("plotpoints_update") or []))
-        if entry
-    ]
-    sanitized_map_nodes: List[Dict[str, Any]] = []
-    for node in (sanitized.get("map_add_nodes") or []):
-        if not isinstance(node, dict):
-            continue
-        node_id = str(node.get("id") or "").strip()
-        if not node_id:
-            continue
-        node_name = clean_scene_name(str(node.get("name") or node.get("id") or ""))
-        if not node_name:
-            continue
-        if not is_plausible_scene_name(node_name):
-            continue
-        if is_generic_scene_identifier(node_id, node_name):
-            continue
-        sanitized_map_nodes.append(
-            {
-                "id": node_id,
-                "name": node_name,
-                "type": str(node.get("type") or "location").strip() or "location",
-                "danger": clamp(int(node.get("danger", 1) or 1), 0, 10),
-                "discovered": bool(node.get("discovered", True)),
-            }
-        )
-    sanitized["map_add_nodes"] = sanitized_map_nodes
-    sanitized["map_add_edges"] = [
-        {
-            "from": str(edge.get("from") or "").strip(),
-            "to": str(edge.get("to") or "").strip(),
-            "kind": str(edge.get("kind") or "path").strip() or "path",
-        }
-        for edge in (sanitized.get("map_add_edges") or [])
-        if isinstance(edge, dict) and str(edge.get("from") or "").strip() and str(edge.get("to") or "").strip()
-    ]
-    sanitized["events_add"] = [
-        entry
-        for entry in (normalize_event_entry(raw) for raw in (sanitized.get("events_add") or []))
-        if entry
-    ]
-    return sanitized
-
 def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: int = 10) -> Dict[str, Any]:
     patch = normalize_patch_semantics(patch)
-    state.setdefault("items", {})
     attribute_cap = max(1, int(attribute_cap or 10))
-    for item_id, item in (patch.get("items_new") or {}).items():
-        state["items"][item_id] = ensure_item_shape(item_id, item)
+    apply_patch_item_updates(state, patch, ensure_item_shape=ensure_item_shape)
 
-    state["plotpoints"] = [
-        entry
-        for entry in (normalize_plotpoint_entry(raw) for raw in (state.get("plotpoints") or []))
-        if entry
-    ]
-    for raw_pp in (patch.get("plotpoints_add") or []):
-        pp = normalize_plotpoint_entry(raw_pp)
-        if not pp:
-            continue
-        if not any(isinstance(existing, dict) and existing.get("id") == pp.get("id") for existing in state["plotpoints"]):
-            state["plotpoints"].append(pp)
+    apply_patch_plotpoint_updates(
+        state,
+        patch,
+        normalize_plotpoint_entry=normalize_plotpoint_entry,
+        normalize_plotpoint_update_entry=normalize_plotpoint_update_entry,
+    )
 
-    for raw_upd in (patch.get("plotpoints_update") or []):
-        upd = normalize_plotpoint_update_entry(raw_upd)
-        if not upd:
-            continue
-        pid = upd.get("id")
-        for pp in state["plotpoints"]:
-            if isinstance(pp, dict) and pp.get("id") == pid:
-                if "status" in upd:
-                    pp["status"] = upd["status"]
-                if "notes" in upd and upd["notes"]:
-                    pp["notes"] = upd["notes"]
+    apply_patch_map_updates(state, patch)
 
-    state.setdefault("map", {"nodes": {}, "edges": []})
-    state["map"].setdefault("nodes", {})
-    for node in (patch.get("map_add_nodes") or []):
-        node_id = node["id"]
-        state["map"]["nodes"][node_id] = {
-            "name": node["name"],
-            "type": node["type"],
-            "danger": node["danger"],
-            "discovered": node["discovered"],
-        }
-        state.setdefault("scenes", {})
-        state["scenes"].setdefault(node_id, {"name": node["name"], "danger": node["danger"], "notes": ""})
-
-    for edge in (patch.get("map_add_edges") or []):
-        if edge not in state["map"]["edges"]:
-            state["map"]["edges"].append(edge)
-
-    time_advance = ((patch.get("meta") or {}).get("time_advance") or {})
-    if time_advance:
-        apply_world_time_advance(state, int(time_advance.get("days", 0) or 0), time_advance.get("time_of_day"))
-        if time_advance.get("reason"):
-            state.setdefault("events", [])
-            state["events"].append(f"Zeit vergeht: +{int(time_advance.get('days', 0) or 0)} Tage ({time_advance.get('reason')}).")
+    apply_patch_time_advance(state, patch, apply_world_time_advance=apply_world_time_advance)
 
     effective_world_time = normalize_world_time(state.get("meta", {}))
     for slot_name, upd in (patch.get("characters") or {}).items():
@@ -774,73 +568,18 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
         if upd.get("bio_set"):
             character["bio"] = {**character.get("bio", {}), **upd["bio_set"]}
             character["bio"].pop("party_role", None)
-        if upd.get("resources_set"):
-            canonical_set = canonical_resources_set_from_payload(
-                upd.get("resources_set"),
-                character,
-                ((state.get("world") or {}).get("settings") or {}),
-            )
-            for key, value in canonical_set.items():
-                character[key] = max(0, int(value or 0))
-            misc_resource_set = legacy_misc_resources_set_from_payload(upd.get("resources_set"))
-            if misc_resource_set:
-                resources_store = character.setdefault("resources", {})
-                if not isinstance(resources_store, dict):
-                    resources_store = {}
-                    character["resources"] = resources_store
-                for misc_key, misc_payload in misc_resource_set.items():
-                    max_value = max(0, int(misc_payload.get("max", 0) or 0))
-                    current_value = max(0, int(misc_payload.get("current", 0) or 0))
-                    resources_store[misc_key] = {
-                        "current": clamp(current_value, 0, max_value) if max_value > 0 else current_value,
-                        "base_max": max_value,
-                        "bonus_max": 0,
-                        "max": max_value,
-                    }
-        canonical_resource_deltas = canonical_resource_deltas_from_update(upd)
-        if canonical_resource_deltas["hp_current"]:
-            character["hp_current"] = int(character.get("hp_current", 0) or 0) + canonical_resource_deltas["hp_current"]
-        if canonical_resource_deltas["sta_current"]:
-            character["sta_current"] = int(character.get("sta_current", 0) or 0) + canonical_resource_deltas["sta_current"]
-        if canonical_resource_deltas["res_current"]:
-            character["res_current"] = int(character.get("res_current", 0) or 0) + canonical_resource_deltas["res_current"]
-        if canonical_resource_deltas["carry_current"]:
-            character["carry_current"] = int(character.get("carry_current", 0) or 0) + canonical_resource_deltas["carry_current"]
-        misc_resource_deltas = legacy_misc_resource_deltas_from_update(upd)
-        if any(int(misc_resource_deltas.get(key, 0) or 0) != 0 for key in ("stress", "corruption", "wounds")):
-            resources_store = character.setdefault("resources", {})
-            if not isinstance(resources_store, dict):
-                resources_store = {}
-                character["resources"] = resources_store
-            for misc_key in ("stress", "corruption", "wounds"):
-                delta = int(misc_resource_deltas.get(misc_key, 0) or 0)
-                if not delta:
-                    continue
-                current_entry = resources_store.get(misc_key) if isinstance(resources_store.get(misc_key), dict) else {}
-                max_value = max(0, int(current_entry.get("max", 10 if misc_key != "wounds" else 3) or (10 if misc_key != "wounds" else 3)))
-                current_value = int(current_entry.get("current", 0) or 0) + delta
-                resources_store[misc_key] = {
-                    "current": clamp(current_value, 0, max_value),
-                    "base_max": max(0, int(current_entry.get("base_max", max_value) or max_value)),
-                    "bonus_max": int(current_entry.get("bonus_max", 0) or 0),
-                    "max": max_value,
-                }
-
-        if upd.get("attributes_set"):
-            character.setdefault("attributes", {}).update(
-                {
-                    key: clamp(int(value or 0), 0, attribute_cap)
-                    for key, value in upd["attributes_set"].items()
-                    if key in ATTRIBUTE_KEYS
-                }
-            )
-        for key, value in (upd.get("attributes_delta") or {}).items():
-            if key in ATTRIBUTE_KEYS:
-                character.setdefault("attributes", {})[key] = clamp(
-                    int(character["attributes"].get(key, 0) or 0) + int(value or 0),
-                    0,
-                    attribute_cap,
-                )
+        apply_patch_character_resource_attribute_updates(
+            character,
+            upd,
+            world_settings=((state.get("world") or {}).get("settings") or {}),
+            clamp=clamp,
+            attribute_cap=attribute_cap,
+            attribute_keys=ATTRIBUTE_KEYS,
+            canonical_resources_set_from_payload=canonical_resources_set_from_payload,
+            legacy_misc_resources_set_from_payload=legacy_misc_resources_set_from_payload,
+            canonical_resource_deltas_from_update=canonical_resource_deltas_from_update,
+            legacy_misc_resource_deltas_from_update=legacy_misc_resource_deltas_from_update,
+        )
 
         skill_store = character.setdefault("skills", {})
         resource_name = resource_name_for_character(character, ((state.get("world") or {}).get("settings") or {}))
@@ -929,93 +668,29 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
                 state.get("world") if isinstance(state.get("world"), dict) else {},
             )
 
-        for condition in upd.get("conditions_add", []) or []:
-            if condition and condition not in character["conditions"]:
-                character["conditions"].append(condition)
-        for condition in upd.get("conditions_remove", []) or []:
-            if condition in character["conditions"]:
-                character["conditions"].remove(condition)
+        apply_patch_character_condition_effect_updates(character, upd)
 
-        for effect in upd.get("effects_add", []) or []:
-            if effect.get("id") and not any(existing.get("id") == effect.get("id") for existing in character.get("effects", [])):
-                character.setdefault("effects", []).append(effect)
-        remove_effect_ids = set(upd.get("effects_remove", []) or [])
-        if remove_effect_ids:
-            character["effects"] = [effect for effect in character.get("effects", []) if effect.get("id") not in remove_effect_ids]
+        apply_patch_character_inventory_equipment_updates(
+            character,
+            upd,
+            normalize_equipment_update_payload=normalize_equipment_update_payload,
+        )
 
-        for item_id in upd.get("inventory_add", []) or []:
-            if item_id and not any(entry.get("item_id") == item_id for entry in character.get("inventory", {}).get("items", [])):
-                character.setdefault("inventory", {}).setdefault("items", []).append({"item_id": item_id, "stack": 1})
-        for item_id in upd.get("inventory_remove", []) or []:
-            character.setdefault("inventory", {}).setdefault("items", [])
-            character["inventory"]["items"] = [entry for entry in character["inventory"]["items"] if entry.get("item_id") != item_id]
-
-        inventory_set = upd.get("inventory_set") or {}
-        if inventory_set.get("items") is not None:
-            character.setdefault("inventory", {})["items"] = inventory_set.get("items", [])
-        if inventory_set.get("quick_slots") is not None:
-            character.setdefault("inventory", {})["quick_slots"] = inventory_set.get("quick_slots", {})
-
-        equipment_set = upd.get("equipment_set") or upd.get("equip_set")
-        if equipment_set:
-            normalized_equipment = character.get("equipment", {})
-            normalized_update = normalize_equipment_update_payload(equipment_set)
-            for key, value in normalized_update.items():
-                normalized_equipment[key] = value
-                if value and not any(entry.get("item_id") == value for entry in character.get("inventory", {}).get("items", [])):
-                    character.setdefault("inventory", {}).setdefault("items", []).append({"item_id": value, "stack": 1})
-            character["equipment"] = normalized_equipment
-
-        for ability in upd.get("abilities_add", []) or []:
-            normalized_ability = normalize_ability_state(ability, slot_name)
-            normalized_skill = normalize_dynamic_skill_state(
-                {
-                    "id": skill_id_from_name(normalized_ability.get("name", normalized_ability.get("id", ""))),
-                    "name": normalized_ability.get("name"),
-                    "rank": normalize_skill_rank(normalized_ability.get("rank")),
-                    "level": max(1, int(normalized_ability.get("level", 1) or 1)),
-                    "level_max": 10,
-                    "tags": list(dict.fromkeys([*(normalized_ability.get("tags") or []), normalized_ability.get("type", "")])),
-                    "description": normalized_ability.get("description") or f"{normalized_ability.get('name', 'Technik')} wurde gelernt.",
-                    "cost": None if not normalized_ability.get("cost") else {"resource": resource_name, "amount": sum(int(v or 0) for v in (normalized_ability.get("cost") or {}).values())},
-                    "price": None,
-                    "cooldown_turns": normalized_ability.get("cooldown_turns"),
-                    "unlocked_from": normalized_ability.get("source") or "Patch",
-                    "synergy_notes": None,
-                    "xp": int(normalized_ability.get("xp", 0) or 0),
-                    "next_xp": int(normalized_ability.get("next_xp", next_skill_xp_for_level(max(1, int(normalized_ability.get('level', 1) or 1)))) or next_skill_xp_for_level(max(1, int(normalized_ability.get('level', 1) or 1)))),
-                    "mastery": int(normalized_ability.get("mastery", 0) or 0),
-                },
-                resource_name=resource_name,
-            )
-            existing_skill = skill_store.get(normalized_skill["id"])
-            skill_store[normalized_skill["id"]] = merge_dynamic_skill(existing_skill, normalized_skill, resource_name=resource_name) if existing_skill else normalized_skill
-        for ability_update in upd.get("abilities_update", []) or []:
-            ability_id = skill_id_from_name(str(ability_update.get("id") or ""))
-            existing_skill = skill_store.get(ability_id)
-            if not existing_skill:
-                continue
-            skill = normalize_dynamic_skill_state(existing_skill, resource_name=resource_name)
-            if "level" in ability_update:
-                skill["level"] = max(1, int(ability_update.get("level", 1) or 1))
-            if "xp" in ability_update:
-                skill["xp"] = max(0, int(ability_update.get("xp", 0) or 0))
-            if "cooldown_turns" in ability_update:
-                skill["cooldown_turns"] = max(0, int(ability_update.get("cooldown_turns", 0) or 0))
-            skill_store[ability_id] = normalize_dynamic_skill_state(skill, resource_name=resource_name)
-        if ENABLE_LEGACY_SHADOW_WRITEBACK:
-            character["abilities"] = []
-        else:
-            character.pop("abilities", None)
-
-        for potential in upd.get("potential_add", []) or []:
-            if isinstance(potential, dict):
-                existing_ids = {entry.get("id") for entry in character.get("progression", {}).get("potential_cards", [])}
-                if potential.get("id") and potential.get("id") not in existing_ids:
-                    character.setdefault("progression", {}).setdefault("potential_cards", []).append(potential)
-            elif potential:
-                card = {"id": make_id("potential"), "name": str(potential), "description": "", "tags": [], "requirements": [], "status": "locked"}
-                character.setdefault("progression", {}).setdefault("potential_cards", []).append(card)
+        apply_patch_character_ability_potential_updates(
+            character,
+            upd,
+            slot_name=slot_name,
+            skill_store=skill_store,
+            resource_name=resource_name,
+            enable_legacy_shadow_writeback=ENABLE_LEGACY_SHADOW_WRITEBACK,
+            make_id=make_id,
+            normalize_ability_state=normalize_ability_state,
+            normalize_dynamic_skill_state=normalize_dynamic_skill_state,
+            skill_id_from_name=skill_id_from_name,
+            normalize_skill_rank=normalize_skill_rank,
+            next_skill_xp_for_level=next_skill_xp_for_level,
+            merge_dynamic_skill=merge_dynamic_skill,
+        )
 
         if upd.get("progression_set"):
             progression_set = deep_copy(upd["progression_set"] or {})
@@ -1037,12 +712,12 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
                 if "class_level" in progression_set:
                     current_class["level"] = max(1, int(progression_set.get("class_level", current_class.get("level", 1)) or current_class.get("level", 1)))
                 character["class_current"] = normalize_class_current(current_class)
-        if upd.get("journal_add"):
-            journal = character.setdefault("journal", {})
-            for key, value in upd["journal_add"].items():
-                journal.setdefault(key, [])
-                if isinstance(value, list):
-                    journal[key].extend(value)
+        apply_patch_character_journal_faction_updates(
+            character,
+            upd,
+            deep_copy=deep_copy,
+            include_factions=False,
+        )
 
         if upd.get("class_set"):
             character["class_current"] = normalize_class_current(upd["class_set"])
@@ -1073,22 +748,12 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
         if core_skill_messages:
             state.setdefault("events", [])
             state["events"].extend(core_skill_messages)
-        for faction in upd.get("factions_add", []) or []:
-            faction_id = faction.get("faction_id", "")
-            if not faction_id:
-                continue
-            memberships = character.setdefault("faction_memberships", [])
-            existing = next((entry for entry in memberships if entry.get("faction_id") == faction_id), None)
-            if existing:
-                existing.update(deep_copy(faction))
-            else:
-                memberships.append(deep_copy(faction))
-        for faction_update in upd.get("factions_update", []) or []:
-            faction_id = faction_update.get("faction_id", "")
-            for membership in character.setdefault("faction_memberships", []):
-                if membership.get("faction_id") == faction_id:
-                    membership.update(deep_copy(faction_update))
-                    break
+        apply_patch_character_journal_faction_updates(
+            character,
+            upd,
+            deep_copy=deep_copy,
+            include_journal=False,
+        )
         injuries = character.setdefault("injuries", [])
         if upd.get("injuries_add"):
             existing_injury_ids = {entry.get("id") for entry in injuries if isinstance(entry, dict)}
@@ -1143,14 +808,9 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
             write_legacy_shadow_fields(character, ((state.get("world") or {}).get("settings") or {}))
         sync_scars_into_appearance(character)
 
-    meta = patch.get("meta")
-    if meta and "phase" in meta:
-        state["meta"]["phase"] = meta["phase"]
+    apply_patch_meta_updates(state, patch)
 
-    state.setdefault("events", [])
-    for entry in (normalize_event_entry(raw) for raw in (patch.get("events_add") or [])):
-        if entry:
-            state["events"].append(entry)
+    apply_patch_event_updates(state, patch, normalize_event_entry=normalize_event_entry)
     return state
 
 def enforce_non_milestone_patch_limits(state: Dict[str, Any], patch: Dict[str, Any], *, is_milestone: bool, action_type: str) -> Dict[str, Any]:
@@ -2073,4 +1733,3 @@ def reset_turn_branch(campaign: Dict[str, Any], turn: Dict[str, Any], new_status
             current_turn["updated_at"] = utc_now()
     remember_recent_story(campaign)
     rebuild_memory_summary(campaign)
-
