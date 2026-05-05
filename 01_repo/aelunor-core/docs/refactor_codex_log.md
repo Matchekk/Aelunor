@@ -34,11 +34,7 @@
 - ensure_world_codex_from_setup ruft generate_world_race_profiles auf -> muss nach race.py ausgelagert werden
 - normalize_npc_codex_state ruft normalize_dynamic_skill_state auf -> muss nach skills.py ausgelagert werden
 - normalize_npc_codex_state ruft normalize_element_id_list auf -> muss nach element.py ausgelagert werden
-- normalize_npc_codex_state ruft normalize_resource_name auf -> muss nach progression.py ausgelagert werden
 - normalize_npc_codex_state ruft normalize_skill_elements_for_world auf -> muss nach element.py ausgelagert werden
-- normalize_npc_entry ruft next_character_xp_for_level auf -> muss nach progression.py ausgelagert werden
-- normalize_npc_entry ruft normalize_class_current auf -> muss nach progression.py ausgelagert werden
-- normalize_npc_entry ruft normalize_resource_name auf -> muss nach progression.py ausgelagert werden
 - normalize_npc_entry ruft normalize_skill_store auf -> muss nach skills.py ausgelagert werden
 - normalize_world_codex_structures ruft build_element_alias_index auf -> muss nach element.py ausgelagert werden
 - normalize_world_codex_structures ruft element_sort_key auf -> muss nach element.py ausgelagert werden
@@ -57,6 +53,11 @@
 ## Aufgeloeste NPC-Abhängigkeiten
 - npc_id_from_name -> app/services/world/npc.py
 - normalize_npc_alias -> app/services/world/npc.py
+
+## Aufgeloeste Progression-Abhängigkeiten
+- normalize_resource_name -> app/services/world/progression.py
+- normalize_class_current -> app/services/world/progression.py
+- next_character_xp_for_level -> app/services/world/progression.py
 
 ## Offene Tests
 - [ ] Keine neuen Tests geschrieben - Grund: Scope war reines Verschieben/Re-Exportieren ohne neue Testdateien.

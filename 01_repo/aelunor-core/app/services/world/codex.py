@@ -14,6 +14,7 @@ Abhaengigkeiten auf globals (temporaer, bis DI-Refactor):
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import re
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -21,6 +22,11 @@ from app.services.world.collections import stable_sorted_mapping
 from app.services.world.math_utils import clamp
 from app.services.world.naming import strip_name_parenthetical
 from app.services.world.npc import npc_id_from_name, normalize_npc_alias
+from app.services.world.progression import (
+    next_character_xp_for_level,
+    normalize_class_current,
+    normalize_resource_name,
+)
 from app.services.world.text_normalization import normalized_eval_text
 
 # -- temporaere Global-Injektion (identisch zu state_engine.py Pattern) --
@@ -33,6 +39,86 @@ def configure(main_globals: Dict[str, Any]) -> None:
     _CONFIGURED = True
 
 
+@dataclass(frozen=True)
+class ElementNormalizationPort:
+    normalize_element_profile: Any
+    element_sort_key: Any
+    build_element_alias_index: Any
+    normalize_element_relations: Any
+    normalize_element_class_paths: Any
+    normalize_element_id_list: Any
+    normalize_skill_elements_for_world: Any
+
+
+@dataclass(frozen=True)
+class SkillNormalizationPort:
+    normalize_resource_name: Any
+    normalize_dynamic_skill_state: Any
+    normalize_skill_store: Any
+
+
+@dataclass(frozen=True)
+class CodexRuntimeDependencies:
+    deep_copy: Any
+    codex_kind_race: str
+    codex_kind_beast: str
+    codex_knowledge_level_min: int
+    codex_knowledge_level_max: int
+    race_blocks_by_level: Dict[int, List[str]]
+    beast_blocks_by_level: Dict[int, List[str]]
+    race_codex_block_order: List[str]
+    beast_codex_block_order: List[str]
+    normalize_race_profile: Any
+    normalize_beast_profile: Any
+    element_core_names: Tuple[str, ...]
+    element_normalization: ElementNormalizationPort
+    skill_normalization: SkillNormalizationPort
+    codex_default_meta: Dict[str, Any]
+    normalize_class_current: Any
+    next_character_xp_for_level: Any
+    npc_status_allowed: Set[str]
+    npc_id_from_name: Any
+    normalize_npc_alias: Any
+
+
+def _codex_deps() -> CodexRuntimeDependencies:
+    runtime = globals()
+    return CodexRuntimeDependencies(
+        deep_copy=runtime["deep_copy"],
+        codex_kind_race=runtime["CODEX_KIND_RACE"],
+        codex_kind_beast=runtime["CODEX_KIND_BEAST"],
+        codex_knowledge_level_min=runtime["CODEX_KNOWLEDGE_LEVEL_MIN"],
+        codex_knowledge_level_max=runtime["CODEX_KNOWLEDGE_LEVEL_MAX"],
+        race_blocks_by_level=runtime["RACE_BLOCKS_BY_LEVEL"],
+        beast_blocks_by_level=runtime["BEAST_BLOCKS_BY_LEVEL"],
+        race_codex_block_order=runtime["RACE_CODEX_BLOCK_ORDER"],
+        beast_codex_block_order=runtime["BEAST_CODEX_BLOCK_ORDER"],
+        normalize_race_profile=runtime["normalize_race_profile"],
+        normalize_beast_profile=runtime["normalize_beast_profile"],
+        element_core_names=tuple(runtime["ELEMENT_CORE_NAMES"]),
+        element_normalization=ElementNormalizationPort(
+            normalize_element_profile=runtime["normalize_element_profile"],
+            element_sort_key=runtime["element_sort_key"],
+            build_element_alias_index=runtime["build_element_alias_index"],
+            normalize_element_relations=runtime["normalize_element_relations"],
+            normalize_element_class_paths=runtime["normalize_element_class_paths"],
+            normalize_element_id_list=runtime["normalize_element_id_list"],
+            normalize_skill_elements_for_world=runtime["normalize_skill_elements_for_world"],
+        ),
+        skill_normalization=SkillNormalizationPort(
+            normalize_resource_name=runtime["normalize_resource_name"],
+            normalize_dynamic_skill_state=runtime["normalize_dynamic_skill_state"],
+            normalize_skill_store=runtime["normalize_skill_store"],
+        ),
+        codex_default_meta=runtime["CODEX_DEFAULT_META"],
+        normalize_class_current=runtime["normalize_class_current"],
+        next_character_xp_for_level=runtime["next_character_xp_for_level"],
+        npc_status_allowed=runtime["NPC_STATUS_ALLOWED"],
+        npc_id_from_name=runtime["npc_id_from_name"],
+        normalize_npc_alias=runtime["normalize_npc_alias"],
+    )
+
+
 # ============================================
 # GRUPPE A - Codex-Normalisierung
 # ============================================
@@ -43,9 +129,11 @@ def codex_block_order(kind: str) -> List[str]:
     return list(BEAST_CODEX_BLOCK_ORDER)
 
 def codex_blocks_for_level(kind: str, level: int) -> List[str]:
-    clamped_level = clamp(int(level or 0), CODEX_KNOWLEDGE_LEVEL_MIN, CODEX_KNOWLEDGE_LEVEL_MAX)
-    block_map = RACE_BLOCKS_BY_LEVEL if str(kind or "").strip().lower() == CODEX_KIND_RACE else BEAST_BLOCKS_BY_LEVEL
-    ordered = codex_block_order(kind)
+    deps = _codex_deps()
+    kind_key = str(kind or "").strip().lower()
+    clamped_level = clamp(int(level or 0), deps.codex_knowledge_level_min, deps.codex_knowledge_level_max)
+    block_map = deps.race_blocks_by_level if kind_key == deps.codex_kind_race else deps.beast_blocks_by_level
+    ordered = deps.race_codex_block_order if kind_key == deps.codex_kind_race else deps.beast_codex_block_order
     unlocked: List[str] = []
     for idx in range(1, clamped_level + 1):
         for block in (block_map.get(idx) or []):
@@ -91,14 +179,16 @@ def normalize_codex_alias_text(text: Any) -> str:
     return alias
 
 def normalize_codex_entry_stable(raw_entry: Any, *, kind: str) -> Dict[str, Any]:
-    base = deep_copy(raw_entry) if isinstance(raw_entry, dict) else {}
-    defaults = default_race_codex_entry("") if str(kind or "").strip().lower() == CODEX_KIND_RACE else default_beast_codex_entry("")
-    normalized = deep_copy(defaults)
+    deps = _codex_deps()
+    kind_key = str(kind or "").strip().lower()
+    base = deps.deep_copy(raw_entry) if isinstance(raw_entry, dict) else {}
+    defaults = default_race_codex_entry("") if kind_key == deps.codex_kind_race else default_beast_codex_entry("")
+    normalized = deps.deep_copy(defaults)
     normalized["discovered"] = bool(base.get("discovered", defaults["discovered"]))
     normalized["knowledge_level"] = clamp(
         int(base.get("knowledge_level", defaults["knowledge_level"]) or defaults["knowledge_level"]),
-        CODEX_KNOWLEDGE_LEVEL_MIN,
-        CODEX_KNOWLEDGE_LEVEL_MAX,
+        deps.codex_knowledge_level_min,
+        deps.codex_knowledge_level_max,
     )
     normalized["encounter_count"] = max(0, int(base.get("encounter_count", defaults["encounter_count"]) or defaults["encounter_count"]))
     normalized["first_seen_turn"] = max(0, int(base.get("first_seen_turn", defaults["first_seen_turn"]) or defaults["first_seen_turn"]))
@@ -106,7 +196,7 @@ def normalize_codex_entry_stable(raw_entry: Any, *, kind: str) -> Dict[str, Any]
         normalized["first_seen_turn"],
         int(base.get("last_updated_turn", defaults["last_updated_turn"]) or defaults["last_updated_turn"]),
     )
-    order = codex_block_order(kind)
+    order = deps.race_codex_block_order if kind_key == deps.codex_kind_race else deps.beast_codex_block_order
     raw_blocks = [str(block or "").strip() for block in (base.get("known_blocks") or []) if str(block or "").strip()]
     seen_blocks = set()
     known_blocks: List[str] = []
@@ -117,7 +207,7 @@ def normalize_codex_entry_stable(raw_entry: Any, *, kind: str) -> Dict[str, Any]
     normalized["known_blocks"] = known_blocks
     normalized["known_facts"] = merge_known_facts_stable(base.get("known_facts") or [], [])
 
-    if str(kind or "").strip().lower() == CODEX_KIND_RACE:
+    if kind_key == deps.codex_kind_race:
         normalized["known_individuals"] = stable_sorted_unique_strings(base.get("known_individuals") or [], limit=64)
     else:
         normalized["defeated_count"] = max(0, int(base.get("defeated_count", defaults.get("defeated_count", 0)) or defaults.get("defeated_count", 0)))
@@ -125,6 +215,8 @@ def normalize_codex_entry_stable(raw_entry: Any, *, kind: str) -> Dict[str, Any]
     return normalized
 
 def normalize_world_codex_structures(state: Dict[str, Any]) -> None:
+    deps = _codex_deps()
+    elements = deps.element_normalization
     world = state.setdefault("world", {})
     world_races = world.get("races") if isinstance(world.get("races"), dict) else {}
     world_beasts = world.get("beast_types") if isinstance(world.get("beast_types"), dict) else {}
@@ -133,7 +225,7 @@ def normalize_world_codex_structures(state: Dict[str, Any]) -> None:
     cleaned_races: Dict[str, Dict[str, Any]] = {}
     for raw_id, raw_profile in world_races.items():
         # TODO: externe Abhaengigkeit auf state_engine - nach race.py auslagern
-        profile = normalize_race_profile(raw_profile, fallback_id=str(raw_id))
+        profile = deps.normalize_race_profile(raw_profile, fallback_id=str(raw_id))
         if not profile:
             continue
         cleaned_races[profile["id"]] = profile
@@ -142,7 +234,7 @@ def normalize_world_codex_structures(state: Dict[str, Any]) -> None:
     cleaned_beasts: Dict[str, Dict[str, Any]] = {}
     for raw_id, raw_profile in world_beasts.items():
         # TODO: externe Abhaengigkeit auf state_engine - nach beast.py auslagern
-        profile = normalize_beast_profile(raw_profile, fallback_id=str(raw_id))
+        profile = deps.normalize_beast_profile(raw_profile, fallback_id=str(raw_id))
         if not profile:
             continue
         cleaned_beasts[profile["id"]] = profile
@@ -151,14 +243,14 @@ def normalize_world_codex_structures(state: Dict[str, Any]) -> None:
     cleaned_elements: Dict[str, Dict[str, Any]] = {}
     for raw_id, raw_profile in world_elements.items():
         fallback_origin = "core" if normalize_codex_alias_text((raw_profile or {}).get("name", "")) in {
-            normalize_codex_alias_text(name) for name in ELEMENT_CORE_NAMES
+            normalize_codex_alias_text(name) for name in deps.element_core_names
         } else "generated"
         # TODO: externe Abhaengigkeit auf state_engine - nach element.py auslagern
-        profile = normalize_element_profile(raw_profile, fallback_id=str(raw_id), fallback_origin=fallback_origin)
+        profile = elements.normalize_element_profile(raw_profile, fallback_id=str(raw_id), fallback_origin=fallback_origin)
         if not profile:
             continue
         cleaned_elements[profile["id"]] = profile
-    cleaned_elements = stable_sorted_mapping(cleaned_elements, key_fn=element_sort_key)
+    cleaned_elements = stable_sorted_mapping(cleaned_elements, key_fn=elements.element_sort_key)
 
     world["races"] = cleaned_races
     world["beast_types"] = cleaned_beasts
@@ -167,11 +259,11 @@ def normalize_world_codex_structures(state: Dict[str, Any]) -> None:
     world["race_alias_index"] = alias_indexes["race_alias_index"]
     world["beast_alias_index"] = alias_indexes["beast_alias_index"]
     # TODO: externe Abhaengigkeit auf state_engine - nach element.py auslagern
-    world["element_alias_index"] = build_element_alias_index(cleaned_elements)
+    world["element_alias_index"] = elements.build_element_alias_index(cleaned_elements)
     # TODO: externe Abhaengigkeit auf state_engine - nach element.py auslagern
-    world["element_relations"] = normalize_element_relations(world.get("element_relations"), cleaned_elements)
+    world["element_relations"] = elements.normalize_element_relations(world.get("element_relations"), cleaned_elements)
     # TODO: externe Abhaengigkeit auf state_engine - nach element.py auslagern
-    world["element_class_paths"] = normalize_element_class_paths(
+    world["element_class_paths"] = elements.normalize_element_class_paths(
         world.get("element_class_paths"),
         cleaned_elements,
         ((state.get("setup") or {}).get("world") or {}).get("summary") or {},
@@ -179,7 +271,7 @@ def normalize_world_codex_structures(state: Dict[str, Any]) -> None:
 
     codex = state.setdefault("codex", {})
     codex_meta = codex.get("meta") if isinstance(codex.get("meta"), dict) else {}
-    normalized_meta = deep_copy(CODEX_DEFAULT_META)
+    normalized_meta = deps.deep_copy(deps.codex_default_meta)
     normalized_meta.update({str(key): value for key, value in codex_meta.items()})
     codex["meta"] = normalized_meta
 
@@ -188,17 +280,17 @@ def normalize_world_codex_structures(state: Dict[str, Any]) -> None:
     normalized_codex_races: Dict[str, Dict[str, Any]] = {}
     normalized_codex_beasts: Dict[str, Dict[str, Any]] = {}
     for race_id in cleaned_races.keys():
-        normalized_codex_races[race_id] = normalize_codex_entry_stable(codex_races_raw.get(race_id), kind=CODEX_KIND_RACE)
+        normalized_codex_races[race_id] = normalize_codex_entry_stable(codex_races_raw.get(race_id), kind=deps.codex_kind_race)
     for beast_id in cleaned_beasts.keys():
-        normalized_codex_beasts[beast_id] = normalize_codex_entry_stable(codex_beasts_raw.get(beast_id), kind=CODEX_KIND_BEAST)
+        normalized_codex_beasts[beast_id] = normalize_codex_entry_stable(codex_beasts_raw.get(beast_id), kind=deps.codex_kind_beast)
     for raw_id, raw_entry in codex_races_raw.items():
         race_id = str(raw_id or "").strip()
         if race_id and race_id not in normalized_codex_races:
-            normalized_codex_races[race_id] = normalize_codex_entry_stable(raw_entry, kind=CODEX_KIND_RACE)
+            normalized_codex_races[race_id] = normalize_codex_entry_stable(raw_entry, kind=deps.codex_kind_race)
     for raw_id, raw_entry in codex_beasts_raw.items():
         beast_id = str(raw_id or "").strip()
         if beast_id and beast_id not in normalized_codex_beasts:
-            normalized_codex_beasts[beast_id] = normalize_codex_entry_stable(raw_entry, kind=CODEX_KIND_BEAST)
+            normalized_codex_beasts[beast_id] = normalize_codex_entry_stable(raw_entry, kind=deps.codex_kind_beast)
 
     codex["races"] = stable_sorted_mapping(
         normalized_codex_races,
@@ -436,6 +528,9 @@ def default_npc_entry(npc_id: str, name: str) -> Dict[str, Any]:
     }
 
 def normalize_npc_codex_state(campaign: Dict[str, Any]) -> None:
+    deps = _codex_deps()
+    elements = deps.element_normalization
+    skills = deps.skill_normalization
     state = campaign.setdefault("state", {})
     state.setdefault("npc_codex", {})
     state.setdefault("npc_alias_index", {})
@@ -447,27 +542,26 @@ def normalize_npc_codex_state(campaign: Dict[str, Any]) -> None:
             continue
         npc_id = normalized_entry["npc_id"]
         # TODO: externe Abhaengigkeit auf state_engine - nach element.py auslagern
-        normalized_entry["element_affinities"] = normalize_element_id_list(normalized_entry.get("element_affinities") or [], state.get("world") or {})
+        normalized_entry["element_affinities"] = elements.normalize_element_id_list(normalized_entry.get("element_affinities") or [], state.get("world") or {})
         # TODO: externe Abhaengigkeit auf state_engine - nach element.py auslagern
-        normalized_entry["element_resistances"] = normalize_element_id_list(normalized_entry.get("element_resistances") or [], state.get("world") or {})
+        normalized_entry["element_resistances"] = elements.normalize_element_id_list(normalized_entry.get("element_resistances") or [], state.get("world") or {})
         # TODO: externe Abhaengigkeit auf state_engine - nach element.py auslagern
-        normalized_entry["element_weaknesses"] = normalize_element_id_list(normalized_entry.get("element_weaknesses") or [], state.get("world") or {})
-        # TODO: externe Abhaengigkeit auf state_engine - nach progression.py auslagern
-        npc_resource_name = normalize_resource_name((((normalized_entry.get("progression") or {}).get("resource_name")) or "Aether"), "Aether")
+        normalized_entry["element_weaknesses"] = elements.normalize_element_id_list(normalized_entry.get("element_weaknesses") or [], state.get("world") or {})
+        npc_resource_name = skills.normalize_resource_name((((normalized_entry.get("progression") or {}).get("resource_name")) or "Aether"), "Aether")
         normalized_skills: Dict[str, Dict[str, Any]] = {}
         for skill_id, raw_skill in ((normalized_entry.get("skills") or {}).items()):
             # TODO: externe Abhaengigkeit auf state_engine - nach skills.py auslagern
-            skill = normalize_dynamic_skill_state(raw_skill, skill_id=str(skill_id), resource_name=npc_resource_name)
+            skill = skills.normalize_dynamic_skill_state(raw_skill, skill_id=str(skill_id), resource_name=npc_resource_name)
             # TODO: externe Abhaengigkeit auf state_engine - nach element.py auslagern
-            skill = normalize_skill_elements_for_world(skill, state.get("world") or {})
+            skill = elements.normalize_skill_elements_for_world(skill, state.get("world") or {})
             normalized_skills[skill["id"]] = skill
         normalized_entry["skills"] = normalized_skills
         cleaned_codex[npc_id] = normalized_entry
-        alias = normalize_npc_alias(normalized_entry.get("name", ""))
+        alias = deps.normalize_npc_alias(normalized_entry.get("name", ""))
         if alias:
             cleaned_alias[alias] = npc_id
     for raw_alias, raw_npc_id in (state.get("npc_alias_index") or {}).items():
-        alias = normalize_npc_alias(str(raw_alias or ""))
+        alias = deps.normalize_npc_alias(str(raw_alias or ""))
         npc_id = str(raw_npc_id or "").strip()
         if alias and npc_id in cleaned_codex:
             cleaned_alias[alias] = npc_id
@@ -475,12 +569,14 @@ def normalize_npc_codex_state(campaign: Dict[str, Any]) -> None:
     state["npc_alias_index"] = cleaned_alias
 
 def normalize_npc_entry(raw: Any, *, fallback_npc_id: str = "") -> Optional[Dict[str, Any]]:
+    deps = _codex_deps()
+    skills = deps.skill_normalization
     if not isinstance(raw, dict):
         return None
     name = str(raw.get("name") or "").strip()
     if not name:
         return None
-    npc_id = str(raw.get("npc_id") or fallback_npc_id or npc_id_from_name(name)).strip()
+    npc_id = str(raw.get("npc_id") or fallback_npc_id or deps.npc_id_from_name(name)).strip()
     if not npc_id:
         return None
     entry = default_npc_entry(npc_id, name)
@@ -497,20 +593,17 @@ def normalize_npc_entry(raw: Any, *, fallback_npc_id: str = "") -> Optional[Dict
     entry["mention_count"] = max(1, int(raw.get("mention_count", 1) or 1))
     entry["relevance_score"] = max(0, int(raw.get("relevance_score", 0) or 0))
     status = str(raw.get("status") or "active").strip().lower()
-    entry["status"] = status if status in NPC_STATUS_ALLOWED else "active"
+    entry["status"] = status if status in deps.npc_status_allowed else "active"
     tags = [str(tag).strip() for tag in (raw.get("tags") or []) if str(tag).strip()]
     entry["tags"] = list(dict.fromkeys(tags or entry["tags"]))
     history_notes = [str(note).strip() for note in (raw.get("history_notes") or []) if str(note).strip()]
     entry["history_notes"] = history_notes[-20:]
-    # TODO: externe Abhaengigkeit auf state_engine - nach progression.py auslagern
-    entry["class_current"] = normalize_class_current(raw.get("class_current"))
-    # TODO: externe Abhaengigkeit auf state_engine - nach progression.py auslagern
-    npc_resource_name = normalize_resource_name((((raw.get("progression") or {}).get("resource_name")) or "Aether"), "Aether")
+    entry["class_current"] = deps.normalize_class_current(raw.get("class_current"))
+    npc_resource_name = skills.normalize_resource_name((((raw.get("progression") or {}).get("resource_name")) or "Aether"), "Aether")
     # TODO: externe Abhaengigkeit auf state_engine - nach skills.py auslagern
-    entry["skills"] = normalize_skill_store(raw.get("skills") or {}, resource_name=npc_resource_name)
+    entry["skills"] = skills.normalize_skill_store(raw.get("skills") or {}, resource_name=npc_resource_name)
     entry["xp_total"] = max(0, int(raw.get("xp_total", entry.get("xp_total", 0)) or entry.get("xp_total", 0)))
-    # TODO: externe Abhaengigkeit auf state_engine - nach progression.py auslagern
-    entry["xp_to_next"] = max(1, int(raw.get("xp_to_next", entry.get("xp_to_next", next_character_xp_for_level(entry["level"]))) or next_character_xp_for_level(entry["level"])))
+    entry["xp_to_next"] = max(1, int(raw.get("xp_to_next", entry.get("xp_to_next", deps.next_character_xp_for_level(entry["level"]))) or deps.next_character_xp_for_level(entry["level"])))
     entry["xp_current"] = clamp(int(raw.get("xp_current", entry.get("xp_current", 0)) or entry.get("xp_current", 0)), 0, entry["xp_to_next"])
     entry["hp_max"] = max(1, int(raw.get("hp_max", entry.get("hp_max", 10)) or entry.get("hp_max", 10)))
     entry["hp_current"] = clamp(int(raw.get("hp_current", entry.get("hp_current", entry["hp_max"])) or entry.get("hp_current", entry["hp_max"])), 0, entry["hp_max"])
@@ -522,11 +615,12 @@ def normalize_npc_entry(raw: Any, *, fallback_npc_id: str = "") -> Optional[Dict
     entry["element_resistances"] = [str(value).strip() for value in (raw.get("element_resistances") or []) if str(value).strip()][:8]
     entry["element_weaknesses"] = [str(value).strip() for value in (raw.get("element_weaknesses") or []) if str(value).strip()][:8]
     entry["conditions"] = [str(cond).strip() for cond in (raw.get("conditions") or []) if str(cond).strip()][:12]
-    entry["injuries"] = [deep_copy(item) for item in (raw.get("injuries") or []) if isinstance(item, dict)][:16]
-    entry["scars"] = [deep_copy(item) for item in (raw.get("scars") or []) if isinstance(item, dict)][:24]
+    entry["injuries"] = [deps.deep_copy(item) for item in (raw.get("injuries") or []) if isinstance(item, dict)][:16]
+    entry["scars"] = [deps.deep_copy(item) for item in (raw.get("scars") or []) if isinstance(item, dict)][:24]
     return entry
 
 def seed_npc_codex_from_story_cards(campaign: Dict[str, Any]) -> None:
+    deps = _codex_deps()
     state = campaign.setdefault("state", {})
     codex = state.setdefault("npc_codex", {})
     alias_index = state.setdefault("npc_alias_index", {})
@@ -537,7 +631,7 @@ def seed_npc_codex_from_story_cards(campaign: Dict[str, Any]) -> None:
         name = str(card.get("title") or "").strip()
         if not name:
             continue
-        npc_id = npc_id_from_name(name)
+        npc_id = deps.npc_id_from_name(name)
         if npc_id in codex:
             continue
         entry = default_npc_entry(npc_id, name)
@@ -547,7 +641,7 @@ def seed_npc_codex_from_story_cards(campaign: Dict[str, Any]) -> None:
         entry["relevance_score"] = 2
         entry["history_notes"] = [f"Aus Story-Karte übernommen: {entry['backstory_short'][:120]}"] if entry["backstory_short"] else []
         codex[npc_id] = entry
-        alias = normalize_npc_alias(name)
+        alias = deps.normalize_npc_alias(name)
         if alias:
             alias_index[alias] = npc_id
 
