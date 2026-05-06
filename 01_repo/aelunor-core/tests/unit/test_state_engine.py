@@ -964,6 +964,49 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("patch_has_combat_signal", state_engine.EXPORTED_SYMBOLS)
         self.assertTrue(state_engine.patch_has_combat_signal({"characters": {"slot_1": {"hp_delta": -1}}}))
 
+    def test_combat_meta_normalizer_filters_queue_and_defaults(self) -> None:
+        meta = {
+            "combat": {
+                "active": True,
+                "combat_id": " cmb_1 ",
+                "round": -2,
+                "phase": "BROKEN",
+                "participants": [" slot_1 ", ""],
+                "action_queue": [
+                    {"turn": 2, "actor": " slot_1 ", "action_type": "combat", "summary": " Hit ", "created_at": ""},
+                    {"turn": 3, "actor": "", "action_type": "combat"},
+                    {"turn": 4, "actor": "slot_2", "action_type": "invalid"},
+                ],
+            }
+        }
+
+        normalized = combat.normalize_combat_meta(
+            meta,
+            default_combat_meta=lambda: combat.default_combat_meta(utc_now=lambda: "now"),
+            deep_copy=copy.deepcopy,
+            action_types={"combat"},
+            utc_now=lambda: "now",
+        )
+
+        self.assertTrue(normalized["active"])
+        self.assertEqual(normalized["combat_id"], "cmb_1")
+        self.assertEqual(normalized["round"], 0)
+        self.assertEqual(normalized["phase"], "idle")
+        self.assertEqual(normalized["participants"], ["slot_1"])
+        self.assertEqual(normalized["action_queue"], [{"turn": 2, "actor": "slot_1", "action_type": "combat", "summary": "Hit", "created_at": "now"}])
+        self.assertEqual(meta["combat"], normalized)
+
+    def test_state_engine_combat_meta_wrappers_preserve_contract(self) -> None:
+        state_engine.configure({"utc_now": lambda: "now", "ACTION_TYPES": {"combat"}})
+
+        default_meta = state_engine.default_combat_meta()
+        normalized = state_engine.normalize_combat_meta({"combat": {"action_queue": [{"actor": "slot_1", "action_type": "combat"}]}})
+
+        self.assertIn("default_combat_meta", state_engine.EXPORTED_SYMBOLS)
+        self.assertIn("normalize_combat_meta", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(default_meta["updated_at"], "now")
+        self.assertEqual(normalized["action_queue"][0]["created_at"], "now")
+
     def test_combat_meta_update_starts_combat_and_records_queue(self) -> None:
         def normalize_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
             combat_meta = copy.deepcopy(

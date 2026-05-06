@@ -1,6 +1,59 @@
 from typing import Any, Callable, Dict, List, Optional
 
 
+def default_combat_meta(*, utc_now: Callable[[], str]) -> Dict[str, Any]:
+    return {
+        "active": False,
+        "combat_id": "",
+        "round": 0,
+        "phase": "idle",
+        "action_queue": [],
+        "participants": [],
+        "last_resolution": {},
+        "updated_at": utc_now(),
+    }
+
+
+def normalize_combat_meta(
+    meta: Dict[str, Any],
+    *,
+    default_combat_meta: Callable[[], Dict[str, Any]],
+    deep_copy: Callable[[Any], Any],
+    action_types: set[str],
+    utc_now: Callable[[], str],
+) -> Dict[str, Any]:
+    combat = deep_copy(meta.get("combat") or default_combat_meta())
+    defaults = default_combat_meta()
+    combat["active"] = bool(combat.get("active", defaults["active"]))
+    combat["combat_id"] = str(combat.get("combat_id") or "").strip()
+    combat["round"] = max(0, int(combat.get("round", defaults["round"]) or defaults["round"]))
+    phase = str(combat.get("phase") or defaults["phase"]).strip().lower()
+    combat["phase"] = phase if phase in {"idle", "collecting", "resolving", "ended"} else defaults["phase"]
+    combat["participants"] = [str(entry).strip() for entry in (combat.get("participants") or []) if str(entry).strip()]
+    queue_entries: List[Dict[str, Any]] = []
+    for raw in (combat.get("action_queue") or []):
+        if not isinstance(raw, dict):
+            continue
+        actor = str(raw.get("actor") or "").strip()
+        action_type = str(raw.get("action_type") or "").strip().lower()
+        if not actor or action_type not in action_types:
+            continue
+        queue_entries.append(
+            {
+                "turn": max(0, int(raw.get("turn", 0) or 0)),
+                "actor": actor,
+                "action_type": action_type,
+                "summary": str(raw.get("summary") or "").strip(),
+                "created_at": str(raw.get("created_at") or utc_now()),
+            }
+        )
+    combat["action_queue"] = queue_entries[-20:]
+    combat["last_resolution"] = deep_copy(combat.get("last_resolution") or {})
+    combat["updated_at"] = str(combat.get("updated_at") or utc_now())
+    meta["combat"] = combat
+    return combat
+
+
 def skill_rank_power_weight(rank: str, *, normalize_skill_rank: Callable[[Any], str]) -> int:
     return {"F": 1, "E": 2, "D": 3, "C": 4, "B": 5, "A": 7, "S": 9}.get(normalize_skill_rank(rank), 1)
 
