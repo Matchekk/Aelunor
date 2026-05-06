@@ -121,6 +121,10 @@ from app.services.world.codex import (
     codex_seed_for_state,
     ensure_world_codex_from_setup,
 )
+from app.services.world.attribute_influence import (
+    default_attribute_influence_meta as _default_attribute_influence_meta,
+    normalize_attribute_influence_meta as _normalize_attribute_influence_meta,
+)
 from app.services.world.combat import (
     apply_combat_scaling_to_patch as _apply_combat_scaling_to_patch,
     build_combat_scaling_context as _build_combat_scaling_context,
@@ -5634,21 +5638,7 @@ def default_combat_meta() -> Dict[str, Any]:
     return _default_combat_meta(utc_now=utc_now)
 
 def default_attribute_influence_meta() -> Dict[str, Any]:
-    return {
-        "last_turn": 0,
-        "last_actor": "",
-        "last_profile": {
-            "primary_attributes": [],
-            "influence_tier": "none",
-            "narrative_bias": [],
-            "mechanical_bias": {
-                "damage_taken_mult": 1.0,
-                "cost_mult": 1.0,
-                "complication_mult": 1.0,
-                "outgoing_effect_mult": 1.0,
-            },
-        },
-    }
+    return _default_attribute_influence_meta()
 
 def default_extraction_quarantine() -> Dict[str, Any]:
     return {
@@ -5763,31 +5753,13 @@ def normalize_combat_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
     )
 
 def normalize_attribute_influence_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
-    influence = deep_copy(meta.get("attribute_influence") or default_attribute_influence_meta())
-    defaults = default_attribute_influence_meta()
-    influence["last_turn"] = max(0, int(influence.get("last_turn", defaults["last_turn"]) or defaults["last_turn"]))
-    influence["last_actor"] = str(influence.get("last_actor") or defaults["last_actor"]).strip()
-    profile = deep_copy(influence.get("last_profile") or defaults["last_profile"])
-    tier = str(profile.get("influence_tier") or "none").strip().lower()
-    if tier not in {"none", "low", "medium", "high"}:
-        tier = "none"
-    profile["influence_tier"] = tier
-    profile["primary_attributes"] = [
-        str(entry).strip().lower()
-        for entry in (profile.get("primary_attributes") or [])
-        if str(entry).strip().lower() in ATTRIBUTE_KEYS
-    ]
-    profile["narrative_bias"] = [str(entry).strip() for entry in (profile.get("narrative_bias") or []) if str(entry).strip()]
-    raw_mechanical = profile.get("mechanical_bias") if isinstance(profile.get("mechanical_bias"), dict) else {}
-    profile["mechanical_bias"] = {
-        "damage_taken_mult": clamp_float(float(raw_mechanical.get("damage_taken_mult", 1.0) or 1.0), 0.65, 1.35),
-        "cost_mult": clamp_float(float(raw_mechanical.get("cost_mult", 1.0) or 1.0), 0.65, 1.35),
-        "complication_mult": clamp_float(float(raw_mechanical.get("complication_mult", 1.0) or 1.0), 0.65, 1.35),
-        "outgoing_effect_mult": clamp_float(float(raw_mechanical.get("outgoing_effect_mult", 1.0) or 1.0), 0.65, 1.35),
-    }
-    influence["last_profile"] = profile
-    meta["attribute_influence"] = influence
-    return influence
+    return _normalize_attribute_influence_meta(
+        meta,
+        default_attribute_influence_meta=default_attribute_influence_meta,
+        deep_copy=deep_copy,
+        attribute_keys=ATTRIBUTE_KEYS,
+        clamp_float=clamp_float,
+    )
 
 def active_pacing_profile(state: Dict[str, Any]) -> Dict[str, Any]:
     settings = normalize_world_settings(((state.get("world") or {}).get("settings") or {}))

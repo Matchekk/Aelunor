@@ -4,6 +4,7 @@ from typing import Any, Dict, List
 
 from app.services import state_engine
 from app.services import state_basics
+from app.services.world import attribute_influence
 from app.services.world import combat
 from app.services.world import element_class_paths
 from app.services.world import element_entities
@@ -1006,6 +1007,47 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("normalize_combat_meta", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(default_meta["updated_at"], "now")
         self.assertEqual(normalized["action_queue"][0]["created_at"], "now")
+
+    def test_attribute_influence_normalizer_filters_profile_and_clamps_bias(self) -> None:
+        meta = {
+            "attribute_influence": {
+                "last_turn": -2,
+                "last_actor": " slot_1 ",
+                "last_profile": {
+                    "primary_attributes": [" STR ", "bogus"],
+                    "influence_tier": "HIGH",
+                    "narrative_bias": [" quick ", ""],
+                    "mechanical_bias": {"damage_taken_mult": 9.0, "cost_mult": 0.1},
+                },
+            }
+        }
+
+        normalized = attribute_influence.normalize_attribute_influence_meta(
+            meta,
+            default_attribute_influence_meta=attribute_influence.default_attribute_influence_meta,
+            deep_copy=copy.deepcopy,
+            attribute_keys=("str", "dex"),
+            clamp_float=lambda value, low, high: max(low, min(high, float(value))),
+        )
+
+        self.assertEqual(normalized["last_turn"], 0)
+        self.assertEqual(normalized["last_actor"], "slot_1")
+        self.assertEqual(normalized["last_profile"]["primary_attributes"], ["str"])
+        self.assertEqual(normalized["last_profile"]["influence_tier"], "high")
+        self.assertEqual(normalized["last_profile"]["narrative_bias"], ["quick"])
+        self.assertEqual(normalized["last_profile"]["mechanical_bias"]["damage_taken_mult"], 1.35)
+        self.assertEqual(normalized["last_profile"]["mechanical_bias"]["cost_mult"], 0.65)
+        self.assertEqual(meta["attribute_influence"], normalized)
+
+    def test_state_engine_attribute_influence_wrappers_preserve_contract(self) -> None:
+        normalized = state_engine.normalize_attribute_influence_meta(
+            {"attribute_influence": {"last_profile": {"primary_attributes": ["str"], "mechanical_bias": {}}}}
+        )
+
+        self.assertIn("default_attribute_influence_meta", state_engine.EXPORTED_SYMBOLS)
+        self.assertIn("normalize_attribute_influence_meta", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(state_engine.default_attribute_influence_meta()["last_profile"]["influence_tier"], "none")
+        self.assertEqual(normalized["last_profile"]["primary_attributes"], ["str"])
 
     def test_combat_meta_update_starts_combat_and_records_queue(self) -> None:
         def normalize_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
