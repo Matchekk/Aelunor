@@ -887,6 +887,40 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(context["threat_count"], 0)
         self.assertEqual(context["pressure"], "medium")
 
+    def test_combat_scaling_patch_helper_scales_negative_actor_deltas(self) -> None:
+        patch = {"characters": {"slot_1": {"hp_delta": -10, "resources_delta": {"sta": -2, "res": 3}}}}
+
+        updated, meta = combat.apply_combat_scaling_to_patch(
+            patch,
+            actor="slot_1",
+            combat_context={"active": True},
+            scaling_context={"pressure": "high", "element_factor": 1.0},
+            action_type="combat",
+            deep_copy=copy.deepcopy,
+            blank_patch=state_engine.blank_patch,
+        )
+
+        self.assertTrue(meta["applied"])
+        self.assertEqual(meta["effective_multiplier"], 1.28)
+        self.assertEqual(updated["characters"]["slot_1"]["hp_delta"], -13)
+        self.assertEqual(updated["characters"]["slot_1"]["resources_delta"]["sta"], -3)
+        self.assertEqual(updated["characters"]["slot_1"]["resources_delta"]["res"], 3)
+        self.assertEqual(patch["characters"]["slot_1"]["hp_delta"], -10)
+
+    def test_state_engine_combat_scaling_patch_wrapper_preserves_contract(self) -> None:
+        updated, meta = state_engine.apply_combat_scaling_to_patch(
+            {"characters": {"slot_1": {"stamina_delta": -1}}},
+            actor="slot_1",
+            combat_context={"hinted": True},
+            scaling_context={"pressure": "low", "element_factor": 1.0},
+            action_type="combat",
+        )
+
+        self.assertIn("apply_combat_scaling_to_patch", state_engine.EXPORTED_SYMBOLS)
+        self.assertTrue(meta["applied"])
+        self.assertEqual(meta["effective_multiplier"], 0.82)
+        self.assertEqual(updated["characters"]["slot_1"]["stamina_delta"], -1)
+
     def test_element_class_path_rank_lookup_selects_requested_path(self) -> None:
         world = {
             "element_class_paths": {

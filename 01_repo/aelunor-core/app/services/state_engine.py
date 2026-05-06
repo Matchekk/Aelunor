@@ -122,6 +122,7 @@ from app.services.world.codex import (
     ensure_world_codex_from_setup,
 )
 from app.services.world.combat import (
+    apply_combat_scaling_to_patch as _apply_combat_scaling_to_patch,
     build_combat_scaling_context as _build_combat_scaling_context,
     compute_character_combat_score as _compute_character_combat_score,
     compute_npc_combat_score as _compute_npc_combat_score,
@@ -6254,44 +6255,15 @@ def apply_combat_scaling_to_patch(
     scaling_context: Dict[str, Any],
     action_type: str,
 ) -> tuple[Dict[str, Any], Dict[str, Any]]:
-    if action_type == "canon":
-        return patch, {"applied": False, "multiplier": 1.0}
-    if not bool(combat_context.get("active") or combat_context.get("hinted")):
-        return patch, {"applied": False, "multiplier": 1.0}
-    pressure = str(scaling_context.get("pressure") or "medium").lower()
-    if pressure == "high":
-        multiplier = 1.28
-    elif pressure == "low":
-        multiplier = 0.82
-    else:
-        multiplier = 1.0
-    element_factor = float(scaling_context.get("element_factor", 1.0) or 1.0)
-    element_adjusted = max(0.72, min(1.35, (multiplier * (1.0 / element_factor))))
-    updated = deep_copy(patch or blank_patch())
-    actor_patch = (updated.get("characters") or {}).get(actor)
-    if not isinstance(actor_patch, dict):
-        return updated, {"applied": False, "multiplier": multiplier, "element_factor": round(element_factor, 3), "effective_multiplier": round(element_adjusted, 3)}
-    applied = False
-    for key in ("hp_delta", "stamina_delta"):
-        if key in actor_patch and int(actor_patch.get(key, 0) or 0) < 0:
-            scaled = int(round(int(actor_patch.get(key, 0) or 0) * element_adjusted))
-            if scaled == 0:
-                scaled = -1
-            actor_patch[key] = scaled
-            applied = True
-    resources_delta = actor_patch.get("resources_delta") if isinstance(actor_patch.get("resources_delta"), dict) else {}
-    if resources_delta:
-        for key in ("hp", "stamina", "sta", "res", "aether"):
-            raw = int(resources_delta.get(key, 0) or 0)
-            if raw < 0:
-                scaled = int(round(raw * element_adjusted))
-                if scaled == 0:
-                    scaled = -1
-                resources_delta[key] = scaled
-                applied = True
-        actor_patch["resources_delta"] = resources_delta
-    updated.setdefault("characters", {})[actor] = actor_patch
-    return updated, {"applied": applied, "multiplier": multiplier, "element_factor": round(element_factor, 3), "effective_multiplier": round(element_adjusted, 3)}
+    return _apply_combat_scaling_to_patch(
+        patch,
+        actor=actor,
+        combat_context=combat_context,
+        scaling_context=scaling_context,
+        action_type=action_type,
+        deep_copy=deep_copy,
+        blank_patch=blank_patch,
+    )
 
 def infer_combat_context(
     state: Dict[str, Any],
