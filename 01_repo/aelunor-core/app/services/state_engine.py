@@ -126,6 +126,7 @@ from app.services.world.combat import (
     build_combat_scaling_context as _build_combat_scaling_context,
     compute_character_combat_score as _compute_character_combat_score,
     compute_npc_combat_score as _compute_npc_combat_score,
+    infer_combat_context as _infer_combat_context,
     skill_rank_power_weight as _skill_rank_power_weight,
 )
 
@@ -6271,18 +6272,15 @@ def infer_combat_context(
     action_type: str,
     text: str,
 ) -> Dict[str, Any]:
-    normalized_text = normalized_eval_text(text)
-    meta_combat = normalize_combat_meta(state.setdefault("meta", {}))
-    actor_char = ((state.get("characters") or {}).get(actor) or {})
-    actor_in_combat = bool((((actor_char.get("derived") or {}).get("combat_flags") or {}).get("in_combat", False)))
-    hinted = any(keyword in normalized_text for keyword in COMBAT_NARRATIVE_HINTS)
-    return {
-        "active": bool(meta_combat.get("active") or actor_in_combat),
-        "hinted": hinted,
-        "actor_in_combat": actor_in_combat,
-        "phase": meta_combat.get("phase", "idle"),
-        "action_type": action_type,
-    }
+    return _infer_combat_context(
+        state,
+        actor,
+        action_type,
+        text,
+        normalized_eval_text=normalized_eval_text,
+        normalize_combat_meta=normalize_combat_meta,
+        combat_narrative_hints=COMBAT_NARRATIVE_HINTS,
+    )
 
 def patch_has_combat_signal(patch: Dict[str, Any]) -> bool:
     for upd in (patch.get("characters") or {}).values():

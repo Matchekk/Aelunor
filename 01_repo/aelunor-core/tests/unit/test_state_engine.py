@@ -921,6 +921,40 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(meta["effective_multiplier"], 0.82)
         self.assertEqual(updated["characters"]["slot_1"]["stamina_delta"], -1)
 
+    def test_combat_context_inference_uses_meta_actor_flag_and_hints(self) -> None:
+        context = combat.infer_combat_context(
+            {
+                "meta": {"combat": {"active": False, "phase": "collecting"}},
+                "characters": {"slot_1": {"derived": {"combat_flags": {"in_combat": True}}}},
+            },
+            "slot_1",
+            "combat",
+            "Ein Angriff beginnt.",
+            normalized_eval_text=lambda value: str(value or "").strip().lower(),
+            normalize_combat_meta=lambda meta: dict((meta.get("combat") or {}), phase="collecting"),
+            combat_narrative_hints=("angriff",),
+        )
+
+        self.assertTrue(context["active"])
+        self.assertTrue(context["hinted"])
+        self.assertTrue(context["actor_in_combat"])
+        self.assertEqual(context["phase"], "collecting")
+        self.assertEqual(context["action_type"], "combat")
+
+    def test_state_engine_combat_context_inference_wrapper_preserves_contract(self) -> None:
+        state_engine.configure({"COMBAT_NARRATIVE_HINTS": ("angriff",)})
+
+        context = state_engine.infer_combat_context(
+            {"meta": {}, "characters": {"slot_1": {"derived": {"combat_flags": {"in_combat": True}}}}},
+            "slot_1",
+            "combat",
+            "Angriff",
+        )
+
+        self.assertIn("infer_combat_context", state_engine.EXPORTED_SYMBOLS)
+        self.assertTrue(context["active"])
+        self.assertTrue(context["hinted"])
+
     def test_element_class_path_rank_lookup_selects_requested_path(self) -> None:
         world = {
             "element_class_paths": {

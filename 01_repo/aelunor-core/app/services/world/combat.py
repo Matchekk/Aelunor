@@ -211,3 +211,27 @@ def apply_combat_scaling_to_patch(
         "element_factor": round(element_factor, 3),
         "effective_multiplier": round(element_adjusted, 3),
     }
+
+
+def infer_combat_context(
+    state: Dict[str, Any],
+    actor: str,
+    action_type: str,
+    text: str,
+    *,
+    normalized_eval_text: Callable[[Any], str],
+    normalize_combat_meta: Callable[[Dict[str, Any]], Dict[str, Any]],
+    combat_narrative_hints: tuple[str, ...],
+) -> Dict[str, Any]:
+    normalized_text = normalized_eval_text(text)
+    meta_combat = normalize_combat_meta(state.setdefault("meta", {}))
+    actor_char = ((state.get("characters") or {}).get(actor) or {})
+    actor_in_combat = bool((((actor_char.get("derived") or {}).get("combat_flags") or {}).get("in_combat", False)))
+    hinted = any(keyword in normalized_text for keyword in combat_narrative_hints)
+    return {
+        "active": bool(meta_combat.get("active") or actor_in_combat),
+        "hinted": hinted,
+        "actor_in_combat": actor_in_combat,
+        "phase": meta_combat.get("phase", "idle"),
+        "action_type": action_type,
+    }
