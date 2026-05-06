@@ -37,3 +37,32 @@ def entity_element_profile_for_npc(
     resistances = normalize_element_id_list(npc_entry.get("element_resistances") or [], world)
     weaknesses = normalize_element_id_list(npc_entry.get("element_weaknesses") or [], world)
     return {"affinities": affinities, "resistances": resistances, "weaknesses": weaknesses}
+
+
+def element_matchup_multiplier(
+    world: Dict[str, Any],
+    attacker_profile: Dict[str, List[str]],
+    defender_profile: Dict[str, List[str]],
+    *,
+    resolve_element_relation: Callable[[Dict[str, Any], str, str], str],
+    element_relation_score: Dict[str, float],
+) -> float:
+    attacker = attacker_profile.get("affinities") or []
+    defender_affinities = defender_profile.get("affinities") or []
+    defender_resistances = set(defender_profile.get("resistances") or [])
+    defender_weaknesses = set(defender_profile.get("weaknesses") or [])
+    if not attacker:
+        return 1.0
+    multipliers: List[float] = []
+    for source in attacker:
+        for target in defender_affinities:
+            relation = resolve_element_relation(world, source, target)
+            multipliers.append(element_relation_score.get(relation, 1.0))
+        if source in defender_resistances:
+            multipliers.append(0.85)
+        if source in defender_weaknesses:
+            multipliers.append(1.15)
+    if not multipliers:
+        return 1.0
+    avg = sum(multipliers) / max(1, len(multipliers))
+    return max(0.72, min(1.35, avg))

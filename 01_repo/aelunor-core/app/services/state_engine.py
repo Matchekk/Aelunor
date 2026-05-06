@@ -71,6 +71,7 @@ from app.services.world.element_class_paths import (
     resolve_class_path_rank_node as _resolve_class_path_rank_node,
 )
 from app.services.world.element_entities import (
+    element_matchup_multiplier as _element_matchup_multiplier,
     entity_element_profile_for_character as _entity_element_profile_for_character,
     entity_element_profile_for_npc as _entity_element_profile_for_npc,
 )
@@ -6198,27 +6199,13 @@ def entity_element_profile_for_npc(npc_entry: Dict[str, Any], world: Dict[str, A
     )
 
 def element_matchup_multiplier(world: Dict[str, Any], attacker_profile: Dict[str, List[str]], defender_profile: Dict[str, List[str]]) -> float:
-    attacker = attacker_profile.get("affinities") or []
-    defender_affinities = defender_profile.get("affinities") or []
-    defender_resistances = set(defender_profile.get("resistances") or [])
-    defender_weaknesses = set(defender_profile.get("weaknesses") or [])
-    if not attacker:
-        return 1.0
-    multipliers: List[float] = []
-    for source in attacker:
-        # relation to defender affinities
-        for target in defender_affinities:
-            relation = resolve_element_relation(world, source, target)
-            multipliers.append(ELEMENT_RELATION_SCORE.get(relation, 1.0))
-        # explicit defender resistance/weakness tags
-        if source in defender_resistances:
-            multipliers.append(0.85)
-        if source in defender_weaknesses:
-            multipliers.append(1.15)
-    if not multipliers:
-        return 1.0
-    avg = sum(multipliers) / max(1, len(multipliers))
-    return max(0.72, min(1.35, avg))
+    return _element_matchup_multiplier(
+        world,
+        attacker_profile,
+        defender_profile,
+        resolve_element_relation=resolve_element_relation,
+        element_relation_score=ELEMENT_RELATION_SCORE,
+    )
 
 def compute_character_combat_score(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> int:
     attrs = character.get("attributes") or {}

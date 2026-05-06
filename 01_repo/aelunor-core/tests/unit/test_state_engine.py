@@ -712,6 +712,30 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("entity_element_profile_for_npc", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(profile["affinities"], ["elem_water", "elem_fire"])
 
+    def test_element_matchup_multiplier_averages_relation_and_explicit_tags(self) -> None:
+        multiplier = element_entities.element_matchup_multiplier(
+            {},
+            {"affinities": ["elem_fire"]},
+            {"affinities": ["elem_water"], "resistances": ["elem_fire"], "weaknesses": []},
+            resolve_element_relation=lambda _world, _source, _target: "strong",
+            element_relation_score={"strong": 1.2},
+        )
+
+        self.assertAlmostEqual(multiplier, 1.025)
+
+    def test_state_engine_element_matchup_wrapper_preserves_contract(self) -> None:
+        state_engine.configure({"ELEMENT_RELATION_SCORE": {"strong": 1.2}})
+        world = {"element_relations": {"elem_fire": {"elem_water": "strong"}}}
+
+        multiplier = state_engine.element_matchup_multiplier(
+            world,
+            {"affinities": ["elem_fire"]},
+            {"affinities": ["elem_water"], "resistances": ["elem_fire"], "weaknesses": []},
+        )
+
+        self.assertIn("element_matchup_multiplier", state_engine.EXPORTED_SYMBOLS)
+        self.assertAlmostEqual(multiplier, 1.025)
+
     def test_element_class_path_rank_lookup_selects_requested_path(self) -> None:
         world = {
             "element_class_paths": {
