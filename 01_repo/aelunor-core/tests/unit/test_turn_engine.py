@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from app.services import state_engine
 from app.services import turn_engine
+from app.services.turn.attribute_context import build_turn_attribute_context
 from app.services.turn.flow_errors import build_narrator_turn_error
 from app.services.turn.patch_apply_bio import apply_patch_character_bio_updates
 from app.services.turn.patch_apply_normalization import apply_patch_character_late_normalization
@@ -643,6 +644,69 @@ class TurnEngineTests(unittest.TestCase):
         self.assertIn("ELEMENTSYSTEM ist bindend", system_prompt)
         self.assertIn("actor_score=12 threat_score=8 pressure=normal", system_prompt)
         self.assertIn("Die story muss mindestens 900 Zeichen enthalten.", system_prompt)
+
+    def test_build_turn_attribute_context_uses_actor_and_world_settings(self) -> None:
+        seen = {}
+
+        def derive(state, actor, action_type, content, combat_context):
+            seen["derive"] = (state, actor, action_type, content, combat_context)
+            return {"primary_attributes": ["str"], "influence_tier": "minor"}
+
+        def compute(profile, actor_character, world_settings):
+            seen["compute"] = (profile, actor_character, world_settings)
+            return {"damage_taken_mult": 0.9}
+
+        profile, bias, hints = build_turn_attribute_context(
+            {
+                "characters": {"slot_1": {"bio": {"name": "Mati"}}},
+                "world": {"settings": {"difficulty": "hard"}},
+            },
+            actor="slot_1",
+            action_type="play",
+            content="Angriff",
+            combat_context={"active": True},
+            derive_attribute_relevance=derive,
+            compute_attribute_bias=compute,
+            compose_attribute_prompt_hints=lambda profile, bias: f"{profile['influence_tier']}:{bias['damage_taken_mult']}",
+        )
+
+        self.assertEqual(profile, {"primary_attributes": ["str"], "influence_tier": "minor"})
+        self.assertEqual(bias, {"damage_taken_mult": 0.9})
+        self.assertEqual(hints, "minor:0.9")
+        self.assertEqual(seen["compute"][1], {"bio": {"name": "Mati"}})
+        self.assertEqual(seen["compute"][2], {"difficulty": "hard"})
+
+    def test_build_turn_attribute_context_canon_overrides_bias(self) -> None:
+        profile, bias, hints = build_turn_attribute_context(
+            {"characters": {"slot_1": {}}, "world": {"settings": {}}},
+            actor="slot_1",
+            action_type="canon",
+            content="Kanon",
+            combat_context={"active": True},
+            derive_attribute_relevance=lambda *_args: {"primary_attributes": ["str"], "influence_tier": "major"},
+            compute_attribute_bias=lambda *_args: {"damage_taken_mult": 0.5},
+            compose_attribute_prompt_hints=lambda profile, bias: f"{profile['influence_tier']}:{bias['damage_taken_mult']}",
+        )
+
+        self.assertEqual(
+            profile,
+            {
+                "primary_attributes": [],
+                "influence_tier": "none",
+                "narrative_bias": [],
+                "combat_active": True,
+            },
+        )
+        self.assertEqual(
+            bias,
+            {
+                "damage_taken_mult": 1.0,
+                "cost_mult": 1.0,
+                "complication_mult": 1.0,
+                "outgoing_effect_mult": 1.0,
+            },
+        )
+        self.assertEqual(hints, "none:1.0")
 
     def test_enforce_non_milestone_patch_limits_strips_rank_and_high_new_skills(self) -> None:
         state = self._base_apply_state()

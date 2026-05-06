@@ -12,6 +12,7 @@ from app.services.turn.patch_sanitizer import (
     configure as configure_patch_sanitizer,
     sanitize_patch,
 )
+from app.services.turn.attribute_context import build_turn_attribute_context
 from app.services.turn.patch_apply_abilities import apply_patch_character_ability_potential_updates
 from app.services.turn.patch_apply_bio import apply_patch_character_bio_updates
 from app.services.turn.patch_apply_conditions import apply_patch_character_condition_effect_updates
@@ -774,23 +775,16 @@ def create_turn_record(
     max_story_chars = int(pacing_profile.get("max_story_chars", 2200) or 2200)
     combat_context = infer_combat_context(working_state, actor, action_type, content)
     combat_scaling_context = build_combat_scaling_context(working_state, actor)
-    actor_character = (working_state.get("characters", {}) or {}).get(actor, {})
-    attribute_profile = derive_attribute_relevance(working_state, actor, action_type, content, combat_context)
-    attribute_bias = compute_attribute_bias(attribute_profile, actor_character, ((working_state.get("world") or {}).get("settings") or {}))
-    if action_type == "canon":
-        attribute_profile = {
-            "primary_attributes": [],
-            "influence_tier": "none",
-            "narrative_bias": [],
-            "combat_active": bool(combat_context.get("active")),
-        }
-        attribute_bias = {
-            "damage_taken_mult": 1.0,
-            "cost_mult": 1.0,
-            "complication_mult": 1.0,
-            "outgoing_effect_mult": 1.0,
-        }
-    attribute_prompt_hints = compose_attribute_prompt_hints(attribute_profile, attribute_bias)
+    attribute_profile, attribute_bias, attribute_prompt_hints = build_turn_attribute_context(
+        working_state,
+        actor=actor,
+        action_type=action_type,
+        content=content,
+        combat_context=combat_context,
+        derive_attribute_relevance=derive_attribute_relevance,
+        compute_attribute_bias=compute_attribute_bias,
+        compose_attribute_prompt_hints=compose_attribute_prompt_hints,
+    )
 
     context = build_context_packet(campaign, working_state, actor, action_type)
     user_prompt, actor_display, actor_resolution_hint = build_turn_user_prompt(
