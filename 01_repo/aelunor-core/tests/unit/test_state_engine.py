@@ -273,6 +273,60 @@ class StateEngineTests(unittest.TestCase):
         self.assertTrue(all(candidate["origin"] == "generated" for candidate in candidates))
         self.assertTrue(all(candidate["status_effect_tags"] for candidate in candidates))
 
+    def test_element_generation_llm_normalizes_schema_rows(self) -> None:
+        seen = {}
+
+        def fake_schema(system, user, schema, **kwargs):
+            seen["system"] = system
+            seen["user"] = user
+            seen["schema"] = schema
+            seen["kwargs"] = kwargs
+            return {
+                "elements": [
+                    {
+                        "name": " Nebelglas ",
+                        "rarity": "",
+                        "description": "  Desc ",
+                        "theme": " Täuschung ",
+                        "status_effect_tags": [" Blind ", ""],
+                        "class_affinities": [" Illusion "],
+                        "skill_affinities": [" Schleier "],
+                        "lore_notes": [" Notiz "],
+                        "visual_motif": " Glas ",
+                        "temperament": "still",
+                        "environment_bias": "Nebel",
+                        "aliases": [" Glas "],
+                    },
+                    "bad",
+                ]
+            }
+
+        rows = element_generation.generate_world_elements_with_llm(
+            {"theme": "Nebel", "tone": "leise", "premise": "Schwelle"},
+            call_ollama_schema=fake_schema,
+            element_generator_schema={"type": "object"},
+        )
+
+        self.assertEqual(seen["kwargs"], {"timeout": 120, "temperature": 0.55})
+        self.assertIn("Nebel", seen["user"])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["name"], "Nebelglas")
+        self.assertEqual(rows[0]["rarity"], "ungewöhnlich")
+        self.assertEqual(rows[0]["status_effect_tags"], ["Blind"])
+        self.assertEqual(rows[0]["aliases"], ["Glas"])
+
+    def test_state_engine_llm_element_generation_wrapper_preserves_patchable_call(self) -> None:
+        original_call = state_engine.call_ollama_schema
+        try:
+            state_engine.call_ollama_schema = lambda *_args, **_kwargs: {"elements": [{"name": "Traum", "theme": "Schlaf"}]}
+            rows = state_engine.generate_world_elements_with_llm({"theme": "Traum"})
+        finally:
+            state_engine.call_ollama_schema = original_call
+
+        self.assertEqual(rows[0]["name"], "Traum")
+        self.assertEqual(rows[0]["theme"], "Schlaf")
+        self.assertEqual(rows[0]["origin"], "generated")
+
     def test_normalize_patch_semantics_scene_set_alias(self) -> None:
         patch = {
             "characters": {

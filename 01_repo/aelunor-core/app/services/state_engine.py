@@ -46,6 +46,7 @@ from app.services.world.element_relations import (
 from app.services.world.element_generation import (
     candidate_from_fallback_element as _candidate_from_fallback_element,
     generate_world_elements_fallback as _generate_world_elements_fallback,
+    generate_world_elements_with_llm as _generate_world_elements_with_llm,
     generated_element_too_similar as _generated_element_too_similar,
     theme_flavor as _theme_flavor,
     theme_flavor_options as _theme_flavor_options,
@@ -785,47 +786,11 @@ def generate_world_elements_fallback(summary: Dict[str, Any]) -> List[Dict[str, 
     )
 
 def generate_world_elements_with_llm(summary: Dict[str, Any]) -> List[Dict[str, Any]]:
-    user = (
-        "Erzeuge genau 6 neue Elemente fuer diese Welt. "
-        "Nicht Feuer/Wasser/Erde/Luft/Licht/Schatten und keine reinen Umbenennungen davon. "
-        "Jedes Element braucht klar unterscheidbares Thema.\n"
-        f"Weltprofil: {json.dumps({'theme': summary.get('theme', ''), 'tone': summary.get('tone', ''), 'premise': summary.get('premise', '')}, ensure_ascii=False)}"
+    return _generate_world_elements_with_llm(
+        summary,
+        call_ollama_schema=call_ollama_schema,
+        element_generator_schema=ELEMENT_GENERATOR_SCHEMA,
     )
-    response = call_ollama_schema(
-        "Du bist ein präziser Worldbuilder. Antworte nur als JSON gemäß Schema.",
-        user,
-        ELEMENT_GENERATOR_SCHEMA,
-        timeout=120,
-        temperature=0.55,
-    )
-    rows = response.get("elements") if isinstance(response, dict) else []
-    if not isinstance(rows, list):
-        return []
-    out: List[Dict[str, Any]] = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        candidate = {
-            "name": str(row.get("name") or "").strip(),
-            "rarity": str(row.get("rarity") or "ungewöhnlich").strip() or "ungewöhnlich",
-            "description": str(row.get("description") or "").strip(),
-            "theme": str(row.get("theme") or "").strip(),
-            "origin": "generated",
-            "strengths_against": [],
-            "weaknesses_against": [],
-            "synergies_with": [],
-            "status_effect_tags": [str(entry).strip() for entry in (row.get("status_effect_tags") or []) if str(entry).strip()],
-            "class_affinities": [str(entry).strip() for entry in (row.get("class_affinities") or []) if str(entry).strip()],
-            "skill_affinities": [str(entry).strip() for entry in (row.get("skill_affinities") or []) if str(entry).strip()],
-            "discoverable": True,
-            "lore_notes": [str(entry).strip() for entry in (row.get("lore_notes") or []) if str(entry).strip()],
-            "visual_motif": str(row.get("visual_motif") or "").strip(),
-            "temperament": str(row.get("temperament") or "").strip(),
-            "environment_bias": str(row.get("environment_bias") or "").strip(),
-            "aliases": [str(entry).strip() for entry in (row.get("aliases") or []) if str(entry).strip()],
-        }
-        out.append(candidate)
-    return out
 
 def generate_world_element_profiles(summary: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     elements: Dict[str, Dict[str, Any]] = {}
