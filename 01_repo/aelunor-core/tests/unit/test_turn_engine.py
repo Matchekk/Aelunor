@@ -7,6 +7,8 @@ from fastapi import HTTPException
 
 from app.services import state_engine
 from app.services import turn_engine
+from app.services.turn.patch_apply_bio import apply_patch_character_bio_updates
+from app.services.turn.patch_apply_normalization import apply_patch_character_late_normalization
 
 
 def configure_engine_for_tests() -> None:
@@ -165,6 +167,133 @@ class TurnEngineTests(unittest.TestCase):
         self.assertEqual(campaign["state"]["meta"]["turn"], 0)
         self.assertEqual(campaign["turns"][0]["status"], "undone")
         self.assertEqual(campaign["turns"][1]["status"], "undone")
+
+    def test_apply_patch_bio_helper_updates_scene_and_removes_party_role(self) -> None:
+        character = {
+            "scene_id": "scene_old",
+            "bio": {"name": "Mati", "party_role": "Leader", "origin": "Alt"},
+        }
+        upd = {
+            "scene_id": "scene_new",
+            "bio_set": {"name": "Mat", "party_role": "Tank", "title": "Wanderer"},
+        }
+
+        apply_patch_character_bio_updates(character, upd)
+
+        self.assertEqual(character["scene_id"], "scene_new")
+        self.assertEqual(
+            character["bio"],
+            {"name": "Mat", "origin": "Alt", "title": "Wanderer"},
+        )
+
+    def test_apply_patch_late_normalization_helper_preserves_order_and_events(self) -> None:
+        calls = []
+        character = {
+            "bio": {"name": "Mati"},
+            "skills": {"skill_a": {"name": "A"}},
+        }
+        state = {
+            "meta": {"turn": 4},
+            "world": {"settings": {"resource_name": "Mana"}},
+            "items": {"item_a": {}},
+            "events": [],
+        }
+
+        def record(name):
+            def _callback(*_args, **_kwargs):
+                calls.append(name)
+                if name == "normalize_skill_store":
+                    return {"skill_a": {"name": "A", "normalized": True}}
+                if name == "resolve_injury_healing":
+                    return [{"title": "eine Narbe"}]
+                return None
+
+            return _callback
+
+        apply_patch_character_late_normalization(
+            character,
+            state,
+            "slot_1",
+            resource_name="Mana",
+            effective_world_time={"absolute_day": 1},
+            ENABLE_LEGACY_SHADOW_WRITEBACK=True,
+            ensure_progression_shape=record("ensure_progression_shape"),
+            ensure_character_progression_core=record("ensure_character_progression_core"),
+            normalize_skill_store=record("normalize_skill_store"),
+            resolve_injury_healing=record("resolve_injury_healing"),
+            rebuild_character_derived=record("rebuild_character_derived"),
+            reconcile_canonical_resources=record("reconcile_canonical_resources"),
+            strip_legacy_shadow_fields=record("strip_legacy_shadow_fields"),
+            write_legacy_shadow_fields=record("write_legacy_shadow_fields"),
+            sync_scars_into_appearance=record("sync_scars_into_appearance"),
+        )
+
+        self.assertEqual(
+            calls,
+            [
+                "ensure_progression_shape",
+                "ensure_character_progression_core",
+                "normalize_skill_store",
+                "resolve_injury_healing",
+                "rebuild_character_derived",
+                "reconcile_canonical_resources",
+                "strip_legacy_shadow_fields",
+                "write_legacy_shadow_fields",
+                "sync_scars_into_appearance",
+            ],
+        )
+        self.assertEqual(character["skills"], {"skill_a": {"name": "A", "normalized": True}})
+        self.assertEqual(state["events"], ["Mati trägt nun eine Narbe."])
+
+    def test_apply_patch_mixed_character_patch_preserves_apply_order(self) -> None:
+        state = self._base_apply_state()
+        character = state["characters"]["slot_1"]
+        character["conditions"] = ["focused"]
+        character["injuries"] = [
+            {
+                "id": "injury_cut",
+                "title": "Tiefe Schnitt",
+                "severity": "leicht",
+                "effects": [],
+                "healing_stage": "frisch",
+                "will_scar": True,
+                "created_turn": 1,
+                "notes": "vom alten Kampf",
+            }
+        ]
+        patch = {
+            "characters": {
+                "slot_1": {
+                    "scene_id": "scene_bridge",
+                    "bio_set": {"name": "Mat", "party_role": "Leader"},
+                    "conditions_add": ["hidden"],
+                    "skills_set": {
+                        "skill_shadow_step": {
+                            "name": "Schatten Schritt",
+                            "rank": "F",
+                            "level": 1,
+                            "description": "Leise Bewegung.",
+                        }
+                    },
+                    "injuries_heal": ["injury_cut"],
+                }
+            }
+        }
+
+        applied = turn_engine.apply_patch(state, patch)
+        character = applied["characters"]["slot_1"]
+
+        self.assertEqual(character["scene_id"], "scene_bridge")
+        self.assertEqual(character["bio"]["name"], "Mat")
+        self.assertNotIn("party_role", character["bio"])
+        self.assertIn("hidden", character["conditions"])
+        self.assertEqual(character["injuries"], [])
+        self.assertEqual(character["scars"][0]["title"], "Tiefe Narbe")
+        self.assertEqual(character["appearance"]["scars"][0]["label"], "Tiefe Narbe")
+        self.assertIn("Mat trägt nun Tiefe Narbe.", applied["events"])
+        self.assertTrue(
+            any(skill.get("name") == "Schatten Schritt" for skill in character["skills"].values())
+        )
 
     def test_sanitize_patch_prunes_invalid_character_item_refs(self) -> None:
         state = {

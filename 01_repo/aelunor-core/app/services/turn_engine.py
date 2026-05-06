@@ -13,13 +13,19 @@ from app.services.turn.patch_sanitizer import (
     sanitize_patch,
 )
 from app.services.turn.patch_apply_abilities import apply_patch_character_ability_potential_updates
+from app.services.turn.patch_apply_bio import apply_patch_character_bio_updates
 from app.services.turn.patch_apply_conditions import apply_patch_character_condition_effect_updates
 from app.services.turn.patch_apply_events import apply_patch_event_updates
+from app.services.turn.patch_apply_injuries import apply_patch_character_injury_appearance_updates
 from app.services.turn.patch_apply_inventory import apply_patch_character_inventory_equipment_updates
+from app.services.turn.patch_apply_progression import apply_patch_character_progression_updates
+from app.services.turn.patch_apply_skills import apply_patch_character_skill_updates
+from app.services.turn.patch_apply_class import apply_patch_character_class_updates
 from app.services.turn.patch_apply_items import apply_patch_item_updates
 from app.services.turn.patch_apply_journal_factions import apply_patch_character_journal_faction_updates
 from app.services.turn.patch_apply_map import apply_patch_map_updates
 from app.services.turn.patch_apply_meta import apply_patch_meta_updates
+from app.services.turn.patch_apply_normalization import apply_patch_character_late_normalization
 from app.services.turn.patch_apply_plotpoints import apply_patch_plotpoint_updates
 from app.services.turn.patch_apply_resources import apply_patch_character_resource_attribute_updates
 from app.services.turn.patch_apply_time import apply_patch_time_advance
@@ -564,10 +570,7 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
         character = state["characters"][slot_name]
         ensure_progression_shape(character)
         ensure_character_progression_core(character)
-        character["scene_id"] = upd.get("scene_id", character["scene_id"])
-        if upd.get("bio_set"):
-            character["bio"] = {**character.get("bio", {}), **upd["bio_set"]}
-            character["bio"].pop("party_role", None)
+        apply_patch_character_bio_updates(character, upd)
         apply_patch_character_resource_attribute_updates(
             character,
             upd,
@@ -581,92 +584,21 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
             legacy_misc_resource_deltas_from_update=legacy_misc_resource_deltas_from_update,
         )
 
-        skill_store = character.setdefault("skills", {})
-        resource_name = resource_name_for_character(character, ((state.get("world") or {}).get("settings") or {}))
-        if upd.get("skills_set"):
-            for key, value in (upd.get("skills_set") or {}).items():
-                skill_key = str(key or "").strip()
-                if not skill_key:
-                    continue
-                normalized_skill = normalize_dynamic_skill_state(
-                    value,
-                    skill_id=skill_key,
-                    skill_name=(value or {}).get("name", skill_key) if isinstance(value, dict) else skill_key,
-                    resource_name=resource_name,
-                    unlocked_from="Patch",
-                )
-                normalized_skill = normalize_skill_elements_for_world(
-                    normalized_skill,
-                    state.get("world") if isinstance(state.get("world"), dict) else {},
-                )
-                existing_skill = skill_store.get(normalized_skill["id"])
-                if not existing_skill:
-                    existing_skill = next(
-                        (
-                            skill_value
-                            for skill_value in skill_store.values()
-                            if isinstance(skill_value, dict)
-                            and normalized_eval_text(skill_value.get("name", "")) == normalized_eval_text(normalized_skill.get("name", ""))
-                        ),
-                        None,
-                    )
-                skill_store[normalized_skill["id"]] = merge_dynamic_skill(existing_skill, normalized_skill, resource_name=resource_name) if existing_skill else normalized_skill
-                if existing_skill:
-                    duplicate_ids = [
-                        existing_id
-                        for existing_id, skill_value in list(skill_store.items())
-                        if existing_id != normalized_skill["id"]
-                        and isinstance(skill_value, dict)
-                        and normalized_eval_text(skill_value.get("name", "")) == normalized_eval_text(normalized_skill.get("name", ""))
-                    ]
-                    for duplicate_id in duplicate_ids:
-                        skill_store.pop(duplicate_id, None)
-        world_settings = ((state.get("world") or {}).get("settings") or {})
-        for key, value in (upd.get("skills_delta") or {}).items():
-            skill_key = str(key or "").strip()
-            if not skill_key:
-                continue
-            existing_skill = skill_store.get(skill_key)
-            if not existing_skill:
-                existing_skill = normalize_dynamic_skill_state(
-                    {"id": skill_key, "name": skill_key, "level": 1, "rank": "F", "level_max": 10, "tags": [], "description": f"{skill_key} wurde im Abenteuer aktiviert.", "unlocked_from": "Patch"},
-                    resource_name=resource_name,
-                )
-            skill = normalize_dynamic_skill_state(existing_skill, skill_id=skill_key, skill_name=(existing_skill or {}).get("name", skill_key), resource_name=resource_name)
-            skill = normalize_skill_elements_for_world(
-                skill,
-                state.get("world") if isinstance(state.get("world"), dict) else {},
-            )
-            if isinstance(value, dict):
-                if "xp" in value:
-                    multiplier = effective_skill_progress_multiplier(character, skill, world_settings)
-                    skill["xp"] = max(0, int(skill.get("xp", 0) or 0) + int(round(float(value.get("xp", 0) or 0) * multiplier)))
-                if "level" in value:
-                    level_max = max(1, int(skill.get("level_max", DEFAULT_DYNAMIC_SKILL_LEVEL_MAX) or DEFAULT_DYNAMIC_SKILL_LEVEL_MAX))
-                    skill["level"] = clamp(int(skill.get("level", 1) or 1) + int(value.get("level", 0) or 0), 1, level_max)
-                if "description" in value and str(value.get("description") or "").strip():
-                    skill["description"] = str(value.get("description")).strip()
-                if "elements" in value:
-                    skill["elements"] = list(dict.fromkeys([str(entry).strip() for entry in (value.get("elements") or []) if str(entry).strip()]))
-                if "element_primary" in value:
-                    skill["element_primary"] = str(value.get("element_primary") or "").strip() or None
-                if "element_synergies" in value:
-                    skill["element_synergies"] = list(dict.fromkeys([str(entry).strip() for entry in (value.get("element_synergies") or []) if str(entry).strip()])) or None
-            else:
-                multiplier = effective_skill_progress_multiplier(character, skill, world_settings)
-                raw_delta = int(value or 0)
-                xp_gain = int(round(raw_delta * DEFAULT_NUMERIC_SKILL_DELTA_XP * multiplier))
-                skill["xp"] = max(0, int(skill.get("xp", 0) or 0) + xp_gain)
-            while skill["xp"] >= int(skill.get("next_xp", next_skill_xp_for_level(skill["level"])) or next_skill_xp_for_level(skill["level"])) and skill["level"] < int(skill.get("level_max", DEFAULT_DYNAMIC_SKILL_LEVEL_MAX) or DEFAULT_DYNAMIC_SKILL_LEVEL_MAX):
-                next_xp = int(skill.get("next_xp", next_skill_xp_for_level(skill["level"])) or next_skill_xp_for_level(skill["level"]))
-                skill["xp"] = max(0, skill["xp"] - next_xp)
-                skill["level"] += 1
-            skill["next_xp"] = next_skill_xp_for_level(skill["level"])
-            skill["xp"] = clamp(int(skill.get("xp", 0) or 0), 0, skill["next_xp"])
-            skill_store[skill["id"]] = normalize_skill_elements_for_world(
-                normalize_dynamic_skill_state(skill, resource_name=resource_name),
-                state.get("world") if isinstance(state.get("world"), dict) else {},
-            )
+        apply_patch_character_skill_updates(
+            character,
+            upd,
+            state,
+            resource_name_for_character=resource_name_for_character,
+            normalize_dynamic_skill_state=normalize_dynamic_skill_state,
+            normalize_skill_elements_for_world=normalize_skill_elements_for_world,
+            normalized_eval_text=normalized_eval_text,
+            merge_dynamic_skill=merge_dynamic_skill,
+            effective_skill_progress_multiplier=effective_skill_progress_multiplier,
+            clamp=clamp,
+            next_skill_xp_for_level=next_skill_xp_for_level,
+            DEFAULT_DYNAMIC_SKILL_LEVEL_MAX=DEFAULT_DYNAMIC_SKILL_LEVEL_MAX,
+            DEFAULT_NUMERIC_SKILL_DELTA_XP=DEFAULT_NUMERIC_SKILL_DELTA_XP,
+        )
 
         apply_patch_character_condition_effect_updates(character, upd)
 
@@ -676,6 +608,8 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
             normalize_equipment_update_payload=normalize_equipment_update_payload,
         )
 
+        skill_store = character.setdefault("skills", {})
+        resource_name = resource_name_for_character(character, ((state.get("world") or {}).get("settings") or {}))
         apply_patch_character_ability_potential_updates(
             character,
             upd,
@@ -692,26 +626,13 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
             merge_dynamic_skill=merge_dynamic_skill,
         )
 
-        if upd.get("progression_set"):
-            progression_set = deep_copy(upd["progression_set"] or {})
-            character.setdefault("progression", {}).update(progression_set)
-            if "level" in progression_set:
-                character["level"] = max(1, int(progression_set.get("level", character.get("level", 1)) or character.get("level", 1)))
-            if "xp_total" in progression_set:
-                character["xp_total"] = max(0, int(progression_set.get("xp_total", character.get("xp_total", 0)) or character.get("xp_total", 0)))
-            if "xp_current" in progression_set:
-                character["xp_current"] = max(0, int(progression_set.get("xp_current", character.get("xp_current", 0)) or character.get("xp_current", 0)))
-            if "xp_to_next" in progression_set:
-                character["xp_to_next"] = max(1, int(progression_set.get("xp_to_next", character.get("xp_to_next", 1)) or character.get("xp_to_next", 1)))
-            if "class_xp" in progression_set or "class_level" in progression_set:
-                current_class = normalize_class_current(character.get("class_current")) or default_class_current()
-                if "class_xp" in progression_set:
-                    current_class["xp"] = max(0, int(progression_set.get("class_xp", current_class.get("xp", 0)) or current_class.get("xp", 0)))
-                if "class_xp_to_next" in progression_set:
-                    current_class["xp_next"] = max(1, int(progression_set.get("class_xp_to_next", current_class.get("xp_next", 1)) or current_class.get("xp_next", 1)))
-                if "class_level" in progression_set:
-                    current_class["level"] = max(1, int(progression_set.get("class_level", current_class.get("level", 1)) or current_class.get("level", 1)))
-                character["class_current"] = normalize_class_current(current_class)
+        apply_patch_character_progression_updates(
+            character,
+            upd,
+            deep_copy=deep_copy,
+            normalize_class_current=normalize_class_current,
+            default_class_current=default_class_current,
+        )
         apply_patch_character_journal_faction_updates(
             character,
             upd,
@@ -719,94 +640,45 @@ def apply_patch(state: Dict[str, Any], patch: Dict[str, Any], *, attribute_cap: 
             include_factions=False,
         )
 
-        if upd.get("class_set"):
-            character["class_current"] = normalize_class_current(upd["class_set"])
-        if upd.get("class_update"):
-            current_class = normalize_class_current(character.get("class_current")) or default_class_current()
-            merged_class = deep_copy(current_class)
-            merged_class.update(deep_copy(upd["class_update"]))
-            character["class_current"] = normalize_class_current(merged_class)
-        character["class_current"] = normalize_class_current(character.get("class_current"))
-        if character.get("class_current"):
-            resolved_element = resolve_class_element_id(
-                character.get("class_current"),
-                state.get("world") if isinstance(state.get("world"), dict) else {},
-            )
-            class_current = normalize_class_current(character.get("class_current")) or default_class_current()
-            if resolved_element:
-                class_current["element_id"] = resolved_element
-                class_current["element_tags"] = list(
-                    dict.fromkeys([*(class_current.get("element_tags") or []), resolved_element])
-                )
-            character["class_current"] = normalize_class_current(class_current)
-        core_skill_messages = ensure_class_rank_core_skills(
+        apply_patch_character_class_updates(
             character,
-            state.get("world") if isinstance(state.get("world"), dict) else {},
-            ((state.get("world") or {}).get("settings") or {}),
-            unlock_extra=False,
+            upd,
+            state,
+            deep_copy=deep_copy,
+            normalize_class_current=normalize_class_current,
+            default_class_current=default_class_current,
+            resolve_class_element_id=resolve_class_element_id,
+            ensure_class_rank_core_skills=ensure_class_rank_core_skills,
         )
-        if core_skill_messages:
-            state.setdefault("events", [])
-            state["events"].extend(core_skill_messages)
         apply_patch_character_journal_faction_updates(
             character,
             upd,
             deep_copy=deep_copy,
             include_journal=False,
         )
-        injuries = character.setdefault("injuries", [])
-        if upd.get("injuries_add"):
-            existing_injury_ids = {entry.get("id") for entry in injuries if isinstance(entry, dict)}
-            for injury in upd.get("injuries_add", []) or []:
-                if injury.get("id") not in existing_injury_ids:
-                    injuries.append(injury)
-                    existing_injury_ids.add(injury.get("id"))
-        if upd.get("injuries_update"):
-            injury_index = {entry.get("id"): entry for entry in injuries if isinstance(entry, dict)}
-            for injury_update in upd.get("injuries_update", []) or []:
-                target = injury_index.get(injury_update.get("id"))
-                if target:
-                    target.update(deep_copy(injury_update))
-        if upd.get("injuries_heal"):
-            heal_ids = {str(entry) for entry in (upd.get("injuries_heal") or [])}
-            for injury in injuries:
-                if isinstance(injury, dict) and injury.get("id") in heal_ids:
-                    injury["healing_stage"] = "geheilt"
-        scars_store = character.setdefault("scars", [])
-        if upd.get("scars_add"):
-            existing_scar_ids = {entry.get("id") for entry in scars_store if isinstance(entry, dict)}
-            for scar in upd.get("scars_add", []) or []:
-                if scar.get("id") not in existing_scar_ids:
-                    scars_store.append(scar)
-                    existing_scar_ids.add(scar.get("id"))
-        for flag in upd.get("appearance_flags_add", []) or []:
-            if not flag:
-                continue
-            character.setdefault("appearance", {}).setdefault("visual_modifiers", []).append(
-                {
-                    "source_type": "story",
-                    "source_id": "story_flag",
-                    "kind": "skin_mark",
-                    "value": str(flag),
-                    "active": True,
-                }
-            )
+        apply_patch_character_injury_appearance_updates(
+            character,
+            upd,
+            deep_copy=deep_copy,
+        )
 
-        ensure_progression_shape(character)
-        ensure_character_progression_core(character)
-        character["skills"] = normalize_skill_store(character.get("skills") or {}, resource_name=resource_name)
-        new_scars = resolve_injury_healing(character, int(state.get("meta", {}).get("turn", 0) or 0))
-        if new_scars:
-            state.setdefault("events", [])
-            char_name = str(((character.get("bio") or {}).get("name")) or slot_name).strip() or slot_name
-            for scar in new_scars:
-                state["events"].append(f"{char_name} trägt nun {scar.get('title')}.")
-        rebuild_character_derived(character, state.get("items", {}), effective_world_time)
-        reconcile_canonical_resources(character, ((state.get("world") or {}).get("settings") or {}))
-        strip_legacy_shadow_fields(character, ((state.get("world") or {}).get("settings") or {}))
-        if ENABLE_LEGACY_SHADOW_WRITEBACK:
-            write_legacy_shadow_fields(character, ((state.get("world") or {}).get("settings") or {}))
-        sync_scars_into_appearance(character)
+        apply_patch_character_late_normalization(
+            character,
+            state,
+            slot_name,
+            resource_name=resource_name,
+            effective_world_time=effective_world_time,
+            ENABLE_LEGACY_SHADOW_WRITEBACK=ENABLE_LEGACY_SHADOW_WRITEBACK,
+            ensure_progression_shape=ensure_progression_shape,
+            ensure_character_progression_core=ensure_character_progression_core,
+            normalize_skill_store=normalize_skill_store,
+            resolve_injury_healing=resolve_injury_healing,
+            rebuild_character_derived=rebuild_character_derived,
+            reconcile_canonical_resources=reconcile_canonical_resources,
+            strip_legacy_shadow_fields=strip_legacy_shadow_fields,
+            write_legacy_shadow_fields=write_legacy_shadow_fields,
+            sync_scars_into_appearance=sync_scars_into_appearance,
+        )
 
     apply_patch_meta_updates(state, patch)
 
