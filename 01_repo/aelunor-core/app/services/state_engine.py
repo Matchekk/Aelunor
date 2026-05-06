@@ -53,6 +53,9 @@ from app.services.world.element_generation import (
     theme_flavor as _theme_flavor,
     theme_flavor_options as _theme_flavor_options,
 )
+from app.services.world.element_skills import (
+    normalize_skill_elements_for_world as _normalize_skill_elements_for_world,
+)
 from app.services.world.element_class_paths import (
     generate_element_class_paths as _generate_element_class_paths,
     next_element_path_name as _next_element_path_name,
@@ -931,14 +934,12 @@ def normalize_element_id_list(values: Any, world: Optional[Dict[str, Any]] = Non
     return list(dict.fromkeys([entry for entry in out if entry]))
 
 def normalize_skill_elements_for_world(skill: Dict[str, Any], world: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    normalized = deep_copy(skill or {})
-    normalized["elements"] = normalize_element_id_list(normalized.get("elements") or [], world or {})
-    primary_candidates = normalize_element_id_list([normalized.get("element_primary")], world or {})
-    normalized["element_primary"] = primary_candidates[0] if primary_candidates else (normalized["elements"][0] if normalized["elements"] else None)
-    if normalized.get("element_primary") and normalized["element_primary"] not in (normalized.get("elements") or []):
-        normalized["elements"] = [normalized["element_primary"], *(normalized.get("elements") or [])]
-    normalized["element_synergies"] = normalize_element_id_list(normalized.get("element_synergies") or [], world or {}) or None
-    return normalized
+    return _normalize_skill_elements_for_world(
+        skill,
+        world,
+        deep_copy=deep_copy,
+        normalize_element_id_list=normalize_element_id_list,
+    )
 
 def resolve_class_element_id(current_class: Optional[Dict[str, Any]], world: Dict[str, Any]) -> Optional[str]:
     return _resolve_class_element_id(

@@ -7,6 +7,7 @@ from app.services.world import element_class_paths
 from app.services.world import element_generation
 from app.services.world import element_profiles
 from app.services.world import element_relations
+from app.services.world import element_skills
 from app.services.world import species_profiles
 
 
@@ -545,6 +546,43 @@ class StateEngineTests(unittest.TestCase):
 
         self.assertIn("resolve_class_element_id", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(resolved, "elem_fire")
+
+    def test_element_skill_normalizer_prefers_primary_element(self) -> None:
+        normalized = element_skills.normalize_skill_elements_for_world(
+            {
+                "id": "skill_fire",
+                "elements": ["wasser"],
+                "element_primary": "feuer",
+                "element_synergies": ["luft"],
+            },
+            {"elements": {"elem_fire": {}, "elem_water": {}, "elem_air": {}}},
+            deep_copy=copy.deepcopy,
+            normalize_element_id_list=lambda values, _world: [
+                {"feuer": "elem_fire", "wasser": "elem_water", "luft": "elem_air"}.get(value)
+                for value in values
+                if {"feuer": "elem_fire", "wasser": "elem_water", "luft": "elem_air"}.get(value)
+            ],
+        )
+
+        self.assertEqual(normalized["elements"], ["elem_fire", "elem_water"])
+        self.assertEqual(normalized["element_primary"], "elem_fire")
+        self.assertEqual(normalized["element_synergies"], ["elem_air"])
+
+    def test_state_engine_skill_element_normalizer_wrapper_preserves_contract(self) -> None:
+        world = {
+            "elements": {"elem_fire": {"name": "Feuer"}, "elem_water": {"name": "Wasser"}},
+            "element_alias_index": {"feuer": ["elem_fire"], "wasser": ["elem_water"]},
+        }
+
+        normalized = state_engine.normalize_skill_elements_for_world(
+            {"id": "skill_fire", "elements": ["Wasser"], "element_primary": "Feuer"},
+            world,
+        )
+
+        self.assertIn("normalize_skill_elements_for_world", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(normalized["elements"], ["elem_fire", "elem_water"])
+        self.assertEqual(normalized["element_primary"], "elem_fire")
+        self.assertIsNone(normalized["element_synergies"])
 
     def test_element_class_path_rank_lookup_selects_requested_path(self) -> None:
         world = {
