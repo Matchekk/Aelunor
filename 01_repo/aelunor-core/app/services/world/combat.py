@@ -91,3 +91,63 @@ def compute_npc_combat_score(
         + int(((hp_ratio * 0.45) + (sta_ratio * 0.3) + (res_ratio * 0.25)) * 0.35)
     )
     return max(1, score)
+
+
+def build_combat_scaling_context(
+    state: Dict[str, Any],
+    actor: str,
+    *,
+    compute_character_combat_score: Callable[[Dict[str, Any], Optional[Dict[str, Any]]], int],
+    compute_npc_combat_score: Callable[[Dict[str, Any], Optional[Dict[str, Any]]], int],
+    entity_element_profile_for_character: Callable[[Dict[str, Any], Dict[str, Any]], Dict[str, List[str]]],
+    entity_element_profile_for_npc: Callable[[Dict[str, Any], Dict[str, Any]], Dict[str, List[str]]],
+    element_matchup_multiplier: Callable[[Dict[str, Any], Dict[str, List[str]], Dict[str, List[str]]], float],
+    sorted_npc_codex_entries: Callable[[Dict[str, Any]], List[Dict[str, Any]]],
+) -> Dict[str, Any]:
+    world_settings = ((state.get("world") or {}).get("settings") or {})
+    world_model = state.get("world") if isinstance(state.get("world"), dict) else {}
+    actor_character = ((state.get("characters") or {}).get(actor) or {})
+    actor_scene = str(actor_character.get("scene_id") or "").strip()
+    actor_score = compute_character_combat_score(actor_character, world_settings)
+    actor_element_profile = entity_element_profile_for_character(actor_character, world_model)
+    threat_scores: List[int] = []
+    element_matchups: List[float] = []
+
+    for slot_name, character in (state.get("characters") or {}).items():
+        if slot_name == actor:
+            continue
+        if actor_scene and str(character.get("scene_id") or "").strip() != actor_scene:
+            continue
+        threat_scores.append(compute_character_combat_score(character, world_settings))
+        enemy_profile = entity_element_profile_for_character(character, world_model)
+        forward = element_matchup_multiplier(world_model, actor_element_profile, enemy_profile)
+        reverse = element_matchup_multiplier(world_model, enemy_profile, actor_element_profile)
+        element_matchups.append(max(0.72, min(1.35, (forward / max(0.72, reverse)))))
+
+    for raw_npc in sorted_npc_codex_entries(state):
+        npc_scene = str(raw_npc.get("last_seen_scene_id") or "").strip()
+        if actor_scene and npc_scene and npc_scene != actor_scene:
+            continue
+        if str(raw_npc.get("status") or "active").strip().lower() == "gone":
+            continue
+        threat_scores.append(compute_npc_combat_score(raw_npc, world_settings))
+        enemy_profile = entity_element_profile_for_npc(raw_npc, world_model)
+        forward = element_matchup_multiplier(world_model, actor_element_profile, enemy_profile)
+        reverse = element_matchup_multiplier(world_model, enemy_profile, actor_element_profile)
+        element_matchups.append(max(0.72, min(1.35, (forward / max(0.72, reverse)))))
+
+    threat_score = max(1, int(round(sum(threat_scores) / max(1, len(threat_scores))))) if threat_scores else actor_score
+    ratio = float(actor_score) / float(max(1, threat_score))
+    element_factor = max(0.8, min(1.2, (sum(element_matchups) / max(1, len(element_matchups))))) if element_matchups else 1.0
+    weighted_ratio = ratio * element_factor
+    pressure = "high" if weighted_ratio <= 0.78 else "medium" if weighted_ratio <= 1.24 else "low"
+    return {
+        "actor_score": actor_score,
+        "threat_score": threat_score,
+        "ratio": round(ratio, 3),
+        "weighted_ratio": round(weighted_ratio, 3),
+        "pressure": pressure,
+        "threat_count": len(threat_scores),
+        "element_factor": round(element_factor, 3),
+        "element_affinities": actor_element_profile.get("affinities") or [],
+    }

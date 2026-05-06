@@ -831,6 +831,62 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("compute_npc_combat_score", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(score, 47)
 
+    def test_combat_scaling_context_filters_scene_and_gone_threats(self) -> None:
+        state = {
+            "world": {"settings": {}},
+            "characters": {
+                "slot_1": {"scene_id": "scene_a"},
+                "slot_2": {"scene_id": "scene_a"},
+                "slot_3": {"scene_id": "scene_b"},
+            },
+            "npc_codex": {},
+        }
+
+        context = combat.build_combat_scaling_context(
+            state,
+            "slot_1",
+            compute_character_combat_score=lambda character, _settings: {"slot_1": 100, "slot_2": 50, "slot_3": 10}.get(character.get("score_key"), 100 if character is state["characters"]["slot_1"] else 50),
+            compute_npc_combat_score=lambda npc, _settings: int(npc.get("score", 1)),
+            entity_element_profile_for_character=lambda character, _world: {"affinities": [character.get("scene_id", "")], "resistances": [], "weaknesses": []},
+            entity_element_profile_for_npc=lambda npc, _world: {"affinities": [npc.get("last_seen_scene_id", "")], "resistances": [], "weaknesses": []},
+            element_matchup_multiplier=lambda _world, _attacker, _defender: 1.0,
+            sorted_npc_codex_entries=lambda _state: [
+                {"last_seen_scene_id": "scene_a", "score": 70},
+                {"last_seen_scene_id": "scene_a", "score": 90, "status": "gone"},
+                {"last_seen_scene_id": "scene_b", "score": 20},
+            ],
+        )
+
+        self.assertEqual(context["actor_score"], 100)
+        self.assertEqual(context["threat_score"], 60)
+        self.assertEqual(context["threat_count"], 2)
+        self.assertEqual(context["pressure"], "low")
+        self.assertEqual(context["element_factor"], 1.0)
+        self.assertEqual(context["element_affinities"], ["scene_a"])
+
+    def test_state_engine_combat_scaling_context_wrapper_preserves_contract(self) -> None:
+        context = state_engine.build_combat_scaling_context(
+            {
+                "world": {"settings": {}},
+                "characters": {
+                    "slot_1": {
+                        "hp_current": 10,
+                        "hp_max": 10,
+                        "sta_current": 10,
+                        "sta_max": 10,
+                        "res_current": 10,
+                        "res_max": 10,
+                    }
+                },
+            },
+            "slot_1",
+        )
+
+        self.assertIn("build_combat_scaling_context", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(context["actor_score"], 47)
+        self.assertEqual(context["threat_count"], 0)
+        self.assertEqual(context["pressure"], "medium")
+
     def test_element_class_path_rank_lookup_selects_requested_path(self) -> None:
         world = {
             "element_class_paths": {
