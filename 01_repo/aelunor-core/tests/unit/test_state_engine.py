@@ -175,6 +175,41 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(alias_index["feuer"], ["elem_fire"])
         self.assertEqual(alias_index["glut"], ["elem_fire"])
 
+    def test_element_relation_lookup_helper_returns_normalized_relation(self) -> None:
+        world = {"element_relations": {"elem_fire": {"elem_water": " Strong "}}}
+
+        relation = element_relations.resolve_element_relation(
+            world,
+            " elem_fire ",
+            " elem_water ",
+            normalize_element_relation=lambda value: element_relations.normalize_element_relation(
+                value,
+                element_relations={"neutral", "strong"},
+            ),
+        )
+
+        self.assertEqual(relation, "strong")
+        self.assertEqual(
+            element_relations.get_element_relation(
+                {},
+                "elem_fire",
+                "elem_water",
+                normalize_element_relation=lambda value: element_relations.normalize_element_relation(
+                    value,
+                    element_relations={"neutral", "strong"},
+                ),
+            ),
+            "neutral",
+        )
+
+    def test_state_engine_element_relation_lookup_wrappers_preserve_contract(self) -> None:
+        world = {"element_relations": {"elem_fire": {"elem_water": "dominant"}}}
+
+        self.assertIn("resolve_element_relation", state_engine.EXPORTED_SYMBOLS)
+        self.assertIn("get_element_relation", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(state_engine.resolve_element_relation(world, "elem_fire", "elem_water"), "dominant")
+        self.assertEqual(state_engine.get_element_relation(world, "elem_fire", "missing"), "neutral")
+
     def test_element_relation_matrix_helpers_normalize_maps(self) -> None:
         elements = {"elem_b": {"name": "B"}, "elem_a": {"name": "A"}}
         relations = element_relations.normalize_element_relations(

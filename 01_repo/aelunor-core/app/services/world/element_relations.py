@@ -153,6 +153,37 @@ def normalize_element_relations(
     )
 
 
+def resolve_element_relation(
+    world: Dict[str, Any],
+    source_element_id: str,
+    target_element_id: str,
+    *,
+    normalize_element_relation: Callable[[Any], str],
+) -> str:
+    source = str(source_element_id or "").strip()
+    target = str(target_element_id or "").strip()
+    if not source or not target:
+        return "neutral"
+    relations = (world or {}).get("element_relations") if isinstance((world or {}).get("element_relations"), dict) else {}
+    source_map = relations.get(source) if isinstance(relations.get(source), dict) else {}
+    return normalize_element_relation(source_map.get(target, "neutral"))
+
+
+def get_element_relation(
+    world: Dict[str, Any],
+    source_element_id: str,
+    target_element_id: str,
+    *,
+    normalize_element_relation: Callable[[Any], str],
+) -> str:
+    return resolve_element_relation(
+        world,
+        source_element_id,
+        target_element_id,
+        normalize_element_relation=normalize_element_relation,
+    )
+
+
 def generate_element_relations(
     elements: Dict[str, Dict[str, Any]],
     *,

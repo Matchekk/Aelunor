@@ -39,9 +39,11 @@ from app.services.world.element_relations import (
     element_pair_rule_ids as _element_pair_rule_ids,
     element_sort_key as _element_sort_key,
     generate_element_relations as _generate_element_relations,
+    get_element_relation as _get_element_relation,
     normalize_element_relation as _normalize_element_relation,
     normalize_element_relations as _normalize_element_relations,
     relation_sort_value as _relation_sort_value,
+    resolve_element_relation as _resolve_element_relation,
     set_element_relation as _set_element_relation_impl,
 )
 from app.services.world.element_generation import (
@@ -904,16 +906,20 @@ def ensure_world_element_system_from_setup(state: Dict[str, Any], setup_summary:
     world["elements"] = stable_sorted_mapping(world["elements"], key_fn=element_sort_key)
 
 def resolve_element_relation(world: Dict[str, Any], source_element_id: str, target_element_id: str) -> str:
-    source = str(source_element_id or "").strip()
-    target = str(target_element_id or "").strip()
-    if not source or not target:
-        return "neutral"
-    relations = (world or {}).get("element_relations") if isinstance((world or {}).get("element_relations"), dict) else {}
-    source_map = relations.get(source) if isinstance(relations.get(source), dict) else {}
-    return normalize_element_relation(source_map.get(target, "neutral"))
+    return _resolve_element_relation(
+        world,
+        source_element_id,
+        target_element_id,
+        normalize_element_relation=normalize_element_relation,
+    )
 
 def get_element_relation(world: Dict[str, Any], source_element_id: str, target_element_id: str) -> str:
-    return resolve_element_relation(world, source_element_id, target_element_id)
+    return _get_element_relation(
+        world,
+        source_element_id,
+        target_element_id,
+        normalize_element_relation=normalize_element_relation,
+    )
 
 def normalize_element_id_list(values: Any, world: Optional[Dict[str, Any]] = None) -> List[str]:
     return _normalize_element_id_list(
