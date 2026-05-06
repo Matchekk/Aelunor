@@ -121,6 +121,9 @@ from app.services.world.codex import (
     codex_seed_for_state,
     ensure_world_codex_from_setup,
 )
+from app.services.world.combat import (
+    skill_rank_power_weight as _skill_rank_power_weight,
+)
 
 _CONFIGURED = False
 
@@ -6178,7 +6181,7 @@ def apply_skill_cost_deltas_to_patch(patch: Dict[str, Any], actor: str, delta_pa
     return adjusted
 
 def skill_rank_power_weight(rank: str) -> int:
-    return {"F": 1, "E": 2, "D": 3, "C": 4, "B": 5, "A": 7, "S": 9}.get(normalize_skill_rank(rank), 1)
+    return _skill_rank_power_weight(rank, normalize_skill_rank=normalize_skill_rank)
 
 def entity_element_profile_for_character(character: Dict[str, Any], world: Dict[str, Any]) -> Dict[str, List[str]]:
     return _entity_element_profile_for_character(

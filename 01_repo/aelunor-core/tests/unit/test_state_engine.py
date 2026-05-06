@@ -4,6 +4,7 @@ from typing import Any, Dict, List
 
 from app.services import state_engine
 from app.services import state_basics
+from app.services.world import combat
 from app.services.world import element_class_paths
 from app.services.world import element_entities
 from app.services.world import element_generation
@@ -735,6 +736,21 @@ class StateEngineTests(unittest.TestCase):
 
         self.assertIn("element_matchup_multiplier", state_engine.EXPORTED_SYMBOLS)
         self.assertAlmostEqual(multiplier, 1.025)
+
+    def test_combat_skill_rank_power_weight_uses_normalized_rank(self) -> None:
+        self.assertEqual(
+            combat.skill_rank_power_weight(" a ", normalize_skill_rank=lambda value: str(value or "").strip().upper()),
+            7,
+        )
+        self.assertEqual(
+            combat.skill_rank_power_weight("unknown", normalize_skill_rank=lambda _value: "unknown"),
+            1,
+        )
+
+    def test_state_engine_skill_rank_power_weight_wrapper_preserves_contract(self) -> None:
+        self.assertIn("skill_rank_power_weight", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(state_engine.skill_rank_power_weight("s"), 9)
+        self.assertEqual(state_engine.skill_rank_power_weight("unknown"), 1)
 
     def test_element_class_path_rank_lookup_selects_requested_path(self) -> None:
         world = {
