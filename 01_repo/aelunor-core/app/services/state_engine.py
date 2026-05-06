@@ -53,6 +53,9 @@ from app.services.world.element_generation import (
     theme_flavor as _theme_flavor,
     theme_flavor_options as _theme_flavor_options,
 )
+from app.services.world.element_class_paths import (
+    next_element_path_name as _next_element_path_name,
+)
 from app.services.world.math_utils import clamp
 from app.services.world.naming import strip_name_parenthetical
 from app.services.world.npc import npc_id_from_name, normalize_npc_alias
@@ -820,15 +823,7 @@ def generate_element_relations(elements: Dict[str, Dict[str, Any]]) -> Dict[str,
     )
 
 def next_element_path_name(element_name: str, rank: str, path_seed: int) -> str:
-    suffixes = {
-        "F": ["Novize", "Student", "Lehrling"],
-        "C": ["Magier", "Wandler", "Hüter"],
-        "B": ["Adept", "Weber", "Kernträger"],
-        "A": ["Erzrufer", "Meister", "Archon"],
-        "S": ["Legende", "Erbe", "Ultimus"],
-    }
-    picks = suffixes.get(rank, ["Adept"])
-    return f"{element_name}-{picks[path_seed % len(picks)]}"
+    return _next_element_path_name(element_name, rank, path_seed)
 
 def generate_element_class_paths(elements: Dict[str, Dict[str, Any]], summary: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
     seed_text = json.dumps(

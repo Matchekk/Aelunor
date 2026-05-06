@@ -3,6 +3,7 @@ import unittest
 
 from app.services import state_engine
 from app.services import state_basics
+from app.services.world import element_class_paths
 from app.services.world import element_generation
 from app.services.world import element_profiles
 from app.services.world import element_relations
@@ -397,6 +398,12 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(len(profiles), 12)
         self.assertIn("elem_feuer", profiles)
         self.assertTrue(any(profile.get("origin") == "generated" for profile in profiles.values()))
+
+    def test_element_class_path_name_helper_preserves_rank_suffixes(self) -> None:
+        self.assertEqual(element_class_paths.next_element_path_name("Feuer", "F", 0), "Feuer-Novize")
+        self.assertEqual(element_class_paths.next_element_path_name("Feuer", "F", 1), "Feuer-Student")
+        self.assertEqual(element_class_paths.next_element_path_name("Feuer", "S", 2), "Feuer-Ultimus")
+        self.assertEqual(state_engine.next_element_path_name("Feuer", "X", 0), "Feuer-Adept")
 
     def test_normalize_patch_semantics_scene_set_alias(self) -> None:
         patch = {
