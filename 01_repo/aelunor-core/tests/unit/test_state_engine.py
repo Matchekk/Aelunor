@@ -171,6 +171,40 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(alias_index["feuer"], ["elem_fire"])
         self.assertEqual(alias_index["glut"], ["elem_fire"])
 
+    def test_element_relation_matrix_helpers_normalize_maps(self) -> None:
+        elements = {"elem_b": {"name": "B"}, "elem_a": {"name": "A"}}
+        relations = element_relations.normalize_element_relations(
+            {"elem_a": {"elem_b": " Strong ", "missing": "weak"}},
+            elements,
+            build_default_element_relations=element_relations.build_default_element_relations,
+            normalize_element_relation=lambda value: element_relations.normalize_element_relation(
+                value,
+                element_relations={"neutral", "strong", "weak"},
+            ),
+            stable_sorted_mapping=lambda mapping, key_fn: dict(sorted(mapping.items(), key=key_fn)),
+        )
+
+        self.assertEqual(list(relations.keys()), ["elem_a", "elem_b"])
+        self.assertEqual(relations["elem_a"]["elem_b"], "strong")
+        self.assertEqual(relations["elem_a"]["elem_a"], "neutral")
+        self.assertEqual(relations["elem_b"]["elem_a"], "neutral")
+
+    def test_state_engine_element_anchor_rules_preserve_contract(self) -> None:
+        elements = {
+            "elem_fire": {"name": "Feuer"},
+            "elem_water": {"name": "Wasser"},
+        }
+        relations = state_engine.build_default_element_relations(elements)
+
+        state_engine.apply_element_anchor_relation_rules(elements, relations)
+
+        self.assertEqual(relations["elem_fire"]["elem_water"], "weak")
+        self.assertEqual(relations["elem_water"]["elem_fire"], "strong")
+        self.assertEqual(
+            state_engine.normalize_element_relations({"elem_fire": {"elem_water": "dominant"}}, elements)["elem_fire"]["elem_water"],
+            "dominant",
+        )
+
     def test_normalize_patch_semantics_scene_set_alias(self) -> None:
         patch = {
             "characters": {

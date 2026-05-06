@@ -33,10 +33,15 @@ from app.services.world.element_profiles import (
     normalize_element_profile as _normalize_element_profile,
 )
 from app.services.world.element_relations import (
+    apply_element_anchor_relation_rules as _apply_element_anchor_relation_rules,
     build_element_alias_index as _build_element_alias_index,
+    build_default_element_relations as _build_default_element_relations,
+    element_pair_rule_ids as _element_pair_rule_ids,
     element_sort_key as _element_sort_key,
     normalize_element_relation as _normalize_element_relation,
+    normalize_element_relations as _normalize_element_relations,
     relation_sort_value as _relation_sort_value,
+    set_element_relation as _set_element_relation_impl,
 )
 from app.services.world.math_utils import clamp
 from app.services.world.naming import strip_name_parenthetical
@@ -700,84 +705,43 @@ def build_element_alias_index(elements: Dict[str, Dict[str, Any]]) -> Dict[str, 
     )
 
 def build_default_element_relations(elements: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, str]]:
-    relation_map: Dict[str, Dict[str, str]] = {}
-    element_ids = list((elements or {}).keys())
-    for source_id in element_ids:
-        relation_map[source_id] = {}
-        for target_id in element_ids:
-            relation_map[source_id][target_id] = "neutral"
-    return relation_map
+    return _build_default_element_relations(elements)
 
 def _set_element_relation(relations: Dict[str, Dict[str, str]], source_id: str, target_id: str, relation: str) -> None:
-    if source_id not in relations:
-        relations[source_id] = {}
-    relations[source_id][target_id] = normalize_element_relation(relation)
+    _set_element_relation_impl(
+        relations,
+        source_id,
+        target_id,
+        relation,
+        normalize_element_relation=normalize_element_relation,
+    )
 
 def element_pair_rule_ids(elements: Dict[str, Dict[str, Any]], name_a: str, name_b: str) -> Tuple[str, str]:
-    wanted_a = normalize_codex_alias_text(name_a)
-    wanted_b = normalize_codex_alias_text(name_b)
-    found_a = ""
-    found_b = ""
-    for element_id, profile in (elements or {}).items():
-        normalized_name = normalize_codex_alias_text((profile or {}).get("name", ""))
-        if not found_a and normalized_name == wanted_a:
-            found_a = element_id
-        if not found_b and normalized_name == wanted_b:
-            found_b = element_id
-    return found_a, found_b
+    return _element_pair_rule_ids(
+        elements,
+        name_a,
+        name_b,
+        normalize_codex_alias_text=normalize_codex_alias_text,
+    )
 
 def apply_element_anchor_relation_rules(elements: Dict[str, Dict[str, Any]], relations: Dict[str, Dict[str, str]]) -> None:
-    predefined = [
-        ("Feuer", "Wasser", "weak"),
-        ("Wasser", "Feuer", "strong"),
-        ("Feuer", "Erde", "strong"),
-        ("Erde", "Feuer", "neutral"),
-        ("Luft", "Erde", "strong"),
-        ("Erde", "Luft", "weak"),
-        ("Licht", "Schatten", "strong"),
-        ("Schatten", "Licht", "countered"),
-        ("Wasser", "Erde", "weak"),
-        ("Erde", "Wasser", "strong"),
-        ("Luft", "Wasser", "neutral"),
-        ("Wasser", "Luft", "neutral"),
-    ]
-    for src_name, dst_name, relation in predefined:
-        src_id, dst_id = element_pair_rule_ids(elements, src_name, dst_name)
-        if src_id and dst_id:
-            _set_element_relation(relations, src_id, dst_id, relation)
+    _apply_element_anchor_relation_rules(
+        elements,
+        relations,
+        element_pair_rule_ids=element_pair_rule_ids,
+        set_element_relation=_set_element_relation,
+    )
 
 def normalize_element_relations(
     relations: Any,
     elements: Dict[str, Dict[str, Any]],
 ) -> Dict[str, Dict[str, str]]:
-    element_ids = list((elements or {}).keys())
-    normalized = build_default_element_relations(elements)
-    raw = relations if isinstance(relations, dict) else {}
-    for source_id, target_map in raw.items():
-        source = str(source_id or "").strip()
-        if source not in normalized or not isinstance(target_map, dict):
-            continue
-        for target_id, value in target_map.items():
-            target = str(target_id or "").strip()
-            if target not in normalized[source]:
-                continue
-            normalized[source][target] = normalize_element_relation(value)
-    for element_id in element_ids:
-        normalized.setdefault(element_id, {})
-        for target_id in element_ids:
-            normalized[element_id][target_id] = normalize_element_relation(
-                normalized[element_id].get(target_id, "neutral")
-            )
-    # deterministically set self-relations (default neutral)
-    for element_id in element_ids:
-        if element_id not in normalized:
-            normalized[element_id] = {}
-        normalized[element_id][element_id] = normalize_element_relation(
-            normalized[element_id].get(element_id, "neutral")
-        )
-    return stable_sorted_mapping(
-        {src: stable_sorted_mapping(dst_map, key_fn=lambda item: item[0]) for src, dst_map in normalized.items()},
-        key_fn=lambda item: item[0],
+    return _normalize_element_relations(
+        relations,
+        elements,
+        build_default_element_relations=build_default_element_relations,
+        normalize_element_relation=normalize_element_relation,
+        stable_sorted_mapping=stable_sorted_mapping,
     )
 
 def generated_element_too_similar(candidate: Dict[str, Any], existing: List[Dict[str, Any]]) -> Tuple[bool, str]:
