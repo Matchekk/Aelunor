@@ -34,7 +34,12 @@ from app.services.turn.patch_limits import (
     enforce_non_milestone_patch_limits as _enforce_non_milestone_patch_limits,
     enforce_progression_set_mode_limits as _enforce_progression_set_mode_limits,
 )
-from app.services.turn.patch_pipeline import apply_patch_with_events, sanitize_patch_with_events, validate_patch_with_events
+from app.services.turn.patch_pipeline import (
+    apply_patch_with_events,
+    call_canon_extractor_with_events,
+    sanitize_patch_with_events,
+    validate_patch_with_events,
+)
 from app.services.turn.patch_validator import (
     PatchValidatorDependencies,
     configure as configure_patch_validator,
@@ -837,26 +842,20 @@ def create_turn_record(
             "system": CANON_EXTRACTOR_SYSTEM_PROMPT,
             "user": build_extractor_context_packet(campaign, working_state, actor, action_type, content, source="player"),
         }
-        emit_turn_phase_event(trace_ctx, phase="extractor_patch_generation", success=True, extra={"stage": "canon"})
-        try:
-            extractor_piece = call_canon_extractor(campaign, working_state, actor, action_type, content, source="player")
-            emit_turn_phase_event(trace_ctx, phase="extractor_patch_generation", success=True, extra={"stage": "canon", "result": "ok"})
-        except Exception as exc:
-            emit_turn_phase_event(
-                trace_ctx,
-                phase="extractor_patch_generation",
-                success=False,
-                error_code=ERROR_CODE_EXTRACTOR,
-                error_class=exc.__class__.__name__,
-                message=str(exc)[:240],
-                extra={"stage": "canon"},
-            )
-            raise turn_flow_error(
-                error_code=ERROR_CODE_EXTRACTOR,
-                phase="extractor_patch_generation",
-                trace_ctx=trace_ctx,
-                exc=exc,
-            )
+        extractor_piece = call_canon_extractor_with_events(
+            campaign,
+            working_state,
+            actor,
+            action_type,
+            content,
+            source="player",
+            stage="canon",
+            trace_ctx=trace_ctx,
+            call_canon_extractor=call_canon_extractor,
+            emit_turn_phase_event=emit_turn_phase_event,
+            turn_flow_error=turn_flow_error,
+            error_code_extractor=ERROR_CODE_EXTRACTOR,
+        )
         extractor_piece.setdefault("events_add", [])
         extractor_piece["events_add"].append(f"KANON: {content}")
         emit_turn_phase_event(trace_ctx, phase="extractor_patch_apply", success=True, extra={"stage": "canon"})
@@ -1079,31 +1078,20 @@ def create_turn_record(
             error_code_patch_apply=ERROR_CODE_PATCH_APPLY,
         )
         for source_text, source_kind in ((content, "player"), (out.get("story", ""), "narrator")):
-            emit_turn_phase_event(trace_ctx, phase="extractor_patch_generation", success=True, extra={"stage": source_kind})
-            try:
-                extractor_piece = call_canon_extractor(campaign, working_state, actor, action_type, source_text, source=source_kind)
-                emit_turn_phase_event(
-                    trace_ctx,
-                    phase="extractor_patch_generation",
-                    success=True,
-                    extra={"stage": source_kind, "result": "ok"},
-                )
-            except Exception as exc:
-                emit_turn_phase_event(
-                    trace_ctx,
-                    phase="extractor_patch_generation",
-                    success=False,
-                    error_code=ERROR_CODE_EXTRACTOR,
-                    error_class=exc.__class__.__name__,
-                    message=str(exc)[:240],
-                    extra={"stage": source_kind},
-                )
-                raise turn_flow_error(
-                    error_code=ERROR_CODE_EXTRACTOR,
-                    phase="extractor_patch_generation",
-                    trace_ctx=trace_ctx,
-                    exc=exc,
-                )
+            extractor_piece = call_canon_extractor_with_events(
+                campaign,
+                working_state,
+                actor,
+                action_type,
+                source_text,
+                source=source_kind,
+                stage=source_kind,
+                trace_ctx=trace_ctx,
+                call_canon_extractor=call_canon_extractor,
+                emit_turn_phase_event=emit_turn_phase_event,
+                turn_flow_error=turn_flow_error,
+                error_code_extractor=ERROR_CODE_EXTRACTOR,
+            )
             emit_turn_phase_event(trace_ctx, phase="extractor_patch_apply", success=True, extra={"stage": source_kind})
             extractor_piece = sanitize_patch_with_events(
                 working_state,

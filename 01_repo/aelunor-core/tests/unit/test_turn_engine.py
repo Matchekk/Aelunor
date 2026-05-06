@@ -11,6 +11,7 @@ from app.services.turn.flow_errors import build_narrator_turn_error
 from app.services.turn.patch_apply_bio import apply_patch_character_bio_updates
 from app.services.turn.patch_apply_normalization import apply_patch_character_late_normalization
 from app.services.turn.patch_pipeline import apply_patch_with_events, sanitize_patch_with_events, validate_patch_with_events
+from app.services.turn.patch_pipeline import call_canon_extractor_with_events
 from app.services.turn.prompt_payloads import build_turn_system_prompt, build_turn_user_prompt
 from app.services.turn.records import build_turn_record_payload
 from app.services.turn.story_length_guard import rewrite_story_length_guard as rewrite_story_length_guard_helper
@@ -327,6 +328,81 @@ class TurnEngineTests(unittest.TestCase):
         )
         self.assertEqual(events[1][1]["extra"], {"stage": "extractor_player"})
         self.assertEqual(events[2][1]["extra"], {"stage": "player"})
+
+    def test_call_canon_extractor_with_events_returns_patch(self) -> None:
+        events = []
+        patch = {"events_add": ["x"]}
+        seen = {}
+
+        def fake_extractor(campaign, state, actor, action_type, source_text, *, source):
+            seen.update(
+                {
+                    "campaign": campaign,
+                    "state": state,
+                    "actor": actor,
+                    "action_type": action_type,
+                    "source_text": source_text,
+                    "source": source,
+                }
+            )
+            return patch
+
+        result = call_canon_extractor_with_events(
+            {"id": "campaign_1"},
+            {"state": True},
+            "slot_1",
+            "play",
+            "Text",
+            source="player",
+            stage="player",
+            trace_ctx={"trace_id": "trace_1"},
+            call_canon_extractor=fake_extractor,
+            emit_turn_phase_event=lambda ctx, **payload: events.append((ctx, payload)),
+            turn_flow_error=lambda **_payload: AssertionError("unexpected error"),
+            error_code_extractor="extractor",
+        )
+
+        self.assertIs(result, patch)
+        self.assertEqual(seen["source"], "player")
+        self.assertEqual([event[1]["phase"] for event in events], ["extractor_patch_generation", "extractor_patch_generation"])
+        self.assertEqual(events[1][1]["extra"], {"stage": "player", "result": "ok"})
+
+    def test_call_canon_extractor_with_events_wraps_failure(self) -> None:
+        events = []
+
+        def fail_extractor(*_args, **_kwargs):
+            raise ValueError("extract failed")
+
+        def make_error(**payload):
+            return turn_engine.TurnFlowError(
+                error_code=payload["error_code"],
+                phase=payload["phase"],
+                trace_id=(payload["trace_ctx"] or {}).get("trace_id", ""),
+                user_message="extract failed",
+                cause_class=payload["exc"].__class__.__name__,
+                cause_message=str(payload["exc"]),
+            )
+
+        with self.assertRaises(turn_engine.TurnFlowError) as ctx:
+            call_canon_extractor_with_events(
+                {"id": "campaign_1"},
+                {"state": True},
+                "slot_1",
+                "play",
+                "Text",
+                source="player",
+                stage="player",
+                trace_ctx={"trace_id": "trace_1"},
+                call_canon_extractor=fail_extractor,
+                emit_turn_phase_event=lambda event_ctx, **payload: events.append((event_ctx, payload)),
+                turn_flow_error=make_error,
+                error_code_extractor="extractor",
+            )
+
+        self.assertEqual(ctx.exception.error_code, "extractor")
+        self.assertEqual([event[1]["phase"] for event in events], ["extractor_patch_generation", "extractor_patch_generation"])
+        self.assertEqual(events[1][1]["error_class"], "ValueError")
+        self.assertEqual(events[1][1]["extra"], {"stage": "player"})
 
     def test_validate_patch_with_events_emits_extractor_failure_event(self) -> None:
         events = []
