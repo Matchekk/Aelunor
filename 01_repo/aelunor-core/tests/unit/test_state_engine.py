@@ -1,9 +1,11 @@
 import copy
 import unittest
+from typing import Any, Dict, List
 
 from app.services import state_engine
 from app.services import state_basics
 from app.services.world import element_class_paths
+from app.services.world import element_entities
 from app.services.world import element_generation
 from app.services.world import element_ids
 from app.services.world import element_profiles
@@ -662,6 +664,53 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(normalized["elements"], ["elem_fire", "elem_water"])
         self.assertEqual(normalized["element_primary"], "elem_fire")
         self.assertIsNone(normalized["element_synergies"])
+
+    def test_element_entity_profiles_include_class_element_tags(self) -> None:
+        mapping = {"feuer": "elem_fire", "wasser": "elem_water", "luft": "elem_air", "erde": "elem_earth"}
+
+        def normalize_ids(values: Any, _world: Dict[str, Any]) -> List[str]:
+            out = []
+            for value in values:
+                text = str(value or "").strip()
+                resolved = text if text in mapping.values() else mapping.get(text.lower())
+                if resolved:
+                    out.append(resolved)
+            return list(dict.fromkeys(out))
+
+        profile = element_entities.entity_element_profile_for_character(
+            {
+                "element_affinities": ["wasser"],
+                "element_resistances": ["luft"],
+                "element_weaknesses": ["erde"],
+                "class_current": {"element_tags": ["feuer"]},
+            },
+            {"elements": {value: {} for value in mapping.values()}},
+            normalize_class_current=lambda value: value,
+            resolve_class_element_id=lambda _klass, _world: "elem_fire",
+            normalize_element_id_list=normalize_ids,
+        )
+
+        self.assertEqual(profile["affinities"], ["elem_water", "elem_fire"])
+        self.assertEqual(profile["resistances"], ["elem_air"])
+        self.assertEqual(profile["weaknesses"], ["elem_earth"])
+
+    def test_state_engine_element_entity_profile_wrappers_preserve_contract(self) -> None:
+        world = {
+            "elements": {"elem_fire": {"name": "Feuer"}, "elem_water": {"name": "Wasser"}},
+            "element_alias_index": {"feuer": ["elem_fire"], "wasser": ["elem_water"]},
+        }
+
+        profile = state_engine.entity_element_profile_for_npc(
+            {
+                "element_affinities": ["Wasser"],
+                "class_current": {"name": "Feuerklasse", "element_tags": ["Feuer"]},
+            },
+            world,
+        )
+
+        self.assertIn("entity_element_profile_for_character", state_engine.EXPORTED_SYMBOLS)
+        self.assertIn("entity_element_profile_for_npc", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(profile["affinities"], ["elem_water", "elem_fire"])
 
     def test_element_class_path_rank_lookup_selects_requested_path(self) -> None:
         world = {

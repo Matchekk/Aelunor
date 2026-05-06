@@ -70,6 +70,10 @@ from app.services.world.element_class_paths import (
     resolve_class_element_id as _resolve_class_element_id,
     resolve_class_path_rank_node as _resolve_class_path_rank_node,
 )
+from app.services.world.element_entities import (
+    entity_element_profile_for_character as _entity_element_profile_for_character,
+    entity_element_profile_for_npc as _entity_element_profile_for_npc,
+)
 from app.services.world.math_utils import clamp
 from app.services.world.naming import strip_name_parenthetical
 from app.services.world.npc import npc_id_from_name, normalize_npc_alias
@@ -6176,26 +6180,22 @@ def skill_rank_power_weight(rank: str) -> int:
     return {"F": 1, "E": 2, "D": 3, "C": 4, "B": 5, "A": 7, "S": 9}.get(normalize_skill_rank(rank), 1)
 
 def entity_element_profile_for_character(character: Dict[str, Any], world: Dict[str, Any]) -> Dict[str, List[str]]:
-    class_current = normalize_class_current(character.get("class_current")) or {}
-    class_element = resolve_class_element_id(class_current, world)
-    affinities = normalize_element_id_list(
-        [*(character.get("element_affinities") or []), *(class_current.get("element_tags") or []), class_element],
+    return _entity_element_profile_for_character(
+        character,
         world,
+        normalize_class_current=normalize_class_current,
+        resolve_class_element_id=resolve_class_element_id,
+        normalize_element_id_list=normalize_element_id_list,
     )
-    resistances = normalize_element_id_list(character.get("element_resistances") or [], world)
-    weaknesses = normalize_element_id_list(character.get("element_weaknesses") or [], world)
-    return {"affinities": affinities, "resistances": resistances, "weaknesses": weaknesses}
 
 def entity_element_profile_for_npc(npc_entry: Dict[str, Any], world: Dict[str, Any]) -> Dict[str, List[str]]:
-    class_current = normalize_class_current(npc_entry.get("class_current")) or {}
-    class_element = resolve_class_element_id(class_current, world)
-    affinities = normalize_element_id_list(
-        [*(npc_entry.get("element_affinities") or []), *(class_current.get("element_tags") or []), class_element],
+    return _entity_element_profile_for_npc(
+        npc_entry,
         world,
+        normalize_class_current=normalize_class_current,
+        resolve_class_element_id=resolve_class_element_id,
+        normalize_element_id_list=normalize_element_id_list,
     )
-    resistances = normalize_element_id_list(npc_entry.get("element_resistances") or [], world)
-    weaknesses = normalize_element_id_list(npc_entry.get("element_weaknesses") or [], world)
-    return {"affinities": affinities, "resistances": resistances, "weaknesses": weaknesses}
 
 def element_matchup_multiplier(world: Dict[str, Any], attacker_profile: Dict[str, List[str]], defender_profile: Dict[str, List[str]]) -> float:
     attacker = attacker_profile.get("affinities") or []
