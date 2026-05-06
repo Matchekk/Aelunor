@@ -405,6 +405,39 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(element_class_paths.next_element_path_name("Feuer", "S", 2), "Feuer-Ultimus")
         self.assertEqual(state_engine.next_element_path_name("Feuer", "X", 0), "Feuer-Adept")
 
+    def test_element_class_path_generation_builds_rank_nodes(self) -> None:
+        paths = element_class_paths.generate_element_class_paths(
+            {"elem_fire": {"name": "Feuer", "theme": "Hitze", "class_affinities": ["flamme"]}},
+            {"theme": "Feuer", "tone": "hell", "premise": "Probe"},
+            clamp=lambda value, low, high: max(low, min(high, value)),
+            element_class_path_min=1,
+            element_class_path_max=1,
+            element_class_path_ranks=["F", "C"],
+            normalize_codex_alias_text=lambda value: str(value or "").strip().lower(),
+            skill_rank_sort_value=lambda rank: {"F": 0, "C": 3}.get(rank, 0),
+            next_element_path_name=element_class_paths.next_element_path_name,
+            stable_sorted_mapping=lambda mapping, key_fn: dict(sorted(mapping.items(), key=key_fn)),
+        )
+
+        rank_f = paths["elem_fire"][0]["ranks"]["F"]
+        rank_c = paths["elem_fire"][0]["ranks"]["C"]
+        self.assertEqual(rank_f["required_level"], 1)
+        self.assertEqual(rank_c["required_level"], 10)
+        self.assertEqual(rank_c["required_class_level"], 4)
+        self.assertEqual(rank_f["skill_prefix"], "feuer")
+        self.assertEqual(rank_f["required_affinity_tags"], ["feuer", "flamme"])
+
+    def test_state_engine_element_class_path_generation_wrapper_preserves_contract(self) -> None:
+        paths = state_engine.generate_element_class_paths(
+            {"elem_fire": {"name": "Feuer", "theme": "Hitze"}},
+            {"theme": "Feuer"},
+        )
+
+        self.assertIn("elem_fire", paths)
+        self.assertTrue(1 <= len(paths["elem_fire"]) <= 3)
+        self.assertIn("F", paths["elem_fire"][0]["ranks"])
+        self.assertEqual(paths["elem_fire"][0]["ranks"]["F"]["element_id"], "elem_fire")
+
     def test_normalize_patch_semantics_scene_set_alias(self) -> None:
         patch = {
             "characters": {

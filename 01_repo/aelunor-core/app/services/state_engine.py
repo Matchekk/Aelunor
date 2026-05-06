@@ -54,6 +54,7 @@ from app.services.world.element_generation import (
     theme_flavor_options as _theme_flavor_options,
 )
 from app.services.world.element_class_paths import (
+    generate_element_class_paths as _generate_element_class_paths,
     next_element_path_name as _next_element_path_name,
 )
 from app.services.world.math_utils import clamp
@@ -826,58 +827,18 @@ def next_element_path_name(element_name: str, rank: str, path_seed: int) -> str:
     return _next_element_path_name(element_name, rank, path_seed)
 
 def generate_element_class_paths(elements: Dict[str, Dict[str, Any]], summary: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
-    seed_text = json.dumps(
-        {"theme": summary.get("theme", ""), "tone": summary.get("tone", ""), "premise": summary.get("premise", "")},
-        ensure_ascii=False,
-        sort_keys=True,
+    return _generate_element_class_paths(
+        elements,
+        summary,
+        clamp=clamp,
+        element_class_path_min=ELEMENT_CLASS_PATH_MIN,
+        element_class_path_max=ELEMENT_CLASS_PATH_MAX,
+        element_class_path_ranks=ELEMENT_CLASS_PATH_RANKS,
+        normalize_codex_alias_text=normalize_codex_alias_text,
+        skill_rank_sort_value=skill_rank_sort_value,
+        next_element_path_name=next_element_path_name,
+        stable_sorted_mapping=stable_sorted_mapping,
     )
-    rng = random.Random(int(hashlib.sha1(seed_text.encode("utf-8")).hexdigest(), 16) % (2**32))
-    out: Dict[str, List[Dict[str, Any]]] = {}
-    for element_id, profile in (elements or {}).items():
-        if not isinstance(profile, dict):
-            continue
-        name = str(profile.get("name") or element_id).strip()
-        path_count = clamp(1 + rng.randint(0, 2), ELEMENT_CLASS_PATH_MIN, ELEMENT_CLASS_PATH_MAX)
-        paths: List[Dict[str, Any]] = []
-        for path_index in range(path_count):
-            path_id = f"path_{element_id}_{path_index+1}"
-            rank_nodes: Dict[str, Dict[str, Any]] = {}
-            for rank in ELEMENT_CLASS_PATH_RANKS:
-                rank_skill_base = normalize_codex_alias_text(name).replace(" ", "_") or "element"
-                rank_nodes[rank] = {
-                    "id": f"{path_id}_{rank.lower()}",
-                    "name": next_element_path_name(name, rank, path_index + skill_rank_sort_value(rank)),
-                    "rank": rank,
-                    "element_id": element_id,
-                    "description": f"Pfadstufe {rank} des Elements {name}.",
-                    "required_level": 1 + (skill_rank_sort_value(rank) * 3),
-                    "required_class_level": 1 + skill_rank_sort_value(rank),
-                    "required_affinity_tags": list(dict.fromkeys([normalize_codex_alias_text(name), *profile.get("class_affinities", [])]))[:4],
-                    "required_skills": [],
-                    "core_skills_required": [
-                        f"{name} {['Impuls','Schnitt','Bindung'][path_index % 3]}",
-                        f"{name} Fokus",
-                    ],
-                    "core_skills_unlockable": [
-                        f"{name} Schub {rank}",
-                        f"{name} Mantel {rank}",
-                    ],
-                    "signature_skills": [f"{name} Signatur {rank}"],
-                    "signature_theme": str(profile.get("theme") or name),
-                    "next_paths": [],
-                    "skill_prefix": rank_skill_base,
-                }
-            paths.append(
-                {
-                    "id": path_id,
-                    "name": f"{name}-Pfad {path_index+1}",
-                    "element_id": element_id,
-                    "signature_theme": str(profile.get("theme") or name),
-                    "ranks": rank_nodes,
-                }
-            )
-        out[element_id] = paths
-    return stable_sorted_mapping(out, key_fn=lambda item: item[0])
 
 def normalize_class_path_rank_node(raw_node: Any, *, default_rank: str, element_id: str, path_id: str) -> Optional[Dict[str, Any]]:
     if not isinstance(raw_node, dict):
