@@ -10,7 +10,7 @@ from app.services import turn_engine
 from app.services.turn.flow_errors import build_narrator_turn_error
 from app.services.turn.patch_apply_bio import apply_patch_character_bio_updates
 from app.services.turn.patch_apply_normalization import apply_patch_character_late_normalization
-from app.services.turn.patch_pipeline import sanitize_patch_with_events, validate_patch_with_events
+from app.services.turn.patch_pipeline import apply_patch_with_events, sanitize_patch_with_events, validate_patch_with_events
 from app.services.turn.prompt_payloads import build_turn_system_prompt, build_turn_user_prompt
 from app.services.turn.records import build_turn_record_payload
 from app.services.turn.story_length_guard import rewrite_story_length_guard as rewrite_story_length_guard_helper
@@ -257,6 +257,73 @@ class TurnEngineTests(unittest.TestCase):
         self.assertEqual(
             [event[1]["phase"] for event in events],
             ["patch_sanitize", "patch_sanitize", "extractor_patch_apply"],
+        )
+        self.assertEqual(events[1][1]["extra"], {"stage": "extractor_player"})
+        self.assertEqual(events[2][1]["extra"], {"stage": "player"})
+
+    def test_apply_patch_with_events_returns_next_state(self) -> None:
+        events = []
+        next_state = {"meta": {"turn": 2}}
+        seen = {}
+
+        def fake_apply(state, patch, *, attribute_cap):
+            seen["state"] = state
+            seen["patch"] = patch
+            seen["attribute_cap"] = attribute_cap
+            return next_state
+
+        result = apply_patch_with_events(
+            {"meta": {"turn": 1}},
+            {"events_add": ["x"]},
+            stage="narrator",
+            trace_ctx={"trace_id": "trace_1"},
+            attribute_cap=12,
+            apply_patch=fake_apply,
+            emit_turn_phase_event=lambda ctx, **payload: events.append((ctx, payload)),
+            turn_flow_error=lambda **_payload: AssertionError("unexpected error"),
+            error_code_patch_apply="patch_apply",
+        )
+
+        self.assertIs(result, next_state)
+        self.assertEqual(seen["attribute_cap"], 12)
+        self.assertEqual([event[1]["phase"] for event in events], ["patch_apply", "patch_apply"])
+        self.assertEqual(events[1][1]["extra"], {"stage": "narrator", "result": "ok"})
+
+    def test_apply_patch_with_events_emits_extractor_failure_event(self) -> None:
+        events = []
+
+        def fail_apply(_state, _patch, *, attribute_cap):
+            self.assertEqual(attribute_cap, 10)
+            raise ValueError("bad apply")
+
+        def make_error(**payload):
+            return turn_engine.TurnFlowError(
+                error_code=payload["error_code"],
+                phase=payload["phase"],
+                trace_id=(payload["trace_ctx"] or {}).get("trace_id", ""),
+                user_message="apply failed",
+                cause_class=payload["exc"].__class__.__name__,
+                cause_message=str(payload["exc"]),
+            )
+
+        with self.assertRaises(turn_engine.TurnFlowError) as ctx:
+            apply_patch_with_events(
+                {"state": True},
+                {"patch": True},
+                stage="extractor_player",
+                trace_ctx={"trace_id": "trace_1"},
+                attribute_cap=10,
+                apply_patch=fail_apply,
+                emit_turn_phase_event=lambda event_ctx, **payload: events.append((event_ctx, payload)),
+                turn_flow_error=make_error,
+                error_code_patch_apply="patch_apply",
+                extractor_apply_stage="player",
+            )
+
+        self.assertEqual(ctx.exception.error_code, "patch_apply")
+        self.assertEqual(
+            [event[1]["phase"] for event in events],
+            ["patch_apply", "patch_apply", "extractor_patch_apply"],
         )
         self.assertEqual(events[1][1]["extra"], {"stage": "extractor_player"})
         self.assertEqual(events[2][1]["extra"], {"stage": "player"})
