@@ -1,7 +1,7 @@
 import hashlib
 import json
 import random
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 
 def next_element_path_name(element_name: str, rank: str, path_seed: int) -> str:
@@ -81,3 +81,44 @@ def generate_element_class_paths(
             )
         out[element_id] = paths
     return stable_sorted_mapping(out, key_fn=lambda item: item[0])
+
+
+def normalize_class_path_rank_node(
+    raw_node: Any,
+    *,
+    default_rank: str,
+    element_id: str,
+    path_id: str,
+    normalize_skill_rank: Callable[[Any], str],
+) -> Optional[Dict[str, Any]]:
+    if not isinstance(raw_node, dict):
+        return None
+    rank = normalize_skill_rank(raw_node.get("rank", default_rank))
+    node_id = str(raw_node.get("id") or f"{path_id}_{rank.lower()}").strip() or f"{path_id}_{rank.lower()}"
+    name = str(raw_node.get("name") or "").strip()
+    if not name:
+        return None
+    required_affinity_tags = [str(tag).strip() for tag in (raw_node.get("required_affinity_tags") or []) if str(tag).strip()]
+    required_skills = [str(skill).strip() for skill in (raw_node.get("required_skills") or []) if str(skill).strip()]
+    core_required = [str(skill).strip() for skill in (raw_node.get("core_skills_required") or []) if str(skill).strip()]
+    core_unlockable = [str(skill).strip() for skill in (raw_node.get("core_skills_unlockable") or []) if str(skill).strip()]
+    signature_skills = [str(skill).strip() for skill in (raw_node.get("signature_skills") or []) if str(skill).strip()]
+    if not core_required:
+        return None
+    return {
+        "id": node_id,
+        "name": name,
+        "rank": rank,
+        "element_id": str(raw_node.get("element_id") or element_id).strip() or element_id,
+        "description": str(raw_node.get("description") or "").strip(),
+        "required_level": max(1, int(raw_node.get("required_level", 1) or 1)),
+        "required_class_level": max(1, int(raw_node.get("required_class_level", 1) or 1)),
+        "required_affinity_tags": list(dict.fromkeys(required_affinity_tags)),
+        "required_skills": list(dict.fromkeys(required_skills)),
+        "core_skills_required": list(dict.fromkeys(core_required)),
+        "core_skills_unlockable": list(dict.fromkeys(core_unlockable)),
+        "signature_skills": list(dict.fromkeys(signature_skills)),
+        "signature_theme": str(raw_node.get("signature_theme") or "").strip(),
+        "next_paths": [str(path).strip() for path in (raw_node.get("next_paths") or []) if str(path).strip()],
+        "skill_prefix": str(raw_node.get("skill_prefix") or "").strip(),
+    }

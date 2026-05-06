@@ -427,6 +427,59 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(rank_f["skill_prefix"], "feuer")
         self.assertEqual(rank_f["required_affinity_tags"], ["feuer", "flamme"])
 
+    def test_element_class_path_rank_node_normalizer_preserves_shape(self) -> None:
+        node = element_class_paths.normalize_class_path_rank_node(
+            {
+                "name": " Feuer Adept ",
+                "rank": "c",
+                "required_affinity_tags": [" flamme ", "flamme", ""],
+                "required_skills": ["Glut", " Glut "],
+                "core_skills_required": [" Funke ", "Funke"],
+                "core_skills_unlockable": [" Schild "],
+                "signature_skills": [" Signatur "],
+                "next_paths": [" path_next ", ""],
+                "required_level": 0,
+                "required_class_level": 2,
+            },
+            default_rank="F",
+            element_id="elem_fire",
+            path_id="path_fire_1",
+            normalize_skill_rank=lambda value: str(value or "").strip().upper() if str(value or "").strip().upper() in {"F", "C"} else "F",
+        )
+
+        self.assertIsNotNone(node)
+        self.assertEqual(node["id"], "path_fire_1_c")
+        self.assertEqual(node["name"], "Feuer Adept")
+        self.assertEqual(node["rank"], "C")
+        self.assertEqual(node["element_id"], "elem_fire")
+        self.assertEqual(node["required_level"], 1)
+        self.assertEqual(node["required_class_level"], 2)
+        self.assertEqual(node["required_affinity_tags"], ["flamme"])
+        self.assertEqual(node["required_skills"], ["Glut"])
+        self.assertEqual(node["core_skills_required"], ["Funke"])
+        self.assertEqual(node["core_skills_unlockable"], ["Schild"])
+        self.assertEqual(node["signature_skills"], ["Signatur"])
+        self.assertEqual(node["next_paths"], ["path_next"])
+
+    def test_state_engine_class_path_rank_node_wrapper_preserves_contract(self) -> None:
+        node = state_engine.normalize_class_path_rank_node(
+            {"name": "Feuer Adept", "core_skills_required": ["Funke"], "rank": "c"},
+            default_rank="F",
+            element_id="elem_fire",
+            path_id="path_fire_1",
+        )
+
+        self.assertIsNotNone(node)
+        self.assertEqual(node["rank"], "C")
+        self.assertIsNone(
+            state_engine.normalize_class_path_rank_node(
+                {"name": "Feuer Adept"},
+                default_rank="F",
+                element_id="elem_fire",
+                path_id="path_fire_1",
+            )
+        )
+
     def test_state_engine_element_class_path_generation_wrapper_preserves_contract(self) -> None:
         paths = state_engine.generate_element_class_paths(
             {"elem_fire": {"name": "Feuer", "theme": "Hitze"}},
