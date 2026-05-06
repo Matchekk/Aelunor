@@ -252,3 +252,77 @@ def patch_has_combat_signal(patch: Dict[str, Any]) -> bool:
             if isinstance(effect, dict) and str(effect.get("category") or "").strip().lower() == "combat":
                 return True
     return False
+
+
+def update_combat_meta_after_turn(
+    state: Dict[str, Any],
+    *,
+    actor: str,
+    action_type: str,
+    input_text: str,
+    story_text: str,
+    patch: Dict[str, Any],
+    combat_context: Dict[str, Any],
+    resolution_summary: Dict[str, Any],
+    normalize_combat_meta: Callable[[Dict[str, Any]], Dict[str, Any]],
+    utc_now: Callable[[], str],
+    normalized_eval_text: Callable[[Any], str],
+    patch_has_combat_signal: Callable[[Dict[str, Any]], bool],
+    combat_narrative_hints: tuple[str, ...],
+    combat_end_hints: tuple[str, ...],
+    make_id: Callable[[str], str],
+    first_sentences: Callable[[str, int], str],
+    deep_copy: Callable[[Any], Any],
+) -> Dict[str, Any]:
+    meta = state.setdefault("meta", {})
+    combat = normalize_combat_meta(meta)
+    turn_number = int(meta.get("turn", 0) or 0)
+    now = utc_now()
+
+    story_norm = normalized_eval_text(story_text)
+    hinted = bool(combat_context.get("hinted")) or patch_has_combat_signal(patch) or any(
+        keyword in story_norm for keyword in combat_narrative_hints
+    )
+    ended = any(keyword in story_norm for keyword in combat_end_hints)
+    participants = [
+        slot_name
+        for slot_name, character in (state.get("characters") or {}).items()
+        if bool((((character.get("derived") or {}).get("combat_flags") or {}).get("in_combat", False)))
+    ]
+
+    if not combat.get("active") and hinted:
+        combat["active"] = True
+        combat["combat_id"] = combat.get("combat_id") or make_id("cmb")
+        combat["round"] = max(1, int(combat.get("round", 0) or 0) + 1)
+        combat["phase"] = "resolving"
+    elif combat.get("active"):
+        combat["phase"] = "resolving"
+        combat["round"] = max(1, int(combat.get("round", 0) or 0) + 1)
+
+    if combat.get("active"):
+        summary = str(first_sentences(story_text, 1) or "").strip()
+        combat.setdefault("action_queue", []).append(
+            {
+                "turn": turn_number,
+                "actor": actor,
+                "action_type": action_type,
+                "summary": summary[:220],
+                "created_at": now,
+            }
+        )
+        combat["action_queue"] = (combat.get("action_queue") or [])[-20:]
+        combat["participants"] = participants or [actor]
+        combat["last_resolution"] = deep_copy(resolution_summary or {})
+        if ended and not patch_has_combat_signal(patch):
+            combat["active"] = False
+            combat["phase"] = "ended"
+            combat["participants"] = []
+        else:
+            combat["phase"] = "collecting"
+    else:
+        combat["phase"] = "idle"
+        combat["participants"] = []
+
+    combat["updated_at"] = now
+    meta["combat"] = combat
+    return combat

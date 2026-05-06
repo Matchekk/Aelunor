@@ -129,6 +129,7 @@ from app.services.world.combat import (
     infer_combat_context as _infer_combat_context,
     patch_has_combat_signal as _patch_has_combat_signal,
     skill_rank_power_weight as _skill_rank_power_weight,
+    update_combat_meta_after_turn as _update_combat_meta_after_turn,
 )
 
 _CONFIGURED = False
@@ -6297,58 +6298,25 @@ def update_combat_meta_after_turn(
     combat_context: Dict[str, Any],
     resolution_summary: Dict[str, Any],
 ) -> Dict[str, Any]:
-    meta = state.setdefault("meta", {})
-    combat = normalize_combat_meta(meta)
-    turn_number = int(meta.get("turn", 0) or 0)
-    now = utc_now()
-
-    story_norm = normalized_eval_text(story_text)
-    hinted = bool(combat_context.get("hinted")) or patch_has_combat_signal(patch) or any(
-        keyword in story_norm for keyword in COMBAT_NARRATIVE_HINTS
+    return _update_combat_meta_after_turn(
+        state,
+        actor=actor,
+        action_type=action_type,
+        input_text=input_text,
+        story_text=story_text,
+        patch=patch,
+        combat_context=combat_context,
+        resolution_summary=resolution_summary,
+        normalize_combat_meta=normalize_combat_meta,
+        utc_now=utc_now,
+        normalized_eval_text=normalized_eval_text,
+        patch_has_combat_signal=patch_has_combat_signal,
+        combat_narrative_hints=COMBAT_NARRATIVE_HINTS,
+        combat_end_hints=COMBAT_END_HINTS,
+        make_id=make_id,
+        first_sentences=first_sentences,
+        deep_copy=deep_copy,
     )
-    ended = any(keyword in story_norm for keyword in COMBAT_END_HINTS)
-    participants = [
-        slot_name
-        for slot_name, character in (state.get("characters") or {}).items()
-        if bool((((character.get("derived") or {}).get("combat_flags") or {}).get("in_combat", False)))
-    ]
-
-    if not combat.get("active") and hinted:
-        combat["active"] = True
-        combat["combat_id"] = combat.get("combat_id") or make_id("cmb")
-        combat["round"] = max(1, int(combat.get("round", 0) or 0) + 1)
-        combat["phase"] = "resolving"
-    elif combat.get("active"):
-        combat["phase"] = "resolving"
-        combat["round"] = max(1, int(combat.get("round", 0) or 0) + 1)
-
-    if combat.get("active"):
-        summary = str(first_sentences(story_text, 1) or "").strip()
-        combat.setdefault("action_queue", []).append(
-            {
-                "turn": turn_number,
-                "actor": actor,
-                "action_type": action_type,
-                "summary": summary[:220],
-                "created_at": now,
-            }
-        )
-        combat["action_queue"] = (combat.get("action_queue") or [])[-20:]
-        combat["participants"] = participants or [actor]
-        combat["last_resolution"] = deep_copy(resolution_summary or {})
-        if ended and not patch_has_combat_signal(patch):
-            combat["active"] = False
-            combat["phase"] = "ended"
-            combat["participants"] = []
-        else:
-            combat["phase"] = "collecting"
-    else:
-        combat["phase"] = "idle"
-        combat["participants"] = []
-
-    combat["updated_at"] = now
-    meta["combat"] = combat
-    return combat
 
 def normalize_ruleset_choice(raw_value: Any) -> str:
     text = str(extract_text_answer(raw_value) or raw_value or "").strip()

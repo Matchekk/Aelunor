@@ -964,6 +964,79 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("patch_has_combat_signal", state_engine.EXPORTED_SYMBOLS)
         self.assertTrue(state_engine.patch_has_combat_signal({"characters": {"slot_1": {"hp_delta": -1}}}))
 
+    def test_combat_meta_update_starts_combat_and_records_queue(self) -> None:
+        def normalize_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
+            combat_meta = copy.deepcopy(
+                meta.get("combat")
+                or {"active": False, "combat_id": "", "round": 0, "phase": "idle", "action_queue": [], "participants": [], "last_resolution": {}}
+            )
+            combat_meta.setdefault("action_queue", [])
+            combat_meta.setdefault("participants", [])
+            combat_meta.setdefault("last_resolution", {})
+            return combat_meta
+
+        state = {
+            "meta": {"turn": 7},
+            "characters": {"slot_1": {"derived": {"combat_flags": {"in_combat": True}}}},
+        }
+
+        combat_meta = combat.update_combat_meta_after_turn(
+            state,
+            actor="slot_1",
+            action_type="combat",
+            input_text="",
+            story_text="Ein Angriff beginnt. Danach passiert mehr.",
+            patch={},
+            combat_context={"hinted": False},
+            resolution_summary={"outcome": "started"},
+            normalize_combat_meta=normalize_meta,
+            utc_now=lambda: "now",
+            normalized_eval_text=lambda value: str(value or "").strip().lower(),
+            patch_has_combat_signal=lambda _patch: False,
+            combat_narrative_hints=("angriff",),
+            combat_end_hints=("ende",),
+            make_id=lambda prefix: f"{prefix}_1",
+            first_sentences=lambda text, _count: str(text).split(".")[0],
+            deep_copy=copy.deepcopy,
+        )
+
+        self.assertTrue(combat_meta["active"])
+        self.assertEqual(combat_meta["combat_id"], "cmb_1")
+        self.assertEqual(combat_meta["round"], 1)
+        self.assertEqual(combat_meta["phase"], "collecting")
+        self.assertEqual(combat_meta["participants"], ["slot_1"])
+        self.assertEqual(combat_meta["action_queue"][-1]["turn"], 7)
+        self.assertEqual(combat_meta["action_queue"][-1]["summary"], "Ein Angriff beginnt")
+        self.assertEqual(combat_meta["last_resolution"], {"outcome": "started"})
+        self.assertEqual(state["meta"]["combat"], combat_meta)
+
+    def test_state_engine_combat_meta_update_wrapper_preserves_contract(self) -> None:
+        state_engine.configure(
+            {
+                "COMBAT_NARRATIVE_HINTS": ("angriff",),
+                "COMBAT_END_HINTS": ("ende",),
+                "make_id": lambda prefix: f"{prefix}_1",
+                "utc_now": lambda: "now",
+                "first_sentences": lambda text, _count: str(text).split(".")[0],
+            }
+        )
+
+        combat_meta = state_engine.update_combat_meta_after_turn(
+            {"meta": {"turn": 1}, "characters": {}},
+            actor="slot_1",
+            action_type="combat",
+            input_text="",
+            story_text="Angriff.",
+            patch={},
+            combat_context={},
+            resolution_summary={},
+        )
+
+        self.assertIn("update_combat_meta_after_turn", state_engine.EXPORTED_SYMBOLS)
+        self.assertTrue(combat_meta["active"])
+        self.assertEqual(combat_meta["phase"], "collecting")
+        self.assertEqual(combat_meta["participants"], ["slot_1"])
+
     def test_element_class_path_rank_lookup_selects_requested_path(self) -> None:
         world = {
             "element_class_paths": {
