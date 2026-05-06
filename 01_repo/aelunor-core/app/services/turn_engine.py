@@ -29,6 +29,7 @@ from app.services.turn.patch_apply_normalization import apply_patch_character_la
 from app.services.turn.patch_apply_plotpoints import apply_patch_plotpoint_updates
 from app.services.turn.patch_apply_resources import apply_patch_character_resource_attribute_updates
 from app.services.turn.patch_apply_time import apply_patch_time_advance
+from app.services.turn.flow_errors import build_narrator_turn_error
 from app.services.turn.patch_limits import (
     enforce_non_milestone_patch_limits as _enforce_non_milestone_patch_limits,
     enforce_progression_set_mode_limits as _enforce_progression_set_mode_limits,
@@ -830,22 +831,6 @@ def create_turn_record(
     resource_deltas_applied: Dict[str, Any] = {}
     combat_resolution: Dict[str, Any] = {}
 
-    def narrator_turn_error(message: str) -> TurnFlowError:
-        emit_turn_phase_event(
-            trace_ctx,
-            phase="narrator_call_finished",
-            success=False,
-            error_code=ERROR_CODE_NARRATOR_RESPONSE,
-            error_class="NarratorGuardError",
-            message=str(message)[:240],
-        )
-        return turn_flow_error(
-            error_code=ERROR_CODE_NARRATOR_RESPONSE,
-            phase="narrator_call_finished",
-            trace_ctx=trace_ctx,
-            user_message=message,
-        )
-
     if action_type == "canon":
         prompt_payload = {
             "system": CANON_EXTRACTOR_SYSTEM_PROMPT,
@@ -1001,7 +986,13 @@ def create_turn_record(
             inactive_refs = inactive_character_refs(campaign, out.get("story", ""), out.get("patch") or {})
             if inactive_refs:
                 if attempt == MAX_TURN_MODEL_ATTEMPTS:
-                    raise narrator_turn_error(f"Die KI hat wiederholt ungültige Figuren eingeführt: {', '.join(inactive_refs)}.")
+                    raise build_narrator_turn_error(
+                        f"Die KI hat wiederholt ungültige Figuren eingeführt: {', '.join(inactive_refs)}.",
+                        trace_ctx=trace_ctx,
+                        error_code_narrator_response=ERROR_CODE_NARRATOR_RESPONSE,
+                        emit_turn_phase_event=emit_turn_phase_event,
+                        turn_flow_error=turn_flow_error,
+                    )
                 prompt_attempt_user = (
                     user_prompt
                     + "\n\nDEINE LETZTE ANTWORT HAT INAKTIVE ODER UNFERTIGE FIGUREN EINGEFÜHRT ("
@@ -1030,7 +1021,13 @@ def create_turn_record(
             if not is_suspicious_story_text(out.get("story", "")):
                 break
             if attempt == MAX_TURN_MODEL_ATTEMPTS:
-                raise narrator_turn_error("Die KI-Antwort wirkt abgeschnitten.")
+                raise build_narrator_turn_error(
+                    "Die KI-Antwort wirkt abgeschnitten.",
+                    trace_ctx=trace_ctx,
+                    error_code_narrator_response=ERROR_CODE_NARRATOR_RESPONSE,
+                    emit_turn_phase_event=emit_turn_phase_event,
+                    turn_flow_error=turn_flow_error,
+                )
             prompt_attempt_user = (
                 user_prompt
                 + "\n\nDEINE LETZTE ANTWORT WAR OFFENSICHTLICH ABGESCHNITTEN. "

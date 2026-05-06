@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from app.services import state_engine
 from app.services import turn_engine
+from app.services.turn.flow_errors import build_narrator_turn_error
 from app.services.turn.patch_apply_bio import apply_patch_character_bio_updates
 from app.services.turn.patch_apply_normalization import apply_patch_character_late_normalization
 from app.services.turn.prompt_payloads import build_turn_system_prompt, build_turn_user_prompt
@@ -154,6 +155,35 @@ class TurnEngineTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as ctx:
             turn_engine.find_turn({"turns": []}, "turn_missing")
         self.assertEqual(ctx.exception.status_code, 404)
+
+    def test_build_narrator_turn_error_emits_guard_event(self) -> None:
+        events = []
+
+        def emit(ctx, **payload):
+            events.append((ctx, payload))
+
+        def make_error(**payload):
+            return turn_engine.TurnFlowError(
+                error_code=payload["error_code"],
+                phase=payload["phase"],
+                trace_id=(payload["trace_ctx"] or {}).get("trace_id", ""),
+                user_message=payload["user_message"],
+            )
+
+        err = build_narrator_turn_error(
+            "Antwort abgeschnitten",
+            trace_ctx={"trace_id": "trace_1"},
+            error_code_narrator_response="narrator_response",
+            emit_turn_phase_event=emit,
+            turn_flow_error=make_error,
+        )
+
+        self.assertIsInstance(err, turn_engine.TurnFlowError)
+        self.assertEqual(err.error_code, "narrator_response")
+        self.assertEqual(err.phase, "narrator_call_finished")
+        self.assertEqual(events[0][0], {"trace_id": "trace_1"})
+        self.assertEqual(events[0][1]["error_class"], "NarratorGuardError")
+        self.assertEqual(events[0][1]["message"], "Antwort abgeschnitten")
 
     def test_reset_turn_branch_marks_following_turns(self) -> None:
         campaign = {
