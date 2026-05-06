@@ -14,6 +14,7 @@ from app.services.world import element_profiles
 from app.services.world import element_relations
 from app.services.world import element_skills
 from app.services.world import species_profiles
+from app.services.world import world_settings
 
 
 class StateEngineTests(unittest.TestCase):
@@ -1048,6 +1049,55 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("normalize_attribute_influence_meta", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(state_engine.default_attribute_influence_meta()["last_profile"]["influence_tier"], "none")
         self.assertEqual(normalized["last_profile"]["primary_attributes"], ["str"])
+
+    def test_world_settings_normalizer_preserves_campaign_defaults_and_bounds(self) -> None:
+        defaults = {
+            "campaign_length": "medium",
+            "target_turns": {"short": 12, "medium": 40, "open": None},
+            "pacing_profile": {
+                "short": {"beats_per_turn": 3, "detail_level": "high", "plot_density": "dense", "sideplot_limit": 0, "milestone_every_n_turns": 6, "min_story_chars": 800, "max_story_chars": 1400},
+                "medium": {"beats_per_turn": 2, "detail_level": "medium", "plot_density": "balanced", "sideplot_limit": 2, "milestone_every_n_turns": 12, "min_story_chars": 900, "max_story_chars": 1800},
+                "open": {"beats_per_turn": 1, "detail_level": "low", "plot_density": "loose", "sideplot_limit": None, "milestone_every_n_turns": 20, "min_story_chars": 700, "max_story_chars": 1600},
+            },
+        }
+
+        normalized = world_settings.normalize_world_settings(
+            {
+                "campaign_length": "SHORT",
+                "resource_name": " Mana ",
+                "consequence_severity": "invalid",
+                "offclass_xp_multiplier": 9,
+                "onclass_xp_multiplier": 0.1,
+                "target_turns": {"short": 0, "open": 99},
+                "pacing_profile": {"short": {"beats_per_turn": 0, "sideplot_limit": -2, "min_story_chars": 10, "max_story_chars": 20}},
+            },
+            deep_copy=copy.deepcopy,
+            default_campaign_length_settings=lambda: copy.deepcopy(defaults),
+            normalize_resource_name=lambda value, _default: str(value or "").strip(),
+            clamp_float=lambda value, low, high: max(low, min(high, float(value))),
+            campaign_lengths=("short", "medium", "open"),
+        )
+
+        self.assertEqual(normalized["campaign_length"], "short")
+        self.assertEqual(normalized["resource_name"], "Mana")
+        self.assertEqual(normalized["consequence_severity"], "mittel")
+        self.assertEqual(normalized["offclass_xp_multiplier"], 1.0)
+        self.assertEqual(normalized["onclass_xp_multiplier"], 0.5)
+        self.assertEqual(normalized["target_turns"]["short"], 12)
+        self.assertIsNone(normalized["target_turns"]["open"])
+        self.assertEqual(normalized["pacing_profile"]["short"]["beats_per_turn"], 3)
+        self.assertEqual(normalized["pacing_profile"]["short"]["sideplot_limit"], 0)
+        self.assertEqual(normalized["pacing_profile"]["short"]["min_story_chars"], 300)
+        self.assertEqual(normalized["pacing_profile"]["short"]["max_story_chars"], 300)
+
+    def test_state_engine_world_settings_wrappers_preserve_contract(self) -> None:
+        settings = state_engine.normalize_world_settings({"campaign_length": "open"})
+
+        self.assertIn("default_campaign_length_settings", state_engine.EXPORTED_SYMBOLS)
+        self.assertIn("normalize_world_settings", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(state_engine.default_campaign_length_settings()["campaign_length"], "medium")
+        self.assertEqual(settings["campaign_length"], "open")
+        self.assertIsNone(settings["target_turns"]["open"])
 
     def test_combat_meta_update_starts_combat_and_records_queue(self) -> None:
         def normalize_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
