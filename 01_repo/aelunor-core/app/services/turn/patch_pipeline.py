@@ -1,6 +1,51 @@
 from typing import Any, Callable, Dict, Optional
 
 
+def sanitize_patch_with_events(
+    state: Dict[str, Any],
+    patch: Dict[str, Any],
+    *,
+    stage: str,
+    trace_ctx: Optional[Dict[str, Any]],
+    sanitize_patch: Callable[[Dict[str, Any], Dict[str, Any]], Dict[str, Any]],
+    emit_turn_phase_event: Callable[..., None],
+    turn_flow_error: Callable[..., Exception],
+    error_code_patch_sanitize: str,
+    extractor_apply_stage: str = "",
+) -> Dict[str, Any]:
+    try:
+        emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": stage})
+        sanitized = sanitize_patch(state, patch)
+        emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": stage, "result": "ok"})
+        return sanitized
+    except Exception as exc:
+        emit_turn_phase_event(
+            trace_ctx,
+            phase="patch_sanitize",
+            success=False,
+            error_code=error_code_patch_sanitize,
+            error_class=exc.__class__.__name__,
+            message=str(exc)[:240],
+            extra={"stage": stage},
+        )
+        if extractor_apply_stage:
+            emit_turn_phase_event(
+                trace_ctx,
+                phase="extractor_patch_apply",
+                success=False,
+                error_code=error_code_patch_sanitize,
+                error_class=exc.__class__.__name__,
+                message=str(exc)[:240],
+                extra={"stage": extractor_apply_stage},
+            )
+        raise turn_flow_error(
+            error_code=error_code_patch_sanitize,
+            phase="patch_sanitize",
+            trace_ctx=trace_ctx,
+            exc=exc,
+        )
+
+
 def validate_patch_with_events(
     state: Dict[str, Any],
     patch: Dict[str, Any],

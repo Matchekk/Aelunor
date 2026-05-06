@@ -34,7 +34,7 @@ from app.services.turn.patch_limits import (
     enforce_non_milestone_patch_limits as _enforce_non_milestone_patch_limits,
     enforce_progression_set_mode_limits as _enforce_progression_set_mode_limits,
 )
-from app.services.turn.patch_pipeline import validate_patch_with_events
+from app.services.turn.patch_pipeline import sanitize_patch_with_events, validate_patch_with_events
 from app.services.turn.patch_validator import (
     PatchValidatorDependencies,
     configure as configure_patch_validator,
@@ -860,26 +860,16 @@ def create_turn_record(
         extractor_piece.setdefault("events_add", [])
         extractor_piece["events_add"].append(f"KANON: {content}")
         emit_turn_phase_event(trace_ctx, phase="extractor_patch_apply", success=True, extra={"stage": "canon"})
-        try:
-            emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": "canon"})
-            extractor_piece = sanitize_patch(working_state, extractor_piece)
-            emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": "canon", "result": "ok"})
-        except Exception as exc:
-            emit_turn_phase_event(
-                trace_ctx,
-                phase="patch_sanitize",
-                success=False,
-                error_code=ERROR_CODE_PATCH_SANITIZE,
-                error_class=exc.__class__.__name__,
-                message=str(exc)[:240],
-                extra={"stage": "canon"},
-            )
-            raise turn_flow_error(
-                error_code=ERROR_CODE_PATCH_SANITIZE,
-                phase="patch_sanitize",
-                trace_ctx=trace_ctx,
-                exc=exc,
-            )
+        extractor_piece = sanitize_patch_with_events(
+            working_state,
+            extractor_piece,
+            stage="canon",
+            trace_ctx=trace_ctx,
+            sanitize_patch=sanitize_patch,
+            emit_turn_phase_event=emit_turn_phase_event,
+            turn_flow_error=turn_flow_error,
+            error_code_patch_sanitize=ERROR_CODE_PATCH_SANITIZE,
+        )
         extractor_piece = enforce_progression_set_mode_limits(extractor_piece, action_type=action_type)
         validate_patch_with_events(
             working_state,
@@ -1045,26 +1035,16 @@ def create_turn_record(
         except Exception as exc:
             raise classify_turn_exception(exc, phase="narrator_call_finished", trace_ctx=trace_ctx)
 
-        try:
-            emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": "narrator"})
-            narrator_patch = sanitize_patch(working_state, out["patch"])
-            emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": "narrator", "result": "ok"})
-        except Exception as exc:
-            emit_turn_phase_event(
-                trace_ctx,
-                phase="patch_sanitize",
-                success=False,
-                error_code=ERROR_CODE_PATCH_SANITIZE,
-                error_class=exc.__class__.__name__,
-                message=str(exc)[:240],
-                extra={"stage": "narrator"},
-            )
-            raise turn_flow_error(
-                error_code=ERROR_CODE_PATCH_SANITIZE,
-                phase="patch_sanitize",
-                trace_ctx=trace_ctx,
-                exc=exc,
-            )
+        narrator_patch = sanitize_patch_with_events(
+            working_state,
+            out["patch"],
+            stage="narrator",
+            trace_ctx=trace_ctx,
+            sanitize_patch=sanitize_patch,
+            emit_turn_phase_event=emit_turn_phase_event,
+            turn_flow_error=turn_flow_error,
+            error_code_patch_sanitize=ERROR_CODE_PATCH_SANITIZE,
+        )
         narrator_patch, attribute_delta_adjustments = apply_attribute_bias_to_patch(narrator_patch, actor, attribute_bias)
         if attribute_delta_adjustments:
             resource_deltas_applied["attribute_bias"] = attribute_delta_adjustments
@@ -1152,35 +1132,17 @@ def create_turn_record(
                     exc=exc,
                 )
             emit_turn_phase_event(trace_ctx, phase="extractor_patch_apply", success=True, extra={"stage": source_kind})
-            try:
-                emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": f"extractor_{source_kind}"})
-                extractor_piece = sanitize_patch(working_state, extractor_piece)
-                emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": f"extractor_{source_kind}", "result": "ok"})
-            except Exception as exc:
-                emit_turn_phase_event(
-                    trace_ctx,
-                    phase="patch_sanitize",
-                    success=False,
-                    error_code=ERROR_CODE_PATCH_SANITIZE,
-                    error_class=exc.__class__.__name__,
-                    message=str(exc)[:240],
-                    extra={"stage": f"extractor_{source_kind}"},
-                )
-                emit_turn_phase_event(
-                    trace_ctx,
-                    phase="extractor_patch_apply",
-                    success=False,
-                    error_code=ERROR_CODE_PATCH_SANITIZE,
-                    error_class=exc.__class__.__name__,
-                    message=str(exc)[:240],
-                    extra={"stage": source_kind},
-                )
-                raise turn_flow_error(
-                    error_code=ERROR_CODE_PATCH_SANITIZE,
-                    phase="patch_sanitize",
-                    trace_ctx=trace_ctx,
-                    exc=exc,
-                )
+            extractor_piece = sanitize_patch_with_events(
+                working_state,
+                extractor_piece,
+                stage=f"extractor_{source_kind}",
+                trace_ctx=trace_ctx,
+                sanitize_patch=sanitize_patch,
+                emit_turn_phase_event=emit_turn_phase_event,
+                turn_flow_error=turn_flow_error,
+                error_code_patch_sanitize=ERROR_CODE_PATCH_SANITIZE,
+                extractor_apply_stage=source_kind,
+            )
             extractor_piece = enforce_non_milestone_patch_limits(
                 working_state,
                 extractor_piece,

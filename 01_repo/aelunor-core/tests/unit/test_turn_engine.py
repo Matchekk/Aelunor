@@ -10,7 +10,7 @@ from app.services import turn_engine
 from app.services.turn.flow_errors import build_narrator_turn_error
 from app.services.turn.patch_apply_bio import apply_patch_character_bio_updates
 from app.services.turn.patch_apply_normalization import apply_patch_character_late_normalization
-from app.services.turn.patch_pipeline import validate_patch_with_events
+from app.services.turn.patch_pipeline import sanitize_patch_with_events, validate_patch_with_events
 from app.services.turn.prompt_payloads import build_turn_system_prompt, build_turn_user_prompt
 from app.services.turn.records import build_turn_record_payload
 from app.services.turn.story_length_guard import rewrite_story_length_guard as rewrite_story_length_guard_helper
@@ -203,6 +203,63 @@ class TurnEngineTests(unittest.TestCase):
         self.assertEqual([event[1]["phase"] for event in events], ["schema_validation", "schema_validation"])
         self.assertEqual(events[0][1]["extra"], {"stage": "narrator"})
         self.assertEqual(events[1][1]["extra"], {"stage": "narrator", "result": "ok"})
+
+    def test_sanitize_patch_with_events_returns_sanitized_patch(self) -> None:
+        events = []
+        sanitized = {"patch": "clean"}
+
+        result = sanitize_patch_with_events(
+            {"state": True},
+            {"patch": "raw"},
+            stage="narrator",
+            trace_ctx={"trace_id": "trace_1"},
+            sanitize_patch=lambda _state, _patch: sanitized,
+            emit_turn_phase_event=lambda ctx, **payload: events.append((ctx, payload)),
+            turn_flow_error=lambda **_payload: AssertionError("unexpected error"),
+            error_code_patch_sanitize="patch_sanitize",
+        )
+
+        self.assertIs(result, sanitized)
+        self.assertEqual([event[1]["phase"] for event in events], ["patch_sanitize", "patch_sanitize"])
+        self.assertEqual(events[0][1]["extra"], {"stage": "narrator"})
+        self.assertEqual(events[1][1]["extra"], {"stage": "narrator", "result": "ok"})
+
+    def test_sanitize_patch_with_events_emits_extractor_failure_event(self) -> None:
+        events = []
+
+        def fail_sanitize(_state, _patch):
+            raise ValueError("bad sanitize")
+
+        def make_error(**payload):
+            return turn_engine.TurnFlowError(
+                error_code=payload["error_code"],
+                phase=payload["phase"],
+                trace_id=(payload["trace_ctx"] or {}).get("trace_id", ""),
+                user_message="sanitize failed",
+                cause_class=payload["exc"].__class__.__name__,
+                cause_message=str(payload["exc"]),
+            )
+
+        with self.assertRaises(turn_engine.TurnFlowError) as ctx:
+            sanitize_patch_with_events(
+                {"state": True},
+                {"patch": "raw"},
+                stage="extractor_player",
+                trace_ctx={"trace_id": "trace_1"},
+                sanitize_patch=fail_sanitize,
+                emit_turn_phase_event=lambda event_ctx, **payload: events.append((event_ctx, payload)),
+                turn_flow_error=make_error,
+                error_code_patch_sanitize="patch_sanitize",
+                extractor_apply_stage="player",
+            )
+
+        self.assertEqual(ctx.exception.error_code, "patch_sanitize")
+        self.assertEqual(
+            [event[1]["phase"] for event in events],
+            ["patch_sanitize", "patch_sanitize", "extractor_patch_apply"],
+        )
+        self.assertEqual(events[1][1]["extra"], {"stage": "extractor_player"})
+        self.assertEqual(events[2][1]["extra"], {"stage": "player"})
 
     def test_validate_patch_with_events_emits_extractor_failure_event(self) -> None:
         events = []
