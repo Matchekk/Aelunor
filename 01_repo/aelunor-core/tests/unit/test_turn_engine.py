@@ -9,6 +9,9 @@ from app.services import state_engine
 from app.services import turn_engine
 from app.services.turn.patch_apply_bio import apply_patch_character_bio_updates
 from app.services.turn.patch_apply_normalization import apply_patch_character_late_normalization
+from app.services.turn.prompt_payloads import build_turn_system_prompt, build_turn_user_prompt
+from app.services.turn.records import build_turn_record_payload
+from app.services.turn.story_length_guard import rewrite_story_length_guard as rewrite_story_length_guard_helper
 
 
 def configure_engine_for_tests() -> None:
@@ -68,6 +71,16 @@ def configure_engine_for_tests() -> None:
             "formel",
         },
         "ABILITY_UNLOCK_TRIGGER_PATTERNS": [],
+        "CLASS_ASCENSION_STATUSES": {"none", "available", "active", "completed"},
+        "PROGRESSION_SET_DIRECT_KEYS": {
+            "level",
+            "xp_total",
+            "xp_current",
+            "xp_to_next",
+            "class_level",
+            "class_xp",
+            "class_xp_to_next",
+        },
         "normalize_patch_semantics": state_engine.normalize_patch_semantics,
         "clean_auto_item_name": state_engine.clean_auto_item_name,
         "clean_creator_item_name": state_engine.clean_creator_item_name,
@@ -294,6 +307,279 @@ class TurnEngineTests(unittest.TestCase):
         self.assertTrue(
             any(skill.get("name") == "Schatten Schritt" for skill in character["skills"].values())
         )
+
+    def test_build_turn_user_prompt_includes_actor_resolution_hint(self) -> None:
+        user_prompt, actor_display, actor_resolution_hint = build_turn_user_prompt(
+            campaign={"slots": {"slot_1": {"character_name": "Mati"}}},
+            actor="slot_1",
+            action_type="play",
+            content="Ich öffne die Tür.",
+            context='{"state": "ok"}',
+            turn_mode_guide={"play": "Spielzug"},
+            turn_response_json_contract='{"story": "string"}',
+            display_name_for_slot=lambda _campaign, _actor: "Mati",
+            is_slot_id=lambda value: value.startswith("slot_"),
+            is_first_person_action=lambda text: "Ich" in text,
+        )
+
+        self.assertEqual(actor_display, "Mati")
+        self.assertIn("Aktiver Actor-Slot: slot_1.", actor_resolution_hint)
+        self.assertIn(
+            "Erste-Person-Pronomen im Spieltext wie 'ich', 'mich', 'mir' oder 'mein' meinen in diesem Turn immer Mati und niemals eine andere Figur.",
+            actor_resolution_hint,
+        )
+        self.assertIn("CONTEXT_PACKET(JSON):\n{\"state\": \"ok\"}", user_prompt)
+        self.assertIn('"actor_display": "Mati"', user_prompt)
+        self.assertIn("ACTOR_AUFLÖSUNG:", user_prompt)
+
+    def test_build_turn_system_prompt_keeps_core_guard_fragments(self) -> None:
+        system_prompt = build_turn_system_prompt(
+            system_prompt_base="BASE",
+            turn_mode_guide={"play": "Spielzug", "canon": "Kanon"},
+            pacing_text="PACING",
+            attribute_prompt_hints="ATTRIBUTES",
+            combat_scaling_context={
+                "actor_score": 12,
+                "threat_score": 8,
+                "pressure": "normal",
+                "ratio": 1.5,
+                "weighted_ratio": 1.2,
+                "element_factor": 1.0,
+            },
+            min_story_chars=900,
+        )
+
+        self.assertTrue(system_prompt.startswith("BASE\n\nACTION_TYPE-HINWEIS:"))
+        self.assertIn("- play: Spielzug", system_prompt)
+        self.assertIn("PACING\n\nATTRIBUTES", system_prompt)
+        self.assertIn("INTENT-FIRST ist bindend", system_prompt)
+        self.assertIn("ELEMENTSYSTEM ist bindend", system_prompt)
+        self.assertIn("actor_score=12 threat_score=8 pressure=normal", system_prompt)
+        self.assertIn("Die story muss mindestens 900 Zeichen enthalten.", system_prompt)
+
+    def test_enforce_non_milestone_patch_limits_strips_rank_and_high_new_skills(self) -> None:
+        state = self._base_apply_state()
+        state["characters"]["slot_1"]["class_current"] = {
+            "id": "wanderer",
+            "name": "Wanderer",
+            "rank": "F",
+        }
+        state["characters"]["slot_1"]["skills"] = {
+            "skill_existing": {"name": "Bestehend", "rank": "F"}
+        }
+        patch = {
+            "plotpoints_add": [
+                {"id": "quest_class", "type": "class_ascension"},
+                {"id": "quest_keep", "type": "rumor"},
+            ],
+            "characters": {
+                "slot_1": {
+                    "class_set": {"id": "mage", "name": "Magier", "rank": "A"},
+                    "class_update": {"rank": "B", "title": "Adept"},
+                    "skills_set": {
+                        "skill_existing": {"name": "Bestehend", "rank": "S"},
+                        "skill_new_a": {"name": "Neue Macht", "rank": "A"},
+                        "skill_new_f": {"name": "Kleine List", "rank": "F"},
+                    },
+                }
+            },
+        }
+
+        limited = turn_engine.enforce_non_milestone_patch_limits(
+            state,
+            patch,
+            is_milestone=False,
+            action_type="play",
+        )
+
+        self.assertEqual(patch["characters"]["slot_1"]["class_set"]["rank"], "A")
+        self.assertEqual(limited["plotpoints_add"], [{"id": "quest_keep", "type": "rumor"}])
+        self.assertEqual(limited["characters"]["slot_1"]["class_set"]["rank"], "F")
+        self.assertEqual(limited["characters"]["slot_1"]["class_update"], {"title": "Adept"})
+        self.assertIn("skill_existing", limited["characters"]["slot_1"]["skills_set"])
+        self.assertNotIn("skill_new_a", limited["characters"]["slot_1"]["skills_set"])
+        self.assertIn("skill_new_f", limited["characters"]["slot_1"]["skills_set"])
+        self.assertIn("Klassenaufstiegs-Quest auf Milestone verschoben.", limited["events_add"])
+        self.assertIn("Neuer A-Skill für slot_1 auf Milestone verschoben.", limited["events_add"])
+
+    def test_enforce_progression_set_mode_limits_strips_direct_sets_outside_canon(self) -> None:
+        patch = {
+            "characters": {
+                "slot_1": {
+                    "progression_set": {
+                        "level": 4,
+                        "xp_total": 300,
+                        "progression_events": [{"kind": "training"}],
+                    }
+                }
+            }
+        }
+
+        limited = turn_engine.enforce_progression_set_mode_limits(patch, action_type="play")
+
+        self.assertEqual(patch["characters"]["slot_1"]["progression_set"]["level"], 4)
+        self.assertEqual(
+            limited["characters"]["slot_1"]["progression_set"],
+            {"progression_events": [{"kind": "training"}]},
+        )
+        self.assertEqual(
+            limited["events_add"],
+            ["System: Direkte XP/Level-Setzung ist nur im Modus CANON bindend."],
+        )
+
+    def test_progression_limit_wrappers_keep_canon_payloads_unchanged(self) -> None:
+        patch = {
+            "characters": {
+                "slot_1": {
+                    "progression_set": {"level": 4},
+                    "class_update": {"rank": "A"},
+                }
+            }
+        }
+
+        self.assertIs(
+            turn_engine.enforce_progression_set_mode_limits(patch, action_type="canon"),
+            patch,
+        )
+        self.assertIs(
+            turn_engine.enforce_non_milestone_patch_limits(
+                self._base_apply_state(),
+                patch,
+                is_milestone=False,
+                action_type="canon",
+            ),
+            patch,
+        )
+
+    def test_story_length_guard_rewrites_short_story_with_fake_schema_call(self) -> None:
+        calls = []
+
+        def fake_call(_system, user, _schema, **kwargs):
+            calls.append((user, kwargs))
+            return {"story": "Lang genug."}
+
+        story = rewrite_story_length_guard_helper(
+            system_prompt="system",
+            user_prompt="user",
+            story_text="kurz",
+            patch={"events_add": ["x"]},
+            requests_payload=[{"type": "none"}],
+            min_story_chars=10,
+            max_story_chars=80,
+            min_story_rewrite_attempts=1,
+            max_story_compress_attempts=1,
+            story_rewrite_schema={"type": "object"},
+            ollama_temperature=0.7,
+            call_ollama_schema=fake_call,
+            http_exception_type=HTTPException,
+        )
+
+        self.assertEqual(story, "Lang genug.")
+        self.assertEqual(calls[0][1]["timeout"], 120)
+        self.assertIn("REWRITE-AUFTRAG:", calls[0][0])
+        self.assertIn("PATCH (unverändert lassen):", calls[0][0])
+
+    def test_story_length_guard_compresses_long_story_with_fake_schema_call(self) -> None:
+        calls = []
+
+        def fake_call(_system, user, _schema, **kwargs):
+            calls.append((user, kwargs))
+            return {"story": "kurz"}
+
+        story = rewrite_story_length_guard_helper(
+            system_prompt="system",
+            user_prompt="user",
+            story_text="x" * 20,
+            patch={},
+            requests_payload=[],
+            min_story_chars=5,
+            max_story_chars=10,
+            min_story_rewrite_attempts=1,
+            max_story_compress_attempts=1,
+            story_rewrite_schema={"type": "object"},
+            ollama_temperature=0.7,
+            call_ollama_schema=fake_call,
+            http_exception_type=HTTPException,
+        )
+
+        self.assertEqual(story, "kurz")
+        self.assertEqual(calls[0][1]["timeout"], 90)
+        self.assertIn("KOMPRIMIERUNGSAUFTRAG:", calls[0][0])
+
+    def test_story_length_guard_raises_when_rewrite_stays_short(self) -> None:
+        with self.assertRaises(HTTPException) as ctx:
+            rewrite_story_length_guard_helper(
+                system_prompt="system",
+                user_prompt="user",
+                story_text="kurz",
+                patch={},
+                requests_payload=[],
+                min_story_chars=10,
+                max_story_chars=80,
+                min_story_rewrite_attempts=1,
+                max_story_compress_attempts=1,
+                story_rewrite_schema={"type": "object"},
+                ollama_temperature=0.7,
+                call_ollama_schema=lambda *_args, **_kwargs: {"story": "kurz"},
+                http_exception_type=HTTPException,
+            )
+
+        self.assertEqual(ctx.exception.status_code, 500)
+
+    def test_build_turn_record_payload_preserves_record_contract(self) -> None:
+        state_before = {"meta": {"turn": 1}}
+        state_after = {"meta": {"turn": 2}, "events": []}
+        attribute_profile = {"primary_attributes": ["str"]}
+        combat_resolution = {"damage_taken": 2}
+        resource_deltas = {"skill_cost": {"mana": -1}}
+        npc_updates = [{"id": "npc_1"}]
+        codex_updates = [{"id": "codex_1"}]
+        updated_combat = {"active": True}
+
+        turn_record = build_turn_record_payload(
+            campaign={"turns": [{"turn_id": "turn_old"}]},
+            actor="slot_1",
+            player_id="player_1",
+            action_type="play",
+            content="Weiter",
+            gm_text_display="GM text",
+            requests_payload=[{"type": "none"}],
+            skill_requests=[{"type": "choice"}],
+            patch={"events_add": ["event"]},
+            narrator_patch={"characters": {}},
+            extractor_patch={"items_new": {}},
+            canon_applied=False,
+            attribute_profile=attribute_profile,
+            combat_resolution=combat_resolution,
+            resource_deltas_applied=resource_deltas,
+            progression_result={"events": [{"kind": "xp"}]},
+            canon_gate_meta={"ok": True},
+            npc_updates=npc_updates,
+            codex_updates=codex_updates,
+            updated_combat=updated_combat,
+            state_before=state_before,
+            state_after=state_after,
+            retry_of_turn_id="turn_retry",
+            prompt_payload={"system": "s"},
+            make_id=lambda prefix: f"{prefix}_new",
+            utc_now=lambda: "2026-03-10T00:00:00+00:00",
+            deep_copy=copy.deepcopy,
+            normalize_requests_payload=lambda payload, **_kwargs: payload,
+            is_continue_story_content=lambda value: value == "Weiter",
+        )
+
+        self.assertEqual(turn_record["turn_id"], "turn_new")
+        self.assertEqual(turn_record["turn_number"], 2)
+        self.assertEqual(turn_record["input_text_raw"], "Weiter")
+        self.assertEqual(turn_record["input_text_display"], "")
+        self.assertEqual(turn_record["requests"], [{"type": "none"}, {"type": "choice"}])
+        self.assertEqual(turn_record["created_at"], "2026-03-10T00:00:00+00:00")
+        self.assertEqual(turn_record["updated_at"], "2026-03-10T00:00:00+00:00")
+        self.assertEqual(turn_record["retry_of_turn_id"], "turn_retry")
+        self.assertIs(turn_record["state_before"], state_before)
+        self.assertIsNot(turn_record["state_after"], state_after)
+        attribute_profile["primary_attributes"].append("dex")
+        self.assertEqual(turn_record["attribute_profile"], {"primary_attributes": ["str"]})
 
     def test_sanitize_patch_prunes_invalid_character_item_refs(self) -> None:
         state = {
