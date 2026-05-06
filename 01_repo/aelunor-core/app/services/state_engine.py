@@ -53,6 +53,9 @@ from app.services.world.element_generation import (
     theme_flavor as _theme_flavor,
     theme_flavor_options as _theme_flavor_options,
 )
+from app.services.world.element_ids import (
+    normalize_element_id_list as _normalize_element_id_list,
+)
 from app.services.world.element_skills import (
     normalize_skill_elements_for_world as _normalize_skill_elements_for_world,
 )
@@ -913,25 +916,12 @@ def get_element_relation(world: Dict[str, Any], source_element_id: str, target_e
     return resolve_element_relation(world, source_element_id, target_element_id)
 
 def normalize_element_id_list(values: Any, world: Optional[Dict[str, Any]] = None) -> List[str]:
-    ids = set(((world or {}).get("elements") or {}).keys()) if isinstance((world or {}).get("elements"), dict) else set()
-    alias_index = ((world or {}).get("element_alias_index") or {}) if isinstance((world or {}).get("element_alias_index"), dict) else {}
-    out: List[str] = []
-    for raw in (values or []):
-        text = str(raw or "").strip()
-        if not text:
-            continue
-        if text in ids:
-            out.append(text)
-            continue
-        normalized = normalize_codex_alias_text(text)
-        matched = alias_index.get(normalized) if isinstance(alias_index.get(normalized), list) else []
-        if isinstance(matched, list) and len(matched) == 1:
-            out.append(str(matched[0]))
-            continue
-        candidate_id = element_id_from_name(text)
-        if candidate_id in ids:
-            out.append(candidate_id)
-    return list(dict.fromkeys([entry for entry in out if entry]))
+    return _normalize_element_id_list(
+        values,
+        world,
+        normalize_codex_alias_text=normalize_codex_alias_text,
+        element_id_from_name=element_id_from_name,
+    )
 
 def normalize_skill_elements_for_world(skill: Dict[str, Any], world: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     return _normalize_skill_elements_for_world(

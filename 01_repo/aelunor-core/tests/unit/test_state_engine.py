@@ -5,6 +5,7 @@ from app.services import state_engine
 from app.services import state_basics
 from app.services.world import element_class_paths
 from app.services.world import element_generation
+from app.services.world import element_ids
 from app.services.world import element_profiles
 from app.services.world import element_relations
 from app.services.world import element_skills
@@ -546,6 +547,30 @@ class StateEngineTests(unittest.TestCase):
 
         self.assertIn("resolve_class_element_id", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(resolved, "elem_fire")
+
+    def test_element_id_list_normalizer_uses_aliases_and_dedupes(self) -> None:
+        normalized = element_ids.normalize_element_id_list(
+            ["Feuer", "elem_water", "Feuer", "", "Unknown"],
+            {
+                "elements": {"elem_fire": {}, "elem_water": {}},
+                "element_alias_index": {"feuer": ["elem_fire"]},
+            },
+            normalize_codex_alias_text=lambda value: str(value or "").strip().lower(),
+            element_id_from_name=lambda name: f"elem_{str(name or '').strip().lower()}",
+        )
+
+        self.assertEqual(normalized, ["elem_fire", "elem_water"])
+
+    def test_state_engine_element_id_list_wrapper_preserves_contract(self) -> None:
+        world = {
+            "elements": {"elem_fire": {"name": "Feuer"}, "elem_water": {"name": "Wasser"}},
+            "element_alias_index": {"feuer": ["elem_fire"]},
+        }
+
+        normalized = state_engine.normalize_element_id_list(["Feuer", "elem_water", "Feuer"], world)
+
+        self.assertIn("normalize_element_id_list", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(normalized, ["elem_fire", "elem_water"])
 
     def test_element_skill_normalizer_prefers_primary_element(self) -> None:
         normalized = element_skills.normalize_skill_elements_for_world(
