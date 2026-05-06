@@ -955,6 +955,15 @@ class StateEngineTests(unittest.TestCase):
         self.assertTrue(context["active"])
         self.assertTrue(context["hinted"])
 
+    def test_combat_patch_signal_helper_detects_resource_and_effect_signals(self) -> None:
+        self.assertTrue(combat.patch_has_combat_signal({"characters": {"slot_1": {"resources_delta": {"hp": -1}}}}))
+        self.assertTrue(combat.patch_has_combat_signal({"characters": {"slot_1": {"effects_add": [{"category": "combat"}]}}}))
+        self.assertFalse(combat.patch_has_combat_signal({"characters": {"slot_1": {"resources_delta": {"hp": 1}}}}))
+
+    def test_state_engine_combat_patch_signal_wrapper_preserves_contract(self) -> None:
+        self.assertIn("patch_has_combat_signal", state_engine.EXPORTED_SYMBOLS)
+        self.assertTrue(state_engine.patch_has_combat_signal({"characters": {"slot_1": {"hp_delta": -1}}}))
+
     def test_element_class_path_rank_lookup_selects_requested_path(self) -> None:
         world = {
             "element_class_paths": {

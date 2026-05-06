@@ -127,6 +127,7 @@ from app.services.world.combat import (
     compute_character_combat_score as _compute_character_combat_score,
     compute_npc_combat_score as _compute_npc_combat_score,
     infer_combat_context as _infer_combat_context,
+    patch_has_combat_signal as _patch_has_combat_signal,
     skill_rank_power_weight as _skill_rank_power_weight,
 )
 
@@ -6283,20 +6284,7 @@ def infer_combat_context(
     )
 
 def patch_has_combat_signal(patch: Dict[str, Any]) -> bool:
-    for upd in (patch.get("characters") or {}).values():
-        if not isinstance(upd, dict):
-            continue
-        if int(upd.get("hp_delta", 0) or 0) < 0:
-            return True
-        if int(upd.get("stamina_delta", 0) or 0) < 0:
-            return True
-        resources_delta = upd.get("resources_delta") if isinstance(upd.get("resources_delta"), dict) else {}
-        if any(int(resources_delta.get(key, 0) or 0) < 0 for key in ("hp", "stamina", "sta", "res", "aether")):
-            return True
-        for effect in (upd.get("effects_add") or []):
-            if isinstance(effect, dict) and str(effect.get("category") or "").strip().lower() == "combat":
-                return True
-    return False
+    return _patch_has_combat_signal(patch)
 
 def update_combat_meta_after_turn(
     state: Dict[str, Any],

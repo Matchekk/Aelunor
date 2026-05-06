@@ -235,3 +235,20 @@ def infer_combat_context(
         "phase": meta_combat.get("phase", "idle"),
         "action_type": action_type,
     }
+
+
+def patch_has_combat_signal(patch: Dict[str, Any]) -> bool:
+    for upd in (patch.get("characters") or {}).values():
+        if not isinstance(upd, dict):
+            continue
+        if int(upd.get("hp_delta", 0) or 0) < 0:
+            return True
+        if int(upd.get("stamina_delta", 0) or 0) < 0:
+            return True
+        resources_delta = upd.get("resources_delta") if isinstance(upd.get("resources_delta"), dict) else {}
+        if any(int(resources_delta.get(key, 0) or 0) < 0 for key in ("hp", "stamina", "sta", "res", "aether")):
+            return True
+        for effect in (upd.get("effects_add") or []):
+            if isinstance(effect, dict) and str(effect.get("category") or "").strip().lower() == "combat":
+                return True
+    return False
