@@ -33,6 +33,7 @@ from app.services.world.element_profiles import (
     normalize_element_profile as _normalize_element_profile,
 )
 from app.services.world.element_relations import (
+    build_element_alias_index as _build_element_alias_index,
     element_sort_key as _element_sort_key,
     normalize_element_relation as _normalize_element_relation,
     relation_sort_value as _relation_sort_value,
@@ -691,21 +692,12 @@ def normalize_element_relation(value: Any) -> str:
     return _normalize_element_relation(value, element_relations=set(ELEMENT_RELATIONS))
 
 def build_element_alias_index(elements: Dict[str, Dict[str, Any]]) -> Dict[str, List[str]]:
-    index: Dict[str, List[str]] = {}
-    for element_id, profile in (elements or {}).items():
-        if not isinstance(profile, dict):
-            continue
-        variants = build_entity_alias_variants(str(profile.get("name") or element_id), profile.get("aliases") or [])
-        for alias in variants:
-            normalized = normalize_codex_alias_text(alias)
-            if not normalized:
-                continue
-            index.setdefault(normalized, [])
-            if element_id not in index[normalized]:
-                index[normalized].append(element_id)
-    for alias, ids in list(index.items()):
-        index[alias] = sorted(set(ids), key=str)
-    return stable_sorted_mapping(index, key_fn=lambda item: item[0])
+    return _build_element_alias_index(
+        elements,
+        build_entity_alias_variants=build_entity_alias_variants,
+        normalize_codex_alias_text=normalize_codex_alias_text,
+        stable_sorted_mapping=stable_sorted_mapping,
+    )
 
 def build_default_element_relations(elements: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, str]]:
     relation_map: Dict[str, Dict[str, str]] = {}

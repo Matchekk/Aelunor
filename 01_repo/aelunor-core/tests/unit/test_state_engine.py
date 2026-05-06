@@ -147,11 +147,29 @@ class StateEngineTests(unittest.TestCase):
             "neutral",
         )
 
+    def test_element_alias_index_helper_dedupes_and_sorts(self) -> None:
+        index = element_relations.build_element_alias_index(
+            {
+                "elem_b": {"name": "Wasser", "aliases": ["Flut", "Flut"]},
+                "elem_a": {"name": "Feuer", "aliases": ["Glut"]},
+                "broken": "not-a-dict",
+            },
+            build_entity_alias_variants=lambda name, aliases: [name, *aliases],
+            normalize_codex_alias_text=lambda value: str(value or "").strip().lower(),
+            stable_sorted_mapping=lambda mapping, key_fn: dict(sorted(mapping.items(), key=key_fn)),
+        )
+
+        self.assertEqual(list(index.keys()), ["feuer", "flut", "glut", "wasser"])
+        self.assertEqual(index["flut"], ["elem_b"])
+
     def test_state_engine_element_relation_wrappers_preserve_contract(self) -> None:
         self.assertEqual(state_engine.relation_sort_value("countered"), 0)
         self.assertEqual(state_engine.normalize_element_relation("dominant"), "dominant")
         self.assertEqual(state_engine.normalize_element_relation("invalid"), "neutral")
         self.assertEqual(state_engine.element_sort_key(("elem_fire", {"name": "Feuer"})), ("feuer", "elem_fire"))
+        alias_index = state_engine.build_element_alias_index({"elem_fire": {"name": "Feuer", "aliases": ["Glut"]}})
+        self.assertEqual(alias_index["feuer"], ["elem_fire"])
+        self.assertEqual(alias_index["glut"], ["elem_fire"])
 
     def test_normalize_patch_semantics_scene_set_alias(self) -> None:
         patch = {
