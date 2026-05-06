@@ -327,6 +327,46 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(rows[0]["theme"], "Schlaf")
         self.assertEqual(rows[0]["origin"], "generated")
 
+    def test_element_generation_profiles_combines_core_and_generated_candidates(self) -> None:
+        summary = {}
+
+        profiles = element_generation.generate_world_element_profiles(
+            summary,
+            element_total_count=8,
+            element_id_from_name=lambda name: f"elem_{str(name).strip().lower()}",
+            normalize_element_profile=lambda raw, **_kwargs: dict(raw),
+            default_element_profile=lambda element_id, name, **_kwargs: {"id": element_id, "name": name},
+            normalize_codex_alias_text=lambda value: str(value or "").strip().lower(),
+            generate_world_elements_with_llm=lambda _summary: [
+                {"name": "Traum", "theme": "Schlaf"},
+                {"name": "Traum", "theme": "Schlaf"},
+            ],
+            generate_world_elements_fallback=lambda _summary: [{"name": "Nebel", "theme": "Dunst"}],
+            generated_element_too_similar=lambda candidate, existing: (
+                (True, "DUPLICATE_NAME") if any(item.get("name") == candidate.get("name") for item in existing) else (False, "")
+            ),
+            stable_sorted_mapping=lambda mapping, key_fn: dict(sorted(mapping.items(), key=key_fn)),
+            element_sort_key=lambda item: item[0],
+        )
+
+        self.assertIn("elem_feuer", profiles)
+        self.assertIn("elem_traum", profiles)
+        self.assertIn("elem_nebel", profiles)
+        self.assertIn("DUPLICATE_NAME", summary["_element_generation_notes"])
+        self.assertLessEqual(len(profiles), 8)
+
+    def test_state_engine_element_profile_generation_wrapper_preserves_contract(self) -> None:
+        original_call = state_engine.call_ollama_schema
+        try:
+            state_engine.call_ollama_schema = lambda *_args, **_kwargs: {"elements": []}
+            profiles = state_engine.generate_world_element_profiles({"theme": "Nebel"})
+        finally:
+            state_engine.call_ollama_schema = original_call
+
+        self.assertEqual(len(profiles), 12)
+        self.assertIn("elem_feuer", profiles)
+        self.assertTrue(any(profile.get("origin") == "generated" for profile in profiles.values()))
+
     def test_normalize_patch_semantics_scene_set_alias(self) -> None:
         patch = {
             "characters": {

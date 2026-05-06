@@ -173,3 +173,99 @@ def generate_world_elements_with_llm(
         }
         out.append(candidate)
     return out
+
+
+def generate_world_element_profiles(
+    summary: Dict[str, Any],
+    *,
+    element_total_count: int,
+    element_id_from_name: Callable[[str], str],
+    normalize_element_profile: Callable[..., Dict[str, Any]],
+    default_element_profile: Callable[..., Dict[str, Any]],
+    normalize_codex_alias_text: Callable[[Any], str],
+    generate_world_elements_with_llm: Callable[[Dict[str, Any]], List[Dict[str, Any]]],
+    generate_world_elements_fallback: Callable[[Dict[str, Any]], List[Dict[str, Any]]],
+    generated_element_too_similar: Callable[[Dict[str, Any], List[Dict[str, Any]]], Tuple[bool, str]],
+    stable_sorted_mapping: Callable[..., Dict[str, Dict[str, Any]]],
+    element_sort_key: Callable[[Tuple[str, Dict[str, Any]]], Tuple[str, str]],
+) -> Dict[str, Dict[str, Any]]:
+    elements: Dict[str, Dict[str, Any]] = {}
+    core_templates = [
+        ("Feuer", "core", "Zerstörerische Hitze und treibende Energie", "Verbrennung und Druck", ["brand", "hitzewallung"]),
+        ("Wasser", "core", "Fluss, Anpassung und Bindung", "Kontrolle, Heilung und Sog", ["durchnässung", "strudel"]),
+        ("Erde", "core", "Standfestigkeit, Last und Struktur", "Panzerung und Zermalmung", ["bruch", "fessel"]),
+        ("Luft", "core", "Tempo, Reichweite und Präzision", "Bewegung und Distanzkontrolle", ["verwirbelung", "stoß"]),
+        ("Licht", "core", "Offenbarung, Reinheit und Ordnung", "Blendung und Läuterung", ["blendung", "reinbrand"]),
+        ("Schatten", "core", "Verhüllung, Furcht und Umgehung", "Täuschung und Entzug", ["furcht", "verhüllung"]),
+    ]
+    for name, origin, desc, theme, effects in core_templates:
+        element_id = element_id_from_name(name)
+        elements[element_id] = normalize_element_profile(
+            {
+                "id": element_id,
+                "name": name,
+                "rarity": "anker",
+                "description": desc,
+                "theme": theme,
+                "origin": origin,
+                "status_effect_tags": effects,
+                "class_affinities": [normalize_codex_alias_text(name)],
+                "skill_affinities": [normalize_codex_alias_text(name)],
+                "discoverable": True,
+                "aliases": [name],
+            },
+            fallback_id=element_id,
+            fallback_origin=origin,
+        ) or default_element_profile(element_id, name, origin=origin)
+
+    generated_candidates: List[Dict[str, Any]] = []
+    llm_attempts = 0
+    max_llm_attempts = 3
+    while llm_attempts < max_llm_attempts and len(generated_candidates) < 6:
+        llm_attempts += 1
+        try:
+            batch = generate_world_elements_with_llm(summary)
+        except Exception:
+            batch = []
+        if not batch:
+            continue
+        generated_candidates.extend(batch)
+    accepted: List[Dict[str, Any]] = []
+    rejection_notes: List[str] = []
+    for candidate in generated_candidates:
+        too_similar, reason = generated_element_too_similar(candidate, accepted + list(elements.values()))
+        if too_similar:
+            rejection_notes.append(reason)
+            continue
+        accepted.append(candidate)
+        if len(accepted) >= 6:
+            break
+    if len(accepted) < 6:
+        for fallback in generate_world_elements_fallback(summary):
+            too_similar, reason = generated_element_too_similar(fallback, accepted + list(elements.values()))
+            if too_similar:
+                rejection_notes.append(reason)
+                continue
+            accepted.append(fallback)
+            if len(accepted) >= 6:
+                break
+    for candidate in accepted[:6]:
+        element_id = element_id_from_name(candidate.get("name", ""))
+        normalized = normalize_element_profile(
+            {
+                **candidate,
+                "id": element_id,
+                "origin": "generated",
+                "discoverable": True,
+            },
+            fallback_id=element_id,
+            fallback_origin="generated",
+        )
+        if normalized:
+            elements[element_id] = normalized
+    elements = dict(list(stable_sorted_mapping(elements, key_fn=element_sort_key).items())[:element_total_count])
+    if rejection_notes:
+        meta_notes = summary.setdefault("_element_generation_notes", [])
+        if isinstance(meta_notes, list):
+            meta_notes.extend(rejection_notes[:12])
+    return stable_sorted_mapping(elements, key_fn=element_sort_key)
