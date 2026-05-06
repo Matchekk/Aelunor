@@ -44,7 +44,11 @@ from app.services.world.element_relations import (
     set_element_relation as _set_element_relation_impl,
 )
 from app.services.world.element_generation import (
+    candidate_from_fallback_element as _candidate_from_fallback_element,
+    generate_world_elements_fallback as _generate_world_elements_fallback,
     generated_element_too_similar as _generated_element_too_similar,
+    theme_flavor as _theme_flavor,
+    theme_flavor_options as _theme_flavor_options,
 )
 from app.services.world.math_utils import clamp
 from app.services.world.naming import strip_name_parenthetical
@@ -756,23 +760,10 @@ def generated_element_too_similar(candidate: Dict[str, Any], existing: List[Dict
     )
 
 def _theme_flavor_options(anchor: str) -> List[Tuple[str, str, List[str], List[str]]]:
-    motifs = [
-        ("Resonanz von Schwingungen und Klang", "resonanz", ["desorientierung", "echo"], ["ruhe", "stille"]),
-        ("Nebel aus Erinnerung und Täuschung", "nebel", ["blindheit", "verwirrung"], ["wind", "fokus"]),
-        ("Asche als Rest alter Opfer", "asche", ["brandspur", "erstickung"], ["wasser", "reinigung"]),
-        ("Sternenstaub und kosmische Splitter", "sterne", ["strahl", "markierung"], ["schatten", "erde"]),
-        ("Leere und entziehende Kälte", "leere", ["auszehrung", "druck"], ["licht", "bindung"]),
-        ("Traum zwischen Hoffnung und Alb", "traum", ["schlaf", "furcht"], ["klarheit", "lärm"]),
-        ("Blutpakt und Lebensrausch", "blut", ["blutung", "rausch"], ["reinheit", "frost"]),
-        ("Dornenwuchs und uraltes Grün", "dornen", ["fessel", "gift"], ["feuer", "schneide"]),
-        ("Donnerglas und geladene Splitter", "donnerglas", ["schock", "bruch"], ["erde", "isolierung"]),
-        ("Eidstahl aus gebundenem Metall", "eidstahl", ["schnitt", "druck"], ["magnet", "säure"]),
-    ]
-    return [(label, f"{theme} ({anchor})", status_tags, weak_tags) for theme, label, status_tags, weak_tags in motifs]
+    return _theme_flavor_options(anchor)
 
 def _theme_flavor(seed: random.Random, anchor: str) -> Tuple[str, str, List[str], List[str]]:
-    choice = seed.choice(_theme_flavor_options(anchor))
-    return choice
+    return _theme_flavor(seed, anchor)
 
 def _candidate_from_fallback_element(
     raw_name: str,
@@ -782,53 +773,16 @@ def _candidate_from_fallback_element(
     weak_tags: List[str],
     anchor: str,
 ) -> Dict[str, Any]:
-    return {
-        "name": raw_name,
-        "rarity": "ungewöhnlich",
-        "description": f"{raw_name} prägt Konflikte dieser Welt durch {theme.lower()}.",
-        "theme": theme,
-        "origin": "generated",
-        "strengths_against": [],
-        "weaknesses_against": weak_tags[:2],
-        "synergies_with": [],
-        "status_effect_tags": status_tags[:2],
-        "class_affinities": [short],
-        "skill_affinities": [short],
-        "discoverable": True,
-        "lore_notes": [f"{raw_name} wird in {anchor} mit alten Ritualen verknüpft."],
-        "visual_motif": short,
-        "temperament": "unruhig",
-        "environment_bias": anchor,
-        "aliases": [],
-    }
+    return _candidate_from_fallback_element(raw_name, short, theme, status_tags, weak_tags, anchor)
 
 def generate_world_elements_fallback(summary: Dict[str, Any]) -> List[Dict[str, Any]]:
-    seed_text = json.dumps(
-        {"theme": summary.get("theme", ""), "tone": summary.get("tone", ""), "premise": summary.get("premise", "")},
-        ensure_ascii=False,
-        sort_keys=True,
+    return _generate_world_elements_fallback(
+        summary,
+        deep_copy=deep_copy,
+        element_generated_names_fallback=ELEMENT_GENERATED_NAMES_FALLBACK,
+        pick_world_theme_anchor=pick_world_theme_anchor,
+        generated_element_too_similar=generated_element_too_similar,
     )
-    seed = random.Random(int(hashlib.sha1(seed_text.encode("utf-8")).hexdigest(), 16) % (2**32))
-    anchor = pick_world_theme_anchor(summary)
-    names = deep_copy(ELEMENT_GENERATED_NAMES_FALLBACK)
-    seed.shuffle(names)
-    flavor_options = _theme_flavor_options(anchor)
-    flavor_start = seed.randrange(len(flavor_options)) if flavor_options else 0
-    picked: List[Dict[str, Any]] = []
-    for name_index, raw_name in enumerate(names):
-        for flavor_index in range(len(flavor_options)):
-            short, theme, status_tags, weak_tags = flavor_options[
-                (flavor_start + name_index + flavor_index) % len(flavor_options)
-            ]
-            candidate = _candidate_from_fallback_element(raw_name, short, theme, status_tags, weak_tags, anchor)
-            too_similar, _reason = generated_element_too_similar(candidate, picked)
-            if too_similar:
-                continue
-            picked.append(candidate)
-            break
-        if len(picked) >= 6:
-            break
-    return picked[:6]
 
 def generate_world_elements_with_llm(summary: Dict[str, Any]) -> List[Dict[str, Any]]:
     user = (

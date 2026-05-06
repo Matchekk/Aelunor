@@ -250,6 +250,29 @@ class StateEngineTests(unittest.TestCase):
             (True, "DUPLICATE_THEME"),
         )
 
+    def test_element_generation_fallback_builds_six_distinct_candidates(self) -> None:
+        candidates = element_generation.generate_world_elements_fallback(
+            {"theme": "Wald", "tone": "dunkel", "premise": "Rituale"},
+            deep_copy=copy.deepcopy,
+            element_generated_names_fallback=["A", "B", "C", "D", "E", "F", "G"],
+            pick_world_theme_anchor=lambda _summary: "Wald",
+            generated_element_too_similar=lambda _candidate, _picked: (False, ""),
+        )
+
+        self.assertEqual(len(candidates), 6)
+        self.assertEqual(len({candidate["name"] for candidate in candidates}), 6)
+        self.assertTrue(all(candidate["origin"] == "generated" for candidate in candidates))
+        self.assertTrue(all(candidate["environment_bias"] == "Wald" for candidate in candidates))
+
+    def test_state_engine_fallback_element_generation_wrapper_preserves_contract(self) -> None:
+        candidates = state_engine.generate_world_elements_fallback(
+            {"theme": "Nebel", "tone": "mystisch", "premise": "Grenzen"}
+        )
+
+        self.assertEqual(len(candidates), 6)
+        self.assertTrue(all(candidate["origin"] == "generated" for candidate in candidates))
+        self.assertTrue(all(candidate["status_effect_tags"] for candidate in candidates))
+
     def test_normalize_patch_semantics_scene_set_alias(self) -> None:
         patch = {
             "characters": {
