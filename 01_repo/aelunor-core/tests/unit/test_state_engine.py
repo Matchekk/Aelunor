@@ -752,6 +752,47 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(state_engine.skill_rank_power_weight("s"), 9)
         self.assertEqual(state_engine.skill_rank_power_weight("unknown"), 1)
 
+    def test_combat_character_score_applies_stats_skills_and_penalties(self) -> None:
+        score = combat.compute_character_combat_score(
+            {
+                "level": 2,
+                "attributes": {"str": 1, "dex": 1, "con": 1, "int": 1, "wis": 1, "luck": 1},
+                "hp_current": 10,
+                "hp_max": 10,
+                "sta_current": 10,
+                "sta_max": 10,
+                "res_current": 10,
+                "res_max": 10,
+                "class_current": {"level": 2, "rank": "C"},
+                "skills": {"fire": {"level": 2, "rank": "F"}},
+                "injuries": [{"severity": "mittel"}],
+                "conditions": ["burning", "slowed"],
+            },
+            normalize_class_current=lambda value: value,
+            skill_rank_power_weight=lambda rank: {"F": 1, "C": 4}.get(rank, 1),
+            normalize_dynamic_skill_state=lambda value, **_kwargs: value,
+            resource_name_for_character=lambda _character, _settings: "Aether",
+            normalize_injury_state=lambda value: value,
+        )
+
+        self.assertEqual(score, 61)
+
+    def test_state_engine_character_combat_score_wrapper_preserves_contract(self) -> None:
+        score = state_engine.compute_character_combat_score(
+            {
+                "level": 1,
+                "hp_current": 10,
+                "hp_max": 10,
+                "sta_current": 10,
+                "sta_max": 10,
+                "res_current": 10,
+                "res_max": 10,
+            }
+        )
+
+        self.assertIn("compute_character_combat_score", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(score, 47)
+
     def test_combat_npc_score_uses_class_resources_and_skills(self) -> None:
         score = combat.compute_npc_combat_score(
             {
