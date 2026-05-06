@@ -522,6 +522,54 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(normalized["elem_fire"][0]["id"], "path_fire")
         self.assertEqual(normalized["elem_fire"][0]["ranks"]["F"]["rank"], "F")
 
+    def test_element_class_path_rank_lookup_selects_requested_path(self) -> None:
+        world = {
+            "element_class_paths": {
+                "elem_fire": [
+                    {"id": "path_a", "name": "Pfad A", "ranks": {"F": {"id": "node_a"}}},
+                    {"id": "path_b", "name": "Pfad B", "ranks": {"C": {"id": "node_b"}}},
+                ]
+            }
+        }
+
+        resolved = element_class_paths.resolve_class_path_rank_node(
+            world,
+            {"path_id": "path_b", "rank": "c"},
+            normalize_class_current=lambda value: value,
+            resolve_class_element_id=lambda _klass, _world: "elem_fire",
+            normalize_skill_rank=lambda value: str(value or "").strip().upper(),
+            deep_copy=copy.deepcopy,
+        )
+
+        self.assertEqual(resolved["path_id"], "path_b")
+        self.assertEqual(resolved["path_name"], "Pfad B")
+        self.assertEqual(resolved["element_id"], "elem_fire")
+        self.assertEqual(resolved["rank"], "C")
+        self.assertEqual(resolved["node"], {"id": "node_b"})
+        world["element_class_paths"]["elem_fire"][1]["ranks"]["C"]["id"] = "changed"
+        self.assertEqual(resolved["node"], {"id": "node_b"})
+
+    def test_state_engine_class_path_rank_lookup_wrapper_preserves_contract(self) -> None:
+        world = {
+            "elements": {"elem_fire": {"name": "Feuer"}},
+            "element_class_paths": {
+                "elem_fire": [
+                    {"id": "path_a", "name": "Pfad A", "ranks": {"F": {"id": "node_a"}}},
+                    {"id": "path_b", "name": "Pfad B", "ranks": {"C": {"id": "node_b"}}},
+                ]
+            },
+        }
+
+        resolved = state_engine.resolve_class_path_rank_node(
+            world,
+            {"name": "Feuerklasse", "element_id": "elem_fire", "path_id": "path_b", "rank": "c"},
+        )
+
+        self.assertIn("resolve_class_path_rank_node", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(resolved["path_id"], "path_b")
+        self.assertEqual(resolved["rank"], "C")
+        self.assertEqual(resolved["node"], {"id": "node_b"})
+
     def test_state_engine_element_class_path_generation_wrapper_preserves_contract(self) -> None:
         paths = state_engine.generate_element_class_paths(
             {"elem_fire": {"name": "Feuer", "theme": "Hitze"}},

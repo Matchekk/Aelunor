@@ -58,6 +58,7 @@ from app.services.world.element_class_paths import (
     next_element_path_name as _next_element_path_name,
     normalize_class_path_rank_node as _normalize_class_path_rank_node,
     normalize_element_class_paths as _normalize_element_class_paths,
+    resolve_class_path_rank_node as _resolve_class_path_rank_node,
 )
 from app.services.world.math_utils import clamp
 from app.services.world.naming import strip_name_parenthetical
@@ -953,33 +954,14 @@ def resolve_class_element_id(current_class: Optional[Dict[str, Any]], world: Dic
     return found_from_name[0] if found_from_name else None
 
 def resolve_class_path_rank_node(world: Dict[str, Any], current_class: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    klass = normalize_class_current(current_class)
-    if not klass:
-        return None
-    element_id = resolve_class_element_id(klass, world)
-    if not element_id:
-        return None
-    all_paths = ((world.get("element_class_paths") or {}).get(element_id) or [])
-    if not isinstance(all_paths, list) or not all_paths:
-        return None
-    wanted_path_id = str(klass.get("path_id") or "").strip()
-    rank = normalize_skill_rank(klass.get("rank", "F"))
-    selected_path = None
-    if wanted_path_id:
-        selected_path = next((path for path in all_paths if str((path or {}).get("id") or "") == wanted_path_id), None)
-    if not selected_path:
-        selected_path = all_paths[0]
-    ranks = (selected_path or {}).get("ranks") if isinstance((selected_path or {}).get("ranks"), dict) else {}
-    node = ranks.get(rank) if isinstance(ranks.get(rank), dict) else None
-    if not node:
-        return None
-    return {
-        "path_id": str((selected_path or {}).get("id") or ""),
-        "path_name": str((selected_path or {}).get("name") or ""),
-        "element_id": element_id,
-        "rank": rank,
-        "node": deep_copy(node),
-    }
+    return _resolve_class_path_rank_node(
+        world,
+        current_class,
+        normalize_class_current=normalize_class_current,
+        resolve_class_element_id=resolve_class_element_id,
+        normalize_skill_rank=normalize_skill_rank,
+        deep_copy=deep_copy,
+    )
 
 def pick_world_theme_anchor(summary: Dict[str, Any]) -> str:
     theme = normalize_codex_alias_text(summary.get("theme", ""))

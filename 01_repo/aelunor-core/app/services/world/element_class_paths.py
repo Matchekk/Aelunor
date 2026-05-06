@@ -178,3 +178,41 @@ def normalize_element_class_paths(
             valid_paths = deep_copy(generated_defaults.get(element_id) or [])
         normalized[element_id] = valid_paths[:element_class_path_max]
     return stable_sorted_mapping(normalized, key_fn=lambda item: str(item[0]))
+
+
+def resolve_class_path_rank_node(
+    world: Dict[str, Any],
+    current_class: Optional[Dict[str, Any]],
+    *,
+    normalize_class_current: Callable[[Optional[Dict[str, Any]]], Optional[Dict[str, Any]]],
+    resolve_class_element_id: Callable[[Optional[Dict[str, Any]], Dict[str, Any]], Optional[str]],
+    normalize_skill_rank: Callable[[Any], str],
+    deep_copy: Callable[[Any], Any],
+) -> Optional[Dict[str, Any]]:
+    klass = normalize_class_current(current_class)
+    if not klass:
+        return None
+    element_id = resolve_class_element_id(klass, world)
+    if not element_id:
+        return None
+    all_paths = ((world.get("element_class_paths") or {}).get(element_id) or [])
+    if not isinstance(all_paths, list) or not all_paths:
+        return None
+    wanted_path_id = str(klass.get("path_id") or "").strip()
+    rank = normalize_skill_rank(klass.get("rank", "F"))
+    selected_path = None
+    if wanted_path_id:
+        selected_path = next((path for path in all_paths if str((path or {}).get("id") or "") == wanted_path_id), None)
+    if not selected_path:
+        selected_path = all_paths[0]
+    ranks = (selected_path or {}).get("ranks") if isinstance((selected_path or {}).get("ranks"), dict) else {}
+    node = ranks.get(rank) if isinstance(ranks.get(rank), dict) else None
+    if not node:
+        return None
+    return {
+        "path_id": str((selected_path or {}).get("id") or ""),
+        "path_name": str((selected_path or {}).get("name") or ""),
+        "element_id": element_id,
+        "rank": rank,
+        "node": deep_copy(node),
+    }
