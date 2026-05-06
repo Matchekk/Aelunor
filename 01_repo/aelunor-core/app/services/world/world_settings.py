@@ -68,3 +68,21 @@ def normalize_world_settings(
         row["max_story_chars"] = max(row["min_story_chars"], int(current.get("max_story_chars", row["max_story_chars"]) or row["max_story_chars"]))
     normalized["pacing_profile"] = pacing
     return normalized
+
+
+def active_pacing_profile(
+    state: Dict[str, Any],
+    *,
+    normalize_world_settings: Callable[[Any], Dict[str, Any]],
+    deep_copy: Callable[[Any], Any],
+    campaign_lengths: Iterable[str],
+    pacing_profile_defaults: Dict[str, Any],
+) -> Dict[str, Any]:
+    settings = normalize_world_settings(((state.get("world") or {}).get("settings") or {}))
+    selected = str(settings.get("campaign_length") or "medium").lower()
+    if selected not in tuple(campaign_lengths):
+        selected = "medium"
+    profile = deep_copy((settings.get("pacing_profile") or {}).get(selected) or pacing_profile_defaults[selected])
+    profile["campaign_length"] = selected
+    profile["target_turn"] = (settings.get("target_turns") or {}).get(selected)
+    return profile

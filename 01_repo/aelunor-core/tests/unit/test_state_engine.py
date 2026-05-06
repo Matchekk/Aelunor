@@ -1099,6 +1099,30 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(settings["campaign_length"], "open")
         self.assertIsNone(settings["target_turns"]["open"])
 
+    def test_world_settings_active_pacing_profile_selects_campaign_length(self) -> None:
+        profile = world_settings.active_pacing_profile(
+            {"world": {"settings": {"campaign_length": "short"}}},
+            normalize_world_settings=lambda _settings: {
+                "campaign_length": "short",
+                "target_turns": {"short": 12},
+                "pacing_profile": {"short": {"beats_per_turn": 3}},
+            },
+            deep_copy=copy.deepcopy,
+            campaign_lengths=("short", "medium", "open"),
+            pacing_profile_defaults={"short": {"beats_per_turn": 1}, "medium": {"beats_per_turn": 2}, "open": {"beats_per_turn": 1}},
+        )
+
+        self.assertEqual(profile["campaign_length"], "short")
+        self.assertEqual(profile["target_turn"], 12)
+        self.assertEqual(profile["beats_per_turn"], 3)
+
+    def test_state_engine_active_pacing_profile_wrapper_preserves_contract(self) -> None:
+        profile = state_engine.active_pacing_profile({"world": {"settings": {"campaign_length": "open"}}})
+
+        self.assertIn("active_pacing_profile", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(profile["campaign_length"], "open")
+        self.assertIsNone(profile["target_turn"])
+
     def test_combat_meta_update_starts_combat_and_records_queue(self) -> None:
         def normalize_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
             combat_meta = copy.deepcopy(

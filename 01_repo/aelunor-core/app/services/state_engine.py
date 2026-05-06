@@ -126,6 +126,7 @@ from app.services.world.attribute_influence import (
     normalize_attribute_influence_meta as _normalize_attribute_influence_meta,
 )
 from app.services.world.world_settings import (
+    active_pacing_profile as _active_pacing_profile,
     default_campaign_length_settings as _default_campaign_length_settings,
     normalize_world_settings as _normalize_world_settings,
 )
@@ -5730,14 +5731,13 @@ def normalize_attribute_influence_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
     )
 
 def active_pacing_profile(state: Dict[str, Any]) -> Dict[str, Any]:
-    settings = normalize_world_settings(((state.get("world") or {}).get("settings") or {}))
-    selected = str(settings.get("campaign_length") or "medium").lower()
-    if selected not in CAMPAIGN_LENGTHS:
-        selected = "medium"
-    profile = deep_copy((settings.get("pacing_profile") or {}).get(selected) or PACING_PROFILE_DEFAULTS[selected])
-    profile["campaign_length"] = selected
-    profile["target_turn"] = (settings.get("target_turns") or {}).get(selected)
-    return profile
+    return _active_pacing_profile(
+        state,
+        normalize_world_settings=normalize_world_settings,
+        deep_copy=deep_copy,
+        campaign_lengths=CAMPAIGN_LENGTHS,
+        pacing_profile_defaults=PACING_PROFILE_DEFAULTS,
+    )
 
 def compute_turn_budget_estimates(state: Dict[str, Any]) -> Dict[str, Any]:
     meta = state.setdefault("meta", {})
