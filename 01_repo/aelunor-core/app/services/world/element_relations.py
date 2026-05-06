@@ -151,3 +151,37 @@ def normalize_element_relations(
         {src: stable_sorted_mapping(dst_map, key_fn=lambda item: item[0]) for src, dst_map in normalized.items()},
         key_fn=lambda item: item[0],
     )
+
+
+def generate_element_relations(
+    elements: Dict[str, Dict[str, Any]],
+    *,
+    build_default_element_relations: Callable[[Dict[str, Dict[str, Any]]], Dict[str, Dict[str, str]]],
+    apply_element_anchor_relation_rules: Callable[[Dict[str, Dict[str, Any]], Dict[str, Dict[str, str]]], None],
+    normalize_codex_alias_text: Callable[[Any], str],
+    set_element_relation: Callable[[Dict[str, Dict[str, str]], str, str, str], None],
+    normalize_element_relations: Callable[[Dict[str, Dict[str, str]], Dict[str, Dict[str, Any]]], Dict[str, Dict[str, str]]],
+) -> Dict[str, Dict[str, str]]:
+    relations = build_default_element_relations(elements)
+    apply_element_anchor_relation_rules(elements, relations)
+    ids_by_name = {
+        normalize_codex_alias_text((profile or {}).get("name", "")): element_id
+        for element_id, profile in (elements or {}).items()
+        if isinstance(profile, dict)
+    }
+    for source_id, profile in (elements or {}).items():
+        if not isinstance(profile, dict):
+            continue
+        for target_name in (profile.get("strengths_against") or []):
+            target_id = ids_by_name.get(normalize_codex_alias_text(target_name))
+            if target_id:
+                set_element_relation(relations, source_id, target_id, "strong")
+        for target_name in (profile.get("weaknesses_against") or []):
+            target_id = ids_by_name.get(normalize_codex_alias_text(target_name))
+            if target_id:
+                set_element_relation(relations, source_id, target_id, "weak")
+        for target_name in (profile.get("synergies_with") or []):
+            target_id = ids_by_name.get(normalize_codex_alias_text(target_name))
+            if target_id and relations.get(source_id, {}).get(target_id) == "neutral":
+                set_element_relation(relations, source_id, target_id, "strong")
+    return normalize_element_relations(relations, elements)

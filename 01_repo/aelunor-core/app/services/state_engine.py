@@ -38,6 +38,7 @@ from app.services.world.element_relations import (
     build_default_element_relations as _build_default_element_relations,
     element_pair_rule_ids as _element_pair_rule_ids,
     element_sort_key as _element_sort_key,
+    generate_element_relations as _generate_element_relations,
     normalize_element_relation as _normalize_element_relation,
     normalize_element_relations as _normalize_element_relations,
     relation_sort_value as _relation_sort_value,
@@ -809,30 +810,14 @@ def generate_world_element_profiles(summary: Dict[str, Any]) -> Dict[str, Dict[s
     )
 
 def generate_element_relations(elements: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, str]]:
-    relations = build_default_element_relations(elements)
-    apply_element_anchor_relation_rules(elements, relations)
-    # generated/emergent relation hints from weaknesses/strengths/synergies
-    ids_by_name = {
-        normalize_codex_alias_text((profile or {}).get("name", "")): element_id
-        for element_id, profile in (elements or {}).items()
-        if isinstance(profile, dict)
-    }
-    for source_id, profile in (elements or {}).items():
-        if not isinstance(profile, dict):
-            continue
-        for target_name in (profile.get("strengths_against") or []):
-            target_id = ids_by_name.get(normalize_codex_alias_text(target_name))
-            if target_id:
-                _set_element_relation(relations, source_id, target_id, "strong")
-        for target_name in (profile.get("weaknesses_against") or []):
-            target_id = ids_by_name.get(normalize_codex_alias_text(target_name))
-            if target_id:
-                _set_element_relation(relations, source_id, target_id, "weak")
-        for target_name in (profile.get("synergies_with") or []):
-            target_id = ids_by_name.get(normalize_codex_alias_text(target_name))
-            if target_id and relations.get(source_id, {}).get(target_id) == "neutral":
-                _set_element_relation(relations, source_id, target_id, "strong")
-    return normalize_element_relations(relations, elements)
+    return _generate_element_relations(
+        elements,
+        build_default_element_relations=build_default_element_relations,
+        apply_element_anchor_relation_rules=apply_element_anchor_relation_rules,
+        normalize_codex_alias_text=normalize_codex_alias_text,
+        set_element_relation=_set_element_relation,
+        normalize_element_relations=normalize_element_relations,
+    )
 
 def next_element_path_name(element_name: str, rank: str, path_seed: int) -> str:
     suffixes = {

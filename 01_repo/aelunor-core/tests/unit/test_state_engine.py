@@ -206,6 +206,37 @@ class StateEngineTests(unittest.TestCase):
             "dominant",
         )
 
+    def test_element_relations_generation_applies_profile_hints(self) -> None:
+        elements = {
+            "elem_a": {"name": "A", "strengths_against": ["B"], "synergies_with": ["C"]},
+            "elem_b": {"name": "B", "weaknesses_against": ["A"]},
+            "elem_c": {"name": "C"},
+        }
+
+        relations = element_relations.generate_element_relations(
+            elements,
+            build_default_element_relations=element_relations.build_default_element_relations,
+            apply_element_anchor_relation_rules=lambda _elements, _relations: None,
+            normalize_codex_alias_text=lambda value: str(value or "").strip().lower(),
+            set_element_relation=lambda rels, source, target, relation: rels[source].__setitem__(target, relation),
+            normalize_element_relations=lambda rels, _elements: rels,
+        )
+
+        self.assertEqual(relations["elem_a"]["elem_b"], "strong")
+        self.assertEqual(relations["elem_a"]["elem_c"], "strong")
+        self.assertEqual(relations["elem_b"]["elem_a"], "weak")
+
+    def test_state_engine_generate_element_relations_wrapper_preserves_contract(self) -> None:
+        relations = state_engine.generate_element_relations(
+            {
+                "elem_fire": {"name": "Feuer", "strengths_against": ["Wasser"]},
+                "elem_water": {"name": "Wasser"},
+            }
+        )
+
+        self.assertEqual(relations["elem_fire"]["elem_water"], "strong")
+        self.assertEqual(relations["elem_water"]["elem_fire"], "strong")
+
     def test_generated_element_similarity_helper_detects_core_and_duplicates(self) -> None:
         normalize = lambda value: str(value or "").strip().lower()
 
