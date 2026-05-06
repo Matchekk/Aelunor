@@ -4,6 +4,7 @@ import unittest
 from app.services import state_engine
 from app.services import state_basics
 from app.services.world import element_profiles
+from app.services.world import element_relations
 from app.services.world import species_profiles
 
 
@@ -126,6 +127,31 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(element["id"], "elem_feuer_herz")
         self.assertEqual(element["origin"], "core")
         self.assertEqual(element["strengths_against"], ["Eis"])
+
+    def test_element_relation_helpers_normalize_and_sort(self) -> None:
+        self.assertEqual(
+            element_relations.element_sort_key(
+                ("elem_b", {"name": "Äther"}),
+                normalize_codex_alias_text=lambda value: str(value).lower().replace("ä", "ae"),
+            ),
+            ("aether", "elem_b"),
+        )
+        self.assertEqual(element_relations.relation_sort_value("dominant"), 4)
+        self.assertEqual(element_relations.relation_sort_value("unknown"), 2)
+        self.assertEqual(
+            element_relations.normalize_element_relation(" Strong ", element_relations={"neutral", "strong"}),
+            "strong",
+        )
+        self.assertEqual(
+            element_relations.normalize_element_relation("unknown", element_relations={"neutral", "strong"}),
+            "neutral",
+        )
+
+    def test_state_engine_element_relation_wrappers_preserve_contract(self) -> None:
+        self.assertEqual(state_engine.relation_sort_value("countered"), 0)
+        self.assertEqual(state_engine.normalize_element_relation("dominant"), "dominant")
+        self.assertEqual(state_engine.normalize_element_relation("invalid"), "neutral")
+        self.assertEqual(state_engine.element_sort_key(("elem_fire", {"name": "Feuer"})), ("feuer", "elem_fire"))
 
     def test_normalize_patch_semantics_scene_set_alias(self) -> None:
         patch = {

@@ -32,6 +32,11 @@ from app.services.world.element_profiles import (
     element_id_from_name as _element_id_from_name,
     normalize_element_profile as _normalize_element_profile,
 )
+from app.services.world.element_relations import (
+    element_sort_key as _element_sort_key,
+    normalize_element_relation as _normalize_element_relation,
+    relation_sort_value as _relation_sort_value,
+)
 from app.services.world.math_utils import clamp
 from app.services.world.naming import strip_name_parenthetical
 from app.services.world.npc import npc_id_from_name, normalize_npc_alias
@@ -677,16 +682,13 @@ def normalize_element_profile(raw: Any, *, fallback_id: str = "", fallback_origi
     )
 
 def element_sort_key(entry: Tuple[str, Dict[str, Any]]) -> Tuple[str, str]:
-    element_id, payload = entry
-    return (normalize_codex_alias_text((payload or {}).get("name", "")), str(element_id))
+    return _element_sort_key(entry, normalize_codex_alias_text=normalize_codex_alias_text)
 
 def relation_sort_value(value: str) -> int:
-    order = {"countered": 0, "weak": 1, "neutral": 2, "strong": 3, "dominant": 4}
-    return order.get(str(value or "neutral").strip().lower(), 2)
+    return _relation_sort_value(value)
 
 def normalize_element_relation(value: Any) -> str:
-    relation = str(value or "neutral").strip().lower()
-    return relation if relation in ELEMENT_RELATIONS else "neutral"
+    return _normalize_element_relation(value, element_relations=set(ELEMENT_RELATIONS))
 
 def build_element_alias_index(elements: Dict[str, Dict[str, Any]]) -> Dict[str, List[str]]:
     index: Dict[str, List[str]] = {}
