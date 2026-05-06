@@ -43,6 +43,9 @@ from app.services.world.element_relations import (
     relation_sort_value as _relation_sort_value,
     set_element_relation as _set_element_relation_impl,
 )
+from app.services.world.element_generation import (
+    generated_element_too_similar as _generated_element_too_similar,
+)
 from app.services.world.math_utils import clamp
 from app.services.world.naming import strip_name_parenthetical
 from app.services.world.npc import npc_id_from_name, normalize_npc_alias
@@ -745,33 +748,12 @@ def normalize_element_relations(
     )
 
 def generated_element_too_similar(candidate: Dict[str, Any], existing: List[Dict[str, Any]]) -> Tuple[bool, str]:
-    name_norm = normalize_codex_alias_text(candidate.get("name", ""))
-    theme_norm = normalize_codex_alias_text(candidate.get("theme", ""))
-    if not name_norm:
-        return True, "EMPTY_NAME"
-    for core_norm, terms in ELEMENT_SIMILARITY_BLACKLIST.items():
-        if name_norm == core_norm:
-            return True, "TOO_SIMILAR_TO_CORE"
-        if any(term in name_norm for term in terms):
-            return True, "TOO_SIMILAR_TO_CORE"
-        if theme_norm and any(term in theme_norm for term in terms):
-            return True, "TOO_SIMILAR_TO_CORE"
-    for entry in existing:
-        existing_name_norm = normalize_codex_alias_text(entry.get("name", ""))
-        existing_theme_norm = normalize_codex_alias_text(entry.get("theme", ""))
-        if not existing_name_norm:
-            continue
-        if name_norm == existing_name_norm:
-            return True, "DUPLICATE_NAME"
-        if name_norm.startswith(existing_name_norm) or existing_name_norm.startswith(name_norm):
-            return True, "DUPLICATE_THEME"
-        if theme_norm and existing_theme_norm and (
-            theme_norm == existing_theme_norm
-            or theme_norm in existing_theme_norm
-            or existing_theme_norm in theme_norm
-        ):
-            return True, "DUPLICATE_THEME"
-    return False, ""
+    return _generated_element_too_similar(
+        candidate,
+        existing,
+        normalize_codex_alias_text=normalize_codex_alias_text,
+        element_similarity_blacklist=ELEMENT_SIMILARITY_BLACKLIST,
+    )
 
 def _theme_flavor_options(anchor: str) -> List[Tuple[str, str, List[str], List[str]]]:
     motifs = [

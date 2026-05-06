@@ -3,6 +3,7 @@ import unittest
 
 from app.services import state_engine
 from app.services import state_basics
+from app.services.world import element_generation
 from app.services.world import element_profiles
 from app.services.world import element_relations
 from app.services.world import species_profiles
@@ -203,6 +204,50 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(
             state_engine.normalize_element_relations({"elem_fire": {"elem_water": "dominant"}}, elements)["elem_fire"]["elem_water"],
             "dominant",
+        )
+
+    def test_generated_element_similarity_helper_detects_core_and_duplicates(self) -> None:
+        normalize = lambda value: str(value or "").strip().lower()
+
+        self.assertEqual(
+            element_generation.generated_element_too_similar(
+                {"name": ""},
+                [],
+                normalize_codex_alias_text=normalize,
+                element_similarity_blacklist={"feuer": ["brand"]},
+            ),
+            (True, "EMPTY_NAME"),
+        )
+        self.assertEqual(
+            element_generation.generated_element_too_similar(
+                {"name": "Brandglas"},
+                [],
+                normalize_codex_alias_text=normalize,
+                element_similarity_blacklist={"feuer": ["brand"]},
+            ),
+            (True, "TOO_SIMILAR_TO_CORE"),
+        )
+        self.assertEqual(
+            element_generation.generated_element_too_similar(
+                {"name": "Traum", "theme": "Nebel"},
+                [{"name": "Traum", "theme": "Nebel"}],
+                normalize_codex_alias_text=normalize,
+                element_similarity_blacklist={},
+            ),
+            (True, "DUPLICATE_NAME"),
+        )
+
+    def test_state_engine_generated_element_similarity_wrapper_preserves_contract(self) -> None:
+        self.assertEqual(
+            state_engine.generated_element_too_similar({"name": ""}, []),
+            (True, "EMPTY_NAME"),
+        )
+        self.assertEqual(
+            state_engine.generated_element_too_similar(
+                {"name": "Stern"},
+                [{"name": "Sternenstaub", "theme": "kosmisch"}],
+            ),
+            (True, "DUPLICATE_THEME"),
         )
 
     def test_normalize_patch_semantics_scene_set_alias(self) -> None:
