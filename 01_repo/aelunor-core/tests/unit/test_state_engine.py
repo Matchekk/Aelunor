@@ -522,6 +522,30 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(normalized["elem_fire"][0]["id"], "path_fire")
         self.assertEqual(normalized["elem_fire"][0]["ranks"]["F"]["rank"], "F")
 
+    def test_element_class_path_class_element_resolver_prefers_existing_id(self) -> None:
+        resolved = element_class_paths.resolve_class_element_id(
+            {"element_id": " elem_fire ", "element_tags": ["wasser"], "name": "Wasser"},
+            {"elements": {"elem_fire": {}, "elem_water": {}}},
+            normalize_class_current=lambda value: value,
+            normalize_element_id_list=lambda values, _world: ["elem_water"] if values == ["wasser"] else [],
+        )
+
+        self.assertEqual(resolved, "elem_fire")
+
+    def test_state_engine_class_element_resolver_wrapper_preserves_contract(self) -> None:
+        world = {
+            "elements": {"elem_fire": {"name": "Feuer"}},
+            "element_alias_index": {"feuer": ["elem_fire"]},
+        }
+
+        resolved = state_engine.resolve_class_element_id(
+            {"name": "Feuerklasse", "element_tags": ["Feuer"]},
+            world,
+        )
+
+        self.assertIn("resolve_class_element_id", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(resolved, "elem_fire")
+
     def test_element_class_path_rank_lookup_selects_requested_path(self) -> None:
         world = {
             "element_class_paths": {

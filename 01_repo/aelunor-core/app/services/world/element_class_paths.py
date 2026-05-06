@@ -180,6 +180,27 @@ def normalize_element_class_paths(
     return stable_sorted_mapping(normalized, key_fn=lambda item: str(item[0]))
 
 
+def resolve_class_element_id(
+    current_class: Optional[Dict[str, Any]],
+    world: Dict[str, Any],
+    *,
+    normalize_class_current: Callable[[Optional[Dict[str, Any]]], Optional[Dict[str, Any]]],
+    normalize_element_id_list: Callable[[Any, Optional[Dict[str, Any]]], List[str]],
+) -> Optional[str]:
+    klass = normalize_class_current(current_class)
+    if not klass:
+        return None
+    existing = str(klass.get("element_id") or "").strip()
+    if existing and existing in ((world.get("elements") or {})):
+        return existing
+    for tag in (klass.get("element_tags") or []) + (klass.get("affinity_tags") or []):
+        found = normalize_element_id_list([tag], world)
+        if found:
+            return found[0]
+    found_from_name = normalize_element_id_list([klass.get("name", "")], world)
+    return found_from_name[0] if found_from_name else None
+
+
 def resolve_class_path_rank_node(
     world: Dict[str, Any],
     current_class: Optional[Dict[str, Any]],

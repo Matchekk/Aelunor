@@ -58,6 +58,7 @@ from app.services.world.element_class_paths import (
     next_element_path_name as _next_element_path_name,
     normalize_class_path_rank_node as _normalize_class_path_rank_node,
     normalize_element_class_paths as _normalize_element_class_paths,
+    resolve_class_element_id as _resolve_class_element_id,
     resolve_class_path_rank_node as _resolve_class_path_rank_node,
 )
 from app.services.world.math_utils import clamp
@@ -940,18 +941,12 @@ def normalize_skill_elements_for_world(skill: Dict[str, Any], world: Optional[Di
     return normalized
 
 def resolve_class_element_id(current_class: Optional[Dict[str, Any]], world: Dict[str, Any]) -> Optional[str]:
-    klass = normalize_class_current(current_class)
-    if not klass:
-        return None
-    existing = str(klass.get("element_id") or "").strip()
-    if existing and existing in ((world.get("elements") or {})):
-        return existing
-    for tag in (klass.get("element_tags") or []) + (klass.get("affinity_tags") or []):
-        found = normalize_element_id_list([tag], world)
-        if found:
-            return found[0]
-    found_from_name = normalize_element_id_list([klass.get("name", "")], world)
-    return found_from_name[0] if found_from_name else None
+    return _resolve_class_element_id(
+        current_class,
+        world,
+        normalize_class_current=normalize_class_current,
+        normalize_element_id_list=normalize_element_id_list,
+    )
 
 def resolve_class_path_rank_node(world: Dict[str, Any], current_class: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     return _resolve_class_path_rank_node(
