@@ -3,6 +3,7 @@ import unittest
 
 from app.services import state_engine
 from app.services import state_basics
+from app.services.world import species_profiles
 
 
 class StateEngineTests(unittest.TestCase):
@@ -41,6 +42,56 @@ class StateEngineTests(unittest.TestCase):
                 "events_add": [],
             },
         )
+
+    def test_species_profiles_normalize_race_and_beast(self) -> None:
+        race = species_profiles.normalize_race_profile(
+            {
+                "name": "  Mond Volk ",
+                "strength_tags": [" Nacht ", "Nacht", ""],
+                "playable": False,
+            },
+            race_id_from_name=lambda name: f"race_{name.strip().lower().replace(' ', '_')}",
+            default_race_profile=species_profiles.default_race_profile,
+        )
+        beast = species_profiles.normalize_beast_profile(
+            {
+                "name": "Dornwolf",
+                "danger_rating": 99,
+                "known_abilities": ["Biss", " Biss ", ""],
+            },
+            beast_id_from_name=lambda name: f"beast_{name.lower()}",
+            default_beast_profile=species_profiles.default_beast_profile,
+            clamp=lambda value, low, high: max(low, min(high, value)),
+        )
+
+        self.assertEqual(race["id"], "race_mond_volk")
+        self.assertEqual(race["name"], "Mond Volk")
+        self.assertEqual(race["strength_tags"], ["Nacht"])
+        self.assertFalse(race["playable"])
+        self.assertEqual(beast["id"], "beast_dornwolf")
+        self.assertEqual(beast["danger_rating"], 20)
+        self.assertEqual(beast["known_abilities"], ["Biss"])
+
+    def test_state_engine_species_wrappers_preserve_exported_contract(self) -> None:
+        race = state_engine.normalize_race_profile(
+            {
+                "name": "Sternenvolk",
+                "aliases": [" Sternenleute ", "Sternenleute"],
+            }
+        )
+        beast = state_engine.normalize_beast_profile(
+            {
+                "name": "Aschewolf",
+                "danger_rating": 0,
+                "loot_tags": ["Fell", " Fell "],
+            }
+        )
+
+        self.assertEqual(race["id"], "race_sternenvolk")
+        self.assertEqual(race["aliases"], ["Sternenleute"])
+        self.assertEqual(beast["id"], "beast_aschewolf")
+        self.assertEqual(beast["danger_rating"], 1)
+        self.assertEqual(beast["loot_tags"], ["Fell"])
 
     def test_normalize_patch_semantics_scene_set_alias(self) -> None:
         patch = {
