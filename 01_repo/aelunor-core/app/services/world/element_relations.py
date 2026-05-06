@@ -184,6 +184,28 @@ def get_element_relation(
     )
 
 
+def reflect_element_relation_profile_fields(
+    elements: Dict[str, Dict[str, Any]],
+    relations: Dict[str, Dict[str, str]],
+    *,
+    normalize_element_relation: Callable[[Any], str],
+) -> None:
+    for source_id, profile in (elements or {}).items():
+        rel_map = (relations or {}).get(source_id) or {}
+        strengths = [
+            target
+            for target, rel in rel_map.items()
+            if normalize_element_relation(rel) in {"strong", "dominant"} and target != source_id
+        ]
+        weaknesses = [
+            target
+            for target, rel in rel_map.items()
+            if normalize_element_relation(rel) in {"weak", "countered"} and target != source_id
+        ]
+        profile["strengths_against"] = strengths
+        profile["weaknesses_against"] = weaknesses
+
+
 def generate_element_relations(
     elements: Dict[str, Dict[str, Any]],
     *,

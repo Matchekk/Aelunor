@@ -210,6 +210,25 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(state_engine.resolve_element_relation(world, "elem_fire", "elem_water"), "dominant")
         self.assertEqual(state_engine.get_element_relation(world, "elem_fire", "missing"), "neutral")
 
+    def test_element_relation_profile_projection_reflects_strengths_and_weaknesses(self) -> None:
+        elements = {"elem_fire": {"name": "Feuer"}, "elem_water": {"name": "Wasser"}, "elem_air": {"name": "Luft"}}
+
+        element_relations.reflect_element_relation_profile_fields(
+            elements,
+            {
+                "elem_fire": {"elem_fire": "dominant", "elem_water": "strong", "elem_air": "countered"},
+                "elem_water": {"elem_fire": "weak"},
+            },
+            normalize_element_relation=lambda value: element_relations.normalize_element_relation(
+                value,
+                element_relations={"neutral", "strong", "weak", "dominant", "countered"},
+            ),
+        )
+
+        self.assertEqual(elements["elem_fire"]["strengths_against"], ["elem_water"])
+        self.assertEqual(elements["elem_fire"]["weaknesses_against"], ["elem_air"])
+        self.assertEqual(elements["elem_water"]["weaknesses_against"], ["elem_fire"])
+
     def test_element_relation_matrix_helpers_normalize_maps(self) -> None:
         elements = {"elem_b": {"name": "B"}, "elem_a": {"name": "A"}}
         relations = element_relations.normalize_element_relations(

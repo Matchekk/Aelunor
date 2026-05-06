@@ -43,6 +43,7 @@ from app.services.world.element_relations import (
     normalize_element_relation as _normalize_element_relation,
     normalize_element_relations as _normalize_element_relations,
     relation_sort_value as _relation_sort_value,
+    reflect_element_relation_profile_fields as _reflect_element_relation_profile_fields,
     resolve_element_relation as _resolve_element_relation,
     set_element_relation as _set_element_relation_impl,
 )
@@ -896,13 +897,11 @@ def ensure_world_element_system_from_setup(state: Dict[str, Any], setup_summary:
         world["elements"],
         setup_summary or {},
     )
-    # reflect strengths/weaknesses from relation table to keep profiles coherent
-    for source_id, profile in (world["elements"] or {}).items():
-        rel_map = (world.get("element_relations") or {}).get(source_id) or {}
-        strengths = [target for target, rel in rel_map.items() if normalize_element_relation(rel) in {"strong", "dominant"} and target != source_id]
-        weaknesses = [target for target, rel in rel_map.items() if normalize_element_relation(rel) in {"weak", "countered"} and target != source_id]
-        profile["strengths_against"] = strengths
-        profile["weaknesses_against"] = weaknesses
+    _reflect_element_relation_profile_fields(
+        world["elements"],
+        world.get("element_relations") or {},
+        normalize_element_relation=normalize_element_relation,
+    )
     world["elements"] = stable_sorted_mapping(world["elements"], key_fn=element_sort_key)
 
 def resolve_element_relation(world: Dict[str, Any], source_element_id: str, target_element_id: str) -> str:
