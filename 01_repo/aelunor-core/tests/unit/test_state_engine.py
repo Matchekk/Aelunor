@@ -480,6 +480,48 @@ class StateEngineTests(unittest.TestCase):
             )
         )
 
+    def test_element_class_path_normalizer_preserves_valid_paths(self) -> None:
+        ranks = {
+            rank: {"name": f" Feuer {rank} ", "rank": rank.lower(), "core_skills_required": [f" Kern {rank} "]}
+            for rank in ["F", "C"]
+        }
+
+        normalized = element_class_paths.normalize_element_class_paths(
+            {"elem_fire": [{"id": " path_fire ", "name": " Feuer-Pfad ", "ranks": ranks}]},
+            {"elem_fire": {"theme": "Hitze"}},
+            {"theme": "Feuer"},
+            generate_element_class_paths=lambda _elements, _summary: {"elem_fire": [{"id": "default_path"}]},
+            element_class_path_max=2,
+            element_class_path_ranks=["F", "C"],
+            normalize_skill_rank=lambda value: str(value or "").strip().upper(),
+            deep_copy=copy.deepcopy,
+            stable_sorted_mapping=lambda mapping, key_fn: dict(sorted(mapping.items(), key=key_fn)),
+        )
+
+        path = normalized["elem_fire"][0]
+        self.assertEqual(path["id"], "path_fire")
+        self.assertEqual(path["name"], "Feuer-Pfad")
+        self.assertEqual(path["signature_theme"], "Hitze")
+        self.assertEqual(path["ranks"]["F"]["name"], "Feuer F")
+        self.assertEqual(path["ranks"]["F"]["core_skills_required"], ["Kern F"])
+        self.assertEqual(path["ranks"]["C"]["rank"], "C")
+
+    def test_state_engine_element_class_path_normalizer_wrapper_preserves_contract(self) -> None:
+        ranks = {
+            rank: {"name": f"Feuer {rank}", "rank": rank.lower(), "core_skills_required": [f"Kern {rank}"]}
+            for rank in state_engine.ELEMENT_CLASS_PATH_RANKS
+        }
+
+        normalized = state_engine.normalize_element_class_paths(
+            {"elem_fire": [{"id": "path_fire", "name": "Feuer-Pfad", "ranks": ranks}]},
+            {"elem_fire": {"name": "Feuer", "theme": "Hitze"}},
+            {"theme": "Feuer"},
+        )
+
+        self.assertIn("normalize_element_class_paths", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(normalized["elem_fire"][0]["id"], "path_fire")
+        self.assertEqual(normalized["elem_fire"][0]["ranks"]["F"]["rank"], "F")
+
     def test_state_engine_element_class_path_generation_wrapper_preserves_contract(self) -> None:
         paths = state_engine.generate_element_class_paths(
             {"elem_fire": {"name": "Feuer", "theme": "Hitze"}},

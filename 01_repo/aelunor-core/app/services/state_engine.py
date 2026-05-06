@@ -57,6 +57,7 @@ from app.services.world.element_class_paths import (
     generate_element_class_paths as _generate_element_class_paths,
     next_element_path_name as _next_element_path_name,
     normalize_class_path_rank_node as _normalize_class_path_rank_node,
+    normalize_element_class_paths as _normalize_element_class_paths,
 )
 from app.services.world.math_utils import clamp
 from app.services.world.naming import strip_name_parenthetical
@@ -855,47 +856,17 @@ def normalize_element_class_paths(
     elements: Dict[str, Dict[str, Any]],
     summary: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, List[Dict[str, Any]]]:
-    generated_defaults = generate_element_class_paths(elements, summary or {})
-    if not isinstance(raw_paths, dict):
-        return generated_defaults
-    normalized: Dict[str, List[Dict[str, Any]]] = {}
-    for element_id, element_profile in (elements or {}).items():
-        bucket = raw_paths.get(element_id) if isinstance(raw_paths.get(element_id), list) else []
-        valid_paths: List[Dict[str, Any]] = []
-        for raw_path in bucket[:ELEMENT_CLASS_PATH_MAX]:
-            if not isinstance(raw_path, dict):
-                continue
-            path_id = str(raw_path.get("id") or "").strip() or f"path_{element_id}_{len(valid_paths)+1}"
-            path_name = str(raw_path.get("name") or "").strip()
-            ranks_raw = raw_path.get("ranks") if isinstance(raw_path.get("ranks"), dict) else {}
-            normalized_ranks: Dict[str, Dict[str, Any]] = {}
-            complete = True
-            for rank in ELEMENT_CLASS_PATH_RANKS:
-                node = normalize_class_path_rank_node(
-                    ranks_raw.get(rank),
-                    default_rank=rank,
-                    element_id=element_id,
-                    path_id=path_id,
-                )
-                if not node:
-                    complete = False
-                    break
-                normalized_ranks[rank] = node
-            if not complete or not path_name:
-                continue
-            valid_paths.append(
-                {
-                    "id": path_id,
-                    "name": path_name,
-                    "element_id": element_id,
-                    "signature_theme": str(raw_path.get("signature_theme") or element_profile.get("theme") or "").strip(),
-                    "ranks": normalized_ranks,
-                }
-            )
-        if not valid_paths:
-            valid_paths = deep_copy(generated_defaults.get(element_id) or [])
-        normalized[element_id] = valid_paths[:ELEMENT_CLASS_PATH_MAX]
-    return stable_sorted_mapping(normalized, key_fn=lambda item: str(item[0]))
+    return _normalize_element_class_paths(
+        raw_paths,
+        elements,
+        summary,
+        generate_element_class_paths=generate_element_class_paths,
+        element_class_path_max=ELEMENT_CLASS_PATH_MAX,
+        element_class_path_ranks=ELEMENT_CLASS_PATH_RANKS,
+        normalize_skill_rank=normalize_skill_rank,
+        deep_copy=deep_copy,
+        stable_sorted_mapping=stable_sorted_mapping,
+    )
 
 def ensure_world_element_system_from_setup(state: Dict[str, Any], setup_summary: Dict[str, Any]) -> None:
     world = state.setdefault("world", {})

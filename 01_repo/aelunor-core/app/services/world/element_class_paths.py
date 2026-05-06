@@ -122,3 +122,59 @@ def normalize_class_path_rank_node(
         "next_paths": [str(path).strip() for path in (raw_node.get("next_paths") or []) if str(path).strip()],
         "skill_prefix": str(raw_node.get("skill_prefix") or "").strip(),
     }
+
+
+def normalize_element_class_paths(
+    raw_paths: Any,
+    elements: Dict[str, Dict[str, Any]],
+    summary: Optional[Dict[str, Any]] = None,
+    *,
+    generate_element_class_paths: Callable[[Dict[str, Dict[str, Any]], Dict[str, Any]], Dict[str, List[Dict[str, Any]]]],
+    element_class_path_max: int,
+    element_class_path_ranks: List[str],
+    normalize_skill_rank: Callable[[Any], str],
+    deep_copy: Callable[[Any], Any],
+    stable_sorted_mapping: Callable[..., Dict[str, List[Dict[str, Any]]]],
+) -> Dict[str, List[Dict[str, Any]]]:
+    generated_defaults = generate_element_class_paths(elements, summary or {})
+    if not isinstance(raw_paths, dict):
+        return generated_defaults
+    normalized: Dict[str, List[Dict[str, Any]]] = {}
+    for element_id, element_profile in (elements or {}).items():
+        bucket = raw_paths.get(element_id) if isinstance(raw_paths.get(element_id), list) else []
+        valid_paths: List[Dict[str, Any]] = []
+        for raw_path in bucket[:element_class_path_max]:
+            if not isinstance(raw_path, dict):
+                continue
+            path_id = str(raw_path.get("id") or "").strip() or f"path_{element_id}_{len(valid_paths)+1}"
+            path_name = str(raw_path.get("name") or "").strip()
+            ranks_raw = raw_path.get("ranks") if isinstance(raw_path.get("ranks"), dict) else {}
+            normalized_ranks: Dict[str, Dict[str, Any]] = {}
+            complete = True
+            for rank in element_class_path_ranks:
+                node = normalize_class_path_rank_node(
+                    ranks_raw.get(rank),
+                    default_rank=rank,
+                    element_id=element_id,
+                    path_id=path_id,
+                    normalize_skill_rank=normalize_skill_rank,
+                )
+                if not node:
+                    complete = False
+                    break
+                normalized_ranks[rank] = node
+            if not complete or not path_name:
+                continue
+            valid_paths.append(
+                {
+                    "id": path_id,
+                    "name": path_name,
+                    "element_id": element_id,
+                    "signature_theme": str(raw_path.get("signature_theme") or element_profile.get("theme") or "").strip(),
+                    "ranks": normalized_ranks,
+                }
+            )
+        if not valid_paths:
+            valid_paths = deep_copy(generated_defaults.get(element_id) or [])
+        normalized[element_id] = valid_paths[:element_class_path_max]
+    return stable_sorted_mapping(normalized, key_fn=lambda item: str(item[0]))
