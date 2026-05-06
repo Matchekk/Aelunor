@@ -34,6 +34,7 @@ from app.services.turn.patch_limits import (
     enforce_non_milestone_patch_limits as _enforce_non_milestone_patch_limits,
     enforce_progression_set_mode_limits as _enforce_progression_set_mode_limits,
 )
+from app.services.turn.patch_pipeline import validate_patch_with_events
 from app.services.turn.patch_validator import (
     PatchValidatorDependencies,
     configure as configure_patch_validator,
@@ -880,26 +881,16 @@ def create_turn_record(
                 exc=exc,
             )
         extractor_piece = enforce_progression_set_mode_limits(extractor_piece, action_type=action_type)
-        try:
-            emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": "canon"})
-            validate_patch(working_state, extractor_piece)
-            emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": "canon", "result": "ok"})
-        except Exception as exc:
-            emit_turn_phase_event(
-                trace_ctx,
-                phase="schema_validation",
-                success=False,
-                error_code=ERROR_CODE_SCHEMA_VALIDATION,
-                error_class=exc.__class__.__name__,
-                message=str(exc)[:240],
-                extra={"stage": "canon"},
-            )
-            raise turn_flow_error(
-                error_code=ERROR_CODE_SCHEMA_VALIDATION,
-                phase="schema_validation",
-                trace_ctx=trace_ctx,
-                exc=exc,
-            )
+        validate_patch_with_events(
+            working_state,
+            extractor_piece,
+            stage="canon",
+            trace_ctx=trace_ctx,
+            validate_patch=validate_patch,
+            emit_turn_phase_event=emit_turn_phase_event,
+            turn_flow_error=turn_flow_error,
+            error_code_schema_validation=ERROR_CODE_SCHEMA_VALIDATION,
+        )
         try:
             emit_turn_phase_event(trace_ctx, phase="patch_apply", success=True, extra={"stage": "canon"})
             working_state = apply_patch(working_state, extractor_piece, attribute_cap=attribute_cap_for_campaign(campaign))
@@ -1104,26 +1095,16 @@ def create_turn_record(
             action_type=action_type,
         )
         narrator_patch = enforce_progression_set_mode_limits(narrator_patch, action_type=action_type)
-        try:
-            emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": "narrator"})
-            validate_patch(working_state, narrator_patch)
-            emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": "narrator", "result": "ok"})
-        except Exception as exc:
-            emit_turn_phase_event(
-                trace_ctx,
-                phase="schema_validation",
-                success=False,
-                error_code=ERROR_CODE_SCHEMA_VALIDATION,
-                error_class=exc.__class__.__name__,
-                message=str(exc)[:240],
-                extra={"stage": "narrator"},
-            )
-            raise turn_flow_error(
-                error_code=ERROR_CODE_SCHEMA_VALIDATION,
-                phase="schema_validation",
-                trace_ctx=trace_ctx,
-                exc=exc,
-            )
+        validate_patch_with_events(
+            working_state,
+            narrator_patch,
+            stage="narrator",
+            trace_ctx=trace_ctx,
+            validate_patch=validate_patch,
+            emit_turn_phase_event=emit_turn_phase_event,
+            turn_flow_error=turn_flow_error,
+            error_code_schema_validation=ERROR_CODE_SCHEMA_VALIDATION,
+        )
         try:
             emit_turn_phase_event(trace_ctx, phase="patch_apply", success=True, extra={"stage": "narrator"})
             working_state = apply_patch(working_state, narrator_patch, attribute_cap=attribute_cap_for_campaign(campaign))
@@ -1207,35 +1188,17 @@ def create_turn_record(
                 action_type=action_type,
             )
             extractor_piece = enforce_progression_set_mode_limits(extractor_piece, action_type=action_type)
-            try:
-                emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": f"extractor_{source_kind}"})
-                validate_patch(working_state, extractor_piece)
-                emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": f"extractor_{source_kind}", "result": "ok"})
-            except Exception as exc:
-                emit_turn_phase_event(
-                    trace_ctx,
-                    phase="schema_validation",
-                    success=False,
-                    error_code=ERROR_CODE_SCHEMA_VALIDATION,
-                    error_class=exc.__class__.__name__,
-                    message=str(exc)[:240],
-                    extra={"stage": f"extractor_{source_kind}"},
-                )
-                emit_turn_phase_event(
-                    trace_ctx,
-                    phase="extractor_patch_apply",
-                    success=False,
-                    error_code=ERROR_CODE_SCHEMA_VALIDATION,
-                    error_class=exc.__class__.__name__,
-                    message=str(exc)[:240],
-                    extra={"stage": source_kind},
-                )
-                raise turn_flow_error(
-                    error_code=ERROR_CODE_SCHEMA_VALIDATION,
-                    phase="schema_validation",
-                    trace_ctx=trace_ctx,
-                    exc=exc,
-                )
+            validate_patch_with_events(
+                working_state,
+                extractor_piece,
+                stage=f"extractor_{source_kind}",
+                trace_ctx=trace_ctx,
+                validate_patch=validate_patch,
+                emit_turn_phase_event=emit_turn_phase_event,
+                turn_flow_error=turn_flow_error,
+                error_code_schema_validation=ERROR_CODE_SCHEMA_VALIDATION,
+                extractor_apply_stage=source_kind,
+            )
             try:
                 emit_turn_phase_event(trace_ctx, phase="patch_apply", success=True, extra={"stage": f"extractor_{source_kind}"})
                 working_state = apply_patch(working_state, extractor_piece, attribute_cap=attribute_cap_for_campaign(campaign))

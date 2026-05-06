@@ -10,6 +10,7 @@ from app.services import turn_engine
 from app.services.turn.flow_errors import build_narrator_turn_error
 from app.services.turn.patch_apply_bio import apply_patch_character_bio_updates
 from app.services.turn.patch_apply_normalization import apply_patch_character_late_normalization
+from app.services.turn.patch_pipeline import validate_patch_with_events
 from app.services.turn.prompt_payloads import build_turn_system_prompt, build_turn_user_prompt
 from app.services.turn.records import build_turn_record_payload
 from app.services.turn.story_length_guard import rewrite_story_length_guard as rewrite_story_length_guard_helper
@@ -184,6 +185,62 @@ class TurnEngineTests(unittest.TestCase):
         self.assertEqual(events[0][0], {"trace_id": "trace_1"})
         self.assertEqual(events[0][1]["error_class"], "NarratorGuardError")
         self.assertEqual(events[0][1]["message"], "Antwort abgeschnitten")
+
+    def test_validate_patch_with_events_emits_success_events(self) -> None:
+        events = []
+
+        validate_patch_with_events(
+            {"state": True},
+            {"patch": True},
+            stage="narrator",
+            trace_ctx={"trace_id": "trace_1"},
+            validate_patch=lambda _state, _patch: None,
+            emit_turn_phase_event=lambda ctx, **payload: events.append((ctx, payload)),
+            turn_flow_error=lambda **_payload: AssertionError("unexpected error"),
+            error_code_schema_validation="schema_validation",
+        )
+
+        self.assertEqual([event[1]["phase"] for event in events], ["schema_validation", "schema_validation"])
+        self.assertEqual(events[0][1]["extra"], {"stage": "narrator"})
+        self.assertEqual(events[1][1]["extra"], {"stage": "narrator", "result": "ok"})
+
+    def test_validate_patch_with_events_emits_extractor_failure_event(self) -> None:
+        events = []
+
+        def fail_validation(_state, _patch):
+            raise ValueError("bad patch")
+
+        def make_error(**payload):
+            return turn_engine.TurnFlowError(
+                error_code=payload["error_code"],
+                phase=payload["phase"],
+                trace_id=(payload["trace_ctx"] or {}).get("trace_id", ""),
+                user_message="schema failed",
+                cause_class=payload["exc"].__class__.__name__,
+                cause_message=str(payload["exc"]),
+            )
+
+        with self.assertRaises(turn_engine.TurnFlowError) as ctx:
+            validate_patch_with_events(
+                {"state": True},
+                {"patch": True},
+                stage="extractor_player",
+                trace_ctx={"trace_id": "trace_1"},
+                validate_patch=fail_validation,
+                emit_turn_phase_event=lambda event_ctx, **payload: events.append((event_ctx, payload)),
+                turn_flow_error=make_error,
+                error_code_schema_validation="schema_validation",
+                extractor_apply_stage="player",
+        )
+
+        self.assertEqual(ctx.exception.error_code, "schema_validation")
+        self.assertEqual(
+            [event[1]["phase"] for event in events],
+            ["schema_validation", "schema_validation", "extractor_patch_apply"],
+        )
+        self.assertEqual(events[0][1]["extra"], {"stage": "extractor_player"})
+        self.assertEqual(events[1][1]["extra"], {"stage": "extractor_player"})
+        self.assertEqual(events[2][1]["extra"], {"stage": "player"})
 
     def test_reset_turn_branch_marks_following_turns(self) -> None:
         campaign = {
