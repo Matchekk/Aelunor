@@ -2,6 +2,7 @@ import copy
 import unittest
 
 from app.services import state_engine
+from app.services import state_basics
 
 
 class StateEngineTests(unittest.TestCase):
@@ -19,6 +20,27 @@ class StateEngineTests(unittest.TestCase):
         self.assertTrue(state_engine.is_slot_id("slot_3"))
         self.assertEqual(state_engine.slot_index("invalid"), 9999)
         self.assertFalse(state_engine.is_slot_id("invalid"))
+
+    def test_state_basics_preserves_slot_and_patch_shapes(self) -> None:
+        self.assertEqual(state_basics.slot_id(2, slot_prefix="slot_"), "slot_2")
+        self.assertEqual(state_basics.slot_index("slot_2", slot_prefix="slot_"), 2)
+        self.assertEqual(state_basics.slot_index("invalid", slot_prefix="slot_"), 9999)
+        self.assertEqual(state_basics.ordered_slots(["slot_10", "slot_2"], slot_prefix="slot_"), ["slot_2", "slot_10"])
+        self.assertTrue(state_basics.is_slot_id("slot_2"))
+        self.assertFalse(state_basics.is_slot_id("slot_0"))
+        self.assertEqual(
+            state_basics.blank_patch(),
+            {
+                "meta": {},
+                "characters": {},
+                "items_new": {},
+                "plotpoints_add": [],
+                "plotpoints_update": [],
+                "map_add_nodes": [],
+                "map_add_edges": [],
+                "events_add": [],
+            },
+        )
 
     def test_normalize_patch_semantics_scene_set_alias(self) -> None:
         patch = {

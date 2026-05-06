@@ -18,6 +18,14 @@ from app.services.patch_payloads import (
     normalize_patch_payload,
     normalize_patch_semantics,
 )
+from app.services.state_basics import (
+    blank_patch as _blank_patch,
+    is_slot_id as _is_slot_id,
+    make_join_code as _make_join_code,
+    ordered_slots as _ordered_slots,
+    slot_id as _slot_id,
+    slot_index as _slot_index,
+)
 from app.services.world.collections import stable_sorted_mapping
 from app.services.world.math_utils import clamp
 from app.services.world.naming import strip_name_parenthetical
@@ -582,37 +590,22 @@ EXPORTED_SYMBOLS = [
 ]
 
 def make_join_code() -> str:
-    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-    return "".join(secrets.choice(alphabet) for _ in range(6))
+    return _make_join_code()
 
 def slot_id(index: int) -> str:
-    return f"{SLOT_PREFIX}{index}"
+    return _slot_id(index, slot_prefix=SLOT_PREFIX)
 
 def slot_index(value: str) -> int:
-    if not value.startswith(SLOT_PREFIX):
-        return 9999
-    try:
-        return int(value.split("_", 1)[1])
-    except (IndexError, ValueError):
-        return 9999
+    return _slot_index(value, slot_prefix=SLOT_PREFIX)
 
 def is_slot_id(value: str) -> bool:
-    return bool(re.fullmatch(r"slot_[1-9]\d*", value or ""))
+    return _is_slot_id(value)
 
 def ordered_slots(keys: List[str]) -> List[str]:
-    return sorted(keys, key=slot_index)
+    return _ordered_slots(keys, slot_prefix=SLOT_PREFIX)
 
 def blank_patch() -> Dict[str, Any]:
-    return {
-        "meta": {},
-        "characters": {},
-        "items_new": {},
-        "plotpoints_add": [],
-        "plotpoints_update": [],
-        "map_add_nodes": [],
-        "map_add_edges": [],
-        "events_add": [],
-    }
+    return _blank_patch()
 
 def race_id_from_name(name: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", normalize_codex_alias_text(name)).strip("_")
