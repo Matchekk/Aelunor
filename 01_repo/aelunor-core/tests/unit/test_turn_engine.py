@@ -15,6 +15,7 @@ from app.services.turn.patch_pipeline import apply_patch_with_events, sanitize_p
 from app.services.turn.patch_pipeline import call_canon_extractor_with_events
 from app.services.turn.prompt_payloads import build_turn_system_prompt, build_turn_user_prompt
 from app.services.turn.records import build_turn_record_payload
+from app.services.turn.setup_context import prepare_turn_working_state
 from app.services.turn.story_length_guard import rewrite_story_length_guard as rewrite_story_length_guard_helper
 
 
@@ -707,6 +708,39 @@ class TurnEngineTests(unittest.TestCase):
             },
         )
         self.assertEqual(hints, "none:1.0")
+
+    def test_prepare_turn_working_state_increments_turn_and_pacing_defaults(self) -> None:
+        budget_calls = []
+        campaign = {
+            "state": {
+                "meta": {"turn": 3},
+                "world": {"settings": {"raw": True}},
+            }
+        }
+
+        state_before, working_state, pacing_block, pacing_profile, milestone_info, min_chars, max_chars = prepare_turn_working_state(
+            campaign,
+            deep_copy=copy.deepcopy,
+            normalize_world_settings=lambda settings: {"normalized": settings.get("raw")},
+            compute_turn_budget_estimates=lambda state: budget_calls.append(state["meta"]["turn"]),
+            build_pacing_instruction_block=lambda _state: {
+                "text": "PACING",
+                "profile": {"campaign_length": "short"},
+                "milestone": {"is_milestone": False},
+            },
+        )
+
+        self.assertEqual(state_before["meta"]["turn"], 3)
+        self.assertEqual(working_state["meta"]["turn"], 4)
+        self.assertEqual(working_state["world"]["settings"], {"normalized": True})
+        self.assertEqual(budget_calls, [4])
+        self.assertEqual(pacing_block["text"], "PACING")
+        self.assertEqual(pacing_profile, {"campaign_length": "short"})
+        self.assertEqual(milestone_info, {"is_milestone": False})
+        self.assertEqual(min_chars, 800)
+        self.assertEqual(max_chars, 2200)
+        working_state["meta"]["turn"] = 99
+        self.assertEqual(campaign["state"]["meta"]["turn"], 3)
 
     def test_enforce_non_milestone_patch_limits_strips_rank_and_high_new_skills(self) -> None:
         state = self._base_apply_state()

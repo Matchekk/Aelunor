@@ -48,6 +48,7 @@ from app.services.turn.patch_validator import (
 )
 from app.services.turn.prompt_payloads import build_turn_system_prompt, build_turn_user_prompt
 from app.services.turn.records import build_turn_record_payload
+from app.services.turn.setup_context import prepare_turn_working_state
 from app.services.turn.story_length_guard import (
     rewrite_story_length_guard as _rewrite_story_length_guard,
 )
@@ -762,17 +763,13 @@ def create_turn_record(
     retry_of_turn_id: Optional[str] = None,
     trace_ctx: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    state_before = deep_copy(campaign["state"])
-    working_state = deep_copy(campaign["state"])
-    working_state["meta"]["turn"] += 1
-    working_state.setdefault("world", {}).setdefault("settings", {})
-    working_state["world"]["settings"] = normalize_world_settings(working_state["world"].get("settings") or {})
-    compute_turn_budget_estimates(working_state)
-    pacing_block = build_pacing_instruction_block(working_state)
-    pacing_profile = pacing_block["profile"]
-    milestone_info = pacing_block["milestone"]
-    min_story_chars = int(pacing_profile.get("min_story_chars", 800) or 800)
-    max_story_chars = int(pacing_profile.get("max_story_chars", 2200) or 2200)
+    state_before, working_state, pacing_block, pacing_profile, milestone_info, min_story_chars, max_story_chars = prepare_turn_working_state(
+        campaign,
+        deep_copy=deep_copy,
+        normalize_world_settings=normalize_world_settings,
+        compute_turn_budget_estimates=compute_turn_budget_estimates,
+        build_pacing_instruction_block=build_pacing_instruction_block,
+    )
     combat_context = infer_combat_context(working_state, actor, action_type, content)
     combat_scaling_context = build_combat_scaling_context(working_state, actor)
     attribute_profile, attribute_bias, attribute_prompt_hints = build_turn_attribute_context(
