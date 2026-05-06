@@ -3,6 +3,7 @@ import unittest
 
 from app.services import state_engine
 from app.services import state_basics
+from app.services.world import element_profiles
 from app.services.world import species_profiles
 
 
@@ -92,6 +93,39 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(beast["id"], "beast_aschewolf")
         self.assertEqual(beast["danger_rating"], 1)
         self.assertEqual(beast["loot_tags"], ["Fell"])
+
+    def test_element_profiles_normalize_shape_and_lists(self) -> None:
+        element = element_profiles.normalize_element_profile(
+            {
+                "name": "  Mondlicht ",
+                "origin": "weird",
+                "aliases": [" Luna ", "Luna", ""],
+                "discoverable": 0,
+            },
+            fallback_origin="generated",
+            element_id_from_name=lambda name: f"elem_{name.strip().lower()}",
+            default_element_profile=element_profiles.default_element_profile,
+        )
+
+        self.assertEqual(element["id"], "elem_mondlicht")
+        self.assertEqual(element["name"], "Mondlicht")
+        self.assertEqual(element["origin"], "generated")
+        self.assertEqual(element["aliases"], ["Luna"])
+        self.assertFalse(element["discoverable"])
+
+    def test_state_engine_element_wrappers_preserve_exported_contract(self) -> None:
+        element = state_engine.normalize_element_profile(
+            {
+                "name": "Feuer Herz",
+                "origin": "core",
+                "strengths_against": [" Eis ", "Eis"],
+            }
+        )
+
+        self.assertEqual(state_engine.element_id_from_name("Feuer Herz"), "elem_feuer_herz")
+        self.assertEqual(element["id"], "elem_feuer_herz")
+        self.assertEqual(element["origin"], "core")
+        self.assertEqual(element["strengths_against"], ["Eis"])
 
     def test_normalize_patch_semantics_scene_set_alias(self) -> None:
         patch = {
