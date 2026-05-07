@@ -153,6 +153,7 @@ from app.services.world.skill_ranks import (
 from app.services.world.skill_state import (
     normalize_cooldown_turns as _normalize_cooldown_turns,
     normalize_growth_potential as _normalize_growth_potential,
+    normalize_optional_lower_text as _normalize_optional_lower_text,
     normalize_optional_strings as _normalize_optional_strings,
     normalize_optional_text as _normalize_optional_text,
     normalize_optional_unique_strings as _normalize_optional_unique_strings,
@@ -1927,8 +1928,7 @@ def normalize_dynamic_skill_state(
         999,
     )
     skill["manifestation_source"] = _normalize_optional_text(skill.get("manifestation_source"))
-    category = str(skill.get("category", "") or "").strip().lower()
-    skill["category"] = category or None
+    skill["category"] = _normalize_optional_lower_text(skill.get("category"))
     skill["class_affinity"] = _normalize_optional_strings(skill.get("class_affinity"))
     skill["elements"], skill["element_primary"] = _normalize_skill_element_fields(skill.get("elements"), skill.get("element_primary"))
     skill["element_synergies"] = _normalize_optional_unique_strings(skill.get("element_synergies"))

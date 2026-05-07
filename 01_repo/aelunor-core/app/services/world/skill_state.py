@@ -31,3 +31,8 @@ def normalize_optional_strings(value: Any) -> list[str] | None:
 def normalize_optional_text(value: Any) -> str | None:
     normalized = str(value or "").strip()
     return normalized or None
+
+
+def normalize_optional_lower_text(value: Any) -> str | None:
+    normalized = str(value or "").strip().lower()
+    return normalized or None

@@ -126,6 +126,15 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(skill["manifestation_source"], "Story")
         self.assertEqual(skill["synergy_notes"], "Kombiniert")
 
+    def test_skill_state_normalize_optional_lower_text_strips_lowercases_or_returns_none(self) -> None:
+        self.assertEqual(skill_state.normalize_optional_lower_text(" Aktiv "), "aktiv")
+        self.assertIsNone(skill_state.normalize_optional_lower_text(""))
+
+    def test_state_engine_dynamic_skill_uses_extracted_category_normalizer(self) -> None:
+        skill = state_engine.normalize_dynamic_skill_state({"name": "Funkenwurf", "category": " Aktiv "})
+
+        self.assertEqual(skill["category"], "aktiv")
+
     def test_state_basics_preserves_slot_and_patch_shapes(self) -> None:
         self.assertEqual(state_basics.slot_id(2, slot_prefix="slot_"), "slot_2")
         self.assertEqual(state_basics.slot_index("slot_2", slot_prefix="slot_"), 2)
