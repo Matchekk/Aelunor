@@ -122,6 +122,7 @@ from app.services.world.codex import (
     ensure_world_codex_from_setup,
 )
 from app.services.world.attribute_influence import (
+    compute_attribute_bias as _compute_attribute_bias,
     default_attribute_influence_meta as _default_attribute_influence_meta,
     derive_attribute_relevance as _derive_attribute_relevance,
     normalize_attribute_influence_meta as _normalize_attribute_influence_meta,
@@ -5796,55 +5797,15 @@ def derive_attribute_relevance(
     )
 
 def compute_attribute_bias(profile: Dict[str, Any], character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> Dict[str, float]:
-    attrs = (character or {}).get("attributes", {}) or {}
-    tier = str((profile or {}).get("influence_tier") or "none").lower()
-    strength = ATTRIBUTE_INFLUENCE_STRENGTH.get(tier, 0.0)
-    attr_cap = max(10, max((int(attrs.get(key, 0) or 0) for key in ATTRIBUTE_KEYS), default=10))
-    primary = [key for key in ((profile or {}).get("primary_attributes") or []) if key in ATTRIBUTE_KEYS]
-
-    bias = {
-        "damage_taken_mult": 1.0,
-        "cost_mult": 1.0,
-        "complication_mult": 1.0,
-        "outgoing_effect_mult": 1.0,
-    }
-    if strength <= 0 or not primary:
-        return bias
-
-    for key in primary:
-        value = clamp(int(attrs.get(key, 0) or 0), 0, attr_cap)
-        normalized = value / float(attr_cap)
-        if key == "luck":
-            bias["damage_taken_mult"] -= (0.18 * strength * normalized)
-            bias["cost_mult"] -= (0.14 * strength * normalized)
-            bias["complication_mult"] -= (0.30 * strength * normalized)
-            bias["outgoing_effect_mult"] += (0.10 * strength * normalized)
-            if value <= max(1, int(attr_cap * 0.25)) and tier in {"medium", "high"}:
-                bias["complication_mult"] += (0.22 * strength)
-        elif key == "con":
-            bias["damage_taken_mult"] -= (0.26 * strength * normalized)
-            bias["cost_mult"] -= (0.08 * strength * normalized)
-        elif key == "dex":
-            bias["damage_taken_mult"] -= (0.14 * strength * normalized)
-            bias["complication_mult"] -= (0.16 * strength * normalized)
-            bias["outgoing_effect_mult"] += (0.08 * strength * normalized)
-        elif key == "str":
-            bias["outgoing_effect_mult"] += (0.20 * strength * normalized)
-            bias["cost_mult"] += (0.04 * strength * (1.0 - normalized))
-        elif key == "int":
-            bias["outgoing_effect_mult"] += (0.18 * strength * normalized)
-            bias["cost_mult"] -= (0.10 * strength * normalized)
-        elif key == "wis":
-            bias["complication_mult"] -= (0.14 * strength * normalized)
-            bias["cost_mult"] -= (0.08 * strength * normalized)
-            bias["outgoing_effect_mult"] += (0.06 * strength * normalized)
-        elif key == "cha":
-            bias["complication_mult"] -= (0.08 * strength * normalized)
-            bias["outgoing_effect_mult"] += (0.10 * strength * normalized)
-
-    for key in tuple(bias.keys()):
-        bias[key] = clamp_float(float(bias[key]), 0.65, 1.35)
-    return bias
+    return _compute_attribute_bias(
+        profile,
+        character,
+        world_settings,
+        attribute_keys=ATTRIBUTE_KEYS,
+        attribute_influence_strength=ATTRIBUTE_INFLUENCE_STRENGTH,
+        clamp=clamp,
+        clamp_float=clamp_float,
+    )
 
 def compose_attribute_prompt_hints(profile: Dict[str, Any], bias: Dict[str, float]) -> str:
     attrs = ", ".join(str(entry).upper() for entry in (profile.get("primary_attributes") or [])) or "LUCK"

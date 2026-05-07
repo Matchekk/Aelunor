@@ -1080,6 +1080,30 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("primary_attributes", profile)
         self.assertIn("influence_tier", profile)
 
+    def test_attribute_influence_compute_bias_uses_primary_attributes(self) -> None:
+        bias = attribute_influence.compute_attribute_bias(
+            {"influence_tier": "high", "primary_attributes": ["str", "luck"]},
+            {"attributes": {"str": 10, "luck": 2}},
+            attribute_keys=("str", "luck"),
+            attribute_influence_strength={"high": 1.0},
+            clamp=lambda value, low, high: max(low, min(high, int(value))),
+            clamp_float=lambda value, low, high: max(low, min(high, float(value))),
+        )
+
+        self.assertGreater(bias["outgoing_effect_mult"], 1.0)
+        self.assertGreater(bias["complication_mult"], 1.0)
+        self.assertLess(bias["damage_taken_mult"], 1.0)
+
+    def test_state_engine_compute_attribute_bias_wrapper_preserves_contract(self) -> None:
+        bias = state_engine.compute_attribute_bias(
+            {"influence_tier": "none", "primary_attributes": ["str"]},
+            {"attributes": {"str": 10}},
+        )
+
+        self.assertIn("compute_attribute_bias", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(bias["damage_taken_mult"], 1.0)
+        self.assertEqual(bias["outgoing_effect_mult"], 1.0)
+
     def test_world_settings_normalizer_preserves_campaign_defaults_and_bounds(self) -> None:
         defaults = {
             "campaign_length": "medium",

@@ -132,3 +132,64 @@ def derive_attribute_relevance(
         "narrative_bias": narrative_bias[:3],
         "combat_active": combat_active,
     }
+
+
+def compute_attribute_bias(
+    profile: Dict[str, Any],
+    character: Dict[str, Any],
+    world_settings: Optional[Dict[str, Any]] = None,
+    *,
+    attribute_keys: tuple[str, ...],
+    attribute_influence_strength: Dict[str, float],
+    clamp: Callable[[int, int, int], int],
+    clamp_float: Callable[[float, float, float], float],
+) -> Dict[str, float]:
+    attrs = (character or {}).get("attributes", {}) or {}
+    tier = str((profile or {}).get("influence_tier") or "none").lower()
+    strength = attribute_influence_strength.get(tier, 0.0)
+    attr_cap = max(10, max((int(attrs.get(key, 0) or 0) for key in attribute_keys), default=10))
+    primary = [key for key in ((profile or {}).get("primary_attributes") or []) if key in attribute_keys]
+
+    bias = {
+        "damage_taken_mult": 1.0,
+        "cost_mult": 1.0,
+        "complication_mult": 1.0,
+        "outgoing_effect_mult": 1.0,
+    }
+    if strength <= 0 or not primary:
+        return bias
+
+    for key in primary:
+        value = clamp(int(attrs.get(key, 0) or 0), 0, attr_cap)
+        normalized = value / float(attr_cap)
+        if key == "luck":
+            bias["damage_taken_mult"] -= (0.18 * strength * normalized)
+            bias["cost_mult"] -= (0.14 * strength * normalized)
+            bias["complication_mult"] -= (0.30 * strength * normalized)
+            bias["outgoing_effect_mult"] += (0.10 * strength * normalized)
+            if value <= max(1, int(attr_cap * 0.25)) and tier in {"medium", "high"}:
+                bias["complication_mult"] += (0.22 * strength)
+        elif key == "con":
+            bias["damage_taken_mult"] -= (0.26 * strength * normalized)
+            bias["cost_mult"] -= (0.08 * strength * normalized)
+        elif key == "dex":
+            bias["damage_taken_mult"] -= (0.14 * strength * normalized)
+            bias["complication_mult"] -= (0.16 * strength * normalized)
+            bias["outgoing_effect_mult"] += (0.08 * strength * normalized)
+        elif key == "str":
+            bias["outgoing_effect_mult"] += (0.20 * strength * normalized)
+            bias["cost_mult"] += (0.04 * strength * (1.0 - normalized))
+        elif key == "int":
+            bias["outgoing_effect_mult"] += (0.18 * strength * normalized)
+            bias["cost_mult"] -= (0.10 * strength * normalized)
+        elif key == "wis":
+            bias["complication_mult"] -= (0.14 * strength * normalized)
+            bias["cost_mult"] -= (0.08 * strength * normalized)
+            bias["outgoing_effect_mult"] += (0.06 * strength * normalized)
+        elif key == "cha":
+            bias["complication_mult"] -= (0.08 * strength * normalized)
+            bias["outgoing_effect_mult"] += (0.10 * strength * normalized)
+
+    for key in tuple(bias.keys()):
+        bias[key] = clamp_float(float(bias[key]), 0.65, 1.35)
+    return bias
