@@ -1104,6 +1104,23 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(bias["damage_taken_mult"], 1.0)
         self.assertEqual(bias["outgoing_effect_mult"], 1.0)
 
+    def test_attribute_influence_compose_prompt_hints_formats_bias(self) -> None:
+        text = attribute_influence.compose_attribute_prompt_hints(
+            {"primary_attributes": ["str", "luck"], "narrative_bias": ["force_spike"], "influence_tier": "high"},
+            {"damage_taken_mult": 0.9, "cost_mult": 1.0, "complication_mult": 1.1, "outgoing_effect_mult": 1.2},
+        )
+
+        self.assertIn("ATTRIBUTE INFLUENCE:", text)
+        self.assertIn("- primary_attributes=STR, LUCK", text)
+        self.assertIn("- influence_tier=high", text)
+        self.assertIn("- mechanical_bias.outgoing_effect_mult=1.20", text)
+
+    def test_state_engine_compose_attribute_prompt_hints_wrapper_preserves_contract(self) -> None:
+        text = state_engine.compose_attribute_prompt_hints({"primary_attributes": []}, {})
+
+        self.assertIn("compose_attribute_prompt_hints", state_engine.EXPORTED_SYMBOLS)
+        self.assertIn("- primary_attributes=LUCK", text)
+
     def test_world_settings_normalizer_preserves_campaign_defaults_and_bounds(self) -> None:
         defaults = {
             "campaign_length": "medium",

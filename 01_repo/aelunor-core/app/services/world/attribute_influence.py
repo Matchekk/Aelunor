@@ -193,3 +193,20 @@ def compute_attribute_bias(
     for key in tuple(bias.keys()):
         bias[key] = clamp_float(float(bias[key]), 0.65, 1.35)
     return bias
+
+
+def compose_attribute_prompt_hints(profile: Dict[str, Any], bias: Dict[str, float]) -> str:
+    attrs = ", ".join(str(entry).upper() for entry in (profile.get("primary_attributes") or [])) or "LUCK"
+    narrative = ", ".join(profile.get("narrative_bias") or []) or "keine"
+    tier = str(profile.get("influence_tier") or "none")
+    return (
+        "ATTRIBUTE INFLUENCE:\n"
+        f"- primary_attributes={attrs}\n"
+        f"- influence_tier={tier}\n"
+        f"- narrative_bias={narrative}\n"
+        f"- mechanical_bias.damage_taken_mult={bias.get('damage_taken_mult', 1.0):.2f}\n"
+        f"- mechanical_bias.cost_mult={bias.get('cost_mult', 1.0):.2f}\n"
+        f"- mechanical_bias.complication_mult={bias.get('complication_mult', 1.0):.2f}\n"
+        f"- mechanical_bias.outgoing_effect_mult={bias.get('outgoing_effect_mult', 1.0):.2f}\n"
+        "- Attributwirkung muss im story-Text konkret sichtbar sein (kein abstraktes Meta-Gerede)."
+    )
