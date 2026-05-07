@@ -46,6 +46,15 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("skill_rank_for_level", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(state_engine.skill_rank_for_level(0), "-")
 
+    def test_skill_ranks_next_skill_xp_for_level_preserves_formula(self) -> None:
+        self.assertEqual(skill_ranks.next_skill_xp_for_level(0), 60)
+        self.assertEqual(skill_ranks.next_skill_xp_for_level(1), 100)
+        self.assertEqual(skill_ranks.next_skill_xp_for_level(3), 170)
+
+    def test_state_engine_next_skill_xp_for_level_wrapper_preserves_contract(self) -> None:
+        self.assertIn("next_skill_xp_for_level", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(state_engine.next_skill_xp_for_level(2), 135)
+
     def test_state_basics_preserves_slot_and_patch_shapes(self) -> None:
         self.assertEqual(state_basics.slot_id(2, slot_prefix="slot_"), "slot_2")
         self.assertEqual(state_basics.slot_index("slot_2", slot_prefix="slot_"), 2)

@@ -147,6 +147,7 @@ from app.services.world.skill_costs import (
     normalize_skill_cost as _normalize_skill_cost,
 )
 from app.services.world.skill_ranks import (
+    next_skill_xp_for_level as _next_skill_xp_for_level,
     skill_rank_for_level as _skill_rank_for_level,
 )
 from app.services.world.combat import (
@@ -1521,10 +1522,7 @@ def skill_rank_for_level(level: int) -> str:
     return _skill_rank_for_level(level, skill_rank_thresholds=SKILL_RANK_THRESHOLDS)
 
 def next_skill_xp_for_level(level: int) -> int:
-    normalized = int(level or 0)
-    if normalized <= 0:
-        return 60
-    return 100 + ((normalized - 1) * 35)
+    return _next_skill_xp_for_level(level)
 
 def next_class_xp_for_level(level: int) -> int:
     normalized = max(1, int(level or 1))
