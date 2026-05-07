@@ -86,3 +86,32 @@ def active_pacing_profile(
     profile["campaign_length"] = selected
     profile["target_turn"] = (settings.get("target_turns") or {}).get(selected)
     return profile
+
+
+def compute_turn_budget_estimates(
+    state: Dict[str, Any],
+    *,
+    normalize_meta_timing: Callable[[Dict[str, Any]], Dict[str, Any]],
+    normalize_world_settings: Callable[[Any], Dict[str, Any]],
+    target_turns_defaults: Dict[str, Any],
+    timing_defaults: Dict[str, Any],
+) -> Dict[str, Any]:
+    meta = state.setdefault("meta", {})
+    timing = normalize_meta_timing(meta)
+    settings = normalize_world_settings(((state.get("world") or {}).get("settings") or {}))
+    selected = str(settings.get("campaign_length") or "medium").lower()
+    target_lookup = settings.get("target_turns") or {}
+    target_turns = target_lookup.get(selected)
+    if selected == "open":
+        timing["turns_target_est"] = None
+        timing["turns_left_est"] = None
+    else:
+        fallback_target = target_turns_defaults["short"] if selected == "short" else target_turns_defaults["medium"]
+        target = max(1, int(target_turns or fallback_target))
+        current_turn = int(meta.get("turn", 0) or 0)
+        timing["turns_target_est"] = target
+        timing["turns_left_est"] = max(0, target - current_turn)
+    timing["cycle_ema_sec"] = float(timing.get("ai_latency_ema_sec", timing_defaults["ai_latency_ema_sec"])) + float(
+        timing.get("player_latency_ema_sec", timing_defaults["player_latency_ema_sec"])
+    )
+    return timing

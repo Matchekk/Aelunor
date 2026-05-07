@@ -1123,6 +1123,31 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(profile["campaign_length"], "open")
         self.assertIsNone(profile["target_turn"])
 
+    def test_world_settings_turn_budget_estimates_update_timing(self) -> None:
+        state = {"meta": {"turn": 5}, "world": {"settings": {"campaign_length": "short"}}}
+
+        timing = world_settings.compute_turn_budget_estimates(
+            state,
+            normalize_meta_timing=lambda meta: meta.setdefault("timing", {"ai_latency_ema_sec": 2.0, "player_latency_ema_sec": 3.0}),
+            normalize_world_settings=lambda _settings: {"campaign_length": "short", "target_turns": {"short": 12}},
+            target_turns_defaults={"short": 10, "medium": 40},
+            timing_defaults={"ai_latency_ema_sec": 1.0, "player_latency_ema_sec": 1.0},
+        )
+
+        self.assertEqual(timing["turns_target_est"], 12)
+        self.assertEqual(timing["turns_left_est"], 7)
+        self.assertEqual(timing["cycle_ema_sec"], 5.0)
+        self.assertEqual(state["meta"]["timing"], timing)
+
+    def test_state_engine_turn_budget_estimates_wrapper_preserves_contract(self) -> None:
+        timing = state_engine.compute_turn_budget_estimates(
+            {"meta": {"turn": 2}, "world": {"settings": {"campaign_length": "open"}}}
+        )
+
+        self.assertIn("compute_turn_budget_estimates", state_engine.EXPORTED_SYMBOLS)
+        self.assertIsNone(timing["turns_target_est"])
+        self.assertIsNone(timing["turns_left_est"])
+
     def test_combat_meta_update_starts_combat_and_records_queue(self) -> None:
         def normalize_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
             combat_meta = copy.deepcopy(

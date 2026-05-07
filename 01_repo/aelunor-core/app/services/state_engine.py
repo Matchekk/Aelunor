@@ -127,6 +127,7 @@ from app.services.world.attribute_influence import (
 )
 from app.services.world.world_settings import (
     active_pacing_profile as _active_pacing_profile,
+    compute_turn_budget_estimates as _compute_turn_budget_estimates,
     default_campaign_length_settings as _default_campaign_length_settings,
     normalize_world_settings as _normalize_world_settings,
 )
@@ -5740,25 +5741,13 @@ def active_pacing_profile(state: Dict[str, Any]) -> Dict[str, Any]:
     )
 
 def compute_turn_budget_estimates(state: Dict[str, Any]) -> Dict[str, Any]:
-    meta = state.setdefault("meta", {})
-    timing = normalize_meta_timing(meta)
-    settings = normalize_world_settings(((state.get("world") or {}).get("settings") or {}))
-    selected = str(settings.get("campaign_length") or "medium").lower()
-    target_lookup = settings.get("target_turns") or {}
-    target_turns = target_lookup.get(selected)
-    if selected == "open":
-        timing["turns_target_est"] = None
-        timing["turns_left_est"] = None
-    else:
-        fallback_target = TARGET_TURNS_DEFAULTS["short"] if selected == "short" else TARGET_TURNS_DEFAULTS["medium"]
-        target = max(1, int(target_turns or fallback_target))
-        current_turn = int(meta.get("turn", 0) or 0)
-        timing["turns_target_est"] = target
-        timing["turns_left_est"] = max(0, target - current_turn)
-    timing["cycle_ema_sec"] = float(timing.get("ai_latency_ema_sec", TIMING_DEFAULTS["ai_latency_ema_sec"])) + float(
-        timing.get("player_latency_ema_sec", TIMING_DEFAULTS["player_latency_ema_sec"])
+    return _compute_turn_budget_estimates(
+        state,
+        normalize_meta_timing=normalize_meta_timing,
+        normalize_world_settings=normalize_world_settings,
+        target_turns_defaults=TARGET_TURNS_DEFAULTS,
+        timing_defaults=TIMING_DEFAULTS,
     )
-    return timing
 
 def update_turn_timing_ema(state: Dict[str, Any], request_ts: float, response_ts: float) -> Dict[str, Any]:
     timing = normalize_meta_timing(state.setdefault("meta", {}))
