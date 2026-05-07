@@ -153,6 +153,7 @@ from app.services.world.skill_ranks import (
 from app.services.world.skill_state import (
     normalize_cooldown_turns as _normalize_cooldown_turns,
     normalize_growth_potential as _normalize_growth_potential,
+    normalize_skill_element_fields as _normalize_skill_element_fields,
 )
 from app.services.world.combat import (
     apply_combat_scaling_to_patch as _apply_combat_scaling_to_patch,
@@ -1928,11 +1929,7 @@ def normalize_dynamic_skill_state(
     skill["category"] = category or None
     class_affinity = [str(tag).strip() for tag in (skill.get("class_affinity") or []) if str(tag).strip()]
     skill["class_affinity"] = class_affinity or None
-    skill["elements"] = list(dict.fromkeys([str(tag).strip() for tag in (skill.get("elements") or []) if str(tag).strip()]))
-    element_primary = str(skill.get("element_primary") or "").strip()
-    if element_primary and element_primary not in skill["elements"]:
-        skill["elements"].insert(0, element_primary)
-    skill["element_primary"] = element_primary or (skill["elements"][0] if skill["elements"] else None)
+    skill["elements"], skill["element_primary"] = _normalize_skill_element_fields(skill.get("elements"), skill.get("element_primary"))
     element_synergies = [str(tag).strip() for tag in (skill.get("element_synergies") or []) if str(tag).strip()]
     skill["element_synergies"] = list(dict.fromkeys(element_synergies)) or None
     skill["cost"] = _normalize_skill_cost(skill.get("cost"), resource_name=resource_name)

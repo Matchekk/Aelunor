@@ -78,6 +78,20 @@ class StateEngineTests(unittest.TestCase):
 
         self.assertEqual(skill["cooldown_turns"], 0)
 
+    def test_skill_state_normalize_skill_element_fields_dedupes_and_inserts_primary(self) -> None:
+        elements, primary = skill_state.normalize_skill_element_fields([" fire ", "water", "fire", ""], " air ")
+
+        self.assertEqual(elements, ["air", "fire", "water"])
+        self.assertEqual(primary, "air")
+
+    def test_state_engine_dynamic_skill_uses_extracted_element_field_normalizer(self) -> None:
+        skill = state_engine.normalize_dynamic_skill_state(
+            {"name": "Funkenwurf", "elements": ["fire", "water", "fire"], "element_primary": "air"}
+        )
+
+        self.assertEqual(skill["elements"], ["air", "fire", "water"])
+        self.assertEqual(skill["element_primary"], "air")
+
     def test_state_basics_preserves_slot_and_patch_shapes(self) -> None:
         self.assertEqual(state_basics.slot_id(2, slot_prefix="slot_"), "slot_2")
         self.assertEqual(state_basics.slot_index("slot_2", slot_prefix="slot_"), 2)
