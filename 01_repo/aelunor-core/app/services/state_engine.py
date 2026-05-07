@@ -129,6 +129,7 @@ from app.services.world.world_settings import (
     active_pacing_profile as _active_pacing_profile,
     compute_turn_budget_estimates as _compute_turn_budget_estimates,
     default_campaign_length_settings as _default_campaign_length_settings,
+    normalize_meta_timing as _normalize_meta_timing,
     normalize_world_settings as _normalize_world_settings,
 )
 from app.services.world.combat import (
@@ -5701,17 +5702,11 @@ def normalize_world_settings(world_settings: Any) -> Dict[str, Any]:
     )
 
 def normalize_meta_timing(meta: Dict[str, Any]) -> Dict[str, Any]:
-    timing = deep_copy(meta.get("timing") or default_meta_timing())
-    defaults = default_meta_timing()
-    for key in ("ai_latency_ema_sec", "player_latency_ema_sec", "cycle_ema_sec"):
-        timing[key] = float(timing.get(key, defaults[key]) or defaults[key])
-    for key in ("turns_target_est", "turns_left_est"):
-        raw = timing.get(key, defaults[key])
-        timing[key] = None if raw is None else max(0, int(raw))
-    raw_last = timing.get("last_response_ready_ts", defaults["last_response_ready_ts"])
-    timing["last_response_ready_ts"] = None if raw_last in (None, "") else float(raw_last)
-    meta["timing"] = timing
-    return timing
+    return _normalize_meta_timing(
+        meta,
+        deep_copy=deep_copy,
+        default_meta_timing=default_meta_timing,
+    )
 
 def normalize_combat_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
     return _normalize_combat_meta(

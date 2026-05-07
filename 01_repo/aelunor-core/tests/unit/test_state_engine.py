@@ -1148,6 +1148,45 @@ class StateEngineTests(unittest.TestCase):
         self.assertIsNone(timing["turns_target_est"])
         self.assertIsNone(timing["turns_left_est"])
 
+    def test_world_settings_normalize_meta_timing_coerces_existing_values(self) -> None:
+        meta = {
+            "timing": {
+                "ai_latency_ema_sec": "2.5",
+                "player_latency_ema_sec": "",
+                "cycle_ema_sec": "9",
+                "turns_target_est": "-3",
+                "turns_left_est": None,
+                "last_response_ready_ts": "",
+            }
+        }
+
+        timing = world_settings.normalize_meta_timing(
+            meta,
+            deep_copy=copy.deepcopy,
+            default_meta_timing=lambda: {
+                "ai_latency_ema_sec": 1.0,
+                "player_latency_ema_sec": 3.0,
+                "cycle_ema_sec": 4.0,
+                "turns_target_est": 8,
+                "turns_left_est": 5,
+                "last_response_ready_ts": None,
+            },
+        )
+
+        self.assertEqual(timing["ai_latency_ema_sec"], 2.5)
+        self.assertEqual(timing["player_latency_ema_sec"], 3.0)
+        self.assertEqual(timing["cycle_ema_sec"], 9.0)
+        self.assertEqual(timing["turns_target_est"], 0)
+        self.assertIsNone(timing["turns_left_est"])
+        self.assertIsNone(timing["last_response_ready_ts"])
+        self.assertEqual(meta["timing"], timing)
+
+    def test_state_engine_normalize_meta_timing_wrapper_preserves_contract(self) -> None:
+        timing = state_engine.normalize_meta_timing({"timing": {"last_response_ready_ts": "12.5"}})
+
+        self.assertIn("normalize_meta_timing", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(timing["last_response_ready_ts"], 12.5)
+
     def test_combat_meta_update_starts_combat_and_records_queue(self) -> None:
         def normalize_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
             combat_meta = copy.deepcopy(

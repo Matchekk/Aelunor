@@ -115,3 +115,22 @@ def compute_turn_budget_estimates(
         timing.get("player_latency_ema_sec", timing_defaults["player_latency_ema_sec"])
     )
     return timing
+
+
+def normalize_meta_timing(
+    meta: Dict[str, Any],
+    *,
+    deep_copy: Callable[[Any], Any],
+    default_meta_timing: Callable[[], Dict[str, Any]],
+) -> Dict[str, Any]:
+    timing = deep_copy(meta.get("timing") or default_meta_timing())
+    defaults = default_meta_timing()
+    for key in ("ai_latency_ema_sec", "player_latency_ema_sec", "cycle_ema_sec"):
+        timing[key] = float(timing.get(key, defaults[key]) or defaults[key])
+    for key in ("turns_target_est", "turns_left_est"):
+        raw = timing.get(key, defaults[key])
+        timing[key] = None if raw is None else max(0, int(raw))
+    raw_last = timing.get("last_response_ready_ts", defaults["last_response_ready_ts"])
+    timing["last_response_ready_ts"] = None if raw_last in (None, "") else float(raw_last)
+    meta["timing"] = timing
+    return timing
