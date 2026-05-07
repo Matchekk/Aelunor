@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 
 def default_attribute_influence_meta() -> Dict[str, Any]:
@@ -52,3 +52,83 @@ def normalize_attribute_influence_meta(
     influence["last_profile"] = profile
     meta["attribute_influence"] = influence
     return influence
+
+
+def derive_attribute_relevance(
+    state: Dict[str, Any],
+    actor: str,
+    action_type: str,
+    text: str,
+    combat_context: Optional[Dict[str, Any]] = None,
+    *,
+    normalized_eval_text: Callable[[Any], str],
+    hash_unit_interval: Callable[[str], float],
+    attribute_keys: tuple[str, ...],
+    attribute_influence_distribution: tuple[tuple[str, float], ...],
+) -> Dict[str, Any]:
+    character = ((state.get("characters") or {}).get(actor) or {})
+    attrs = character.get("attributes", {}) or {}
+    normalized_text = normalized_eval_text(text)
+    combat_active = bool((combat_context or {}).get("active") or (combat_context or {}).get("hinted"))
+
+    keyword_map = {
+        "str": ("schlag", "drücken", "kraft", "klinge", "hieb", "werfen", "reißen"),
+        "dex": ("ausweichen", "springen", "schnell", "präzise", "treffer", "klettern", "balanc"),
+        "con": ("aushalten", "einstecken", "standhaft", "zäh", "widerstand", "durchhalten"),
+        "int": ("analys", "plan", "taktik", "berechnen", "runen", "technik", "formel"),
+        "wis": ("spüren", "ahnung", "instinkt", "warnung", "wahrnehmen", "ruhe"),
+        "cha": ("überzeugen", "drohen", "verhandeln", "reden", "bluff", "anführen"),
+        "luck": ("zufall", "glück", "fund", "zufällig", "knapp", "unerwartet", "gerade noch"),
+    }
+
+    scored: list[tuple[float, str]] = []
+    for key in attribute_keys:
+        base = float(int(attrs.get(key, 0) or 0))
+        score = base
+        if combat_active and key in {"str", "dex", "con", "luck"}:
+            score += 2.0
+        if action_type == "say" and key in {"cha", "wis", "luck"}:
+            score += 2.5
+        if action_type == "story" and key in {"int", "wis", "luck"}:
+            score += 1.5
+        for keyword in keyword_map.get(key, ()):
+            if keyword in normalized_text:
+                score += 2.2
+        scored.append((score, key))
+
+    scored.sort(key=lambda entry: (entry[0], int(attrs.get(entry[1], 0) or 0)), reverse=True)
+    primary_attributes = [entry[1] for entry in scored[:2] if entry[0] > 0]
+    if not primary_attributes:
+        primary_attributes = ["luck"]
+
+    roll = hash_unit_interval(f"{int((state.get('meta') or {}).get('turn', 0) or 0)}|{actor}|{action_type}|{normalized_text[:180]}")
+    cursor = 0.0
+    tier = "none"
+    for label, probability in attribute_influence_distribution:
+        cursor += probability
+        if roll <= cursor:
+            tier = label
+            break
+
+    narrative_bias: list[str] = []
+    if "luck" in primary_attributes:
+        narrative_bias.append("fortunate_timing" if int(attrs.get("luck", 0) or 0) >= 5 else "ill_timing")
+    if "dex" in primary_attributes:
+        narrative_bias.append("tempo_shift")
+    if "con" in primary_attributes:
+        narrative_bias.append("pain_tolerance")
+    if "cha" in primary_attributes:
+        narrative_bias.append("social_pressure")
+    if "int" in primary_attributes:
+        narrative_bias.append("tactical_read")
+    if "wis" in primary_attributes:
+        narrative_bias.append("hazard_sense")
+    if "str" in primary_attributes:
+        narrative_bias.append("force_spike")
+
+    return {
+        "primary_attributes": primary_attributes,
+        "influence_tier": tier,
+        "narrative_bias": narrative_bias[:3],
+        "combat_active": combat_active,
+    }

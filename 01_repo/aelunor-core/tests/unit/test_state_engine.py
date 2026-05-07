@@ -1050,6 +1050,36 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(state_engine.default_attribute_influence_meta()["last_profile"]["influence_tier"], "none")
         self.assertEqual(normalized["last_profile"]["primary_attributes"], ["str"])
 
+    def test_attribute_influence_derive_relevance_scores_action_context(self) -> None:
+        profile = attribute_influence.derive_attribute_relevance(
+            {"meta": {"turn": 2}, "characters": {"slot_1": {"attributes": {"str": 2, "dex": 6, "luck": 7}}}},
+            "slot_1",
+            "story",
+            "Ein zufällig präzise Sprung gelingt.",
+            {"active": True},
+            normalized_eval_text=lambda value: str(value or "").lower(),
+            hash_unit_interval=lambda _seed: 0.2,
+            attribute_keys=("str", "dex", "con", "int", "wis", "cha", "luck"),
+            attribute_influence_distribution=(("none", 0.1), ("low", 0.3), ("medium", 0.4), ("high", 0.2)),
+        )
+
+        self.assertEqual(profile["primary_attributes"], ["luck", "dex"])
+        self.assertEqual(profile["influence_tier"], "low")
+        self.assertEqual(profile["narrative_bias"][:2], ["fortunate_timing", "tempo_shift"])
+        self.assertTrue(profile["combat_active"])
+
+    def test_state_engine_derive_attribute_relevance_wrapper_preserves_contract(self) -> None:
+        profile = state_engine.derive_attribute_relevance(
+            {"meta": {"turn": 1}, "characters": {"slot_1": {"attributes": {"cha": 8}}}},
+            "slot_1",
+            "say",
+            "Ich verhandle ruhig.",
+        )
+
+        self.assertIn("derive_attribute_relevance", state_engine.EXPORTED_SYMBOLS)
+        self.assertIn("primary_attributes", profile)
+        self.assertIn("influence_tier", profile)
+
     def test_world_settings_normalizer_preserves_campaign_defaults_and_bounds(self) -> None:
         defaults = {
             "campaign_length": "medium",
