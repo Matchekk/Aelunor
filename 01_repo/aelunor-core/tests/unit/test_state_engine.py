@@ -103,6 +103,17 @@ class StateEngineTests(unittest.TestCase):
 
         self.assertEqual(skill["element_synergies"], ["fire", "water"])
 
+    def test_skill_state_normalize_optional_strings_preserves_duplicates(self) -> None:
+        self.assertEqual(skill_state.normalize_optional_strings([" a ", "a", "", "b"]), ["a", "a", "b"])
+        self.assertIsNone(skill_state.normalize_optional_strings(["", "  "]))
+
+    def test_state_engine_dynamic_skill_uses_extracted_class_affinity_normalizer(self) -> None:
+        skill = state_engine.normalize_dynamic_skill_state(
+            {"name": "Funkenwurf", "class_affinity": [" mage ", "mage", ""]}
+        )
+
+        self.assertEqual(skill["class_affinity"], ["mage", "mage"])
+
     def test_state_basics_preserves_slot_and_patch_shapes(self) -> None:
         self.assertEqual(state_basics.slot_id(2, slot_prefix="slot_"), "slot_2")
         self.assertEqual(state_basics.slot_index("slot_2", slot_prefix="slot_"), 2)
