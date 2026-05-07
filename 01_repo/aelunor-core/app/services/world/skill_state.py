@@ -16,3 +16,8 @@ def normalize_skill_element_fields(elements: Any, element_primary: Any) -> tuple
     if normalized_primary and normalized_primary not in normalized_elements:
         normalized_elements.insert(0, normalized_primary)
     return normalized_elements, normalized_primary or (normalized_elements[0] if normalized_elements else None)
+
+
+def normalize_optional_unique_strings(value: Any) -> list[str] | None:
+    normalized = [str(tag).strip() for tag in (value or []) if str(tag).strip()]
+    return list(dict.fromkeys(normalized)) or None

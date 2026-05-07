@@ -153,6 +153,7 @@ from app.services.world.skill_ranks import (
 from app.services.world.skill_state import (
     normalize_cooldown_turns as _normalize_cooldown_turns,
     normalize_growth_potential as _normalize_growth_potential,
+    normalize_optional_unique_strings as _normalize_optional_unique_strings,
     normalize_skill_element_fields as _normalize_skill_element_fields,
 )
 from app.services.world.combat import (
@@ -1930,8 +1931,7 @@ def normalize_dynamic_skill_state(
     class_affinity = [str(tag).strip() for tag in (skill.get("class_affinity") or []) if str(tag).strip()]
     skill["class_affinity"] = class_affinity or None
     skill["elements"], skill["element_primary"] = _normalize_skill_element_fields(skill.get("elements"), skill.get("element_primary"))
-    element_synergies = [str(tag).strip() for tag in (skill.get("element_synergies") or []) if str(tag).strip()]
-    skill["element_synergies"] = list(dict.fromkeys(element_synergies)) or None
+    skill["element_synergies"] = _normalize_optional_unique_strings(skill.get("element_synergies"))
     skill["cost"] = _normalize_skill_cost(skill.get("cost"), resource_name=resource_name)
     skill["price"] = str(skill.get("price", "") or "").strip() or None
     skill["cooldown_turns"] = _normalize_cooldown_turns(skill.get("cooldown_turns"))

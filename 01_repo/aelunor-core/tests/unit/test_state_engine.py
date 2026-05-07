@@ -92,6 +92,17 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(skill["elements"], ["air", "fire", "water"])
         self.assertEqual(skill["element_primary"], "air")
 
+    def test_skill_state_normalize_optional_unique_strings_dedupes_or_returns_none(self) -> None:
+        self.assertEqual(skill_state.normalize_optional_unique_strings([" a ", "b", "a", ""]), ["a", "b"])
+        self.assertIsNone(skill_state.normalize_optional_unique_strings(["", "  "]))
+
+    def test_state_engine_dynamic_skill_uses_extracted_synergy_normalizer(self) -> None:
+        skill = state_engine.normalize_dynamic_skill_state(
+            {"name": "Funkenwurf", "element_synergies": [" fire ", "water", "fire", ""]}
+        )
+
+        self.assertEqual(skill["element_synergies"], ["fire", "water"])
+
     def test_state_basics_preserves_slot_and_patch_shapes(self) -> None:
         self.assertEqual(state_basics.slot_id(2, slot_prefix="slot_"), "slot_2")
         self.assertEqual(state_basics.slot_index("slot_2", slot_prefix="slot_"), 2)
