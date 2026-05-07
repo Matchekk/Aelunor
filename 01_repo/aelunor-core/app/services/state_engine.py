@@ -129,6 +129,7 @@ from app.services.world.world_settings import (
     active_pacing_profile as _active_pacing_profile,
     compute_turn_budget_estimates as _compute_turn_budget_estimates,
     default_campaign_length_settings as _default_campaign_length_settings,
+    milestone_state_for_turn as _milestone_state_for_turn,
     normalize_meta_timing as _normalize_meta_timing,
     normalize_world_settings as _normalize_world_settings,
     update_turn_timing_ema as _update_turn_timing_ema,
@@ -5759,14 +5760,7 @@ def update_turn_timing_ema(state: Dict[str, Any], request_ts: float, response_ts
     )
 
 def milestone_state_for_turn(turn_number: int, profile: Dict[str, Any]) -> Dict[str, int | bool]:
-    every = max(1, int(profile.get("milestone_every_n_turns", 18) or 18))
-    current_turn = max(0, int(turn_number or 0))
-    if current_turn <= 0:
-        return {"is_milestone": False, "last": 0, "next": every}
-    is_milestone = current_turn % every == 0
-    last = current_turn if is_milestone else (current_turn // every) * every
-    next_turn = current_turn + every if is_milestone else last + every
-    return {"is_milestone": is_milestone, "last": last, "next": max(next_turn, every)}
+    return _milestone_state_for_turn(turn_number, profile)
 
 def build_pacing_instruction_block(state: Dict[str, Any]) -> Dict[str, Any]:
     profile = active_pacing_profile(state)

@@ -165,3 +165,14 @@ def update_turn_timing_ema(
     timing["last_response_ready_ts"] = float(response_ts)
     timing["cycle_ema_sec"] = float(timing.get("ai_latency_ema_sec", 0.0)) + float(timing.get("player_latency_ema_sec", 0.0))
     return timing
+
+
+def milestone_state_for_turn(turn_number: int, profile: Dict[str, Any]) -> Dict[str, int | bool]:
+    every = max(1, int(profile.get("milestone_every_n_turns", 18) or 18))
+    current_turn = max(0, int(turn_number or 0))
+    if current_turn <= 0:
+        return {"is_milestone": False, "last": 0, "next": every}
+    is_milestone = current_turn % every == 0
+    last = current_turn if is_milestone else (current_turn // every) * every
+    next_turn = current_turn + every if is_milestone else last + every
+    return {"is_milestone": is_milestone, "last": last, "next": max(next_turn, every)}

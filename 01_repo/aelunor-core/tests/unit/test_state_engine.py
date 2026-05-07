@@ -1222,6 +1222,22 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(timing["last_response_ready_ts"], 12.0)
         self.assertEqual(timing["cycle_ema_sec"], timing["ai_latency_ema_sec"] + timing["player_latency_ema_sec"])
 
+    def test_world_settings_milestone_state_for_turn_tracks_previous_and_next(self) -> None:
+        self.assertEqual(
+            world_settings.milestone_state_for_turn(7, {"milestone_every_n_turns": 5}),
+            {"is_milestone": False, "last": 5, "next": 10},
+        )
+        self.assertEqual(
+            world_settings.milestone_state_for_turn(10, {"milestone_every_n_turns": 5}),
+            {"is_milestone": True, "last": 10, "next": 15},
+        )
+
+    def test_state_engine_milestone_state_for_turn_wrapper_preserves_contract(self) -> None:
+        milestone = state_engine.milestone_state_for_turn(0, {"milestone_every_n_turns": 0})
+
+        self.assertIn("milestone_state_for_turn", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(milestone, {"is_milestone": False, "last": 0, "next": 18})
+
     def test_combat_meta_update_starts_combat_and_records_queue(self) -> None:
         def normalize_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
             combat_meta = copy.deepcopy(
