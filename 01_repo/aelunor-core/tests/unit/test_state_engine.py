@@ -1152,6 +1152,46 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("_scale_negative_delta", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(state_engine._scale_negative_delta(-4, 2.0), -8)
 
+    def test_attribute_influence_apply_bias_to_patch_scales_actor_deltas(self) -> None:
+        patch = {
+            "characters": {
+                "slot_1": {
+                    "hp_delta": -10,
+                    "stamina_delta": -4,
+                    "resources_delta": {"hp": -2, "sta": -3, "res": -5, "gold": -9},
+                }
+            }
+        }
+
+        adjusted, applied = attribute_influence.apply_attribute_bias_to_patch(
+            patch,
+            "slot_1",
+            {"damage_taken_mult": 0.5, "cost_mult": 2.0},
+            deep_copy=copy.deepcopy,
+            blank_patch=state_engine.blank_patch,
+        )
+
+        actor_patch = adjusted["characters"]["slot_1"]
+        self.assertEqual(actor_patch["hp_delta"], -5)
+        self.assertEqual(actor_patch["stamina_delta"], -8)
+        self.assertEqual(actor_patch["resources_delta"]["hp"], -1)
+        self.assertEqual(actor_patch["resources_delta"]["sta"], -6)
+        self.assertEqual(actor_patch["resources_delta"]["res"], -10)
+        self.assertEqual(actor_patch["resources_delta"]["gold"], -9)
+        self.assertEqual(applied, {"hp_delta": 6, "stamina_delta": -7, "res_delta": -5})
+        self.assertEqual(patch["characters"]["slot_1"]["hp_delta"], -10)
+
+    def test_state_engine_apply_attribute_bias_to_patch_wrapper_preserves_contract(self) -> None:
+        adjusted, applied = state_engine.apply_attribute_bias_to_patch(
+            {"characters": {"slot_1": {"hp_delta": -4}}},
+            "slot_1",
+            {"damage_taken_mult": 2.0},
+        )
+
+        self.assertIn("apply_attribute_bias_to_patch", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(adjusted["characters"]["slot_1"]["hp_delta"], -8)
+        self.assertEqual(applied, {"hp_delta": -4})
+
     def test_world_settings_normalizer_preserves_campaign_defaults_and_bounds(self) -> None:
         defaults = {
             "campaign_length": "medium",

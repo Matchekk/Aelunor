@@ -238,3 +238,52 @@ def scale_negative_delta(value: int, multiplier: float) -> int:
     if scaled == 0:
         return -1
     return scaled
+
+
+def apply_attribute_bias_to_patch(
+    patch: Dict[str, Any],
+    actor: str,
+    numeric_bias: Dict[str, float],
+    *,
+    deep_copy: Callable[[Any], Any],
+    blank_patch: Callable[[], Dict[str, Any]],
+) -> tuple[Dict[str, Any], Dict[str, int]]:
+    adjusted = deep_copy(patch or blank_patch())
+    per_actor = (adjusted.get("characters") or {}).get(actor)
+    if not isinstance(per_actor, dict):
+        return adjusted, {}
+
+    applied: Dict[str, int] = {"hp_delta": 0, "stamina_delta": 0, "res_delta": 0}
+    damage_mult = float(numeric_bias.get("damage_taken_mult", 1.0))
+    cost_mult = float(numeric_bias.get("cost_mult", 1.0))
+
+    if "hp_delta" in per_actor:
+        before = int(per_actor.get("hp_delta", 0) or 0)
+        after = scale_negative_delta(before, damage_mult)
+        per_actor["hp_delta"] = after
+        applied["hp_delta"] += after - before
+    if "stamina_delta" in per_actor:
+        before = int(per_actor.get("stamina_delta", 0) or 0)
+        after = scale_negative_delta(before, cost_mult)
+        per_actor["stamina_delta"] = after
+        applied["stamina_delta"] += after - before
+
+    resources_delta = per_actor.get("resources_delta") if isinstance(per_actor.get("resources_delta"), dict) else {}
+    if resources_delta:
+        for key in tuple(resources_delta.keys()):
+            raw = int(resources_delta.get(key, 0) or 0)
+            if key in {"hp"}:
+                scaled = scale_negative_delta(raw, damage_mult)
+                applied["hp_delta"] += scaled - raw
+                resources_delta[key] = scaled
+            elif key in {"stamina", "sta", "aether", "res"}:
+                scaled = scale_negative_delta(raw, cost_mult)
+                if key in {"stamina", "sta"}:
+                    applied["stamina_delta"] += scaled - raw
+                else:
+                    applied["res_delta"] += scaled - raw
+                resources_delta[key] = scaled
+        per_actor["resources_delta"] = resources_delta
+    adjusted["characters"][actor] = per_actor
+    applied = {key: value for key, value in applied.items() if value}
+    return adjusted, applied
