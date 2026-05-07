@@ -159,6 +159,7 @@ from app.services.world.skill_state import (
     normalize_optional_text as _normalize_optional_text,
     normalize_optional_unique_strings as _normalize_optional_unique_strings,
     normalize_skill_element_fields as _normalize_skill_element_fields,
+    normalize_skill_progression_fields as _normalize_skill_progression_fields,
 )
 from app.services.world.combat import (
     apply_combat_scaling_to_patch as _apply_combat_scaling_to_patch,
@@ -1934,11 +1935,11 @@ def normalize_dynamic_skill_state(
     skill["cooldown_turns"] = _normalize_cooldown_turns(skill.get("cooldown_turns"))
     skill["unlocked_from"] = str(skill.get("unlocked_from") or unlocked_from or "Story").strip() or "Story"
     skill["synergy_notes"] = _normalize_optional_text(skill.get("synergy_notes"))
-    skill["xp"] = max(0, int(skill.get("xp", 0) or 0))
-    skill["next_xp"] = max(1, int(skill.get("next_xp", next_skill_xp_for_level(skill["level"])) or next_skill_xp_for_level(skill["level"])))
-    if skill["xp"] > skill["next_xp"]:
-        skill["xp"] = skill["next_xp"]
-    skill["mastery"] = clamp(int(skill.get("mastery", int((skill["xp"] / max(skill["next_xp"], 1)) * 100)) or 0), 0, 100)
+    skill["xp"], skill["next_xp"], skill["mastery"] = _normalize_skill_progression_fields(
+        skill,
+        next_skill_xp_for_level=next_skill_xp_for_level,
+        clamp=clamp,
+    )
     return skill
 
 def merge_dynamic_skill(existing: Dict[str, Any], incoming: Dict[str, Any], *, resource_name: str) -> Dict[str, Any]:

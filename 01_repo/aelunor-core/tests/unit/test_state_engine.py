@@ -162,6 +162,22 @@ class StateEngineTests(unittest.TestCase):
 
         self.assertEqual(skill["power_rating"], 5)
 
+    def test_skill_state_normalize_skill_progression_fields_caps_xp_and_mastery(self) -> None:
+        xp, next_xp, mastery = skill_state.normalize_skill_progression_fields(
+            {"level": 2, "xp": 500, "next_xp": 120},
+            next_skill_xp_for_level=lambda level: 100 + level,
+            clamp=lambda value, low, high: max(low, min(high, int(value))),
+        )
+
+        self.assertEqual((xp, next_xp, mastery), (120, 120, 100))
+
+    def test_state_engine_dynamic_skill_uses_extracted_progression_normalizer(self) -> None:
+        skill = state_engine.normalize_dynamic_skill_state({"name": "Funkenwurf", "level": 2, "xp": 500, "next_xp": 120})
+
+        self.assertEqual(skill["xp"], 120)
+        self.assertEqual(skill["next_xp"], 120)
+        self.assertEqual(skill["mastery"], 0)
+
     def test_state_basics_preserves_slot_and_patch_shapes(self) -> None:
         self.assertEqual(state_basics.slot_id(2, slot_prefix="slot_"), "slot_2")
         self.assertEqual(state_basics.slot_index("slot_2", slot_prefix="slot_"), 2)

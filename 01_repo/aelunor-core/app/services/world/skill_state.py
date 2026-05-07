@@ -49,3 +49,18 @@ def normalize_power_rating(
     fallback = max(1, (skill_rank_sort_value(rank) + 1) * 5 + int(level or 1))
     raw_value = value if value is not None else fallback
     return clamp(int(raw_value or 1), 1, 999)
+
+
+def normalize_skill_progression_fields(
+    skill: dict[str, Any],
+    *,
+    next_skill_xp_for_level: Callable[[int], int],
+    clamp: Callable[[int, int, int], int],
+) -> tuple[int, int, int]:
+    level = int(skill.get("level", 1) or 1)
+    xp = max(0, int(skill.get("xp", 0) or 0))
+    next_xp = max(1, int(skill.get("next_xp", next_skill_xp_for_level(level)) or next_skill_xp_for_level(level)))
+    if xp > next_xp:
+        xp = next_xp
+    mastery = clamp(int(skill.get("mastery", int((xp / max(next_xp, 1)) * 100)) or 0), 0, 100)
+    return xp, next_xp, mastery
