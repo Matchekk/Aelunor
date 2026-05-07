@@ -122,6 +122,7 @@ from app.services.world.codex import (
     ensure_world_codex_from_setup,
 )
 from app.services.world.attribute_influence import (
+    apply_attribute_bias_to_resolution as _apply_attribute_bias_to_resolution,
     compose_attribute_prompt_hints as _compose_attribute_prompt_hints,
     compute_attribute_bias as _compute_attribute_bias,
     default_attribute_influence_meta as _default_attribute_influence_meta,
@@ -5812,16 +5813,11 @@ def compose_attribute_prompt_hints(profile: Dict[str, Any], bias: Dict[str, floa
     return _compose_attribute_prompt_hints(profile, bias)
 
 def apply_attribute_bias_to_resolution(resolution: Dict[str, Any], numeric_bias: Dict[str, float]) -> Dict[str, Any]:
-    adjusted = deep_copy(resolution or {})
-    if "damage_taken" in adjusted:
-        adjusted["damage_taken"] = int(round(float(adjusted.get("damage_taken", 0) or 0) * float(numeric_bias.get("damage_taken_mult", 1.0))))
-    if "cost" in adjusted:
-        adjusted["cost"] = int(round(float(adjusted.get("cost", 0) or 0) * float(numeric_bias.get("cost_mult", 1.0))))
-    if "complication" in adjusted:
-        adjusted["complication"] = int(round(float(adjusted.get("complication", 0) or 0) * float(numeric_bias.get("complication_mult", 1.0))))
-    if "outgoing_effect" in adjusted:
-        adjusted["outgoing_effect"] = int(round(float(adjusted.get("outgoing_effect", 0) or 0) * float(numeric_bias.get("outgoing_effect_mult", 1.0))))
-    return adjusted
+    return _apply_attribute_bias_to_resolution(
+        resolution,
+        numeric_bias,
+        deep_copy=deep_copy,
+    )
 
 def _scale_negative_delta(value: int, multiplier: float) -> int:
     number = int(value or 0)

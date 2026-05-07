@@ -1121,6 +1121,28 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("compose_attribute_prompt_hints", state_engine.EXPORTED_SYMBOLS)
         self.assertIn("- primary_attributes=LUCK", text)
 
+    def test_attribute_influence_apply_bias_to_resolution_scales_fields(self) -> None:
+        resolution = {"damage_taken": 10, "cost": 6, "complication": 5, "outgoing_effect": 4, "note": "keep"}
+
+        adjusted = attribute_influence.apply_attribute_bias_to_resolution(
+            resolution,
+            {"damage_taken_mult": 0.5, "cost_mult": 1.5, "complication_mult": 2.0, "outgoing_effect_mult": 1.25},
+            deep_copy=copy.deepcopy,
+        )
+
+        self.assertEqual(adjusted["damage_taken"], 5)
+        self.assertEqual(adjusted["cost"], 9)
+        self.assertEqual(adjusted["complication"], 10)
+        self.assertEqual(adjusted["outgoing_effect"], 5)
+        self.assertEqual(adjusted["note"], "keep")
+        self.assertEqual(resolution["damage_taken"], 10)
+
+    def test_state_engine_apply_attribute_bias_to_resolution_wrapper_preserves_contract(self) -> None:
+        adjusted = state_engine.apply_attribute_bias_to_resolution({"cost": 4}, {"cost_mult": 2.0})
+
+        self.assertIn("apply_attribute_bias_to_resolution", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(adjusted["cost"], 8)
+
     def test_world_settings_normalizer_preserves_campaign_defaults_and_bounds(self) -> None:
         defaults = {
             "campaign_length": "medium",
