@@ -49,3 +49,7 @@ def record_appearance_change(
     }
     character.setdefault("appearance_history", []).append(event)
     return event
+
+
+def active_faction_ids(character: dict) -> set:
+    return {entry.get("faction_id") for entry in (character.get("faction_memberships") or []) if entry.get("active", True)}

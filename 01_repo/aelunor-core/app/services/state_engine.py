@@ -132,6 +132,7 @@ from app.services.world.attribute_influence import (
     scale_negative_delta as _scale_negative_delta_helper,
 )
 from app.services.world.appearance import (
+    active_faction_ids as _active_faction_ids,
     appearance_event_id as _appearance_event_id,
     format_appearance_message as _format_appearance_message,
     record_appearance_change as _record_appearance_change,
@@ -3393,8 +3394,8 @@ def sync_appearance_changes(
         )
         if event:
             generated.append(event)
-    before_factions = {entry.get("faction_id") for entry in (before_character.get("faction_memberships") or []) if entry.get("active", True)}
-    after_factions = {entry.get("faction_id") for entry in (after_character.get("faction_memberships") or []) if entry.get("active", True)}
+    before_factions = _active_faction_ids(before_character)
+    after_factions = _active_faction_ids(after_character)
     if before_factions != after_factions and after_factions:
         event = record_appearance_change(
             after_character,

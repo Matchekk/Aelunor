@@ -283,6 +283,19 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("record_appearance_change", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(event["message"], "Mira wirkt nun deutlich älter.")
 
+    def test_appearance_active_faction_ids_filters_inactive_entries(self) -> None:
+        factions = appearance.active_faction_ids(
+            {
+                "faction_memberships": [
+                    {"faction_id": "guild", "active": True},
+                    {"faction_id": "cult", "active": False},
+                    {"faction_id": "order"},
+                ]
+            }
+        )
+
+        self.assertEqual(factions, {"guild", "order"})
+
     def test_species_profiles_normalize_race_and_beast(self) -> None:
         race = species_profiles.normalize_race_profile(
             {
