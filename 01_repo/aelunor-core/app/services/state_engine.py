@@ -142,6 +142,7 @@ from app.services.world.world_settings import (
     update_turn_timing_ema as _update_turn_timing_ema,
 )
 from app.services.world.skill_costs import (
+    apply_skill_cost_deltas_to_patch as _apply_skill_cost_deltas_to_patch,
     infer_skill_cost_deltas_from_text as _infer_skill_cost_deltas_from_text,
 )
 from app.services.world.combat import (
@@ -5860,15 +5861,13 @@ def infer_skill_cost_deltas_from_text(
     )
 
 def apply_skill_cost_deltas_to_patch(patch: Dict[str, Any], actor: str, delta_payload: Dict[str, Any]) -> Dict[str, Any]:
-    deltas = delta_payload.get("deltas") if isinstance(delta_payload, dict) else {}
-    if not isinstance(deltas, dict) or not deltas:
-        return patch
-    adjusted = deep_copy(patch or blank_patch())
-    slot_patch = adjusted.setdefault("characters", {}).setdefault(actor, {})
-    resources_delta = slot_patch.setdefault("resources_delta", {})
-    for key, value in deltas.items():
-        resources_delta[key] = int(resources_delta.get(key, 0) or 0) + int(value or 0)
-    return adjusted
+    return _apply_skill_cost_deltas_to_patch(
+        patch,
+        actor,
+        delta_payload,
+        deep_copy=deep_copy,
+        blank_patch=blank_patch,
+    )
 
 def skill_rank_power_weight(rank: str) -> int:
     return _skill_rank_power_weight(rank, normalize_skill_rank=normalize_skill_rank)

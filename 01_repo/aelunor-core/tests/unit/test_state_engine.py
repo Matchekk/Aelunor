@@ -1226,6 +1226,26 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("infer_skill_cost_deltas_from_text", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(payload, {"deltas": {}, "skills": []})
 
+    def test_skill_costs_apply_deltas_to_patch_merges_resources(self) -> None:
+        patch = {"characters": {"slot_1": {"resources_delta": {"sta": -1}}}}
+
+        adjusted = skill_costs.apply_skill_cost_deltas_to_patch(
+            patch,
+            "slot_1",
+            {"deltas": {"sta": -3, "res": -2}},
+            deep_copy=copy.deepcopy,
+            blank_patch=state_engine.blank_patch,
+        )
+
+        self.assertEqual(adjusted["characters"]["slot_1"]["resources_delta"], {"sta": -4, "res": -2})
+        self.assertEqual(patch["characters"]["slot_1"]["resources_delta"], {"sta": -1})
+
+    def test_state_engine_apply_skill_cost_deltas_wrapper_preserves_contract(self) -> None:
+        adjusted = state_engine.apply_skill_cost_deltas_to_patch({}, "slot_1", {"deltas": {"sta": -2}})
+
+        self.assertIn("apply_skill_cost_deltas_to_patch", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(adjusted["characters"]["slot_1"]["resources_delta"]["sta"], -2)
+
     def test_world_settings_normalizer_preserves_campaign_defaults_and_bounds(self) -> None:
         defaults = {
             "campaign_length": "medium",

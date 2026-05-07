@@ -52,3 +52,22 @@ def infer_skill_cost_deltas_from_text(
         if len(matched_skills) >= 2:
             break
     return {"deltas": {key: value for key, value in deltas.items() if value}, "skills": matched_skills}
+
+
+def apply_skill_cost_deltas_to_patch(
+    patch: Dict[str, Any],
+    actor: str,
+    delta_payload: Dict[str, Any],
+    *,
+    deep_copy: Callable[[Any], Any],
+    blank_patch: Callable[[], Dict[str, Any]],
+) -> Dict[str, Any]:
+    deltas = delta_payload.get("deltas") if isinstance(delta_payload, dict) else {}
+    if not isinstance(deltas, dict) or not deltas:
+        return patch
+    adjusted = deep_copy(patch or blank_patch())
+    slot_patch = adjusted.setdefault("characters", {}).setdefault(actor, {})
+    resources_delta = slot_patch.setdefault("resources_delta", {})
+    for key, value in deltas.items():
+        resources_delta[key] = int(resources_delta.get(key, 0) or 0) + int(value or 0)
+    return adjusted
