@@ -13,6 +13,7 @@ from app.services.world import element_ids
 from app.services.world import element_profiles
 from app.services.world import element_relations
 from app.services.world import element_skills
+from app.services.world import skill_costs
 from app.services.world import species_profiles
 from app.services.world import world_settings
 
@@ -1191,6 +1192,39 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("apply_attribute_bias_to_patch", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(adjusted["characters"]["slot_1"]["hp_delta"], -8)
         self.assertEqual(applied, {"hp_delta": -4})
+
+    def test_skill_costs_infer_deltas_from_combat_text(self) -> None:
+        state = {
+            "characters": {
+                "slot_1": {
+                    "skills": {
+                        "s1": {"name": "Flammen Stoß", "cost": {"resource": "Stamina", "amount": 3}},
+                        "s2": {"name": "Nebelgriff", "cost": {"resource": "Aether", "amount": 2}},
+                    }
+                }
+            },
+            "world": {"settings": {"resource_name": "Aether"}},
+        }
+
+        payload = skill_costs.infer_skill_cost_deltas_from_text(
+            state,
+            "slot_1",
+            "combat",
+            "Sie nutzt Flammen Stoß und aktiviert Nebelgriff.",
+            combat_context={"active": True},
+            resource_name_for_character=lambda _character, _settings: "Aether",
+            normalized_eval_text=lambda value: str(value or "").lower(),
+            normalize_dynamic_skill_state=lambda skill, **_kwargs: dict(skill),
+        )
+
+        self.assertEqual(payload["deltas"], {"sta": -3, "res": -2})
+        self.assertEqual(payload["skills"], ["Flammen Stoß", "Nebelgriff"])
+
+    def test_state_engine_infer_skill_cost_deltas_wrapper_preserves_contract(self) -> None:
+        payload = state_engine.infer_skill_cost_deltas_from_text({}, "slot_1", "canon", "nutzt etwas")
+
+        self.assertIn("infer_skill_cost_deltas_from_text", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(payload, {"deltas": {}, "skills": []})
 
     def test_world_settings_normalizer_preserves_campaign_defaults_and_bounds(self) -> None:
         defaults = {
