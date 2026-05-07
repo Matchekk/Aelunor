@@ -135,6 +135,33 @@ class StateEngineTests(unittest.TestCase):
 
         self.assertEqual(skill["category"], "aktiv")
 
+    def test_skill_state_normalize_power_rating_uses_fallback_and_bounds(self) -> None:
+        self.assertEqual(
+            skill_state.normalize_power_rating(
+                None,
+                rank="C",
+                level=2,
+                skill_rank_sort_value=lambda rank: {"F": 0, "C": 3}.get(rank, 0),
+                clamp=lambda value, low, high: max(low, min(high, int(value))),
+            ),
+            22,
+        )
+        self.assertEqual(
+            skill_state.normalize_power_rating(
+                2000,
+                rank="F",
+                level=1,
+                skill_rank_sort_value=lambda _rank: 0,
+                clamp=lambda value, low, high: max(low, min(high, int(value))),
+            ),
+            999,
+        )
+
+    def test_state_engine_dynamic_skill_uses_extracted_power_rating_normalizer(self) -> None:
+        skill = state_engine.normalize_dynamic_skill_state({"name": "Funkenwurf", "rank": "C", "level": 2})
+
+        self.assertEqual(skill["power_rating"], 5)
+
     def test_state_basics_preserves_slot_and_patch_shapes(self) -> None:
         self.assertEqual(state_basics.slot_id(2, slot_prefix="slot_"), "slot_2")
         self.assertEqual(state_basics.slot_index("slot_2", slot_prefix="slot_"), 2)

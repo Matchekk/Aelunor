@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Callable
 
 
 def normalize_growth_potential(value: Any) -> str:
@@ -36,3 +36,16 @@ def normalize_optional_text(value: Any) -> str | None:
 def normalize_optional_lower_text(value: Any) -> str | None:
     normalized = str(value or "").strip().lower()
     return normalized or None
+
+
+def normalize_power_rating(
+    value: Any,
+    *,
+    rank: str,
+    level: int,
+    skill_rank_sort_value: Callable[[str], int],
+    clamp: Callable[[int, int, int], int],
+) -> int:
+    fallback = max(1, (skill_rank_sort_value(rank) + 1) * 5 + int(level or 1))
+    raw_value = value if value is not None else fallback
+    return clamp(int(raw_value or 1), 1, 999)

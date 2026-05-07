@@ -151,6 +151,7 @@ from app.services.world.skill_ranks import (
     skill_rank_for_level as _skill_rank_for_level,
 )
 from app.services.world.skill_state import (
+    normalize_power_rating as _normalize_power_rating,
     normalize_cooldown_turns as _normalize_cooldown_turns,
     normalize_growth_potential as _normalize_growth_potential,
     normalize_optional_lower_text as _normalize_optional_lower_text,
@@ -1916,16 +1917,12 @@ def normalize_dynamic_skill_state(
     skill["description"] = str(skill.get("description", "") or "").strip() or f"{skill['name']} ist Teil der aktuellen Entwicklung."
     skill["effect_summary"] = str(skill.get("effect_summary", "") or "").strip() or skill["description"][:180]
     skill["growth_potential"] = _normalize_growth_potential(skill.get("growth_potential"))
-    skill["power_rating"] = clamp(
-        int(
-            skill.get(
-                "power_rating",
-                max(1, (skill_rank_sort_value(skill["rank"]) + 1) * 5 + int(skill.get("level", 1) or 1)),
-            )
-            or 1
-        ),
-        1,
-        999,
+    skill["power_rating"] = _normalize_power_rating(
+        skill.get("power_rating"),
+        rank=skill["rank"],
+        level=int(skill.get("level", 1) or 1),
+        skill_rank_sort_value=skill_rank_sort_value,
+        clamp=clamp,
     )
     skill["manifestation_source"] = _normalize_optional_text(skill.get("manifestation_source"))
     skill["category"] = _normalize_optional_lower_text(skill.get("category"))
