@@ -4,6 +4,7 @@ from typing import Any, Dict, List
 
 from app.services import state_engine
 from app.services import state_basics
+from app.services.world import appearance
 from app.services.world import attribute_influence
 from app.services.world import combat
 from app.services.world import element_class_paths
@@ -205,6 +206,23 @@ class StateEngineTests(unittest.TestCase):
                 "map_add_edges": [],
                 "events_add": [],
             },
+        )
+
+    def test_appearance_format_message_by_kind(self) -> None:
+        self.assertEqual(
+            appearance.format_appearance_message("Mira", "scar_added", "scar", "Wangenriss"),
+            "Mira trägt nun eine neue Narbe: Wangenriss.",
+        )
+        self.assertEqual(
+            appearance.format_appearance_message("Mira", "unknown", "x", "leuchtet"),
+            "Miras Erscheinung verändert sich: leuchtet.",
+        )
+
+    def test_state_engine_format_appearance_message_wrapper_preserves_contract(self) -> None:
+        self.assertIn("format_appearance_message", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(
+            state_engine.format_appearance_message("Mira", "aging_stage", "age_stage", "älter"),
+            "Mira wirkt nun deutlich älter.",
         )
 
     def test_species_profiles_normalize_race_and_beast(self) -> None:
