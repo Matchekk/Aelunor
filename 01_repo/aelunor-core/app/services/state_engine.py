@@ -150,6 +150,9 @@ from app.services.world.skill_ranks import (
     next_skill_xp_for_level as _next_skill_xp_for_level,
     skill_rank_for_level as _skill_rank_for_level,
 )
+from app.services.world.skill_state import (
+    normalize_growth_potential as _normalize_growth_potential,
+)
 from app.services.world.combat import (
     apply_combat_scaling_to_patch as _apply_combat_scaling_to_patch,
     build_combat_scaling_context as _build_combat_scaling_context,
@@ -1906,9 +1909,7 @@ def normalize_dynamic_skill_state(
     skill["tags"] = [str(tag).strip() for tag in (skill.get("tags") or []) if str(tag).strip()]
     skill["description"] = str(skill.get("description", "") or "").strip() or f"{skill['name']} ist Teil der aktuellen Entwicklung."
     skill["effect_summary"] = str(skill.get("effect_summary", "") or "").strip() or skill["description"][:180]
-    skill["growth_potential"] = str(skill.get("growth_potential", "") or "mittel").strip().lower() or "mittel"
-    if skill["growth_potential"] not in {"niedrig", "mittel", "hoch", "legendär"}:
-        skill["growth_potential"] = "mittel"
+    skill["growth_potential"] = _normalize_growth_potential(skill.get("growth_potential"))
     skill["power_rating"] = clamp(
         int(
             skill.get(

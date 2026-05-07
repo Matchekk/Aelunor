@@ -15,6 +15,7 @@ from app.services.world import element_relations
 from app.services.world import element_skills
 from app.services.world import skill_costs
 from app.services.world import skill_ranks
+from app.services.world import skill_state
 from app.services.world import species_profiles
 from app.services.world import world_settings
 
@@ -54,6 +55,17 @@ class StateEngineTests(unittest.TestCase):
     def test_state_engine_next_skill_xp_for_level_wrapper_preserves_contract(self) -> None:
         self.assertIn("next_skill_xp_for_level", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(state_engine.next_skill_xp_for_level(2), 135)
+
+    def test_skill_state_normalize_growth_potential_defaults_invalid_values(self) -> None:
+        self.assertEqual(skill_state.normalize_growth_potential(" HOCH "), "hoch")
+        self.assertEqual(skill_state.normalize_growth_potential("legendär"), "legendär")
+        self.assertEqual(skill_state.normalize_growth_potential("mythisch"), "mittel")
+        self.assertEqual(skill_state.normalize_growth_potential(""), "mittel")
+
+    def test_state_engine_dynamic_skill_uses_extracted_growth_potential_normalizer(self) -> None:
+        skill = state_engine.normalize_dynamic_skill_state({"name": "Funkenwurf", "growth_potential": "mythisch"})
+
+        self.assertEqual(skill["growth_potential"], "mittel")
 
     def test_state_basics_preserves_slot_and_patch_shapes(self) -> None:
         self.assertEqual(state_basics.slot_id(2, slot_prefix="slot_"), "slot_2")
