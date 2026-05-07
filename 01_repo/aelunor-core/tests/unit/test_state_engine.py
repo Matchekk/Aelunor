@@ -1238,6 +1238,37 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("milestone_state_for_turn", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(milestone, {"is_milestone": False, "last": 0, "next": 18})
 
+    def test_world_settings_build_pacing_instruction_block_formats_profile(self) -> None:
+        block = world_settings.build_pacing_instruction_block(
+            {"meta": {"turn": 6}},
+            active_pacing_profile=lambda _state: {
+                "campaign_length": "short",
+                "beats_per_turn": 3,
+                "detail_level": "high",
+                "plot_density": "dense",
+                "sideplot_limit": 0,
+                "milestone_every_n_turns": 6,
+                "min_story_chars": 800,
+                "max_story_chars": 1400,
+            },
+            milestone_state_for_turn=lambda _turn, _profile: {"is_milestone": True, "last": 6, "next": 12},
+        )
+
+        self.assertEqual(block["profile"]["campaign_length"], "short")
+        self.assertEqual(block["milestone"], {"is_milestone": True, "last": 6, "next": 12})
+        self.assertIn("PACING INSTRUCTIONS:", block["text"])
+        self.assertIn("- campaign_length=short", block["text"])
+        self.assertIn("- is_milestone_turn=yes", block["text"])
+        self.assertIn("Für SHORT", block["text"])
+
+    def test_state_engine_build_pacing_instruction_block_wrapper_preserves_contract(self) -> None:
+        block = state_engine.build_pacing_instruction_block({"meta": {"turn": 1}, "world": {"settings": {"campaign_length": "open"}}})
+
+        self.assertIn("build_pacing_instruction_block", state_engine.EXPORTED_SYMBOLS)
+        self.assertIn("profile", block)
+        self.assertIn("milestone", block)
+        self.assertIn("text", block)
+
     def test_combat_meta_update_starts_combat_and_records_queue(self) -> None:
         def normalize_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
             combat_meta = copy.deepcopy(

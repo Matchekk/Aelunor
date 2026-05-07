@@ -127,6 +127,7 @@ from app.services.world.attribute_influence import (
 )
 from app.services.world.world_settings import (
     active_pacing_profile as _active_pacing_profile,
+    build_pacing_instruction_block as _build_pacing_instruction_block,
     compute_turn_budget_estimates as _compute_turn_budget_estimates,
     default_campaign_length_settings as _default_campaign_length_settings,
     milestone_state_for_turn as _milestone_state_for_turn,
@@ -5763,40 +5764,11 @@ def milestone_state_for_turn(turn_number: int, profile: Dict[str, Any]) -> Dict[
     return _milestone_state_for_turn(turn_number, profile)
 
 def build_pacing_instruction_block(state: Dict[str, Any]) -> Dict[str, Any]:
-    profile = active_pacing_profile(state)
-    milestone = milestone_state_for_turn(int((state.get("meta") or {}).get("turn", 0) or 0), profile)
-    lines = [
-        "PACING INSTRUCTIONS:",
-        f"- campaign_length={profile.get('campaign_length')}",
-        f"- beats_per_turn={int(profile.get('beats_per_turn', 2) or 2)}",
-        f"- detail_level={profile.get('detail_level', 'medium')}",
-        f"- plot_density={profile.get('plot_density', 'medium')}",
-        f"- sideplot_limit={profile.get('sideplot_limit', 'null')}",
-        f"- milestone_every_n_turns={int(profile.get('milestone_every_n_turns', 18) or 18)}",
-        f"- min_story_chars={int(profile.get('min_story_chars', 800) or 800)}",
-        f"- max_story_chars={int(profile.get('max_story_chars', 2200) or 2200)}",
-        f"- is_milestone_turn={'yes' if milestone['is_milestone'] else 'no'}",
-    ]
-    if profile.get("campaign_length") == "short":
-        lines.extend(
-            [
-                "- Für SHORT: 3 Beats zwingend (Setup -> Konsequenz -> Eskalation) plus klarer Entscheidungspunkt.",
-                "- Antworte mit 2-4 konkreten Optionen und zusätzlich 'eigener Plan'.",
-                "- Weniger Kulissenbeschreibung, mehr sichtbarer Plot-Fortschritt pro Turn.",
-            ]
-        )
-    lines.extend(
-        [
-            "- Die story muss mindestens min_story_chars Zeichen haben.",
-            "- Wiederhole keine vorherigen Absätze.",
-            "- Große Progressionssprünge (Ascension, Rank-Sprung, neue A/S-Skills) sind nur auf Milestone-Turns erlaubt.",
-        ]
+    return _build_pacing_instruction_block(
+        state,
+        active_pacing_profile=active_pacing_profile,
+        milestone_state_for_turn=milestone_state_for_turn,
     )
-    return {
-        "profile": profile,
-        "milestone": milestone,
-        "text": "\n".join(lines),
-    }
 
 def _hash_unit_interval(seed_text: str) -> float:
     digest = hashlib.sha256(seed_text.encode("utf-8")).hexdigest()[:12]
