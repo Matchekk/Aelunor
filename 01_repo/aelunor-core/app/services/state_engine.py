@@ -154,6 +154,7 @@ from app.services.world.skill_state import (
     normalize_cooldown_turns as _normalize_cooldown_turns,
     normalize_growth_potential as _normalize_growth_potential,
     normalize_optional_strings as _normalize_optional_strings,
+    normalize_optional_text as _normalize_optional_text,
     normalize_optional_unique_strings as _normalize_optional_unique_strings,
     normalize_skill_element_fields as _normalize_skill_element_fields,
 )
@@ -1925,8 +1926,7 @@ def normalize_dynamic_skill_state(
         1,
         999,
     )
-    manifestation_source = str(skill.get("manifestation_source", "") or "").strip()
-    skill["manifestation_source"] = manifestation_source or None
+    skill["manifestation_source"] = _normalize_optional_text(skill.get("manifestation_source"))
     category = str(skill.get("category", "") or "").strip().lower()
     skill["category"] = category or None
     skill["class_affinity"] = _normalize_optional_strings(skill.get("class_affinity"))
@@ -1936,7 +1936,7 @@ def normalize_dynamic_skill_state(
     skill["price"] = str(skill.get("price", "") or "").strip() or None
     skill["cooldown_turns"] = _normalize_cooldown_turns(skill.get("cooldown_turns"))
     skill["unlocked_from"] = str(skill.get("unlocked_from") or unlocked_from or "Story").strip() or "Story"
-    skill["synergy_notes"] = str(skill.get("synergy_notes", "") or "").strip() or None
+    skill["synergy_notes"] = _normalize_optional_text(skill.get("synergy_notes"))
     skill["xp"] = max(0, int(skill.get("xp", 0) or 0))
     skill["next_xp"] = max(1, int(skill.get("next_xp", next_skill_xp_for_level(skill["level"])) or next_skill_xp_for_level(skill["level"])))
     if skill["xp"] > skill["next_xp"]:

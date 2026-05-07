@@ -114,6 +114,18 @@ class StateEngineTests(unittest.TestCase):
 
         self.assertEqual(skill["class_affinity"], ["mage", "mage"])
 
+    def test_skill_state_normalize_optional_text_strips_or_returns_none(self) -> None:
+        self.assertEqual(skill_state.normalize_optional_text(" Story "), "Story")
+        self.assertIsNone(skill_state.normalize_optional_text(""))
+
+    def test_state_engine_dynamic_skill_uses_extracted_optional_text_normalizer(self) -> None:
+        skill = state_engine.normalize_dynamic_skill_state(
+            {"name": "Funkenwurf", "manifestation_source": " Story ", "synergy_notes": " Kombiniert "}
+        )
+
+        self.assertEqual(skill["manifestation_source"], "Story")
+        self.assertEqual(skill["synergy_notes"], "Kombiniert")
+
     def test_state_basics_preserves_slot_and_patch_shapes(self) -> None:
         self.assertEqual(state_basics.slot_id(2, slot_prefix="slot_"), "slot_2")
         self.assertEqual(state_basics.slot_index("slot_2", slot_prefix="slot_"), 2)

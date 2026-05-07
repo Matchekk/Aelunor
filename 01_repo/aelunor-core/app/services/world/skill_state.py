@@ -26,3 +26,8 @@ def normalize_optional_unique_strings(value: Any) -> list[str] | None:
 def normalize_optional_strings(value: Any) -> list[str] | None:
     normalized = [str(tag).strip() for tag in (value or []) if str(tag).strip()]
     return normalized or None
+
+
+def normalize_optional_text(value: Any) -> str | None:
+    normalized = str(value or "").strip()
+    return normalized or None
