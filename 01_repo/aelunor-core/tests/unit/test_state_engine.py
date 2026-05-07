@@ -56,6 +56,14 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("next_skill_xp_for_level", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(state_engine.next_skill_xp_for_level(2), 135)
 
+    def test_skill_ranks_normalize_skill_rank_uppercases_and_defaults(self) -> None:
+        self.assertEqual(skill_ranks.normalize_skill_rank(" c ", skill_ranks=("F", "C")), "C")
+        self.assertEqual(skill_ranks.normalize_skill_rank("x", skill_ranks=("F", "C")), "F")
+
+    def test_state_engine_normalize_skill_rank_wrapper_preserves_contract(self) -> None:
+        self.assertIn("normalize_skill_rank", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(state_engine.normalize_skill_rank("s"), "S")
+
     def test_skill_state_normalize_growth_potential_defaults_invalid_values(self) -> None:
         self.assertEqual(skill_state.normalize_growth_potential(" HOCH "), "hoch")
         self.assertEqual(skill_state.normalize_growth_potential("legendär"), "legendär")

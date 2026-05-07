@@ -148,6 +148,7 @@ from app.services.world.skill_costs import (
 )
 from app.services.world.skill_ranks import (
     next_skill_xp_for_level as _next_skill_xp_for_level,
+    normalize_skill_rank as _normalize_skill_rank,
     skill_rank_for_level as _skill_rank_for_level,
 )
 from app.services.world.skill_state import (
@@ -1844,8 +1845,7 @@ def dynamic_skill_default(skill_id: str = "", skill_name: str = "", resource_nam
     }
 
 def normalize_skill_rank(value: Any) -> str:
-    rank = str(value or "F").strip().upper()
-    return rank if rank in SKILL_RANKS else "F"
+    return _normalize_skill_rank(value, skill_ranks=SKILL_RANKS)
 
 def normalize_dynamic_skill_state(
     value: Any,
