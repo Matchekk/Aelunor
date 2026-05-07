@@ -67,6 +67,17 @@ class StateEngineTests(unittest.TestCase):
 
         self.assertEqual(skill["growth_potential"], "mittel")
 
+    def test_skill_state_normalize_cooldown_turns_preserves_none_and_bounds(self) -> None:
+        self.assertIsNone(skill_state.normalize_cooldown_turns(None))
+        self.assertIsNone(skill_state.normalize_cooldown_turns(""))
+        self.assertEqual(skill_state.normalize_cooldown_turns("-2"), 0)
+        self.assertEqual(skill_state.normalize_cooldown_turns("3"), 3)
+
+    def test_state_engine_dynamic_skill_uses_extracted_cooldown_normalizer(self) -> None:
+        skill = state_engine.normalize_dynamic_skill_state({"name": "Funkenwurf", "cooldown_turns": "-2"})
+
+        self.assertEqual(skill["cooldown_turns"], 0)
+
     def test_state_basics_preserves_slot_and_patch_shapes(self) -> None:
         self.assertEqual(state_basics.slot_id(2, slot_prefix="slot_"), "slot_2")
         self.assertEqual(state_basics.slot_index("slot_2", slot_prefix="slot_"), 2)

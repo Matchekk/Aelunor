@@ -151,6 +151,7 @@ from app.services.world.skill_ranks import (
     skill_rank_for_level as _skill_rank_for_level,
 )
 from app.services.world.skill_state import (
+    normalize_cooldown_turns as _normalize_cooldown_turns,
     normalize_growth_potential as _normalize_growth_potential,
 )
 from app.services.world.combat import (
@@ -1936,8 +1937,7 @@ def normalize_dynamic_skill_state(
     skill["element_synergies"] = list(dict.fromkeys(element_synergies)) or None
     skill["cost"] = _normalize_skill_cost(skill.get("cost"), resource_name=resource_name)
     skill["price"] = str(skill.get("price", "") or "").strip() or None
-    cooldown = skill.get("cooldown_turns")
-    skill["cooldown_turns"] = None if cooldown in (None, "", False) else max(0, int(cooldown or 0))
+    skill["cooldown_turns"] = _normalize_cooldown_turns(skill.get("cooldown_turns"))
     skill["unlocked_from"] = str(skill.get("unlocked_from") or unlocked_from or "Story").strip() or "Story"
     skill["synergy_notes"] = str(skill.get("synergy_notes", "") or "").strip() or None
     skill["xp"] = max(0, int(skill.get("xp", 0) or 0))
