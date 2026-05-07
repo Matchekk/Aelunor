@@ -134,6 +134,7 @@ from app.services.world.attribute_influence import (
 from app.services.world.appearance import (
     appearance_event_id as _appearance_event_id,
     format_appearance_message as _format_appearance_message,
+    record_appearance_change as _record_appearance_change,
 )
 from app.services.world.world_settings import (
     active_pacing_profile as _active_pacing_profile,
@@ -3307,24 +3308,16 @@ def record_appearance_change(
     old_value: str,
     new_value: str,
 ) -> Optional[Dict[str, Any]]:
-    if old_value == new_value:
-        return None
-    display_name = (character.get("bio") or {}).get("name") or slot_name
-    event_id = appearance_event_id(slot_name, kind, source, turn_number, absolute_day, new_value)
-    if any(entry.get("event_id") == event_id for entry in (character.get("appearance_history") or [])):
-        return None
-    event = {
-        "event_id": event_id,
-        "absolute_day": absolute_day,
-        "turn_number": turn_number,
-        "kind": kind,
-        "source": source,
-        "old_value": old_value,
-        "new_value": new_value,
-        "message": format_appearance_message(display_name, kind, source, new_value),
-    }
-    character.setdefault("appearance_history", []).append(event)
-    return event
+    return _record_appearance_change(
+        character,
+        slot_name=slot_name,
+        turn_number=turn_number,
+        absolute_day=absolute_day,
+        kind=kind,
+        source=source,
+        old_value=old_value,
+        new_value=new_value,
+    )
 
 def sync_appearance_changes(
     before_character: Dict[str, Any],

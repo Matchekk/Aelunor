@@ -18,3 +18,34 @@ def format_appearance_message(display_name: str, kind: str, source: str, new_val
     if kind == "scar_added":
         return f"{display_name} trägt nun eine neue Narbe: {new_value}."
     return f"{display_name}s Erscheinung verändert sich: {new_value}."
+
+
+def record_appearance_change(
+    character: dict,
+    *,
+    slot_name: str,
+    turn_number: int,
+    absolute_day: int,
+    kind: str,
+    source: str,
+    old_value: str,
+    new_value: str,
+) -> dict | None:
+    if old_value == new_value:
+        return None
+    display_name = (character.get("bio") or {}).get("name") or slot_name
+    event_id = appearance_event_id(slot_name, kind, source, turn_number, absolute_day, new_value)
+    if any(entry.get("event_id") == event_id for entry in (character.get("appearance_history") or [])):
+        return None
+    event = {
+        "event_id": event_id,
+        "absolute_day": absolute_day,
+        "turn_number": turn_number,
+        "kind": kind,
+        "source": source,
+        "old_value": old_value,
+        "new_value": new_value,
+        "message": format_appearance_message(display_name, kind, source, new_value),
+    }
+    character.setdefault("appearance_history", []).append(event)
+    return event

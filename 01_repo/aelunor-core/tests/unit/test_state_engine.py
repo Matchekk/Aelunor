@@ -238,6 +238,51 @@ class StateEngineTests(unittest.TestCase):
             appearance.appearance_event_id("slot_1", "scar_added", "scar", 3, 10, "Wangenriss"),
         )
 
+    def test_appearance_record_change_appends_once(self) -> None:
+        character = {"bio": {"name": "Mira"}}
+
+        event = appearance.record_appearance_change(
+            character,
+            slot_name="slot_1",
+            turn_number=3,
+            absolute_day=10,
+            kind="scar_added",
+            source="scar",
+            old_value="",
+            new_value="Wangenriss",
+        )
+        duplicate = appearance.record_appearance_change(
+            character,
+            slot_name="slot_1",
+            turn_number=3,
+            absolute_day=10,
+            kind="scar_added",
+            source="scar",
+            old_value="",
+            new_value="Wangenriss",
+        )
+
+        self.assertIsNotNone(event)
+        self.assertIsNone(duplicate)
+        self.assertEqual(len(character["appearance_history"]), 1)
+
+    def test_state_engine_record_appearance_change_wrapper_preserves_contract(self) -> None:
+        character = {"bio": {"name": "Mira"}}
+
+        event = state_engine.record_appearance_change(
+            character,
+            slot_name="slot_1",
+            turn_number=3,
+            absolute_day=10,
+            kind="aging_stage",
+            source="age_stage",
+            old_value="jung",
+            new_value="älter",
+        )
+
+        self.assertIn("record_appearance_change", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(event["message"], "Mira wirkt nun deutlich älter.")
+
     def test_species_profiles_normalize_race_and_beast(self) -> None:
         race = species_profiles.normalize_race_profile(
             {
