@@ -144,6 +144,7 @@ from app.services.world.world_settings import (
 from app.services.world.skill_costs import (
     apply_skill_cost_deltas_to_patch as _apply_skill_cost_deltas_to_patch,
     infer_skill_cost_deltas_from_text as _infer_skill_cost_deltas_from_text,
+    normalize_skill_cost as _normalize_skill_cost,
 )
 from app.services.world.combat import (
     apply_combat_scaling_to_patch as _apply_combat_scaling_to_patch,
@@ -1937,13 +1938,7 @@ def normalize_dynamic_skill_state(
     skill["element_primary"] = element_primary or (skill["elements"][0] if skill["elements"] else None)
     element_synergies = [str(tag).strip() for tag in (skill.get("element_synergies") or []) if str(tag).strip()]
     skill["element_synergies"] = list(dict.fromkeys(element_synergies)) or None
-    raw_cost = skill.get("cost")
-    if isinstance(raw_cost, dict):
-        cost_resource = str(raw_cost.get("resource") or resource_name).strip() or resource_name
-        amount = max(0, int(raw_cost.get("amount", 0) or 0))
-        skill["cost"] = {"resource": cost_resource, "amount": amount}
-    else:
-        skill["cost"] = None
+    skill["cost"] = _normalize_skill_cost(skill.get("cost"), resource_name=resource_name)
     skill["price"] = str(skill.get("price", "") or "").strip() or None
     cooldown = skill.get("cooldown_turns")
     skill["cooldown_turns"] = None if cooldown in (None, "", False) else max(0, int(cooldown or 0))

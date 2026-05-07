@@ -1,6 +1,14 @@
 from typing import Any, Callable, Dict, Optional
 
 
+def normalize_skill_cost(raw_cost: Any, *, resource_name: str) -> Optional[Dict[str, Any]]:
+    if not isinstance(raw_cost, dict):
+        return None
+    cost_resource = str(raw_cost.get("resource") or resource_name).strip() or resource_name
+    amount = max(0, int(raw_cost.get("amount", 0) or 0))
+    return {"resource": cost_resource, "amount": amount}
+
+
 def infer_skill_cost_deltas_from_text(
     state: Dict[str, Any],
     actor: str,

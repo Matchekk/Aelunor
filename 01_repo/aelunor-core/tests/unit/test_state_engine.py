@@ -1246,6 +1246,25 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("apply_skill_cost_deltas_to_patch", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(adjusted["characters"]["slot_1"]["resources_delta"]["sta"], -2)
 
+    def test_skill_costs_normalize_skill_cost_bounds_amount_and_resource(self) -> None:
+        self.assertEqual(
+            skill_costs.normalize_skill_cost({"resource": " Mana ", "amount": "-3"}, resource_name="Aether"),
+            {"resource": "Mana", "amount": 0},
+        )
+        self.assertEqual(
+            skill_costs.normalize_skill_cost({"amount": 2}, resource_name="Aether"),
+            {"resource": "Aether", "amount": 2},
+        )
+        self.assertIsNone(skill_costs.normalize_skill_cost(None, resource_name="Aether"))
+
+    def test_state_engine_dynamic_skill_uses_extracted_cost_normalizer(self) -> None:
+        skill = state_engine.normalize_dynamic_skill_state(
+            {"name": "Funkenwurf", "cost": {"resource": " Mana ", "amount": 3}},
+            resource_name="Aether",
+        )
+
+        self.assertEqual(skill["cost"], {"resource": "Mana", "amount": 3})
+
     def test_world_settings_normalizer_preserves_campaign_defaults_and_bounds(self) -> None:
         defaults = {
             "campaign_length": "medium",
