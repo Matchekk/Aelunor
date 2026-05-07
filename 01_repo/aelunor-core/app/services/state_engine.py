@@ -146,6 +146,9 @@ from app.services.world.skill_costs import (
     infer_skill_cost_deltas_from_text as _infer_skill_cost_deltas_from_text,
     normalize_skill_cost as _normalize_skill_cost,
 )
+from app.services.world.skill_ranks import (
+    skill_rank_for_level as _skill_rank_for_level,
+)
 from app.services.world.combat import (
     apply_combat_scaling_to_patch as _apply_combat_scaling_to_patch,
     build_combat_scaling_context as _build_combat_scaling_context,
@@ -1515,13 +1518,7 @@ def blank_character_state(slot_name: str) -> Dict[str, Any]:
     }
 
 def skill_rank_for_level(level: int) -> str:
-    normalized = int(level or 0)
-    if normalized <= 0:
-        return "-"
-    for rank, min_level in SKILL_RANK_THRESHOLDS:
-        if normalized >= min_level:
-            return rank
-    return "-"
+    return _skill_rank_for_level(level, skill_rank_thresholds=SKILL_RANK_THRESHOLDS)
 
 def next_skill_xp_for_level(level: int) -> int:
     normalized = int(level or 0)

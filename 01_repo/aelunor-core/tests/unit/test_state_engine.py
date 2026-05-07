@@ -14,6 +14,7 @@ from app.services.world import element_profiles
 from app.services.world import element_relations
 from app.services.world import element_skills
 from app.services.world import skill_costs
+from app.services.world import skill_ranks
 from app.services.world import species_profiles
 from app.services.world import world_settings
 
@@ -33,6 +34,17 @@ class StateEngineTests(unittest.TestCase):
         self.assertTrue(state_engine.is_slot_id("slot_3"))
         self.assertEqual(state_engine.slot_index("invalid"), 9999)
         self.assertFalse(state_engine.is_slot_id("invalid"))
+
+    def test_skill_ranks_skill_rank_for_level_uses_threshold_order(self) -> None:
+        thresholds = (("S", 20), ("A", 15), ("B", 10), ("F", 1))
+
+        self.assertEqual(skill_ranks.skill_rank_for_level(0, skill_rank_thresholds=thresholds), "-")
+        self.assertEqual(skill_ranks.skill_rank_for_level(1, skill_rank_thresholds=thresholds), "F")
+        self.assertEqual(skill_ranks.skill_rank_for_level(16, skill_rank_thresholds=thresholds), "A")
+
+    def test_state_engine_skill_rank_for_level_wrapper_preserves_contract(self) -> None:
+        self.assertIn("skill_rank_for_level", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(state_engine.skill_rank_for_level(0), "-")
 
     def test_state_basics_preserves_slot_and_patch_shapes(self) -> None:
         self.assertEqual(state_basics.slot_id(2, slot_prefix="slot_"), "slot_2")
