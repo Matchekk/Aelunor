@@ -134,3 +134,34 @@ def normalize_meta_timing(
     timing["last_response_ready_ts"] = None if raw_last in (None, "") else float(raw_last)
     meta["timing"] = timing
     return timing
+
+
+def update_turn_timing_ema(
+    state: Dict[str, Any],
+    request_ts: float,
+    response_ts: float,
+    *,
+    normalize_meta_timing: Callable[[Dict[str, Any]], Dict[str, Any]],
+    clamp_float: Callable[[float, float, float], float],
+    ai_latency_clamp: tuple[float, float],
+    player_latency_clamp: tuple[float, float],
+    timing_ema_alpha: float,
+    timing_defaults: Dict[str, Any],
+) -> Dict[str, Any]:
+    timing = normalize_meta_timing(state.setdefault("meta", {}))
+    ai_latency = clamp_float(float(response_ts - request_ts), ai_latency_clamp[0], ai_latency_clamp[1])
+    timing["ai_latency_ema_sec"] = (
+        (1.0 - timing_ema_alpha) * float(timing.get("ai_latency_ema_sec", timing_defaults["ai_latency_ema_sec"]))
+        + timing_ema_alpha * ai_latency
+    )
+
+    last_response = timing.get("last_response_ready_ts")
+    if last_response is not None:
+        player_latency = clamp_float(float(request_ts - float(last_response)), player_latency_clamp[0], player_latency_clamp[1])
+        timing["player_latency_ema_sec"] = (
+            (1.0 - timing_ema_alpha) * float(timing.get("player_latency_ema_sec", timing_defaults["player_latency_ema_sec"]))
+            + timing_ema_alpha * player_latency
+        )
+    timing["last_response_ready_ts"] = float(response_ts)
+    timing["cycle_ema_sec"] = float(timing.get("ai_latency_ema_sec", 0.0)) + float(timing.get("player_latency_ema_sec", 0.0))
+    return timing

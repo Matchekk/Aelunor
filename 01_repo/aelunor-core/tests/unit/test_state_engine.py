@@ -1187,6 +1187,41 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("normalize_meta_timing", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(timing["last_response_ready_ts"], 12.5)
 
+    def test_world_settings_update_turn_timing_ema_updates_cycle(self) -> None:
+        state = {
+            "meta": {
+                "timing": {
+                    "ai_latency_ema_sec": 2.0,
+                    "player_latency_ema_sec": 4.0,
+                    "last_response_ready_ts": 8.0,
+                }
+            }
+        }
+
+        timing = world_settings.update_turn_timing_ema(
+            state,
+            13.0,
+            16.0,
+            normalize_meta_timing=lambda meta: meta["timing"],
+            clamp_float=lambda value, low, high: max(low, min(high, float(value))),
+            ai_latency_clamp=(0.0, 10.0),
+            player_latency_clamp=(0.0, 10.0),
+            timing_ema_alpha=0.25,
+            timing_defaults={"ai_latency_ema_sec": 1.0, "player_latency_ema_sec": 1.0},
+        )
+
+        self.assertEqual(timing["ai_latency_ema_sec"], 2.25)
+        self.assertEqual(timing["player_latency_ema_sec"], 4.25)
+        self.assertEqual(timing["last_response_ready_ts"], 16.0)
+        self.assertEqual(timing["cycle_ema_sec"], 6.5)
+
+    def test_state_engine_update_turn_timing_ema_wrapper_preserves_contract(self) -> None:
+        timing = state_engine.update_turn_timing_ema({"meta": {}}, 10.0, 12.0)
+
+        self.assertIn("update_turn_timing_ema", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(timing["last_response_ready_ts"], 12.0)
+        self.assertEqual(timing["cycle_ema_sec"], timing["ai_latency_ema_sec"] + timing["player_latency_ema_sec"])
+
     def test_combat_meta_update_starts_combat_and_records_queue(self) -> None:
         def normalize_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
             combat_meta = copy.deepcopy(

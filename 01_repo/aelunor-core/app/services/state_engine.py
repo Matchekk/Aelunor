@@ -131,6 +131,7 @@ from app.services.world.world_settings import (
     default_campaign_length_settings as _default_campaign_length_settings,
     normalize_meta_timing as _normalize_meta_timing,
     normalize_world_settings as _normalize_world_settings,
+    update_turn_timing_ema as _update_turn_timing_ema,
 )
 from app.services.world.combat import (
     apply_combat_scaling_to_patch as _apply_combat_scaling_to_patch,
@@ -5745,23 +5746,17 @@ def compute_turn_budget_estimates(state: Dict[str, Any]) -> Dict[str, Any]:
     )
 
 def update_turn_timing_ema(state: Dict[str, Any], request_ts: float, response_ts: float) -> Dict[str, Any]:
-    timing = normalize_meta_timing(state.setdefault("meta", {}))
-    ai_latency = clamp_float(float(response_ts - request_ts), AI_LATENCY_CLAMP[0], AI_LATENCY_CLAMP[1])
-    timing["ai_latency_ema_sec"] = (
-        (1.0 - TIMING_EMA_ALPHA) * float(timing.get("ai_latency_ema_sec", TIMING_DEFAULTS["ai_latency_ema_sec"]))
-        + TIMING_EMA_ALPHA * ai_latency
+    return _update_turn_timing_ema(
+        state,
+        request_ts,
+        response_ts,
+        normalize_meta_timing=normalize_meta_timing,
+        clamp_float=clamp_float,
+        ai_latency_clamp=AI_LATENCY_CLAMP,
+        player_latency_clamp=PLAYER_LATENCY_CLAMP,
+        timing_ema_alpha=TIMING_EMA_ALPHA,
+        timing_defaults=TIMING_DEFAULTS,
     )
-
-    last_response = timing.get("last_response_ready_ts")
-    if last_response is not None:
-        player_latency = clamp_float(float(request_ts - float(last_response)), PLAYER_LATENCY_CLAMP[0], PLAYER_LATENCY_CLAMP[1])
-        timing["player_latency_ema_sec"] = (
-            (1.0 - TIMING_EMA_ALPHA) * float(timing.get("player_latency_ema_sec", TIMING_DEFAULTS["player_latency_ema_sec"]))
-            + TIMING_EMA_ALPHA * player_latency
-        )
-    timing["last_response_ready_ts"] = float(response_ts)
-    timing["cycle_ema_sec"] = float(timing.get("ai_latency_ema_sec", 0.0)) + float(timing.get("player_latency_ema_sec", 0.0))
-    return timing
 
 def milestone_state_for_turn(turn_number: int, profile: Dict[str, Any]) -> Dict[str, int | bool]:
     every = max(1, int(profile.get("milestone_every_n_turns", 18) or 18))
