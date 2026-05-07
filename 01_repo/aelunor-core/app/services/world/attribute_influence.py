@@ -228,3 +228,13 @@ def apply_attribute_bias_to_resolution(
     if "outgoing_effect" in adjusted:
         adjusted["outgoing_effect"] = int(round(float(adjusted.get("outgoing_effect", 0) or 0) * float(numeric_bias.get("outgoing_effect_mult", 1.0))))
     return adjusted
+
+
+def scale_negative_delta(value: int, multiplier: float) -> int:
+    number = int(value or 0)
+    if number >= 0:
+        return number
+    scaled = int(round(number * float(multiplier)))
+    if scaled == 0:
+        return -1
+    return scaled

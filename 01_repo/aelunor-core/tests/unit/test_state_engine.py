@@ -1143,6 +1143,15 @@ class StateEngineTests(unittest.TestCase):
         self.assertIn("apply_attribute_bias_to_resolution", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(adjusted["cost"], 8)
 
+    def test_attribute_influence_scale_negative_delta_preserves_positive_and_min_negative(self) -> None:
+        self.assertEqual(attribute_influence.scale_negative_delta(5, 3.0), 5)
+        self.assertEqual(attribute_influence.scale_negative_delta(-10, 0.5), -5)
+        self.assertEqual(attribute_influence.scale_negative_delta(-1, 0.1), -1)
+
+    def test_state_engine_scale_negative_delta_wrapper_preserves_contract(self) -> None:
+        self.assertIn("_scale_negative_delta", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(state_engine._scale_negative_delta(-4, 2.0), -8)
+
     def test_world_settings_normalizer_preserves_campaign_defaults_and_bounds(self) -> None:
         defaults = {
             "campaign_length": "medium",

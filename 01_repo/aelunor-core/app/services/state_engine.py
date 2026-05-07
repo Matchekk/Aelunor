@@ -128,6 +128,7 @@ from app.services.world.attribute_influence import (
     default_attribute_influence_meta as _default_attribute_influence_meta,
     derive_attribute_relevance as _derive_attribute_relevance,
     normalize_attribute_influence_meta as _normalize_attribute_influence_meta,
+    scale_negative_delta as _scale_negative_delta_helper,
 )
 from app.services.world.world_settings import (
     active_pacing_profile as _active_pacing_profile,
@@ -5820,13 +5821,7 @@ def apply_attribute_bias_to_resolution(resolution: Dict[str, Any], numeric_bias:
     )
 
 def _scale_negative_delta(value: int, multiplier: float) -> int:
-    number = int(value or 0)
-    if number >= 0:
-        return number
-    scaled = int(round(number * float(multiplier)))
-    if scaled == 0:
-        return -1
-    return scaled
+    return _scale_negative_delta_helper(value, multiplier)
 
 def apply_attribute_bias_to_patch(
     patch: Dict[str, Any],
