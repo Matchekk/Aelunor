@@ -1,3 +1,11 @@
+import hashlib
+
+
+def appearance_event_id(slot_name: str, kind: str, source: str, turn_number: int, absolute_day: int, new_value: str) -> str:
+    digest = hashlib.sha256(f"{slot_name}:{kind}:{source}:{turn_number}:{absolute_day}:{new_value}".encode("utf-8")).hexdigest()[:10]
+    return f"app_{digest}"
+
+
 def format_appearance_message(display_name: str, kind: str, source: str, new_value: str) -> str:
     if kind == "aging_stage":
         return f"{display_name} wirkt nun deutlich {new_value}."

@@ -225,6 +225,19 @@ class StateEngineTests(unittest.TestCase):
             "Mira wirkt nun deutlich älter.",
         )
 
+    def test_appearance_event_id_is_stable_and_prefixed(self) -> None:
+        event_id = appearance.appearance_event_id("slot_1", "scar_added", "scar", 3, 10, "Wangenriss")
+
+        self.assertTrue(event_id.startswith("app_"))
+        self.assertEqual(event_id, appearance.appearance_event_id("slot_1", "scar_added", "scar", 3, 10, "Wangenriss"))
+
+    def test_state_engine_appearance_event_id_wrapper_preserves_contract(self) -> None:
+        self.assertIn("appearance_event_id", state_engine.EXPORTED_SYMBOLS)
+        self.assertEqual(
+            state_engine.appearance_event_id("slot_1", "scar_added", "scar", 3, 10, "Wangenriss"),
+            appearance.appearance_event_id("slot_1", "scar_added", "scar", 3, 10, "Wangenriss"),
+        )
+
     def test_species_profiles_normalize_race_and_beast(self) -> None:
         race = species_profiles.normalize_race_profile(
             {

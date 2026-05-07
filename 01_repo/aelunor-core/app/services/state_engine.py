@@ -132,6 +132,7 @@ from app.services.world.attribute_influence import (
     scale_negative_delta as _scale_negative_delta_helper,
 )
 from app.services.world.appearance import (
+    appearance_event_id as _appearance_event_id,
     format_appearance_message as _format_appearance_message,
 )
 from app.services.world.world_settings import (
@@ -3290,8 +3291,7 @@ def rebuild_character_appearance(character: Dict[str, Any], world_time: Dict[str
     character["appearance"] = appearance
 
 def appearance_event_id(slot_name: str, kind: str, source: str, turn_number: int, absolute_day: int, new_value: str) -> str:
-    digest = hashlib.sha256(f"{slot_name}:{kind}:{source}:{turn_number}:{absolute_day}:{new_value}".encode("utf-8")).hexdigest()[:10]
-    return f"app_{digest}"
+    return _appearance_event_id(slot_name, kind, source, turn_number, absolute_day, new_value)
 
 def format_appearance_message(display_name: str, kind: str, source: str, new_value: str) -> str:
     return _format_appearance_message(display_name, kind, source, new_value)
