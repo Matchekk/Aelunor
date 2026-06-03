@@ -14,9 +14,11 @@ from typing import Any, Dict, List, Literal, Optional, Set, Tuple
 
 import requests
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from app.adapters.llm import OllamaAdapter, OllamaSettings
 from app.helpers import setup_helpers
+from app.repositories.campaign_repository import CampaignRepository
 from app.routers import boards as boards_router_module
 from app.routers import campaigns as campaigns_router_module
 from app.routers import claim as claim_router_module
@@ -79,6 +81,19 @@ OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "8192"))
 OLLAMA_REPEAT_PENALTY = float(os.getenv("OLLAMA_REPEAT_PENALTY", "1.18"))
 OLLAMA_REPEAT_LAST_N = int(os.getenv("OLLAMA_REPEAT_LAST_N", "192"))
 OLLAMA_TIMEOUT_SEC = int(os.getenv("OLLAMA_TIMEOUT_SEC", "240"))
+OLLAMA_ADAPTER = OllamaAdapter(
+    OllamaSettings(
+        url=OLLAMA_URL,
+        model=OLLAMA_MODEL,
+        timeout_sec=OLLAMA_TIMEOUT_SEC,
+        seed=OLLAMA_SEED,
+        temperature=OLLAMA_TEMPERATURE,
+        num_ctx=OLLAMA_NUM_CTX,
+        repeat_penalty=OLLAMA_REPEAT_PENALTY,
+        repeat_last_n=OLLAMA_REPEAT_LAST_N,
+    )
+)
+CAMPAIGN_REPOSITORY = CampaignRepository(data_dir=DATA_DIR, campaigns_dir=CAMPAIGNS_DIR)
 
 LOGGER = logging.getLogger("isekai.turns")
 
@@ -1218,8 +1233,7 @@ def deep_copy(value: Any) -> Any:
     return json.loads(json.dumps(value))
 
 def ensure_data_dirs() -> None:
-    os.makedirs(DATA_DIR, exist_ok=True)
-    os.makedirs(CAMPAIGNS_DIR, exist_ok=True)
+    CampaignRepository(data_dir=DATA_DIR, campaigns_dir=CAMPAIGNS_DIR).ensure_storage()
 
 def hash_secret(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
@@ -1715,12 +1729,10 @@ AUTO_INJURY_PATTERNS = (
 app = FastAPI(title="Aelunor")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/v1/assets", StaticFiles(directory=UI_V1_ASSETS_DIR, check_dir=False), name="v1-assets")
-ensure_campaign_storage()
 
-@app.get("/", response_class=HTMLResponse)
-def index() -> str:
-    with open(os.path.join(STATIC_DIR, "index.html"), "r", encoding="utf-8") as f:
-        return f.read()
+@app.get("/")
+def index() -> RedirectResponse:
+    return RedirectResponse(url="/v1", status_code=307)
 
 def _v1_index_html() -> str:
     index_path = os.path.join(UI_V1_DIST_DIR, "index.html")
@@ -1743,46 +1755,11 @@ def index_v1_routes(path: str) -> str:
 
 @app.get("/api/state")
 def get_state() -> Dict[str, Any]:
-    ensure_campaign_storage()
-    campaign_ids = list_campaign_ids()
-    if not campaign_ids:
-        return deep_copy(INITIAL_STATE)
-    return load_campaign(campaign_ids[0])["state"]
+    raise HTTPException(status_code=410, detail="Die Legacy-State-API wurde entfernt. Verwende /api/campaigns/{campaign_id}.")
 
 @app.get("/api/llm/status")
 def get_llm_status() -> Dict[str, Any]:
-    available_models: List[Dict[str, Any]] = []
-    ollama_ok = False
-    error = ""
-    try:
-        response = requests.get(f"{OLLAMA_URL}/api/tags", timeout=15)
-        if response.status_code != 200:
-            raise RuntimeError(f"Ollama error {response.status_code}: {response.text[:300]}")
-        payload = response.json() or {}
-        available_models = payload.get("models", []) or []
-        ollama_ok = True
-    except Exception as exc:
-        error = str(exc)
-    return {
-        "ollama_url": OLLAMA_URL,
-        "configured_model": OLLAMA_MODEL,
-        "request_timeout_sec": OLLAMA_TIMEOUT_SEC,
-        "seed": OLLAMA_SEED,
-        "temperature": OLLAMA_TEMPERATURE,
-        "num_ctx": OLLAMA_NUM_CTX,
-        "ollama_ok": ollama_ok,
-        "configured_model_available": any((entry or {}).get("name") == OLLAMA_MODEL for entry in available_models),
-        "available_models": [
-            {
-                "name": entry.get("name"),
-                "size": entry.get("size"),
-                "parameter_size": ((entry.get("details") or {}).get("parameter_size")),
-                "family": ((entry.get("details") or {}).get("family")),
-            }
-            for entry in available_models
-        ],
-        "error": error,
-    }
+    return OLLAMA_ADAPTER.status_payload()
 
 def setup_service_dependencies() -> setup_service.SetupServiceDependencies:
     return setup_service.SetupServiceDependencies(

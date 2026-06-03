@@ -1,6 +1,10 @@
+import tempfile
 import unittest
 from datetime import datetime
+from pathlib import Path
+from unittest.mock import patch
 
+from fastapi.testclient import TestClient
 from app import main
 from app.services import state_engine
 from app.services import turn_engine
@@ -74,6 +78,31 @@ class MainStateEngineConfigTests(unittest.TestCase):
         self.assertGreaterEqual(deps.codex_knowledge_level_max, deps.codex_knowledge_level_min)
         self.assertIn("Feuer", deps.element_core_names)
         self.assertIn("active", deps.npc_status_allowed)
+
+    def test_root_redirects_to_v1_after_legacy_ui_removal(self) -> None:
+        with TestClient(main.app, follow_redirects=False) as client:
+            response = client.get("/")
+        self.assertEqual(response.status_code, 307)
+        self.assertEqual(response.headers.get("location"), "/v1")
+
+    def test_legacy_state_endpoint_is_removed(self) -> None:
+        with TestClient(main.app) as client:
+            response = client.get("/api/state")
+        self.assertEqual(response.status_code, 410)
+
+    def test_campaign_repository_respects_patched_data_paths(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="aelunor-repo-path-") as temp_dir:
+            campaigns_dir = str(Path(temp_dir) / "campaigns")
+            with (
+                patch.object(main, "DATA_DIR", temp_dir),
+                patch.object(main, "CAMPAIGNS_DIR", campaigns_dir),
+                patch.object(state_engine, "DATA_DIR", temp_dir),
+                patch.object(state_engine, "CAMPAIGNS_DIR", campaigns_dir),
+            ):
+                main.ensure_campaign_storage()
+                created = main.create_campaign_record("Path Check", "Host")
+                campaign_id = created["campaign"]["campaign_meta"]["campaign_id"]
+                self.assertTrue((Path(campaigns_dir) / f"{campaign_id}.json").is_file())
 
 
 if __name__ == "__main__":

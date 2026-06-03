@@ -8,9 +8,10 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-import requests
 from fastapi import HTTPException
 from app.helpers import setup_helpers
+from app.adapters.llm import OllamaAdapter, OllamaSettings
+from app.repositories.campaign_repository import CampaignRepository
 
 from app.services.patch_payloads import (
     merge_character_patch_update,
@@ -6120,25 +6121,27 @@ def default_character_setup_node() -> Dict[str, Any]:
         "question_runtime": {},
     }
 
+def campaign_repository() -> CampaignRepository:
+    configured = globals().get("CAMPAIGN_REPOSITORY")
+    if (
+        isinstance(configured, CampaignRepository)
+        and configured.data_dir == DATA_DIR
+        and configured.campaigns_dir == CAMPAIGNS_DIR
+    ):
+        return configured
+    return CampaignRepository(data_dir=DATA_DIR, campaigns_dir=CAMPAIGNS_DIR)
+
 def save_json(path: str, payload: Dict[str, Any]) -> None:
-    ensure_data_dirs()
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
+    campaign_repository().save_json(path, payload)
 
 def load_json(path: str) -> Dict[str, Any]:
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    return campaign_repository().load_json(path)
 
 def campaign_path(campaign_id: str) -> str:
-    return os.path.join(CAMPAIGNS_DIR, f"{campaign_id}.json")
+    return campaign_repository().campaign_path(campaign_id)
 
 def list_campaign_ids() -> List[str]:
-    ensure_data_dirs()
-    ids = []
-    for name in os.listdir(CAMPAIGNS_DIR):
-        if name.endswith(".json"):
-            ids.append(name[:-5])
-    return sorted(ids)
+    return campaign_repository().list_campaign_ids()
 
 def extract_text_answer(answer: Any) -> str:
     if answer is None:
@@ -6851,31 +6854,33 @@ def setup_summary_preview(campaign: Dict[str, Any], setup_type: str, slot_name: 
     }
 
 def ollama_request_seed() -> Optional[int]:
-    if OLLAMA_SEED is not None:
-        return int(OLLAMA_SEED)
-    return int.from_bytes(secrets.token_bytes(4), "big")
+    return ollama_adapter().request_seed()
+
+def ollama_adapter() -> OllamaAdapter:
+    configured = globals().get("OLLAMA_ADAPTER")
+    if isinstance(configured, OllamaAdapter):
+        return configured
+    return OllamaAdapter(
+        OllamaSettings(
+            url=OLLAMA_URL,
+            model=OLLAMA_MODEL,
+            timeout_sec=OLLAMA_TIMEOUT_SEC,
+            seed=OLLAMA_SEED,
+            temperature=OLLAMA_TEMPERATURE,
+            num_ctx=OLLAMA_NUM_CTX,
+            repeat_penalty=OLLAMA_REPEAT_PENALTY,
+            repeat_last_n=OLLAMA_REPEAT_LAST_N,
+        )
+    )
 
 def call_ollama_text(system: str, user: str) -> str:
-    options = {
-        "temperature": 0.35,
-        "num_ctx": 4096,
-    }
-    seed = ollama_request_seed()
-    if seed is not None:
-        options["seed"] = seed
-    payload = {
-        "model": OLLAMA_MODEL,
-        "stream": False,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        "options": options,
-    }
-    response = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=max(30, OLLAMA_TIMEOUT_SEC))
-    if response.status_code != 200:
-        raise RuntimeError(f"Ollama error {response.status_code}: {response.text[:500]}")
-    return (response.json().get("message", {}) or {}).get("content", "").strip()
+    return ollama_adapter().chat(
+        system,
+        user,
+        timeout=max(30, OLLAMA_TIMEOUT_SEC),
+        temperature=0.35,
+        num_ctx=4096,
+    )
 
 def ollama_format_fallback_needed(message: str) -> bool:
     lowered = str(message or "").lower()
@@ -9158,29 +9163,17 @@ def call_ollama_chat(
     repeat_penalty: Optional[float] = None,
 ) -> str:
     request_timeout = max(30, int(timeout or OLLAMA_TIMEOUT_SEC))
-    options = {
-        "temperature": OLLAMA_TEMPERATURE if temperature is None else temperature,
-        "num_ctx": OLLAMA_NUM_CTX,
-        "repeat_penalty": OLLAMA_REPEAT_PENALTY if repeat_penalty is None else repeat_penalty,
-        "repeat_last_n": OLLAMA_REPEAT_LAST_N,
-    }
-    seed = ollama_request_seed()
-    if seed is not None:
-        options["seed"] = seed
-    payload = {
-        "model": OLLAMA_MODEL,
-        "stream": False,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        "options": options,
-    }
-    if format_schema is not None:
-        payload["format"] = format_schema
-    response = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=request_timeout)
-    if response.status_code != 200:
-        message = f"Ollama error {response.status_code}: {response.text[:500]}"
+    try:
+        return ollama_adapter().chat(
+            system,
+            user,
+            format_schema=format_schema,
+            timeout=request_timeout,
+            temperature=temperature,
+            repeat_penalty=repeat_penalty,
+        )
+    except RuntimeError as exc:
+        message = str(exc)
         if format_schema is not None and ollama_format_fallback_needed(message):
             fallback_user = (
                 user
@@ -9196,8 +9189,7 @@ def call_ollama_chat(
                 temperature=temperature,
                 repeat_penalty=repeat_penalty,
             )
-        raise RuntimeError(message)
-    return (response.json().get("message", {}) or {}).get("content", "").strip()
+        raise
 
 def call_ollama_json(
     system: str,
@@ -10379,14 +10371,17 @@ def save_campaign(
             message=str(exc)[:240],
             extra={"reason": reason},
         )
-        if trace_ctx is not None:
-            raise turn_flow_error(
-                error_code=ERROR_CODE_SSE_BROADCAST,
-                phase="sse_broadcast",
-                trace_ctx=trace_ctx,
-                exc=exc,
+        logger = globals().get("LOGGER")
+        if logger is not None:
+            logger.warning(
+                "campaign_saved_but_sse_broadcast_failed",
+                extra={
+                    "campaign_id": campaign_id,
+                    "reason": reason,
+                    "error_class": exc.__class__.__name__,
+                    "error": str(exc)[:240],
+                },
             )
-        raise
 
 def active_turns(campaign: Dict[str, Any]) -> List[Dict[str, Any]]:
     return campaign_view_serializer.active_turns(campaign)
@@ -12393,4 +12388,3 @@ def require_claim(campaign: Dict[str, Any], player_id: str, actor: str) -> None:
         raise HTTPException(status_code=403, detail="Dieser Slot ist nicht geclaimt.")
     if claimed_player_id != player_id:
         raise HTTPException(status_code=403, detail="Du darfst nur deinen geclaimten Slot spielen.")
-
