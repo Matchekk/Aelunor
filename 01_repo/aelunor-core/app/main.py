@@ -4,7 +4,6 @@ import logging
 import math
 import os
 import random
-import re
 import secrets
 import time
 import uuid
@@ -17,6 +16,39 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from app.adapters.llm import OllamaAdapter, OllamaSettings
+from app.config.progression import (
+    ATTRIBUTE_KEYS,
+    CLASS_ASCENSION_STATUSES,
+    DEFAULT_DYNAMIC_SKILL_LEVEL_MAX,
+    DEFAULT_NUMERIC_SKILL_DELTA_XP,
+    FIRST_SKILL_FORCE_PROBABILITY,
+    LEGACY_ROLE_CLASS_MAP,
+    LEGACY_SKILL_NAME_MAP,
+    LEGACY_SKILL_TAGS,
+    PROGRESSION_CLAIM_TYPES,
+    PROGRESSION_DENSITY_CAP_MILESTONE,
+    PROGRESSION_DENSITY_CAP_NON_MILESTONE,
+    PROGRESSION_EVENT_BASE_XP,
+    PROGRESSION_EVENT_PRIORITY,
+    PROGRESSION_EVENT_SEVERITIES,
+    PROGRESSION_EVENT_SEVERITY_MULTIPLIER,
+    PROGRESSION_EVENT_TYPES,
+    PROGRESSION_EXTRACTOR_CONFIDENCE_ORDER,
+    PROGRESSION_EXTRACTOR_CONFIDENCE_SCORE,
+    PROGRESSION_EXTRACTOR_CONFIDENCE_THRESHOLDS,
+    PROGRESSION_SET_DIRECT_KEYS,
+    RESOURCE_KEYS,
+    RESISTANCE_KEYS,
+    SKILL_ATTRIBUTE_MAP,
+    SKILL_EVOLUTIONS,
+    SKILL_FUSIONS,
+    SKILL_KEYS,
+    SKILL_OUTCOME_XP,
+    SKILL_PATHS,
+    SKILL_RANK_ORDER,
+    SKILL_RANK_THRESHOLDS,
+    SKILL_RANKS,
+)
 from app.helpers import setup_helpers
 from app.repositories.campaign_repository import CampaignRepository
 from app.routers import boards as boards_router_module
@@ -27,6 +59,56 @@ from app.routers import presence as presence_router_module
 from app.routers import setup as setup_router_module
 from app.routers import sheets as sheets_router_module
 from app.routers import turns as turns_router_module
+from app.prompts.system_prompts import (
+    CANON_EXTRACTOR_JSON_CONTRACT,
+    CANON_EXTRACTOR_SYSTEM_PROMPT,
+    CHARACTER_ATTRIBUTE_SYSTEM_PROMPT,
+    CONTEXT_ASSISTANT_SYSTEM_PROMPT,
+    MANIFESTATION_SKILL_NAME_SYSTEM_PROMPT,
+    MEMORY_SYSTEM_PROMPT,
+    NPC_EXTRACTOR_JSON_CONTRACT,
+    NPC_EXTRACTOR_SYSTEM_PROMPT,
+    PROGRESSION_EXTRACTOR_JSON_CONTRACT,
+    PROGRESSION_EXTRACTOR_SYSTEM_PROMPT,
+    SETUP_QUESTION_SYSTEM_PROMPT,
+    SETUP_RANDOM_SYSTEM_PROMPT,
+    TURN_MODE_GUIDE,
+    TURN_RESPONSE_JSON_CONTRACT,
+)
+from app.text.patterns import (
+    ABILITY_UNLOCK_GENERIC_NAMES,
+    ABILITY_UNLOCK_TRIGGER_PATTERNS,
+    ACTION_STOPWORDS,
+    AUTO_INJURY_PATTERNS,
+    AUTO_ITEM_ACQUIRE_PATTERNS,
+    AUTO_ITEM_EQUIP_PATTERNS,
+    AUTO_ITEM_GENERIC_NAMES,
+    CONTEXT_META_DRIFT_MARKERS,
+    ENGLISH_LANGUAGE_MARKERS,
+    EQUIPMENT_CANONICAL_SLOTS,
+    EQUIPMENT_SLOT_ALIASES,
+    GERMAN_LANGUAGE_MARKERS,
+    ITEM_CHEST_KEYWORDS,
+    ITEM_DETAIL_CLAUSE_MARKERS,
+    ITEM_OFFHAND_KEYWORDS,
+    ITEM_TRINKET_KEYWORDS,
+    ITEM_WEAPON_KEYWORDS,
+    MANIFESTATION_COST_CUES,
+    MANIFESTATION_EFFECT_CUES,
+    MANIFESTATION_MOTIF_GROUPS,
+    MANIFESTATION_STRONG_CUES,
+    MANIFESTATION_TACTICAL_CUES,
+    MANIFESTATION_WORLD_REACTION_CUES,
+    NPC_GENERIC_NAME_TOKENS,
+    PROGRESSION_CLAIM_CUES,
+    SKILL_MANIFESTATION_NAME_STOPWORDS,
+    SKILL_MANIFESTATION_NAME_TOKEN_BLACKLIST,
+    SKILL_MANIFESTATION_VERB_BLACKLIST,
+    STORY_ACTION_CUES,
+    STORY_EXPLORE_CUES,
+    STORY_LEARN_CUES,
+    UNIVERSAL_SKILL_LIKE_NAMES,
+)
 from app.schemas.api import (
     AuthorsNotePatchIn,
     CampaignCreateIn,
@@ -48,6 +130,18 @@ from app.schemas.api import (
     TurnEditIn,
     WorldInfoCreateIn,
     WorldInfoPatchIn,
+)
+from app.schemas.llm import (
+    CHARACTER_ATTRIBUTE_SCHEMA,
+    CONTEXT_RESPONSE_SCHEMA,
+    ELEMENT_GENERATOR_SCHEMA,
+    MANIFESTATION_SKILL_NAME_SCHEMA,
+    NPC_EXTRACTOR_SCHEMA,
+    SETUP_RANDOM_SCHEMA,
+    STORY_REWRITE_SCHEMA,
+    build_canon_extractor_schema,
+    build_progression_extractor_schema,
+    extend_turn_patch_schema,
 )
 from app.serializers import campaign_view as campaign_view_serializer
 from app.services import boards_service
@@ -369,20 +463,13 @@ with open(os.path.join(BASE_DIR, "setup_catalog.json"), "r", encoding="utf-8") a
     SETUP_CATALOG = json.load(f)
 
 SYSTEM_PROMPT = PROMPTS["system_prompt"]
-RESPONSE_SCHEMA = PROMPTS["response_schema"]
+RESPONSE_SCHEMA = extend_turn_patch_schema(PROMPTS["response_schema"])
 INITIAL_STATE = PROMPTS["initial_state"]
 CATALOG_VERSION = SETUP_CATALOG["version"]
 WORLD_FORM_CATALOG = SETUP_CATALOG["world_form_catalog"]
 CHARACTER_FORM_CATALOG = SETUP_CATALOG["character_form_catalog"]
 WORLD_QUESTION_MAP = {entry["id"]: entry for entry in WORLD_FORM_CATALOG}
 CHARACTER_QUESTION_MAP = {entry["id"]: entry for entry in CHARACTER_FORM_CATALOG}
-
-TURN_MODE_GUIDE = {
-    "do": "TUN: Die Figur versucht konkret etwas. Das Ergebnis und die Konsequenzen entscheidet der Erzähler.",
-    "say": "SAGEN: Die Figur spricht. Reaktionen und Folgen entscheidet der Erzähler.",
-    "story": "STORY: Erzählerischer Vorschlag oder Szenenrichtung. Der Erzähler darf ihn passend einbauen oder umlenken.",
-    "canon": "CANON: Harte Wahrheit. Dieser Text wird verbindlich in den Zustand übernommen.",
-}
 
 WORLD_SETUP_CHAPTERS = {
     "foundations": {
@@ -422,809 +509,13 @@ CHAR_SETUP_CHAPTERS = {
     },
 }
 
-def extend_turn_patch_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
-    extended = json.loads(json.dumps(schema))
-    char_patch = (((extended.get("$defs") or {}).get("char_patch")) or {})
-    properties = char_patch.setdefault("properties", {})
-    properties.setdefault("scene_set", {"type": "string"})
-    skill_object_schema = (
-        ((properties.get("skills_set") or {}).get("additionalProperties") or {}).get("anyOf") or []
-    )
-    for candidate in skill_object_schema:
-        if not isinstance(candidate, dict):
-            continue
-        if candidate.get("type") != "object":
-            continue
-        candidate.setdefault("properties", {})
-        candidate["properties"].setdefault("effect_summary", {"type": "string"})
-        candidate["properties"].setdefault("power_rating", {"type": "integer"})
-        candidate["properties"].setdefault("growth_potential", {"type": "string"})
-        candidate["properties"].setdefault("manifestation_source", {"type": ["string", "null"]})
-        candidate["properties"].setdefault("category", {"type": ["string", "null"]})
-        candidate["properties"].setdefault(
-            "class_affinity",
-            {"type": ["array", "null"], "items": {"type": "string"}},
-        )
-        candidate["properties"].setdefault(
-            "elements",
-            {"type": ["array", "null"], "items": {"type": "string"}},
-        )
-        candidate["properties"].setdefault("element_primary", {"type": ["string", "null"]})
-        candidate["properties"].setdefault(
-            "element_synergies",
-            {"type": ["array", "null"], "items": {"type": "string"}},
-        )
-        break
-    class_schema = properties.get("class_set")
-    if isinstance(class_schema, dict):
-        class_schema.setdefault("properties", {})
-        class_schema["properties"].setdefault("element_id", {"type": ["string", "null"]})
-        class_schema["properties"].setdefault(
-            "element_tags",
-            {"type": ["array", "null"], "items": {"type": "string"}},
-        )
-        class_schema["properties"].setdefault("path_id", {"type": ["string", "null"]})
-        class_schema["properties"].setdefault("path_rank", {"type": ["string", "null"]})
-
-    progression_event_schema = {
-        "type": "array",
-        "items": {
-            "type": "object",
-            "properties": {
-                "type": {"type": "string"},
-                "actor": {"type": "string"},
-                "target_skill_id": {"type": ["string", "null"]},
-                "target_class_id": {"type": ["string", "null"]},
-                "target_element_id": {"type": ["string", "null"]},
-                "severity": {"type": "string", "enum": ["low", "medium", "high"]},
-                "tags": {"type": "array", "items": {"type": "string"}},
-                "reason": {"type": "string"},
-                "source_turn": {"type": "integer"},
-                "metadata": {"type": "object", "additionalProperties": True},
-                "skill": {"type": "object", "additionalProperties": True},
-            },
-            "required": ["type"],
-            "additionalProperties": False,
-        },
-    }
-    properties.setdefault("progression_events", progression_event_schema)
-
-    skills_delta = properties.get("skills_delta")
-    if isinstance(skills_delta, dict):
-        skills_delta["additionalProperties"] = {
-            "anyOf": [
-                {"type": "integer"},
-                {
-                    "type": "object",
-                    "properties": {
-                        "xp": {"type": "integer"},
-                        "level": {"type": "integer"},
-                        "mastery": {"type": "integer"},
-                        "description": {"type": "string"},
-                        "elements": {"type": "array", "items": {"type": "string"}},
-                        "element_primary": {"type": ["string", "null"]},
-                        "element_synergies": {"type": ["array", "null"], "items": {"type": "string"}},
-                        "cost": {
-                            "type": ["object", "null"],
-                            "properties": {
-                                "resource": {"type": "string"},
-                                "amount": {"type": "integer"},
-                            },
-                            "required": ["resource", "amount"],
-                            "additionalProperties": False,
-                        },
-                    },
-                    "additionalProperties": True,
-                },
-            ]
-        }
-    return extended
-
-RESPONSE_SCHEMA = extend_turn_patch_schema(RESPONSE_SCHEMA)
-CANON_EXTRACTOR_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "patch": json.loads(json.dumps(RESPONSE_SCHEMA["properties"]["patch"])),
-    },
-    "required": ["patch"],
-    "additionalProperties": False,
-    "$defs": json.loads(json.dumps(RESPONSE_SCHEMA.get("$defs", {}))),
-}
-CANON_EXTRACTOR_JSON_CONTRACT = (
-    "Antworte mit genau einem JSON-Objekt ohne Markdown und ohne Erklärtext. "
-    "Pflichtfeld auf Root-Ebene: `patch` (Objekt). "
-    "`patch` muss mindestens diese Felder enthalten: "
-    "`meta`, `characters`, `items_new`, `plotpoints_add`, `plotpoints_update`, "
-    "`map_add_nodes`, `map_add_edges`, `events_add`. "
-    "Wenn du nichts ändern willst, nutze leere Objekte/Arrays statt Felder wegzulassen."
-)
-CANON_EXTRACTOR_SYSTEM_PROMPT = (
-    "Du bist der Canon Extractor. "
-    "Du schreibst keine Story, keinen Flavour, keine Erklärung. "
-    "Du liest neuen Text und extrahierst nur kanonische Zustandsänderungen als Patch. "
-    "Achte strikt darauf: "
-    "Neue oder veränderte Kräfte werden immer unter skills abgebildet, nicht als abilities. "
-    "skills koennen Magie, Waffenkunst, Koerperentwicklung, Sinnesgeschaerf oder Technik sein. "
-    "Ortwechsel nur dann patchen, wenn der Text klar ausdrückt, dass jemand oder die Gruppe jetzt an einem neuen Ort ist. "
-    "Items nur patchen, wenn Besitz/Fund/Erhalt klar ausgesprochen ist. "
-    "Map-Knoten nur bei klar benannten Orten hinzufügen, nicht aus vagen Beschreibungen. "
-    "equipment_set nur dann setzen, wenn der Text explizit getragen/gezogen/ausgerüstet signalisiert. "
-    "Nutze nur echte Slot-IDs in `characters`. "
-    "Antworte ausschließlich im JSON-Format gemäß OUTPUT-KONTRAKT."
-)
+CANON_EXTRACTOR_SCHEMA = build_canon_extractor_schema(RESPONSE_SCHEMA)
 CANON_GATE_DOMAINS_SUPPORTED = ("progression", "items", "location", "faction", "injury", "spellschool")
 CANON_GATE_ACTIVE_DOMAINS = {"progression"}
-PROGRESSION_CLAIM_TYPES = (
-    "skill_claim",
-    "skill_level_claim",
-    "class_claim",
-    "class_level_claim",
-    "manifestation_claim",
-)
-PROGRESSION_CLAIM_CUES = {
-    "skill_claim": (
-        "lernt",
-        "erlernt",
-        "schaltet frei",
-        "erhaelt die faehigkeit",
-        "erhält die fähigkeit",
-        "entwickelt",
-        "meistert",
-        "beherrscht nun",
-    ),
-    "skill_level_claim": (
-        "skill steigt",
-        "skill-level",
-        "skill level",
-        "stufe des skills",
-        "meisterschaft",
-        "verbessert",
-        "verfeinert",
-    ),
-    "class_claim": (
-        "klassenwechsel",
-        "klasse gewechselt",
-        "wird zum",
-        "wird zur",
-        "nimmt den klassenpfad",
-        "schlaegt den klassenpfad ein",
-        "schlägt den klassenpfad ein",
-        "erwacht als",
-    ),
-    "class_level_claim": (
-        "klassenlevel",
-        "class level",
-        "klassenstufe",
-        "rang steigt",
-        "rangaufstieg",
-        "aufstieg zu rang",
-    ),
-    "manifestation_claim": (
-        "manifestiert",
-        "erstmanifestation",
-        "entfesselt erstmals",
-        "bricht hervor",
-        "erweckt",
-    ),
-}
-PROGRESSION_EXTRACTOR_CONFIDENCE_ORDER = {"low": 1, "medium": 2, "high": 3}
-PROGRESSION_EXTRACTOR_CONFIDENCE_SCORE = {"low": 0.3, "medium": 0.6, "high": 0.85}
-PROGRESSION_EXTRACTOR_CONFIDENCE_THRESHOLDS = {"high": 0.75, "medium": 0.45}
 
-_progress_char_patch_properties = (((RESPONSE_SCHEMA.get("$defs") or {}).get("char_patch") or {}).get("properties") or {})
-PROGRESSION_EXTRACTOR_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
-        "reason": {"type": "string"},
-        "character_patch": {
-            "type": "object",
-            "properties": {
-                "skills_set": json.loads(json.dumps(_progress_char_patch_properties.get("skills_set", {"type": "object", "additionalProperties": True}))),
-                "skills_delta": json.loads(json.dumps(_progress_char_patch_properties.get("skills_delta", {"type": "object", "additionalProperties": True}))),
-                "progression_events": json.loads(
-                    json.dumps(_progress_char_patch_properties.get("progression_events", {"type": "array", "items": {"type": "object", "additionalProperties": True}}))
-                ),
-                "class_set": json.loads(
-                    json.dumps(
-                        _progress_char_patch_properties.get(
-                            "class_set",
-                            {"type": "object", "additionalProperties": True},
-                        )
-                    )
-                ),
-                "class_update": json.loads(
-                    json.dumps(
-                        _progress_char_patch_properties.get(
-                            "class_update",
-                            {"type": "object", "additionalProperties": True},
-                        )
-                    )
-                ),
-                "progression_set": json.loads(
-                    json.dumps(
-                        _progress_char_patch_properties.get(
-                            "progression_set",
-                            {"type": "object", "additionalProperties": True},
-                        )
-                    )
-                ),
-            },
-            "additionalProperties": False,
-        },
-    },
-    "required": ["confidence", "character_patch"],
-    "additionalProperties": False,
-}
-PROGRESSION_EXTRACTOR_JSON_CONTRACT = (
-    "Antworte mit genau einem JSON-Objekt ohne Markdown. "
-    "Pflichtfelder: `confidence` (`high|medium|low`) und `character_patch` (Objekt). "
-    "`character_patch` darf nur strukturierte Progressionsfelder enthalten: "
-    "`skills_set`, `skills_delta`, `progression_events`, `class_set`, `class_update`, `progression_set`. "
-    "Wenn nichts extrahierbar ist, nutze leere Objekte/Arrays."
-)
-PROGRESSION_EXTRACTOR_SYSTEM_PROMPT = (
-    "Du bist der Progression Canon Extractor. "
-    "Du schreibst keine Prosa und keine Erklärtexte. "
-    "Du extrahierst nur strukturierte Progressionsänderungen für den aktiven Actor "
-    "(Skills, Skill-Level, Klassenfortschritt, Manifestationen). "
-    "Wenn die Evidenz schwach ist, gib confidence=low und leere Felder zurück. "
-    "Nutze nur valide JSON-Antworten gemäß OUTPUT-KONTRAKT."
-)
-NPC_EXTRACTOR_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "npc_upserts": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "race": {"type": "string"},
-                    "age": {"type": "string"},
-                    "goal": {"type": "string"},
-                    "level": {"type": "integer"},
-                    "backstory_short": {"type": "string"},
-                    "role_hint": {"type": "string"},
-                    "faction": {"type": "string"},
-                    "status": {"type": "string"},
-                    "scene_hint": {"type": "string"},
-                    "history_note": {"type": "string"},
-                    "relevance_score": {"type": "integer"},
-                    "class_current": {
-                        "type": ["object", "null"],
-                        "properties": {
-                            "id": {"type": "string"},
-                            "name": {"type": "string"},
-                            "rank": {"type": "string"},
-                            "level": {"type": "integer"},
-                            "level_max": {"type": "integer"},
-                            "xp": {"type": "integer"},
-                            "xp_next": {"type": "integer"},
-                            "affinity_tags": {"type": "array", "items": {"type": "string"}},
-                            "description": {"type": "string"},
-                            "ascension": {"type": ["object", "null"]},
-                        },
-                        "additionalProperties": True,
-                    },
-                    "skills": {
-                        "type": ["object", "null"],
-                        "additionalProperties": {
-                            "type": "object",
-                            "properties": {
-                                "id": {"type": "string"},
-                                "name": {"type": "string"},
-                                "rank": {"type": "string"},
-                                "level": {"type": "integer"},
-                                "level_max": {"type": "integer"},
-                                "tags": {"type": "array", "items": {"type": "string"}},
-                                "description": {"type": "string"},
-                                "cost": {"type": ["object", "null"]},
-                            },
-                            "additionalProperties": True,
-                        },
-                    },
-                },
-                "required": ["name"],
-                "additionalProperties": False,
-            },
-        }
-    },
-    "required": ["npc_upserts"],
-    "additionalProperties": False,
-}
-NPC_EXTRACTOR_JSON_CONTRACT = (
-    "Antworte mit genau einem JSON-Objekt ohne Markdown und ohne Erklärtext. "
-    "Root-Feld: `npc_upserts` (Array). "
-    "Jeder Eintrag in npc_upserts beschreibt eine story-relevante Figur und nutzt nur die erlaubten Felder. "
-    "Wenn keine passende Figur enthalten ist, antworte mit `{\"npc_upserts\": []}`."
-)
-NPC_EXTRACTOR_SYSTEM_PROMPT = (
-    "Du bist der NPC-Extractor für ein RPG-Codex-System. "
-    "Du extrahierst nur story-relevante NPCs aus dem neuen Text und lieferst ausschließlich JSON. "
-    "Regeln: "
-    "Nimm keine Spielercharaktere auf. "
-    "Nimm keine generischen Einmal-Nennungen wie 'Wache' oder 'Soldat' ohne individuelle Identität auf. "
-    "Erfasse nur Figuren mit erkennbarer Plot-Relevanz. "
-    "Pflicht beim ersten relevanten Auftreten: Name, Rasse, Alter, Ziel, Level, Kurz-Backstory (best effort). "
-    "Aktualisiere bei Wiedererwähnung vorhandene Figuren mit konkreteren Daten. "
-    "Wenn klar erkennbar, kannst du optional class_current und skills mitliefern (nur strukturierte Felder, keine Prosa). "
-    "Erfinde keine Prosa, keine Requests, kein Patch."
-)
+PROGRESSION_EXTRACTOR_SCHEMA = build_progression_extractor_schema(RESPONSE_SCHEMA)
 
 NPC_STATUS_ALLOWED = {"active", "unknown", "gone"}
-NPC_GENERIC_NAME_TOKENS = {
-    "wache",
-    "soldat",
-    "kind",
-    "frau",
-    "mann",
-    "haendler",
-    "händler",
-    "ritter",
-    "magier",
-    "priester",
-    "scharlatan",
-    "bandit",
-    "siedler",
-    "reisender",
-    "taenzer",
-    "tänzer",
-    "vagabund",
-    "buerger",
-    "bürger",
-    "fremder",
-    "fremde",
-    "gegner",
-    "monster",
-    "kreatur",
-}
-STORY_REWRITE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "story": {"type": "string"},
-    },
-    "required": ["story"],
-    "additionalProperties": False,
-}
-
-ACTION_STOPWORDS = {
-    "ich",
-    "und",
-    "oder",
-    "aber",
-    "doch",
-    "dann",
-    "mit",
-    "dem",
-    "den",
-    "der",
-    "die",
-    "das",
-    "ein",
-    "eine",
-    "einer",
-    "einem",
-    "einen",
-    "paar",
-    "mehr",
-    "weiter",
-    "aktuelle",
-    "szene",
-    "organisch",
-    "ohne",
-    "harten",
-    "sprung",
-    "fort",
-    "bleib",
-    "direkten",
-    "konsequenzen",
-    "letzten",
-    "turns",
-    "rede",
-    "sage",
-    "sag",
-    "mache",
-    "mach",
-}
-
-ENGLISH_LANGUAGE_MARKERS = {
-    "what",
-    "who",
-    "why",
-    "how",
-    "next",
-    "do",
-    "the",
-    "and",
-    "with",
-    "without",
-    "into",
-    "through",
-    "toward",
-    "from",
-    "before",
-    "after",
-    "while",
-    "where",
-    "there",
-    "their",
-    "them",
-    "they",
-    "you",
-    "your",
-    "was",
-    "were",
-    "is",
-    "are",
-    "be",
-    "been",
-    "being",
-    "this",
-    "that",
-    "these",
-    "those",
-    "road",
-    "ruins",
-    "kingdom",
-    "border",
-    "guard",
-    "watchtower",
-    "scene",
-    "story",
-}
-
-ABILITY_UNLOCK_TRIGGER_PATTERNS = [
-    re.compile(
-        r"(?:erlernt|erlent|wiedererlernt|lernt|meistert|beherrscht(?:\s+nun)?|schaltet(?:\s+\w+)?\s+frei|erhält|entwickelt|entfesselt)"
-        r"\s+(?:die|den|das|eine|einen)?\s*(?:fähigkeit|technik|zauber|magie|gabe|kunst|ritual|formel|form)?\s*[„\"]([^\"“”]{3,60})[\"”]?",
-        flags=re.IGNORECASE,
-    ),
-    re.compile(
-        r"(?:erlernt|erlent|wiedererlernt|lernt|meistert|beherrscht(?:\s+nun)?|schaltet(?:\s+\w+)?\s+frei|erhält|entwickelt|entfesselt)"
-        r"\s+(?:die|den|das|eine|einen)?\s*(?:fähigkeit|technik|zauber|magie|gabe|kunst|ritual|formel|form)(?:\s+(?:der|des))?\s+([A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9\- ]{2,60})",
-        flags=re.IGNORECASE,
-    ),
-    re.compile(
-        r"(?:erlernt|erlent|wiedererlernt|lernt|meistert|beherrscht(?:\s+nun)?|schaltet(?:\s+\w+)?\s+frei|erhält|entwickelt|entfesselt)\s+([A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9\- ]{2,40})",
-        flags=re.IGNORECASE,
-    ),
-]
-ABILITY_UNLOCK_GENERIC_NAMES = {
-    "faehigkeit",
-    "technik",
-    "zauber",
-    "magie",
-    "gabe",
-    "kunst",
-    "ritual",
-    "form",
-    "formel",
-    "neue faehigkeit",
-    "neue technik",
-    "neuer zauber",
-    "neue magie",
-    "diese magie",
-    "jene magie",
-}
-UNIVERSAL_SKILL_LIKE_NAMES = {
-    "ausdauer",
-    "harter koerper",
-    "harter körper",
-    "schneller schritt",
-    "sechster sinn",
-    "6ter sinn",
-    "6. sinn",
-    "wacher blick",
-    "zäher wille",
-    "zaeher wille",
-    "ruhepuls",
-    "scharfer blick",
-    "taktisches gefuehl",
-    "taktisches gefühl",
-}
-AUTO_ITEM_ACQUIRE_PATTERNS = [
-    re.compile(
-        r"(?:hebt|hebe|findet|finde|entdeckt|entdecke|pluendert|plündert|pluendere|plündere|lootet|loote|erbeutet|erbeute|erhält|erhaelt|erhalte|nimmt|nehme|steckt|stecke|packt|packe|sammelt|sammle)\s+"
-        r"(?:(?:ich|er|sie|wir|ihr|man)\s+)?(?:den|die|das|einen|eine|ein|einem|einer)?\s*([^,.!?;\n]{3,80}?)(?:\s+auf|\s+ein|\s+an\s+sich|\s+bei\s+sich|\s+und\b|,|\.|$)",
-        flags=re.IGNORECASE,
-    ),
-]
-AUTO_ITEM_EQUIP_PATTERNS = [
-    re.compile(
-        r"(?:zieht|ziehe|zueckt|zückt|zuecke|zücke|führt|fuehrt|fuehre|führe|schwingt|schwinge|hält|haelt|halte|greift|greife|richtet|richte|zielt|ziele)\s+"
-        r"(?:(?:ich|er|sie|wir|ihr|man)\s+)?(?:den|die|das|einen|eine|ein|seinen|seine|ihr|ihre)?\s*([^,.!?;\n]{3,80}?)(?:\s+in\s+der\s+hand|\s+gegen|\s+auf|\s+vor\s+(?:mich|ihn|sie|ihm|ihr|sich|uns|euch)|\s+und\b|,|\.|$)",
-        flags=re.IGNORECASE,
-    ),
-    re.compile(
-        r"(?:trägt|trage|traegt|tragt|legt\s+an|lege\s+an|rüstet|ruestet|rüste|rueste|gürtet|guertet|gürte|guerte|schnallt|schnalle)\s+"
-        r"(?:(?:ich|er|sie|wir|ihr|man)\s+)?(?:den|die|das|einen|eine|ein|seinen|seine|ihr|ihre)?\s*([^,.!?;\n]{3,80}?)(?:\s+an|\s+um|\s+bei\s+sich|\s+und\b|,|\.|$)",
-        flags=re.IGNORECASE,
-    ),
-]
-AUTO_ITEM_GENERIC_NAMES = {
-    "gegenstand",
-    "objekt",
-    "item",
-    "waffe",
-    "rüstung",
-    "ruestung",
-    "ding",
-    "ausrüstung",
-    "ausruestung",
-    "zeug",
-    "kram",
-}
-ITEM_WEAPON_KEYWORDS = {
-    "schwert",
-    "klinge",
-    "dolch",
-    "messer",
-    "axt",
-    "hammer",
-    "speer",
-    "lanze",
-    "stab",
-    "bogen",
-    "armbrust",
-    "peitsche",
-    "flegel",
-    "waffe",
-}
-ITEM_OFFHAND_KEYWORDS = {"schild", "buckler", "fokus", "fokuskristall", "orb"}
-ITEM_CHEST_KEYWORDS = {"rüstung", "ruestung", "panzer", "harnisch", "mantel", "robe", "weste", "brustplatte"}
-ITEM_TRINKET_KEYWORDS = {"amulett", "ring", "talisman", "anhänger", "anhaenger", "kette", "reliquie", "totem"}
-ITEM_DETAIL_CLAUSE_MARKERS = (" mit ", " für ", " fuer ", " welches ", " welcher ", " welche ", " das ", " der ", " die ")
-EQUIPMENT_SLOT_ALIASES = {
-    "armor": "chest",
-    "brust": "chest",
-    "body": "chest",
-    "weapon": "weapon",
-    "mainhand": "weapon",
-    "offhand": "offhand",
-    "shield": "offhand",
-    "trinket": "trinket",
-    "amulet": "amulet",
-    "ring": "ring_1",
-    "ring1": "ring_1",
-    "ring_1": "ring_1",
-    "ring2": "ring_2",
-    "ring_2": "ring_2",
-    "head": "head",
-    "helmet": "head",
-    "gloves": "gloves",
-    "hands": "gloves",
-    "boots": "boots",
-    "feet": "boots",
-}
-EQUIPMENT_CANONICAL_SLOTS = {"weapon", "offhand", "head", "chest", "gloves", "boots", "amulet", "ring_1", "ring_2", "trinket"}
-STORY_ACTION_CUES = (
-    "greift",
-    "attackiert",
-    "schlägt",
-    "rennt",
-    "stürmt",
-    "weicht",
-    "blockt",
-    "zieht",
-    "hebt",
-    "untersucht",
-    "scannt",
-    "beobachtet",
-    "spricht",
-    "flüstert",
-    "kanalisiert",
-    "wirkt",
-    "konzentriert",
-    "handelt",
-    "versucht",
-)
-STORY_EXPLORE_CUES = (
-    "entdeckt",
-    "erkundet",
-    "erreicht",
-    "betritt",
-    "findet",
-    "stößt auf",
-    "stoesst auf",
-    "gelangt",
-    "folgt",
-)
-STORY_LEARN_CUES = (
-    "erlernt",
-    "erlent",
-    "lernt",
-    "wiedererlernt",
-    "meistert",
-    "beherrscht",
-    "begreift",
-    "erkennt",
-    "versteht",
-    "entwickelt",
-    "entfesselt",
-    "manifestiert",
-    "entsteht",
-    "hervorgeht",
-    "formt sich",
-)
-
-GERMAN_LANGUAGE_MARKERS = {
-    "der",
-    "die",
-    "das",
-    "dem",
-    "den",
-    "des",
-    "ein",
-    "eine",
-    "einer",
-    "einem",
-    "einen",
-    "und",
-    "oder",
-    "aber",
-    "nicht",
-    "noch",
-    "mit",
-    "ohne",
-    "durch",
-    "gegen",
-    "über",
-    "unter",
-    "zwischen",
-    "während",
-    "weil",
-    "dass",
-    "wenn",
-    "hier",
-    "dort",
-    "wurde",
-    "waren",
-    "ist",
-    "sind",
-    "szene",
-    "geschichte",
-    "wache",
-}
-
-MEMORY_SYSTEM_PROMPT = (
-    "Du fasst eine laufende deutschsprachige Dark-Fantasy-Isekai-Kampagne zusammen. "
-    "Schreibe kompakt, konkret und nur beobachtbare Fakten, offene Konflikte, Orte, "
-    "Zustand der Figuren und akut relevante Story-Elemente. Keine Markdown-Listen."
-)
-
-SETUP_QUESTION_SYSTEM_PROMPT = (
-    "Du formulierst die nächste Setup-Frage für eine deutschsprachige Dark-Fantasy-Isekai-Kampagne. "
-    "Schreibe genau 1-2 kurze Sätze, atmosphärisch, klar und ohne Meta-Erklärungen. "
-    "Erfinde keine neuen Feldtypen oder Regeln. "
-    "Nenne niemals Frage-IDs, Typen, Setup-Stufen, Slots, JSON, Listen von Rohdaten oder das Weltprofil selbst."
-)
-
-SETUP_RANDOM_SYSTEM_PROMPT = (
-    "Du triffst für ein deutschsprachiges Dark-Fantasy-Isekai-Setup stimmige Zufallsentscheidungen. "
-    "Du antwortest nur mit gültigem JSON. Halte Textfelder knapp, konkret und passend zur bisherigen Welt oder Figur. "
-    "Wenn Auswahloptionen existieren, nutze vorzugsweise diese statt Freitext. "
-    "Bei Charakteren bleibe konsistent mit bereits beantworteten Feldern wie Geschlecht, Klassenrichtung und Ton."
-)
-
-SETUP_RANDOM_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "value": {"type": ["string", "boolean", "number", "null"]},
-        "selected": {
-            "oneOf": [
-                {"type": "string"},
-                {"type": "array", "items": {"type": "string"}},
-                {"type": "null"},
-            ]
-        },
-        "other_text": {"type": "string"},
-        "other_values": {"type": "array", "items": {"type": "string"}},
-    },
-    "required": ["value", "selected", "other_text", "other_values"],
-    "additionalProperties": False,
-}
-
-CHARACTER_ATTRIBUTE_SYSTEM_PROMPT = (
-    "Du verteilst Startattribute fuer eine deutschsprachige Dark-Fantasy-Isekai-Figur. "
-    "Du antwortest nur mit gueltigem JSON. "
-    "Verteile genau ein Profil ueber die sieben Attribute STR, DEX, CON, INT, WIS, CHA und LUCK. "
-    "Die Verteilung soll zur Klassenrichtung, Staerke, Schwaeche, Persoenlichkeit, Fokus und Welt passen. "
-    "Level-1-Figuren sollen klar profilierte, aber noch nicht ueberzogene Startwerte erhalten. "
-    "Bleibe deutsch in allen freien Texten, aber liefere hier nur die Zahlen."
-)
-
-CONTEXT_ASSISTANT_SYSTEM_PROMPT = (
-    "Du bist ein Kontext-Assistent für eine laufende deutschsprachige Isekai-Kampagne. "
-    "Du beantwortest Fragen zum aktuellen Stand (Story, Figuren, Orte, Fraktionen, offene Konflikte) "
-    "nur auf Basis der übergebenen Retrieval-Snippets. "
-    "Wichtig: Deine Antwort ist rein erklärend und verändert keinen Zustand. "
-    "Keine Prosa-Fortsetzung, kein Patch, keine Würfelmechanik. "
-    "Keine Markdown-Formatierung. Keine Meta-Aussagen über Textanalyse oder Prompting. "
-    "Antworte immer auf Deutsch, klar und strukturiert."
-)
-CONTEXT_RESPONSE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "status": {"type": "string", "enum": ["found", "not_in_canon", "ambiguous"]},
-        "intent": {"type": "string", "enum": ["define", "who", "where", "summary", "compare", "unknown"]},
-        "target": {"type": "string"},
-        "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
-        "entity_type": {"type": "string"},
-        "entity_id": {"type": "string"},
-        "title": {"type": "string"},
-        "explanation": {"type": "string"},
-        "facts": {"type": "array", "items": {"type": "string"}},
-        "sources": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "type": {"type": "string"},
-                    "id": {"type": "string"},
-                    "label": {"type": "string"},
-                },
-                "required": ["type", "id", "label"],
-                "additionalProperties": False,
-            },
-        },
-        "suggestions": {"type": "array", "items": {"type": "string"}},
-    },
-    "required": [
-        "status",
-        "intent",
-        "target",
-        "confidence",
-        "entity_type",
-        "entity_id",
-        "title",
-        "explanation",
-        "facts",
-        "sources",
-        "suggestions",
-    ],
-    "additionalProperties": False,
-}
-CONTEXT_META_DRIFT_MARKERS = (
-    "analyse des textes",
-    "bereitgestellten text",
-    "anleitung fuer den autor",
-    "anleitung für den autor",
-    "keine neuen story-elemente",
-    "formatierungsvorschläge",
-    "formatierungsvorschlaege",
-)
-
-CHARACTER_ATTRIBUTE_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "str": {"type": "integer"},
-        "dex": {"type": "integer"},
-        "con": {"type": "integer"},
-        "int": {"type": "integer"},
-        "wis": {"type": "integer"},
-        "cha": {"type": "integer"},
-        "luck": {"type": "integer"},
-    },
-    "required": ["str", "dex", "con", "int", "wis", "cha", "luck"],
-    "additionalProperties": False,
-}
-
-TURN_RESPONSE_JSON_CONTRACT = (
-    "Antworte mit genau einem JSON-Objekt ohne Markdown und ohne Erklärtext. "
-    "Pflichtfelder auf Root-Ebene: "
-    "`story` (String), "
-    "`patch` (Objekt), "
-    "`requests` (Array). "
-    "`patch` muss mindestens diese Felder enthalten: "
-    "`meta`, `characters`, `items_new`, `plotpoints_add`, `plotpoints_update`, "
-    "`map_add_nodes`, `map_add_edges`, `events_add`. "
-    "`meta.phase` muss `lobby`, `world_setup`, `character_setup_open`, `ready_to_start` oder `active` sein. "
-    "Wenn du nichts ändern willst, nutze leere Objekte/Arrays statt Felder wegzulassen. "
-    "Nutze in `characters` nur echte Slot-IDs als Keys. "
-    "Für Fortschritt nutze pro Character optional `progression_events` als Array strukturierter Events. "
-    "`requests` ist ein Array von Objekten mit mindestens `type` und `actor`."
-)
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -1282,38 +573,6 @@ for _name in state_engine.EXPORTED_SYMBOLS:
     globals()[_name] = getattr(state_engine, _name)
 del _name
 
-ELEMENT_GENERATOR_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "elements": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "rarity": {"type": "string"},
-                    "description": {"type": "string"},
-                    "theme": {"type": "string"},
-                    "status_effect_tags": {"type": "array", "items": {"type": "string"}},
-                    "class_affinities": {"type": "array", "items": {"type": "string"}},
-                    "skill_affinities": {"type": "array", "items": {"type": "string"}},
-                    "lore_notes": {"type": "array", "items": {"type": "string"}},
-                    "visual_motif": {"type": "string"},
-                    "temperament": {"type": "string"},
-                    "environment_bias": {"type": "string"},
-                    "aliases": {"type": "array", "items": {"type": "string"}},
-                },
-                "required": ["name", "description", "theme"],
-                "additionalProperties": False,
-            },
-        }
-    },
-    "required": ["elements"],
-    "additionalProperties": False,
-}
-
-RESOURCE_KEYS = ("hp", "stamina", "aether", "stress", "corruption", "wounds")
-ATTRIBUTE_KEYS = ("str", "dex", "con", "int", "wis", "cha", "luck")
 # Canon-first runtime fields. These are the primary mutable gameplay truth.
 CANON_CHARACTER_FIELDS = {
     "scene_id",
@@ -1359,330 +618,8 @@ MIGRATION_ONLY_FIELDS = {
     "stamina",
     "potential",
 }
-PROGRESSION_EVENT_TYPES = {
-    "combat_victory",
-    "combat_survival",
-    "major_discovery",
-    "milestone_progress",
-    "boss_defeated",
-    "class_breakthrough",
-    "skill_mastery_use",
-    "skill_manifestation",
-    "training_success",
-    "bond_event",
-}
-PROGRESSION_EVENT_SEVERITIES = {"low", "medium", "high"}
-PROGRESSION_EVENT_SEVERITY_MULTIPLIER = {
-    "low": 1.0,
-    "medium": 1.35,
-    "high": 1.8,
-}
-PROGRESSION_EVENT_BASE_XP = {
-    "combat_victory": {"character": 28, "class": 18, "skill": 20},
-    "combat_survival": {"character": 14, "class": 8, "skill": 10},
-    "major_discovery": {"character": 24, "class": 14, "skill": 8},
-    "milestone_progress": {"character": 36, "class": 24, "skill": 14},
-    "boss_defeated": {"character": 55, "class": 34, "skill": 26},
-    "class_breakthrough": {"character": 26, "class": 30, "skill": 8},
-    "skill_mastery_use": {"character": 10, "class": 6, "skill": 16},
-    "skill_manifestation": {"character": 22, "class": 14, "skill": 26},
-    "training_success": {"character": 14, "class": 10, "skill": 14},
-    "bond_event": {"character": 12, "class": 8, "skill": 6},
-}
-PROGRESSION_EVENT_PRIORITY = {
-    "boss_defeated": 100,
-    "milestone_progress": 90,
-    "class_breakthrough": 82,
-    "skill_manifestation": 76,
-    "combat_victory": 66,
-    "major_discovery": 62,
-    "skill_mastery_use": 52,
-    "training_success": 46,
-    "combat_survival": 40,
-    "bond_event": 34,
-}
-PROGRESSION_DENSITY_CAP_NON_MILESTONE = {"inferred": 1, "total": 3}
-PROGRESSION_DENSITY_CAP_MILESTONE = {"inferred": 2, "total": 5}
-PROGRESSION_SET_DIRECT_KEYS = {
-    "level",
-    "xp_total",
-    "xp_current",
-    "xp_to_next",
-    "class_level",
-    "class_xp",
-    "class_xp_to_next",
-}
-MANIFESTATION_STRONG_CUES = {
-    "manifestiert",
-    "entfesselt",
-    "bricht hervor",
-    "erstmals",
-    "zum ersten mal",
-    "erweckt",
-    "wird geboren",
-}
-MANIFESTATION_EFFECT_CUES = {
-    "schlägt",
-    "schlagen",
-    "drängt",
-    "drängen",
-    "fesselt",
-    "fesseln",
-    "blockiert",
-    "blockieren",
-    "verlangsamt",
-    "verlangsamen",
-    "durchbohrt",
-    "durchbohren",
-    "zerreißt",
-    "zerreissen",
-    "brechen",
-    "schützt",
-    "schützen",
-    "versperrt",
-    "versperren",
-    "kontrolliert",
-    "kontrollieren",
-}
-MANIFESTATION_TACTICAL_CUES = {
-    "kampffeld",
-    "deckung",
-    "kontrolle",
-    "schutz",
-    "barriere",
-    "angriff",
-    "position",
-    "ritual",
-}
-MANIFESTATION_WORLD_REACTION_CUES = {
-    "gegner",
-    "weicht",
-    "stolpert",
-    "erschrickt",
-    "reagiert",
-    "umgebung",
-    "boden",
-    "wand",
-}
-MANIFESTATION_COST_CUES = {
-    "kostet",
-    "schmerz",
-    "belastet",
-    "erschöpft",
-    "vergiftung",
-    "lebensenergie",
-    "kontrollverlust",
-    "risiko",
-}
-MANIFESTATION_MOTIF_GROUPS = {
-    "spore": ("pilz", "spore", "myzel", "garten", "wurzel", "ranke", "moos"),
-    "light": ("licht", "strahl", "sonne", "glanz", "heilig"),
-    "shadow": ("schatten", "nacht", "dunkel", "finster", "schwärze"),
-    "flame": ("feuer", "flamme", "glut", "asche"),
-    "frost": ("eis", "frost", "kälte", "reif"),
-    "storm": ("blitz", "sturm", "donner", "wind"),
-    "martial": ("schwert", "klinge", "hieb", "stoß", "parade", "speer", "lanze", "faust", "tritt", "bogen"),
-}
-FIRST_SKILL_FORCE_PROBABILITY = 0.8
-MANIFESTATION_SKILL_NAME_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "name": {"type": "string"},
-    },
-    "required": ["name"],
-    "additionalProperties": False,
-}
-MANIFESTATION_SKILL_NAME_SYSTEM_PROMPT = (
-    "Du benennst genau einen neuen Fantasy-Skill für eine gerade entstehende Kraftmanifestation. "
-    "Antworte NUR als JSON mit Feld 'name'. "
-    "Regeln: deutsch, 1-4 Wörter, prägnant, kein Personenname, kein generisches Verb, kein Satzzeichen-Overkill."
-)
-SKILL_MANIFESTATION_VERB_BLACKLIST = {
-    "kaempfen",
-    "kämpfen",
-    "rennen",
-    "laufen",
-    "springen",
-    "ausweichen",
-    "bewegen",
-    "schlagen",
-    "treffen",
-    "manifestiert",
-    "manifestierte",
-    "einleiten",
-    "einleitete",
-    "entfesseln",
-    "entfesselte",
-    "erlernen",
-    "erlernte",
-    "weiter",
-}
-SKILL_MANIFESTATION_NAME_STOPWORDS = {
-    "von",
-    "und",
-    "mit",
-    "ohne",
-    "durch",
-    "gegen",
-    "unter",
-    "ueber",
-}
-SKILL_MANIFESTATION_NAME_TOKEN_BLACKLIST = {
-    "klasse",
-    "class",
-    "spieler",
-    "character",
-    "charakter",
-    "npc",
-}
-SKILL_KEYS = (
-    "stealth",
-    "perception",
-    "survival",
-    "athletics",
-    "intimidation",
-    "persuasion",
-    "lore_occult",
-    "crafting",
-    "lockpicking",
-    "endurance",
-    "willpower",
-    "tactics",
-)
-SKILL_RANKS = ("F", "E", "D", "C", "B", "A", "S")
-SKILL_RANK_ORDER = {rank: index for index, rank in enumerate(SKILL_RANKS)}
-CLASS_ASCENSION_STATUSES = {"none", "available", "active", "completed"}
 INJURY_SEVERITIES = {"leicht", "mittel", "schwer"}
 INJURY_HEALING_STAGES = {"frisch", "heilend", "fast_heil", "geheilt"}
-LEGACY_ROLE_CLASS_MAP = {
-    "frontline": {
-        "id": "class_vorhut",
-        "name": "Vorhut",
-        "rank": "F",
-        "affinity_tags": ["körper", "kampf", "schutz"],
-        "description": "Geht voran, hält Treffer aus und bindet die schlimmste Gefahr zuerst.",
-    },
-    "scout": {
-        "id": "class_spaeher",
-        "name": "Späher",
-        "rank": "F",
-        "affinity_tags": ["bewegung", "heimlichkeit", "sinn"],
-        "description": "Lebt von Überblick, Fährten und riskanten Vorstößen.",
-    },
-    "face": {
-        "id": "class_unterhaendler",
-        "name": "Unterhändler",
-        "rank": "F",
-        "affinity_tags": ["sozial", "sprache", "einfluss"],
-        "description": "Zwingt Gespräche, Drohungen und Deals in eine brauchbare Richtung.",
-    },
-    "support": {
-        "id": "class_waechter",
-        "name": "Wächter",
-        "rank": "F",
-        "affinity_tags": ["schutz", "heilung", "standhaft"],
-        "description": "Hält andere auf den Beinen und stabilisiert chaotische Lagen.",
-    },
-    "tueftler": {
-        "id": "class_schrotttueftler",
-        "name": "Schrotttüftler",
-        "rank": "F",
-        "affinity_tags": ["technik", "improvisation", "werkzeug"],
-        "description": "Macht aus Schrott, Relikten und Notlösungen einen Vorteil.",
-    },
-    "occult": {
-        "id": "class_okkultist",
-        "name": "Okkultist",
-        "rank": "F",
-        "affinity_tags": ["okkult", "ritual", "schatten"],
-        "description": "Greift nach verbotenen Wahrheiten und zahlt dafür einen Preis.",
-    },
-}
-LEGACY_SKILL_NAME_MAP = {
-    "stealth": "Schleichen",
-    "perception": "Wahrnehmung",
-    "survival": "Überleben",
-    "athletics": "Athletik",
-    "intimidation": "Einschüchtern",
-    "persuasion": "Überzeugen",
-    "lore_occult": "Okkultes Wissen",
-    "crafting": "Handwerk",
-    "lockpicking": "Schlösser öffnen",
-    "endurance": "Ausdauer",
-    "willpower": "Willenskraft",
-    "tactics": "Taktik",
-}
-LEGACY_SKILL_TAGS = {
-    "stealth": ["bewegung", "heimlichkeit"],
-    "perception": ["sinn", "wahrnehmung"],
-    "survival": ["wildnis", "ausdauer"],
-    "athletics": ["körper", "kraft"],
-    "intimidation": ["sozial", "druck"],
-    "persuasion": ["sozial", "sprache"],
-    "lore_occult": ["wissen", "okkult"],
-    "crafting": ["technik", "handwerk"],
-    "lockpicking": ["technik", "präzision"],
-    "endurance": ["körper", "regeneration"],
-    "willpower": ["geist", "widerstand"],
-    "tactics": ["kampf", "strategie"],
-}
-RESISTANCE_KEYS = ("physical", "fire", "cold", "lightning", "poison", "bleed", "shadow", "holy", "curse", "fear")
-SKILL_ATTRIBUTE_MAP = {
-    "stealth": "dex",
-    "perception": "wis",
-    "survival": "wis",
-    "athletics": "str",
-    "intimidation": "cha",
-    "persuasion": "cha",
-    "lore_occult": "int",
-    "crafting": "int",
-    "lockpicking": "dex",
-    "endurance": "con",
-    "willpower": "wis",
-    "tactics": "int",
-}
-SKILL_RANK_THRESHOLDS = (
-    ("S", 14),
-    ("A", 11),
-    ("B", 9),
-    ("C", 7),
-    ("D", 5),
-    ("E", 3),
-    ("F", 1),
-)
-SKILL_OUTCOME_XP = {"success": 12, "partial": 8, "fail": 5}
-SKILL_PATHS = {
-    "stealth": ["Shadow Veil", "Ghost Scout", "Cursed Slip"],
-    "perception": ["Hunter Sight", "Arc Sense", "Dread Echo"],
-    "survival": ["Ash Walker", "Beast Route", "Starved Resolve"],
-    "athletics": ["Breaker Frame", "Wild Rush", "Blood Sprint"],
-    "intimidation": ["Grave Voice", "Tyrant Stare", "Panic Chorus"],
-    "persuasion": ["Silver Tongue", "False Halo", "Oath Binder"],
-    "lore_occult": ["Hex Reader", "Curse Weaving", "Void Lexicon"],
-    "crafting": ["Trap Architect", "Relic Smith", "Blight Tinkerer"],
-    "lockpicking": ["Whisper Keys", "Ruin Fingers", "Void Picks"],
-    "endurance": ["Iron Body", "Last Ember", "Pain Vessel"],
-    "willpower": ["Soul Brace", "Moon Mind", "Hollow Oath"],
-    "tactics": ["Kill Box", "War Reader", "Night Marshal"],
-}
-SKILL_EVOLUTIONS = {
-    "stealth": ["Shadow Veil", "Silent Steps", "Night Skin"],
-    "perception": ["Predator Glimpse", "Thread Sense", "Fear Scent"],
-    "athletics": ["Breaker Surge", "Iron Leap", "Ruin Charge"],
-    "lore_occult": ["Curse Weaving", "Hex Memory", "Blood Lexicon"],
-    "crafting": ["Trap Architect", "Relic Stitching", "Ash Forge"],
-    "endurance": ["Iron Body", "Pain Engine", "Grave Stance"],
-    "tactics": ["Kill Grid", "Night Marshal", "Ambush Doctrine"],
-}
-SKILL_FUSIONS = {
-    ("perception", "stealth"): {"id": "skill_predator_sense", "name": "Predator Sense", "rank": "S"},
-    ("athletics", "endurance"): {"id": "skill_iron_body", "name": "Iron Body", "rank": "S"},
-    ("lore_occult", "willpower"): {"id": "skill_curse_weaving", "name": "Curse Weaving", "rank": "S"},
-    ("crafting", "tactics"): {"id": "skill_trap_architect", "name": "Trap Architect", "rank": "S"},
-}
-
-DEFAULT_DYNAMIC_SKILL_LEVEL_MAX = 10
-DEFAULT_NUMERIC_SKILL_DELTA_XP = 20
 
 LEGACY_SELECT_ALIASES: Dict[str, Dict[str, str]] = {
     "theme": {
@@ -1715,16 +652,6 @@ LEGACY_SELECT_ALIASES: Dict[str, Dict[str, str]] = {
         "story": "Erst in der Story",
     },
 }
-
-AUTO_INJURY_PATTERNS = (
-    re.compile(r"\b((?:tiefer?|tiefe|tiefen|klaffender?|klaffende|blutiger?|blutige|frischer?|frische|heftiger?|heftige)\s+)?(Schnitt(?:\s+am|\s+an der|\s+in der)?\s+[A-Za-zÄÖÜäöüß\-]+(?:\s+[A-Za-zÄÖÜäöüß\-]+){0,3})", flags=re.IGNORECASE),
-    re.compile(r"\b((?:tiefer?|tiefe|tiefen|klaffender?|klaffende|blutiger?|blutige|frischer?|frische)\s+)?(Stichwunde(?:\s+am|\s+an der|\s+in der)?\s+[A-Za-zÄÖÜäöüß\-]+(?:\s+[A-Za-zÄÖÜäöüß\-]+){0,3})", flags=re.IGNORECASE),
-    re.compile(r"\b((?:tiefer?|tiefe|tiefen|blutiger?|blutige)\s+)?(Bisswunde(?:\s+am|\s+an der|\s+in der)?\s+[A-Za-zÄÖÜäöüß\-]+(?:\s+[A-Za-zÄÖÜäöüß\-]+){0,3})", flags=re.IGNORECASE),
-    re.compile(r"\b((?:schwere|heftige|frische)\s+)?(Brandwunde(?:\s+am|\s+an der|\s+in der)?\s+[A-Za-zÄÖÜäöüß\-]+(?:\s+[A-Za-zÄÖÜäöüß\-]+){0,3})", flags=re.IGNORECASE),
-    re.compile(r"\b((?:schwere|heftige)\s+)?(Prellung(?:\s+am|\s+an der|\s+in der)?\s+[A-Za-zÄÖÜäöüß\-]+(?:\s+[A-Za-zÄÖÜäöüß\-]+){0,3})", flags=re.IGNORECASE),
-    re.compile(r"\b(gebrochene[rsnm]?\s+[A-Za-zÄÖÜäöüß\-]+(?:\s+[A-Za-zÄÖÜäöüß\-]+){0,3})", flags=re.IGNORECASE),
-    re.compile(r"\b(verstauchte[rsnm]?\s+[A-Za-zÄÖÜäöüß\-]+(?:\s+[A-Za-zÄÖÜäöüß\-]+){0,3})", flags=re.IGNORECASE),
-)
 
 app = FastAPI(title="Aelunor")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
