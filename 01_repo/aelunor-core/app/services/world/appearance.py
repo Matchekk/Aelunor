@@ -1,6 +1,31 @@
 import hashlib
 
 
+def default_appearance_profile() -> dict:
+    return {
+        "height": "average",
+        "build": "neutral",
+        "muscle": 0,
+        "fat": 0,
+        "scars": [],
+        "aura": "none",
+        "eyes": {
+            "base": "",
+            "current": "",
+        },
+        "hair": {
+            "color": "",
+            "style": "",
+            "current": "",
+        },
+        "skin_marks": [],
+        "voice_tone": "",
+        "visual_modifiers": [],
+        "summary_short": "",
+        "summary_full": "",
+    }
+
+
 def appearance_event_id(slot_name: str, kind: str, source: str, turn_number: int, absolute_day: int, new_value: str) -> str:
     digest = hashlib.sha256(f"{slot_name}:{kind}:{source}:{turn_number}:{absolute_day}:{new_value}".encode("utf-8")).hexdigest()[:10]
     return f"app_{digest}"

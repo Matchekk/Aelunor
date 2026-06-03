@@ -157,6 +157,52 @@ Empfohlener naechster Schritt: Race-/Beast-/Element-Normalisierung schrittweise 
 `state_engine.py` in echte World-Module verschieben. Die Turn Pipeline bleibt
 weiterhin ausserhalb dieses Refactoring-Strangs.
 
+## Refactoring-Schritt: Injury-/Scar-Normalisierung
+
+`default_injury_state`, `default_scar_state`, `normalize_injury_state` und
+`normalize_scar_state` liegen jetzt in `app/services/world/injury_state.py`.
+`app/services/state_engine.py` importiert und re-exportiert diese Funktionen
+weiter, damit bestehende Imports und das globale Turn-Wiring unveraendert
+bleiben.
+
+Dieser Schritt entfernt die globale Wiring-Struktur noch nicht vollstaendig:
+`state_engine.configure(main_globals)` spiegelt die bestehenden Runtime-
+Abhaengigkeiten fuer Injury-/Scar-Normalisierung weiterhin in das World-Modul.
+Die Default-State-Helfer selbst brauchen keine globale Injektion mehr. Die Turn
+Pipeline, Patch Sanitizer und Patch Validator wurden dabei nicht umgebaut.
+
+## Refactoring-Schritt: Appearance Default Profile
+
+`default_appearance_profile` liegt jetzt in `app/services/world/appearance.py`
+neben den bestehenden Appearance-Helfern. `app/services/state_engine.py`
+importiert und re-exportiert den Helper weiter; die Appearance-State-Shape und
+bestehende Aufrufer bleiben unveraendert.
+
+## Refactoring-Schritt: Default-State-Konsolidierung
+
+`default_character_modifiers`, `default_world_time` und `default_intro_state`
+liegen jetzt gemeinsam in `app/services/world/state_defaults.py`. Die zuvor
+entstandenen Single-Helper-Module `character_state.py`, `time_state.py` und
+`intro_state.py` wurden entfernt. `app/services/state_engine.py` importiert und
+re-exportiert die Helper weiter, damit `blank_character_state`, World-Time-
+Normalisierung, Campaign-Normalisierung, `intro_state(campaign)` und externe
+Aufrufer dieselben Default-Shapes behalten.
+
+## Refactoring-Schritt: Class Current Default
+
+`default_class_current` liegt jetzt in `app/services/world/progression.py`
+neben `normalize_class_current`. `app/services/state_engine.py` importiert und
+re-exportiert den Helper weiter, damit Class-State-Defaults, Progression-
+Normalisierung und bestehende Aufrufer dieselbe Shape behalten.
+
+## Refactoring-Schritt: Turn-Engine-Test-Harness
+
+`tests/unit/test_turn_engine.py` setzt `SKILL_RANK_THRESHOLDS` jetzt explizit im
+lokalen `configure_engine_for_tests()`-Harness. Dadurch laeuft der Test
+standalone isoliert, ohne auf vorherige Testmodule oder `app.main`-Seiteneffekte
+angewiesen zu sein. Fuer diesen Harness-Fix wurde keine Produktionslogik
+geaendert.
+
 ## Nicht-Ziele
 
 - Keine Produktionslogikaenderung.

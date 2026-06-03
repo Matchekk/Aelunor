@@ -87,6 +87,7 @@ from app.services.world.species_profiles import (
     race_id_from_name as _race_id_from_name,
 )
 from app.services.world.progression import (
+    default_class_current,
     next_character_xp_for_level,
     normalize_class_current,
     normalize_resource_name,
@@ -134,8 +135,14 @@ from app.services.world.attribute_influence import (
 from app.services.world.appearance import (
     active_faction_ids as _active_faction_ids,
     appearance_event_id as _appearance_event_id,
+    default_appearance_profile,
     format_appearance_message as _format_appearance_message,
     record_appearance_change as _record_appearance_change,
+)
+from app.services.world.state_defaults import (
+    default_character_modifiers,
+    default_intro_state,
+    default_world_time,
 )
 from app.services.world.world_settings import (
     active_pacing_profile as _active_pacing_profile,
@@ -190,11 +197,20 @@ def configure(main_globals: Dict[str, Any]) -> None:
 
     # Subsysteme mitinitialisieren
     from app.services.world import codex as _codex_module
+    from app.services.world import injury_state as _injury_state_module
     from app.services.world import npc as _npc_module
     from app.services.world import progression as _progression_module
     _npc_module.configure(main_globals)
     _progression_module.configure(main_globals)
     _codex_module.configure(main_globals)
+    for _name in (
+        "deep_copy",
+        "make_id",
+        "INJURY_SEVERITIES",
+        "INJURY_HEALING_STAGES",
+    ):
+        if _name in globals():
+            setattr(_injury_state_module, _name, globals()[_name])
 
     _CONFIGURED = True
 
@@ -1276,108 +1292,12 @@ def generate_world_beast_profiles(summary: Dict[str, Any], *, seed_hint: str = "
         beasts[beast_id] = normalize_beast_profile(template, fallback_id=beast_id) or default_beast_profile(beast_id, name)
     return stable_sorted_mapping(beasts, key_fn=world_codex_sort_key)
 
-def default_world_time() -> Dict[str, Any]:
-    return {
-        "day": 1,
-        "month": 1,
-        "year": 1,
-        "time_of_day": "night",
-        "weather": "",
-        "absolute_day": 1,
-    }
-
-def default_intro_state() -> Dict[str, Any]:
-    return {
-        "status": "idle",
-        "last_error": "",
-        "last_attempt_at": "",
-        "generated_turn_id": "",
-    }
-
-def default_appearance_profile() -> Dict[str, Any]:
-    return {
-        "height": "average",
-        "build": "neutral",
-        "muscle": 0,
-        "fat": 0,
-        "scars": [],
-        "aura": "none",
-        "eyes": {
-            "base": "",
-            "current": "",
-        },
-        "hair": {
-            "color": "",
-            "style": "",
-            "current": "",
-        },
-        "skin_marks": [],
-        "voice_tone": "",
-        "visual_modifiers": [],
-        "summary_short": "",
-        "summary_full": "",
-    }
-
-def default_character_modifiers() -> Dict[str, Any]:
-    return {
-        "resource_max": [],
-        "derived": [],
-        "appearance_flags": [],
-        "skill_effective": [],
-    }
-
-def default_class_current() -> Dict[str, Any]:
-    return {
-        "id": "",
-        "name": "",
-        "rank": "F",
-        "path_id": "",
-        "path_rank": "F",
-        "element_id": "",
-        "element_tags": [],
-        "level": 1,
-        "level_max": 10,
-        "xp": 0,
-        "xp_next": 100,
-        "class_id": "",
-        "class_name": "",
-        "class_rank": "F",
-        "class_level": 1,
-        "class_level_max": 10,
-        "class_xp": 0,
-        "class_xp_to_next": 100,
-        "affinity_tags": [],
-        "description": "",
-        "class_traits": [],
-        "class_mastery": 0,
-        "ascension": {
-            "status": "none",
-            "quest_id": None,
-            "requirements": [],
-            "result_hint": None,
-        },
-    }
-
-def default_injury_state() -> Dict[str, Any]:
-    return {
-        "id": "",
-        "title": "",
-        "severity": "leicht",
-        "effects": [],
-        "healing_stage": "frisch",
-        "will_scar": False,
-        "created_turn": 0,
-        "notes": "",
-    }
-
-def default_scar_state() -> Dict[str, Any]:
-    return {
-        "id": "",
-        "title": "",
-        "origin_injury_id": None,
-        "description": "",
-        "created_turn": 0,
-    }
+from app.services.world.injury_state import (
+    default_injury_state,
+    default_scar_state,
+    normalize_injury_state,
+    normalize_scar_state,
+)
 
 def blank_character_state(slot_name: str) -> Dict[str, Any]:
     return {
@@ -2137,41 +2057,6 @@ def role_key(role_text: str) -> str:
 
 def class_rank_sort_value(rank: str) -> int:
     return SKILL_RANK_ORDER.get(str(rank or "F").upper(), -1)
-
-def normalize_injury_state(value: Any) -> Optional[Dict[str, Any]]:
-    if not isinstance(value, dict):
-        return None
-    injury = default_injury_state()
-    injury.update(deep_copy(value))
-    injury["id"] = str(injury.get("id") or make_id("inj")).strip()
-    injury["title"] = str(injury.get("title") or "").strip()
-    if not injury["title"]:
-        return None
-    injury["severity"] = str(injury.get("severity") or "leicht").strip().lower()
-    if injury["severity"] not in INJURY_SEVERITIES:
-        injury["severity"] = "leicht"
-    injury["effects"] = [str(entry).strip() for entry in (injury.get("effects") or []) if str(entry).strip()]
-    injury["healing_stage"] = str(injury.get("healing_stage") or "frisch").strip().lower()
-    if injury["healing_stage"] not in INJURY_HEALING_STAGES:
-        injury["healing_stage"] = "frisch"
-    injury["will_scar"] = bool(injury.get("will_scar", False))
-    injury["created_turn"] = max(0, int(injury.get("created_turn", 0) or 0))
-    injury["notes"] = str(injury.get("notes") or "").strip()
-    return injury
-
-def normalize_scar_state(value: Any) -> Optional[Dict[str, Any]]:
-    if not isinstance(value, dict):
-        return None
-    scar = default_scar_state()
-    scar.update(deep_copy(value))
-    scar["id"] = str(scar.get("id") or make_id("scar")).strip()
-    scar["title"] = str(scar.get("title") or scar.get("label") or "").strip()
-    if not scar["title"]:
-        return None
-    scar["origin_injury_id"] = str(scar.get("origin_injury_id") or "").strip() or None
-    scar["description"] = str(scar.get("description") or scar.get("source") or scar["title"]).strip()
-    scar["created_turn"] = max(0, int(scar.get("created_turn") or scar.get("turn_number") or 0))
-    return scar
 
 def migrate_legacy_role_to_class(role_text: str) -> Optional[Dict[str, Any]]:
     template = LEGACY_ROLE_CLASS_MAP.get(role_key(role_text))

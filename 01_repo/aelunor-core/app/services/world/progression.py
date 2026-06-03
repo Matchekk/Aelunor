@@ -28,6 +28,40 @@ def normalize_resource_name(value: Any, default: str = "Aether") -> str:
         text = text[:24].strip()
     return text or default
 
+
+def default_class_current() -> Dict[str, Any]:
+    return {
+        "id": "",
+        "name": "",
+        "rank": "F",
+        "path_id": "",
+        "path_rank": "F",
+        "element_id": "",
+        "element_tags": [],
+        "level": 1,
+        "level_max": 10,
+        "xp": 0,
+        "xp_next": 100,
+        "class_id": "",
+        "class_name": "",
+        "class_rank": "F",
+        "class_level": 1,
+        "class_level_max": 10,
+        "class_xp": 0,
+        "class_xp_to_next": 100,
+        "affinity_tags": [],
+        "description": "",
+        "class_traits": [],
+        "class_mastery": 0,
+        "ascension": {
+            "status": "none",
+            "quest_id": None,
+            "requirements": [],
+            "result_hint": None,
+        },
+    }
+
+
 def normalize_class_current(value: Any) -> Optional[Dict[str, Any]]:
     if value in (None, "", False):
         return None

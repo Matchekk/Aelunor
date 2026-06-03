@@ -3,8 +3,34 @@ import copy
 from app.services.world import progression
 
 
-def _default_class_current():
-    return {
+def setup_module() -> None:
+    progression.configure(
+        {
+            "CLASS_ASCENSION_STATUSES": {"none", "available", "active", "completed"},
+            "deep_copy": copy.deepcopy,
+            "next_class_xp_for_level": lambda level: 100 + ((max(1, int(level or 1)) - 1) * 50),
+            "normalize_skill_rank": lambda value: str(value or "F").strip().upper()
+            if str(value or "F").strip().upper() in {"F", "E", "D", "C", "B", "A", "S"}
+            else "F",
+        }
+    )
+
+
+def test_normalize_resource_name_uses_default_and_length_limit() -> None:
+    assert progression.normalize_resource_name("") == "Aether"
+    assert progression.normalize_resource_name("  Mana   Core  ") == "Mana Core"
+    assert progression.normalize_resource_name("X" * 40) == "X" * 24
+    assert progression.normalize_resource_name("", "Essenz") == "Essenz"
+
+
+def test_next_character_xp_for_level_is_deterministic_and_monotonic() -> None:
+    assert progression.next_character_xp_for_level(0) == progression.next_character_xp_for_level(1)
+    assert progression.next_character_xp_for_level(1) == 120
+    assert progression.next_character_xp_for_level(3) > progression.next_character_xp_for_level(2)
+
+
+def test_default_class_current_preserves_shape() -> None:
+    assert progression.default_class_current() == {
         "id": "",
         "name": "",
         "rank": "F",
@@ -34,33 +60,6 @@ def _default_class_current():
             "result_hint": None,
         },
     }
-
-
-def setup_module() -> None:
-    progression.configure(
-        {
-            "CLASS_ASCENSION_STATUSES": {"none", "available", "active", "completed"},
-            "deep_copy": copy.deepcopy,
-            "default_class_current": _default_class_current,
-            "next_class_xp_for_level": lambda level: 100 + ((max(1, int(level or 1)) - 1) * 50),
-            "normalize_skill_rank": lambda value: str(value or "F").strip().upper()
-            if str(value or "F").strip().upper() in {"F", "E", "D", "C", "B", "A", "S"}
-            else "F",
-        }
-    )
-
-
-def test_normalize_resource_name_uses_default_and_length_limit() -> None:
-    assert progression.normalize_resource_name("") == "Aether"
-    assert progression.normalize_resource_name("  Mana   Core  ") == "Mana Core"
-    assert progression.normalize_resource_name("X" * 40) == "X" * 24
-    assert progression.normalize_resource_name("", "Essenz") == "Essenz"
-
-
-def test_next_character_xp_for_level_is_deterministic_and_monotonic() -> None:
-    assert progression.next_character_xp_for_level(0) == progression.next_character_xp_for_level(1)
-    assert progression.next_character_xp_for_level(1) == 120
-    assert progression.next_character_xp_for_level(3) > progression.next_character_xp_for_level(2)
 
 
 def test_normalize_class_current_normalizes_legacy_fields_and_caps_values() -> None:

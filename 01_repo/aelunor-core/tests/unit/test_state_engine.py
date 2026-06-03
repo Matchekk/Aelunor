@@ -14,6 +14,9 @@ from app.services.world import element_ids
 from app.services.world import element_profiles
 from app.services.world import element_relations
 from app.services.world import element_skills
+from app.services.world import injury_state
+from app.services.world import progression
+from app.services.world import state_defaults
 from app.services.world import skill_costs
 from app.services.world import skill_ranks
 from app.services.world import skill_state
@@ -27,6 +30,9 @@ class StateEngineTests(unittest.TestCase):
             {
                 "SLOT_PREFIX": "slot_",
                 "deep_copy": copy.deepcopy,
+                "make_id": lambda prefix: f"{prefix}_test",
+                "INJURY_SEVERITIES": {"leicht", "mittel", "schwer"},
+                "INJURY_HEALING_STAGES": {"frisch", "heilend", "fast_heil", "geheilt"},
             }
         )
 
@@ -208,6 +214,119 @@ class StateEngineTests(unittest.TestCase):
             },
         )
 
+    def test_injury_state_defaults_preserve_state_engine_contract(self) -> None:
+        self.assertIn("default_injury_state", state_engine.EXPORTED_SYMBOLS)
+        self.assertIn("default_scar_state", state_engine.EXPORTED_SYMBOLS)
+        self.assertIs(state_engine.default_injury_state, injury_state.default_injury_state)
+        self.assertIs(state_engine.default_scar_state, injury_state.default_scar_state)
+        self.assertEqual(
+            state_engine.default_injury_state(),
+            {
+                "id": "",
+                "title": "",
+                "severity": "leicht",
+                "effects": [],
+                "healing_stage": "frisch",
+                "will_scar": False,
+                "created_turn": 0,
+                "notes": "",
+            },
+        )
+        self.assertEqual(
+            state_engine.default_scar_state(),
+            {
+                "id": "",
+                "title": "",
+                "origin_injury_id": None,
+                "description": "",
+                "created_turn": 0,
+            },
+        )
+
+    def test_injury_state_normalize_injury_state_preserves_valid_shape(self) -> None:
+        payload = {
+            "id": "inj_1",
+            "title": "Schnittwunde",
+            "severity": "SCHWER",
+            "effects": [" Blutung ", "", "Schmerz"],
+            "healing_stage": "heilend",
+            "will_scar": 1,
+            "created_turn": "3",
+            "notes": "  verbunden ",
+        }
+
+        self.assertEqual(
+            injury_state.normalize_injury_state(payload),
+            {
+                "id": "inj_1",
+                "title": "Schnittwunde",
+                "severity": "schwer",
+                "effects": ["Blutung", "Schmerz"],
+                "healing_stage": "heilend",
+                "will_scar": True,
+                "created_turn": 3,
+                "notes": "verbunden",
+            },
+        )
+
+    def test_state_engine_normalize_injury_state_wrapper_preserves_contract(self) -> None:
+        self.assertIn("normalize_injury_state", state_engine.EXPORTED_SYMBOLS)
+        self.assertIs(state_engine.normalize_injury_state, injury_state.normalize_injury_state)
+        self.assertIsNone(state_engine.normalize_injury_state({}))
+        self.assertEqual(
+            state_engine.normalize_injury_state(
+                {"title": "Prellung", "severity": "falsch", "healing_stage": "unknown"}
+            ),
+            {
+                "id": "inj_test",
+                "title": "Prellung",
+                "severity": "leicht",
+                "effects": [],
+                "healing_stage": "frisch",
+                "will_scar": False,
+                "created_turn": 0,
+                "notes": "",
+            },
+        )
+
+    def test_injury_state_normalize_scar_state_preserves_valid_shape(self) -> None:
+        payload = {
+            "id": "scar_1",
+            "label": "Wangenriss",
+            "origin_injury_id": " inj_1 ",
+            "source": "Duell",
+            "turn_number": "4",
+        }
+
+        self.assertEqual(
+            injury_state.normalize_scar_state(payload),
+            {
+                "id": "scar_1",
+                "title": "Wangenriss",
+                "origin_injury_id": "inj_1",
+                "description": "Duell",
+                "created_turn": 4,
+                "label": "Wangenriss",
+                "source": "Duell",
+                "turn_number": "4",
+            },
+        )
+
+    def test_state_engine_normalize_scar_state_wrapper_preserves_contract(self) -> None:
+        self.assertIn("normalize_scar_state", state_engine.EXPORTED_SYMBOLS)
+        self.assertIs(state_engine.normalize_scar_state, injury_state.normalize_scar_state)
+        self.assertIsNone(state_engine.normalize_scar_state({}))
+        self.assertEqual(
+            state_engine.normalize_scar_state({"title": "Brandmal"}),
+            {
+                "id": "scar_test",
+                "title": "Brandmal",
+                "origin_injury_id": None,
+                "description": "Brandmal",
+                "created_turn": 0,
+            },
+        )
+
     def test_appearance_format_message_by_kind(self) -> None:
         self.assertEqual(
             appearance.format_appearance_message("Mira", "scar_added", "scar", "Wangenriss"),
@@ -216,6 +335,113 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(
             appearance.format_appearance_message("Mira", "unknown", "x", "leuchtet"),
             "Miras Erscheinung verändert sich: leuchtet.",
+        )
+
+    def test_appearance_default_profile_preserves_state_engine_contract(self) -> None:
+        self.assertIn("default_appearance_profile", state_engine.EXPORTED_SYMBOLS)
+        self.assertIs(state_engine.default_appearance_profile, appearance.default_appearance_profile)
+        self.assertEqual(
+            state_engine.default_appearance_profile(),
+            {
+                "height": "average",
+                "build": "neutral",
+                "muscle": 0,
+                "fat": 0,
+                "scars": [],
+                "aura": "none",
+                "eyes": {
+                    "base": "",
+                    "current": "",
+                },
+                "hair": {
+                    "color": "",
+                    "style": "",
+                    "current": "",
+                },
+                "skin_marks": [],
+                "voice_tone": "",
+                "visual_modifiers": [],
+                "summary_short": "",
+                "summary_full": "",
+            },
+        )
+
+    def test_character_state_default_modifiers_preserve_state_engine_contract(self) -> None:
+        self.assertIn("default_character_modifiers", state_engine.EXPORTED_SYMBOLS)
+        self.assertIs(state_engine.default_character_modifiers, state_defaults.default_character_modifiers)
+        self.assertEqual(
+            state_engine.default_character_modifiers(),
+            {
+                "resource_max": [],
+                "derived": [],
+                "appearance_flags": [],
+                "skill_effective": [],
+            },
+        )
+
+    def test_time_state_default_world_time_preserves_state_engine_contract(self) -> None:
+        self.assertIn("default_world_time", state_engine.EXPORTED_SYMBOLS)
+        self.assertIs(state_engine.default_world_time, state_defaults.default_world_time)
+        self.assertEqual(
+            state_engine.default_world_time(),
+            {
+                "day": 1,
+                "month": 1,
+                "year": 1,
+                "time_of_day": "night",
+                "weather": "",
+                "absolute_day": 1,
+            },
+        )
+
+    def test_progression_default_class_current_preserves_state_engine_contract(self) -> None:
+        self.assertIn("default_class_current", state_engine.EXPORTED_SYMBOLS)
+        self.assertIs(state_engine.default_class_current, progression.default_class_current)
+        self.assertEqual(
+            state_engine.default_class_current(),
+            {
+                "id": "",
+                "name": "",
+                "rank": "F",
+                "path_id": "",
+                "path_rank": "F",
+                "element_id": "",
+                "element_tags": [],
+                "level": 1,
+                "level_max": 10,
+                "xp": 0,
+                "xp_next": 100,
+                "class_id": "",
+                "class_name": "",
+                "class_rank": "F",
+                "class_level": 1,
+                "class_level_max": 10,
+                "class_xp": 0,
+                "class_xp_to_next": 100,
+                "affinity_tags": [],
+                "description": "",
+                "class_traits": [],
+                "class_mastery": 0,
+                "ascension": {
+                    "status": "none",
+                    "quest_id": None,
+                    "requirements": [],
+                    "result_hint": None,
+                },
+            },
+        )
+
+    def test_intro_state_default_preserves_state_engine_contract(self) -> None:
+        self.assertIn("default_intro_state", state_engine.EXPORTED_SYMBOLS)
+        self.assertIs(state_engine.default_intro_state, state_defaults.default_intro_state)
+        self.assertEqual(
+            state_engine.default_intro_state(),
+            {
+                "status": "idle",
+                "last_error": "",
+                "last_attempt_at": "",
+                "generated_turn_id": "",
+            },
         )
 
     def test_state_engine_format_appearance_message_wrapper_preserves_contract(self) -> None:

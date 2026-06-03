@@ -9,15 +9,24 @@
 - [x] codex_blocks_for_level -> codex.py (Gruppe A)
 - [x] codex_facts_for_blocks -> codex.py (Gruppe A)
 - [x] codex_seed_for_state -> codex.py (Gruppe D)
+- [x] default_appearance_profile -> app/services/world/appearance.py
 - [x] default_beast_codex_entry -> codex.py (Gruppe D)
+- [x] default_character_modifiers -> app/services/world/state_defaults.py
+- [x] default_class_current -> app/services/world/progression.py
+- [x] default_intro_state -> app/services/world/state_defaults.py
+- [x] default_injury_state -> app/services/world/injury_state.py
 - [x] default_npc_entry -> codex.py (Gruppe C)
 - [x] default_race_codex_entry -> codex.py (Gruppe D)
+- [x] default_scar_state -> app/services/world/injury_state.py
+- [x] default_world_time -> app/services/world/state_defaults.py
 - [x] ensure_world_codex_from_setup -> codex.py (Gruppe D)
 - [x] merge_known_facts_stable -> codex.py (Gruppe A)
 - [x] normalize_codex_alias_text -> codex.py (Gruppe A)
 - [x] normalize_codex_entry_stable -> codex.py (Gruppe A)
+- [x] normalize_injury_state -> app/services/world/injury_state.py
 - [x] normalize_npc_codex_state -> codex.py (Gruppe C)
 - [x] normalize_npc_entry -> codex.py (Gruppe C)
+- [x] normalize_scar_state -> app/services/world/injury_state.py
 - [x] normalize_world_codex_structures -> codex.py (Gruppe A)
 - [x] race_profile_block_facts -> codex.py (Gruppe D)
 - [x] resolve_codex_entity_ids -> codex.py (Gruppe B)
@@ -58,6 +67,14 @@
 - normalize_resource_name -> app/services/world/progression.py
 - normalize_class_current -> app/services/world/progression.py
 - next_character_xp_for_level -> app/services/world/progression.py
+
+## Aufgeloeste Default-State-Abhängigkeiten
+- default_character_modifiers -> app/services/world/state_defaults.py
+- default_intro_state -> app/services/world/state_defaults.py
+- default_world_time -> app/services/world/state_defaults.py
+
+## Aufgeloeste Test-Harness-Abhängigkeiten
+- tests/unit/test_turn_engine.py setzt SKILL_RANK_THRESHOLDS nun explizit im lokalen Harness, damit der Test standalone isoliert laeuft.
 
 ## Offene Tests
 - [ ] Keine neuen Tests geschrieben - Grund: Scope war reines Verschieben/Re-Exportieren ohne neue Testdateien.
