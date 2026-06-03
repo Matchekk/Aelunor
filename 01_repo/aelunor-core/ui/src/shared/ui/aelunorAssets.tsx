@@ -74,7 +74,21 @@ export function AelunorIconFrame({ label, decorative = false, className, childre
 }
 
 interface AelunorSceneBackgroundProps extends HTMLAttributes<HTMLDivElement> {
-  wallpaper?: "aelunor-hybrid" | "hub-reference" | "nachtblau" | "tavern" | "waldlichtung";
+  wallpaper?:
+    | "aelunor-hybrid"
+    | "hub-reference"
+    | "nachtblau"
+    | "tavern"
+    | "waldlichtung"
+    | "wallpaper-ancient-temple-arcane"
+    | "wallpaper-campfire-long-rest"
+    | "wallpaper-city-night-market"
+    | "wallpaper-desert-sandstone-temple"
+    | "wallpaper-dungeon-shattered-causeway"
+    | "wallpaper-forest-glade"
+    | "wallpaper-frostlands-northern-ruins"
+    | "wallpaper-moonlit-crossroads"
+    | "wallpaper-tavern-interior";
   texture?: boolean;
 }
 

@@ -244,6 +244,42 @@
   background-image: url("/static/brand/wallpapers/waldlichtung.png");
 }
 
+.aelunor-scene-background.is-wallpaper-ancient-temple-arcane {
+  background-image: url("/static/brand/wallpapers/wallpaper-ancient-temple-arcane.png");
+}
+
+.aelunor-scene-background.is-wallpaper-campfire-long-rest {
+  background-image: url("/static/brand/wallpapers/wallpaper-campfire-long-rest.png");
+}
+
+.aelunor-scene-background.is-wallpaper-city-night-market {
+  background-image: url("/static/brand/wallpapers/wallpaper-city-night-market.png");
+}
+
+.aelunor-scene-background.is-wallpaper-desert-sandstone-temple {
+  background-image: url("/static/brand/wallpapers/wallpaper-desert-sandstone-temple.png");
+}
+
+.aelunor-scene-background.is-wallpaper-dungeon-shattered-causeway {
+  background-image: url("/static/brand/wallpapers/wallpaper-dungeon-shattered-causeway.png");
+}
+
+.aelunor-scene-background.is-wallpaper-forest-glade {
+  background-image: url("/static/brand/wallpapers/wallpaper-forest-glade.png");
+}
+
+.aelunor-scene-background.is-wallpaper-frostlands-northern-ruins {
+  background-image: url("/static/brand/wallpapers/wallpaper-frostlands-northern-ruins.png");
+}
+
+.aelunor-scene-background.is-wallpaper-moonlit-crossroads {
+  background-image: url("/static/brand/wallpapers/wallpaper-moonlit-crossroads.png");
+}
+
+.aelunor-scene-background.is-wallpaper-tavern-interior {
+  background-image: url("/static/brand/wallpapers/wallpaper-tavern-interior.png");
+}
+
 .aelunor-empty-state {
   position: relative;
 }
