@@ -1,4 +1,5 @@
 import type { SessionLibraryEntry } from "../../../shared/api/contracts";
+import { AelunorDivider, AelunorPanelFrame } from "../../../shared/ui/aelunorAssets";
 
 interface HubHeroProps {
   has_active_session: boolean;
@@ -34,15 +35,13 @@ export function HubHero({
   const heroCode = active_join_code || latest_entry?.join_code || "kein Code";
 
   return (
-    <section className="hub-hero-panel aelunor-frame-host" aria-labelledby="hub-hero-title">
-      <span className="aelunor-arcane-texture-layer" aria-hidden="true" />
-      <span className="aelunor-frame-overlay is-hero" aria-hidden="true" />
+    <AelunorPanelFrame className="hub-hero-panel" variant="hero" texture aria-labelledby="hub-hero-title">
       <div className="hub-hero-watermark" aria-hidden="true">
         <img src="/static/brand/aelunor-icon-512x512.png" alt="" />
       </div>
       <div className="hub-hero-copy">
         <p className="hub-hero-chapter">Campaign Control</p>
-        <span className="aelunor-divider is-small" aria-hidden="true" />
+        <AelunorDivider variant="small" />
         <h1 id="hub-hero-title">{heroTitle}</h1>
         <p className="hub-hero-subtitle">Öffne deine laufende Chronik, gründe eine neue Runde oder tritt per Code an den Spieltisch.</p>
         <p className="hub-hero-description">
@@ -77,6 +76,6 @@ export function HubHero({
           <dd>{heroCode}</dd>
         </div>
       </dl>
-    </section>
+    </AelunorPanelFrame>
   );
 }

@@ -1,4 +1,5 @@
 import type { SessionLibraryEntry } from "../../../shared/api/contracts";
+import { AelunorDivider, AelunorPanelFrame } from "../../../shared/ui/aelunorAssets";
 import { SessionLibraryItem } from "./SessionLibraryItem";
 
 interface SessionLibraryPanelProps {
@@ -11,13 +12,12 @@ interface SessionLibraryPanelProps {
 
 export function SessionLibraryPanel(props: SessionLibraryPanelProps) {
   return (
-    <section className="v1-panel session-library-panel hub-campaigns-panel aelunor-frame-host">
-      <span className="aelunor-frame-overlay is-card" aria-hidden="true" />
+    <AelunorPanelFrame className="v1-panel session-library-panel hub-campaigns-panel" variant="card">
       <div className="v1-panel-head">
         <h2>Meine Kampagnen</h2>
         <span>{props.entries.length} gespeichert</span>
       </div>
-      <span className="aelunor-divider is-small" aria-hidden="true" />
+      <AelunorDivider variant="small" />
       <p className="status-muted">Fortsetzen ist die Standardaktion. Bearbeiten/Entfernen bleiben sekundär.</p>
       <div className="session-library-body">
         {props.entries.length === 0 ? (
@@ -37,6 +37,6 @@ export function SessionLibraryPanel(props: SessionLibraryPanelProps) {
           ))
         )}
       </div>
-    </section>
+    </AelunorPanelFrame>
   );
 }

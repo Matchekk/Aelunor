@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { JoinCampaignRequest } from "../../../shared/api/contracts";
+import { AelunorDivider, AelunorPanelFrame } from "../../../shared/ui/aelunorAssets";
 import { WaitingInline, WaitingSurface } from "../../../shared/waiting/components";
 import { normalizeJoinCode, validateJoinInput } from "../selectors";
 
@@ -37,14 +38,13 @@ export function JoinCampaignCard({ is_pending, error_message, default_display_na
   };
 
   return (
-    <section className="v1-panel session-card hub-action-card aelunor-frame-host">
-      <span className="aelunor-frame-overlay is-card" aria-hidden="true" />
+    <AelunorPanelFrame className="v1-panel session-card hub-action-card" variant="card">
       <WaitingSurface target="hub_join" />
       <div className="v1-panel-head">
         <h2>Kampagne beitreten</h2>
         <span>Code eingeben</span>
       </div>
-      <span className="aelunor-divider is-small" aria-hidden="true" />
+      <AelunorDivider variant="small" />
       <WaitingInline target="hub_join" className="hub-waiting-inline" />
       <p className="status-muted">Schneller Einstieg in einen bestehenden Raum über Join-Code.</p>
       <form
@@ -88,6 +88,6 @@ export function JoinCampaignCard({ is_pending, error_message, default_display_na
       </form>
       {localError ? <div className="session-feedback error">{localError}</div> : null}
       {error_message ? <div className="session-feedback error">{error_message}</div> : null}
-    </section>
+    </AelunorPanelFrame>
   );
 }
