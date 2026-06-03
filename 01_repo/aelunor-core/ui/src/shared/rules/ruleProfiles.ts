@@ -98,7 +98,7 @@ export const DEFAULT_RULE_PROFILE_ID: RuleProfileId = "cinematic_ai";
 export function findRuleProfileDefinition(profile_id: string | null | undefined): RuleProfileDefinition {
   return (
     RULE_PROFILE_DEFINITIONS.find((definition) => definition.id === profile_id) ??
-    RULE_PROFILE_DEFINITIONS[0]
+    RULE_PROFILE_DEFINITIONS[0]!
   );
 }
 

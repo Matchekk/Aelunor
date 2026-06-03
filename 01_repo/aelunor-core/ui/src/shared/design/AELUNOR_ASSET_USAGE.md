@@ -2,6 +2,8 @@
 
 Assets are UI semantics, not just images. Before using a file from `public/brand`, check `aelunor.asset-manifest.json` for its role, allowed usage, forbidden usage, intended component, layer, and accessibility rule.
 
+For new assets or new asset patterns, start with `AELUNOR_ASSET_PRODUCTION_PROTOCOL.md` and fill out `AELUNOR_ASSET_REQUEST_TEMPLATE.md` before adding runtime files.
+
 ## Source Of Truth
 
 | Path | Meaning |
@@ -95,4 +97,4 @@ Run this from `01_repo/aelunor-core`:
 python scripts/check_ui_asset_usage.py
 ```
 
-The script scans source files, skips build/runtime folders, and reports forbidden corner backgrounds, frame stretching, wallpaper-in-card patterns, and direct UI-kit references outside approved wrappers.
+The script scans source files, skips build/runtime folders, validates manifest paths/roles, and reports forbidden corner backgrounds, frame stretching, wallpaper-in-card patterns, direct UI-kit references outside approved wrappers, decorative UI-kit images without accessibility markers, and high numeric z-index values in `ui/src`.

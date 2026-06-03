@@ -5,6 +5,15 @@
     "frontendRuntime": "ui/public/brand",
     "legacyRuntime": "app/static/brand"
   },
+  "optionalAssetFields": {
+    "sourceFile": "Original design/source file path when distinct from runtime assets.",
+    "exportVariants": "Named export variants with format, size, and runtime path.",
+    "designNotes": "Production notes such as safe zones, slice edges, and visual constraints.",
+    "agentInstructions": "Short implementation instructions that coding agents must follow."
+  },
+  "supportedSubroles": {
+    "panel-edge": "Panel edge/border ornament class. Use role frame and intendedComponent AelunorPanelFrame. Future files should be named panel-edge-top/right/bottom/left."
+  },
   "assets": [
     {
       "id": "aelunor-icon-512",

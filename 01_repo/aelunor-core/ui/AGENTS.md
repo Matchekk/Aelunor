@@ -11,4 +11,4 @@
 - Framed panels must use `position: relative` and `isolation: isolate`.
 - Do not add random `z-index` values. Use Aelunor z-index tokens/classes.
 - Do not encode normal UI text into images.
-- Do not create new asset patterns without updating the asset manifest and usage guide.
+- Do not create new asset patterns without following `src/shared/design/AELUNOR_ASSET_PRODUCTION_PROTOCOL.md` and updating the asset manifest, usage guide, and tests.
