@@ -4,14 +4,26 @@
   overflow: hidden;
 }
 
-.aelunor-frame-host > :not(.aelunor-frame-overlay):not(.aelunor-divider):not(.aelunor-arcane-texture-layer) {
+.aelunor-frame-host > :not(.aelunor-frame-overlay):not(.aelunor-divider):not(.aelunor-arcane-texture-layer):not(.aelunor-corner),
+.aelunor-panel-content {
   position: relative;
-  z-index: 2;
+  z-index: var(--ael-z-content);
+}
+
+.aelunor-panel-content {
+  display: contents;
+}
+
+.aelunor-panel-content > * {
+  position: relative;
+  z-index: var(--ael-z-content);
 }
 
 .aelunor-frame-overlay,
 .aelunor-divider,
-.aelunor-arcane-texture-layer {
+.aelunor-arcane-texture-layer,
+.aelunor-corner,
+.aelunor-scene-background {
   pointer-events: none;
   user-select: none;
 }
@@ -19,10 +31,10 @@
 .aelunor-frame-overlay {
   position: absolute;
   inset: 0.18rem;
-  z-index: 1;
+  z-index: var(--ael-z-surface);
   background-repeat: no-repeat;
   background-position: center;
-  background-size: 100% 100%;
+  background-size: contain;
   opacity: 0.38;
   mix-blend-mode: screen;
   filter:
@@ -41,6 +53,53 @@
   filter:
     drop-shadow(0 0 20px rgba(125, 220, 255, 0.22))
     drop-shadow(0 0 2px rgba(242, 245, 247, 0.34));
+}
+
+.aelunor-frame-overlay.is-modal,
+.aelunor-frame-overlay.is-compact {
+  background-image: url("/static/brand/ui-kit/frame-card.png");
+}
+
+.aelunor-frame-overlay.is-compact {
+  opacity: 0.28;
+}
+
+.aelunor-corner {
+  position: absolute;
+  z-index: var(--ael-z-ornament);
+  width: clamp(4.2rem, 18%, 8.8rem);
+  aspect-ratio: 176 / 130;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  opacity: 0.74;
+  filter:
+    drop-shadow(0 0 12px rgba(125, 220, 255, 0.18))
+    drop-shadow(0 0 1px rgba(242, 245, 247, 0.3));
+}
+
+.aelunor-corner-tl {
+  top: -0.18rem;
+  left: -0.18rem;
+  background-image: url("/static/brand/ui-kit/panel-corner-tl.png");
+}
+
+.aelunor-corner-tr {
+  top: -0.18rem;
+  right: -0.18rem;
+  background-image: url("/static/brand/ui-kit/panel-corner-tr.png");
+}
+
+.aelunor-corner-bl {
+  bottom: -0.18rem;
+  left: -0.18rem;
+  background-image: url("/static/brand/ui-kit/panel-corner-bl.png");
+}
+
+.aelunor-corner-br {
+  right: -0.18rem;
+  bottom: -0.18rem;
+  background-image: url("/static/brand/ui-kit/panel-corner-br.png");
 }
 
 .aelunor-divider {
@@ -69,7 +128,7 @@
 .aelunor-arcane-texture-layer {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: var(--ael-z-texture);
   opacity: 0.16;
   background:
     radial-gradient(circle at 20% 0%, rgba(125, 220, 255, 0.2), transparent 16rem),
@@ -110,16 +169,20 @@
 
 .aelunor-icon-frame {
   position: relative;
+  display: inline-grid;
+  place-items: center;
+  isolation: isolate;
 }
 
 .hub-sidebar-link.is-active .hub-sidebar-icon.has-image {
   position: relative;
-  z-index: 0;
+  z-index: var(--ael-z-background);
 }
 
+.aelunor-icon-frame-content,
 .hub-sidebar-link.is-active .hub-sidebar-icon.has-image img {
   position: relative;
-  z-index: 1;
+  z-index: var(--ael-z-content);
 }
 
 .aelunor-icon-frame::before,
@@ -127,11 +190,94 @@
   content: "";
   position: absolute;
   inset: -0.3rem;
-  z-index: 0;
+  z-index: var(--ael-z-surface);
   pointer-events: none;
   background: url("/static/brand/ui-kit/icon-frame-circle.png") center / contain no-repeat;
   opacity: 0.72;
   filter: drop-shadow(0 0 14px rgba(125, 220, 255, 0.3));
+}
+
+.aelunor-scene-background {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ael-z-background);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.aelunor-scene-background::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(3, 7, 13, 0.18), rgba(3, 7, 13, 0.74));
+}
+
+.aelunor-scene-background.has-texture::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.12;
+  background: url("/static/brand/ui-kit/texture-arcane-noise.webp") center / 18rem auto repeat;
+  mix-blend-mode: screen;
+}
+
+.aelunor-scene-background.is-aelunor-hybrid {
+  background-image: url("/static/brand/wallpapers/aelunor-hybrid.png");
+}
+
+.aelunor-scene-background.is-hub-reference {
+  background-image: url("/static/brand/wallpapers/hub-reference.png");
+}
+
+.aelunor-scene-background.is-nachtblau {
+  background-image: url("/static/brand/wallpapers/nachtblau.png");
+}
+
+.aelunor-scene-background.is-tavern {
+  background-image: url("/static/brand/wallpapers/tavern.png");
+}
+
+.aelunor-scene-background.is-waldlichtung {
+  background-image: url("/static/brand/wallpapers/waldlichtung.png");
+}
+
+.aelunor-scene-background.is-wallpaper-ancient-temple-arcane {
+  background-image: url("/static/brand/wallpapers/wallpaper-ancient-temple-arcane.png");
+}
+
+.aelunor-scene-background.is-wallpaper-campfire-long-rest {
+  background-image: url("/static/brand/wallpapers/wallpaper-campfire-long-rest.png");
+}
+
+.aelunor-scene-background.is-wallpaper-city-night-market {
+  background-image: url("/static/brand/wallpapers/wallpaper-city-night-market.png");
+}
+
+.aelunor-scene-background.is-wallpaper-desert-sandstone-temple {
+  background-image: url("/static/brand/wallpapers/wallpaper-desert-sandstone-temple.png");
+}
+
+.aelunor-scene-background.is-wallpaper-dungeon-shattered-causeway {
+  background-image: url("/static/brand/wallpapers/wallpaper-dungeon-shattered-causeway.png");
+}
+
+.aelunor-scene-background.is-wallpaper-forest-glade {
+  background-image: url("/static/brand/wallpapers/wallpaper-forest-glade.png");
+}
+
+.aelunor-scene-background.is-wallpaper-frostlands-northern-ruins {
+  background-image: url("/static/brand/wallpapers/wallpaper-frostlands-northern-ruins.png");
+}
+
+.aelunor-scene-background.is-wallpaper-moonlit-crossroads {
+  background-image: url("/static/brand/wallpapers/wallpaper-moonlit-crossroads.png");
+}
+
+.aelunor-scene-background.is-wallpaper-tavern-interior {
+  background-image: url("/static/brand/wallpapers/wallpaper-tavern-interior.png");
 }
 
 .aelunor-empty-state {
@@ -164,6 +310,7 @@
   .aelunor-frame-overlay,
   .aelunor-divider,
   .aelunor-arcane-texture-layer,
+  .aelunor-corner,
   .aelunor-button-ornate::before {
     transition: none;
   }

@@ -89,6 +89,15 @@
   --v1-duration-fast: 140ms;
   --v1-duration-base: 220ms;
   --v1-duration-slow: 320ms;
+
+  --ael-z-background: 0;
+  --ael-z-texture: 1;
+  --ael-z-surface: 2;
+  --ael-z-content: 3;
+  --ael-z-ornament: 4;
+  --ael-z-floating: 10;
+  --ael-z-modal: 20;
+  --ael-z-toast: 30;
 }
 
 :root[data-font-preset="classic"] {

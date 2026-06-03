@@ -1,4 +1,5 @@
 import type { SessionLibraryEntry } from "../../../shared/api/contracts";
+import { AelunorPanelFrame } from "../../../shared/ui/aelunorAssets";
 
 interface HubContextRailProps {
   session_count: number;
@@ -45,8 +46,7 @@ export function HubContextRail({
 }: HubContextRailProps) {
   return (
     <aside className="hub-context-rail" aria-label="Campaign Kontext">
-      <section className="hub-context-panel aelunor-frame-host">
-        <span className="aelunor-frame-overlay is-card" aria-hidden="true" />
+      <AelunorPanelFrame className="hub-context-panel" variant="compact">
         <div className="hub-context-head">
           <span>Campaign Status</span>
           <strong>{has_active_session ? "Session Active" : "Standby"}</strong>
@@ -59,10 +59,9 @@ export function HubContextRail({
           <span>Join Code</span>
           <strong>{active_join_code || latest_entry?.join_code || "n/a"}</strong>
         </div>
-      </section>
+      </AelunorPanelFrame>
 
-      <section className="hub-context-panel aelunor-frame-host">
-        <span className="aelunor-frame-overlay is-card" aria-hidden="true" />
+      <AelunorPanelFrame className="hub-context-panel" variant="compact">
         <div className="hub-context-head">
           <span>Current Chronicle</span>
           <strong>{latest_entry?.campaign_title ?? latest_entry?.label ?? "Noch keine Chronik"}</strong>
@@ -73,10 +72,9 @@ export function HubContextRail({
             : "Erstelle oder join eine Kampagne, um die Chronik zu starten."}
         </p>
         <div className="hub-mini-map" aria-hidden="true" />
-      </section>
+      </AelunorPanelFrame>
 
-      <section className="hub-context-panel aelunor-frame-host">
-        <span className="aelunor-frame-overlay is-card" aria-hidden="true" />
+      <AelunorPanelFrame className="hub-context-panel" variant="compact">
         <div className="hub-context-head">
           <span>Active Objective</span>
           <strong>{active_campaign_id ? "Campaign State laden" : "Erste Kampagne erstellen"}</strong>
@@ -86,12 +84,11 @@ export function HubContextRail({
             ? "Lokale Zugangsdaten sind vorhanden. Fortsetzen prüft den Server-State vor dem Einstieg."
             : "Der Hub wartet auf eine neue Host- oder Join-Aktion."}
         </p>
-      </section>
+      </AelunorPanelFrame>
 
-      <section className="hub-context-panel aelunor-frame-host">
-        <span className="aelunor-frame-overlay is-card" aria-hidden="true" />
+      <AelunorPanelFrame className="hub-context-panel" variant="compact">
         <ArcaneStatusWidget has_active_session={has_active_session} />
-      </section>
+      </AelunorPanelFrame>
     </aside>
   );
 }

@@ -1,4 +1,5 @@
 import type { SessionLibraryEntry } from "../../../shared/api/contracts";
+import { AelunorDivider, AelunorPanelFrame } from "../../../shared/ui/aelunorAssets";
 import { WaitingInline, WaitingSectionOverlay } from "../../../shared/waiting/components";
 
 interface HubContinuationPanelProps {
@@ -30,14 +31,13 @@ export function HubContinuationPanel({
   const latestPending = latest_entry ? resume_pending_campaign_id === latest_entry.campaign_id : false;
 
   return (
-    <section className="v1-panel hub-continuation aelunor-frame-host">
-      <span className="aelunor-frame-overlay is-card" aria-hidden="true" />
+    <AelunorPanelFrame className="v1-panel hub-continuation" variant="card">
       <WaitingSectionOverlay target="hub_resume" />
       <div className="v1-panel-head">
         <h2>Weiter spielen</h2>
         <span>Primäraktion</span>
       </div>
-      <span className="aelunor-divider is-small" aria-hidden="true" />
+      <AelunorDivider variant="small" />
       <WaitingInline target="hub_resume" className="hub-waiting-inline" />
       {has_active_session ? (
         <div className="hub-continuation-block">
@@ -77,6 +77,6 @@ export function HubContinuationPanel({
       )}
       {status_message ? <div className="session-feedback success">{status_message}</div> : null}
       {resume_error ? <div className="session-feedback error">{resume_error}</div> : null}
-    </section>
+    </AelunorPanelFrame>
   );
 }
