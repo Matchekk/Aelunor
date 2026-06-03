@@ -10,6 +10,7 @@ venv/
 node_modules/
 dist/
 build/
+release/
 .vite/
 coverage/
 .DS_Store
@@ -26,6 +27,7 @@ yarn-error.log*
 pnpm-debug.log*
 /package-lock.json
 **/.runtime/
+**/.runtime-verify/
 01_repo/aelunor-core/.tmp-check/
 
 07_runtime/campaigns/

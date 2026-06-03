@@ -59,11 +59,14 @@ from app.services import sheets_service
 from app.services import state_engine
 from app.services import turn_engine
 from app.services import turn_service
+from app.runtime_config import bundled_path, resolve_runtime_config
 
-BASE_DIR = os.path.dirname(__file__)
-UI_V1_DIST_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "ui", "dist"))
+RUNTIME_CONFIG = resolve_runtime_config()
+BASE_DIR = str(bundled_path("app"))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+UI_V1_DIST_DIR = str(bundled_path("ui", "dist"))
 UI_V1_ASSETS_DIR = os.path.join(UI_V1_DIST_DIR, "assets")
-DATA_DIR = os.getenv("DATA_DIR", "/data")
+DATA_DIR = str(RUNTIME_CONFIG.data_dir)
 LEGACY_STATE_PATH = os.path.join(DATA_DIR, "state.json")
 CAMPAIGNS_DIR = os.path.join(DATA_DIR, "campaigns")
 
@@ -1710,13 +1713,13 @@ AUTO_INJURY_PATTERNS = (
 )
 
 app = FastAPI(title="Aelunor")
-app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/v1/assets", StaticFiles(directory=UI_V1_ASSETS_DIR, check_dir=False), name="v1-assets")
 ensure_campaign_storage()
 
 @app.get("/", response_class=HTMLResponse)
 def index() -> str:
-    with open(os.path.join(BASE_DIR, "static", "index.html"), "r", encoding="utf-8") as f:
+    with open(os.path.join(STATIC_DIR, "index.html"), "r", encoding="utf-8") as f:
         return f.read()
 
 def _v1_index_html() -> str:

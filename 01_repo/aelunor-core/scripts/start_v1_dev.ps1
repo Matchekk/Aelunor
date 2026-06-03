@@ -70,6 +70,9 @@ Ensure-Port8080Free
 
 Push-Location $coreDir
 try {
+  $previousDataDir = $env:DATA_DIR
+  $env:DATA_DIR = $runtimeDir
+
   Write-Host "[dev-v1] starting UI build watch"
   $uiWatch = Start-Process -FilePath "npm.cmd" -ArgumentList @("run", "build", "--", "--watch") -WorkingDirectory $uiDir -PassThru
 
@@ -92,5 +95,6 @@ try {
   Write-Host "[dev-v1] stop with: powershell -ExecutionPolicy Bypass -File scripts/stop_v1_dev.ps1"
 }
 finally {
+  $env:DATA_DIR = $previousDataDir
   Pop-Location
 }
