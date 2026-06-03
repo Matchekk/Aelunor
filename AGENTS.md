@@ -1,106 +1,103 @@
 # AGENTS.md
 
-## 1. Projektziel
+## Zweck
 
-Aelunor ist ein lokales, browserbasiertes Multiplayer-Story-RPG mit KI-GM. Das Ziel ist ein stabiler, spielbarer Kernflow: Kampagne erstellen, Welt und Charaktere einrichten, Slots claimen, gemeinsam spielen, Story-Turns erzeugen, Canon/Patch-State konsistent halten und Live-Updates per Presence/SSE anzeigen.
+Diese Datei enthaelt verbindliche Arbeitsregeln fuer Coding-Agents im Aelunor-Repository. Sie soll helfen, zielgerichtet zu arbeiten, State-/UI-Regressions zu vermeiden und Aenderungen reviewbar zu halten.
 
-Prioritaet: MVP-Stabilitaet vor Feature-Ausbau. Story-first UX hat Vorrang vor Admin- oder Analyse-Dashboards.
+## Projektueberblick
 
-## 2. Aktive Projektpfade
+Aelunor ist ein lokales, UI-getriebenes Fantasy-/Storytelling-RPG mit FastAPI-Backend, React/Vite-v1-UI, JSON-basierter Kampagnenpersistenz, optionaler Ollama-Narrator-Logik und Windows-App-Packaging.
 
-- `01_repo/aelunor-core/`: aktiver Code-Stack.
-- `01_repo/aelunor-core/app/`: FastAPI-Backend, Legacy-UI, statische Assets und Service-Layer.
-- `01_repo/aelunor-core/app/main.py`: App-Wiring, Runtime-Konfiguration, Router-Composition und zentrale Glue-Funktionen.
-- `01_repo/aelunor-core/app/services/`: Backend-Domainlogik fuer Campaigns, Setup, Claims, Turns, State, Boards, Context, Presence und Sheets.
-- `01_repo/aelunor-core/app/routers/`: HTTP-Router um die Service-Layer.
-- `01_repo/aelunor-core/app/static/`: Legacy-UI. Nicht weiter ausbauen, ausser ausdruecklich angefordert.
-- `01_repo/aelunor-core/ui/`: React/Vite-v1-UI. Neue UI-Arbeit bevorzugt hier.
-- `01_repo/aelunor-core/tests/`: Python-Tests.
-- `01_repo/aelunor-core/scripts/`: technische Repo-Checks und Wartungsskripte.
-- `02_docs/`: Produkt- und Architektur-Dokumentation.
-- `05_prompts/`: Prompt-Bibliothek.
-- `07_runtime/`: lokale Runtime-Daten. Nicht fuer Tests oder Experimente beschreiben, ausser der Nutzer fordert es explizit.
+Fokus:
 
-## 3. Architekturregeln
+- stabile App-Architektur und lokale Start-/Build-Flows
+- saubere Campaign-, Claim-, Turn-, Canon- und Presence-State-Flows
+- modulare UI mit Story-first UX
+- langfristig wartbare Story-/Canon-/Narrator-Logik
 
-- Halte Aenderungen klein, reviewbar und am bestehenden Modulzuschnitt orientiert.
-- Keine grossen Refactorings ohne kurzen Plan, betroffene Module, Migrationsrisiken und Validierungsstrategie.
-- Bewahre oeffentliche Contracts: HTTP-API, JSON-State-Shape, Campaign-Dateien, Setup-Catalog-Struktur, Turn-Record-Format und UI-Erwartungen.
-- Service-Logik gehoert in `app/services/`; Router bleiben duenne HTTP-Adapter.
-- `app/main.py` ist Wiring/Composition. Neue Fachlogik dort nur, wenn sie bestehendes Wiring ergaenzt und nicht sinnvoll in Services passt.
-- State-Aenderungen muessen deterministisch, validierbar und reload-sicher sein.
-- Keine neue Dependency ohne klare Begruendung, vorhandene Alternativen und Update der relevanten Installationsdateien.
+Wichtige Pfade:
 
-## 4. Backend-Regeln
+- `01_repo/aelunor-core/`: aktiver Code-Stack
+- `01_repo/aelunor-core/app/`: FastAPI, Router, Services, Legacy-UI, Assets
+- `01_repo/aelunor-core/app/services/`: Domain- und State-Logik
+- `01_repo/aelunor-core/app/routers/`: duenne HTTP-Adapter
+- `01_repo/aelunor-core/ui/`: React/Vite-v1-UI; neue UI-Arbeit bevorzugt hier
+- `01_repo/aelunor-core/tests/`: Backend-Tests
+- `01_repo/aelunor-core/scripts/`: Checks, Dev-Start, Packaging
+- `02_docs/`: Produkt-/Architektur-Dokumentation
+- `07_runtime/`: lokale Runtime-Daten; nicht fuer Tests oder Experimente benutzen
 
-- Bevorzuge Service-Tests fuer Fachlogik und kleine Integrationstests fuer Kernflows.
-- Verwende Dependency Injection der bestehenden Service-Dependency-Dataclasses statt globales Monkeypatching, wenn moeglich.
-- Persistenz ist JSON-basiert. Tests muessen temporaere Datenpfade oder In-Memory-/Temp-Stores nutzen.
-- Bestehende Daten in `07_runtime/` duerfen nicht veraendert, geloescht oder als Testfixture missbraucht werden.
-- Fehlerpfade sollen HTTP-konforme `HTTPException`s oder bestehende Error-Modelle nutzen.
-- Auth-, Host-, Claim- und Phase-Regeln nicht umgehen, ausser ein Test benennt den Bypass explizit als Harness.
-- Ollama/LLM-Aufrufe in Tests immer faken oder stubben.
+## Arbeitsweise fuer Agents
 
-## 5. Frontend-Regeln
+- Erst verstehen, dann aendern.
+- Vor Aenderungen relevante Dateien, Tests und lokale Konventionen lesen.
+- Nicht blind grossflaechig refactoren.
+- Kleine, nachvollziehbare Aenderungen bevorzugen.
+- Bestehende Patterns, Ordnergrenzen und Public Contracts respektieren.
+- Bei unklarer Architektur zuerst vorhandene Konventionen suchen.
+- Aenderungen so umsetzen, dass sie reviewbar bleiben.
+- Keine kosmetischen Massenaenderungen neben Feature-/Bugfix-Arbeit.
+- Legacy-UI unter `app/static/` nur fuer Bugfixes, Kompatibilitaet oder explizite Aufgaben erweitern.
 
-- Neue Frontend-Arbeit bevorzugt in der React/Vite-v1-UI unter `01_repo/aelunor-core/ui/`.
-- Legacy-UI in `app/static/` nur fuer Bugfixes, Kompatibilitaet oder ausdruecklich angeforderte Arbeit erweitern.
-- Story-first UX: Spieleraktionen, aktueller Turn, GM-Text, Claims, Setup-Fortschritt und spielbare Lage haben Vorrang.
-- Keine Admin-Dashboard-Expansion, solange der Spielkern nicht direkt davon profitiert.
-- UI-State muss Backend-State respektieren; keine eigene parallele Wahrheit fuer Campaign-, Claim-, Turn- oder Canon-Daten einfuehren.
-- Bei UX-Aenderungen mobile und Desktop-Layouts bedenken.
+## Codegroessen und Modularitaet
 
-## 6. Game-/Narrator-/Canon-Regeln
+- Keine neue oder geaenderte Code-Datei ueber 300 Zeilen ohne sachlichen Grund.
+- Wenn eine Datei ueber 300 Zeilen waechst, pruefen, ob Komponenten, Hooks, Services, Utilities, Types oder Tests ausgelagert werden sollten.
+- Keine Funktionen ueber ca. 80 Zeilen ohne Begruendung.
+- Keine Komponenten mit mehreren Verantwortlichkeiten.
+- Keine God-Objects, riesigen Manager-Dateien oder zentralen Dump-Dateien fuer alles.
+- Duplikation vermeiden, aber nicht durch zu fruehe Abstraktion verschlimmern.
+- Bestehende grosse Dateien nicht zwanghaft in einem Task zerreissen; bei Bearbeitung aber keine weitere Unordnung hinzufuegen.
+- Jede Ausnahme kurz im Abschlussbericht begruenden.
 
+## Architekturregeln
+
+- UI, Domain-Logik, Persistenz, API/IO und Tests sauber trennen.
+- Service-Logik gehoert in `app/services/`; Router bleiben duenne Adapter.
+- `app/main.py` ist Wiring/Composition, kein Ablageort fuer neue Fachlogik.
+- State-Aenderungen zentral, nachvollziehbar, reload-sicher und typisiert halten.
+- Keine versteckten Side Effects in UI-Komponenten.
+- Story-/Canon-/Narrator-Logik nicht direkt in zufaellige UI-Komponenten schreiben.
+- Wiederverwendbare Logik in passende Module auslagern.
+- Dateinamen und Ordnerstruktur sollen Zweck und Verantwortlichkeit klar zeigen.
+- Bestehende Architektur nicht umgehen, nur weil es schneller geht.
+- Public Contracts bewahren: HTTP-API, JSON-State-Shape, Campaign-Dateien, Setup-Catalog, Turn-Records, UI-Erwartungen.
+
+## UI/UX-Regeln
+
+- Neue UI-Arbeit bevorzugt unter `01_repo/aelunor-core/ui/`.
+- Keine Dummy-UI bauen, die nicht an echten State oder echte Datenfluesse anschliessbar ist.
+- Keine harten Pixel-Fixes ohne responsives Denken.
+- Keine neuen Designsysteme neben dem bestehenden Design erfinden.
+- Bestehende Theme-, Style-, Wallpaper-, Asset- und Layout-Patterns respektieren.
+- Fuer UI-Assets zusaetzlich `01_repo/aelunor-core/ui/AGENTS.md` und relevante `src/shared/design/*` Regeln beachten.
+- Background-Art, UI-Layer und interaktive Elemente gedanklich trennen.
+- UI-Aenderungen muessen visuell pruefbar sein.
+- Bei UI-Aenderungen Screenshots, Browser-Smoke oder klare manuelle Pruefpfade im Abschluss nennen.
+
+## Story-, Canon- und Game-Logic-Regeln
+
+- Canon-State darf nicht willkuerlich ueberschrieben werden.
 - Schutz des Kernloops: Setup -> Claim -> Character Setup -> Play -> Turn -> Persist/Reload.
-- Narrator-Ausgaben muessen Canon/Patch-State respektieren. Sichtbare Story-Aenderungen sollen, wo relevant, strukturiert im State landen.
-- Turn-/Canon-Aenderungen brauchen Tests oder mindestens einen konkreten Testplan mit Fake Narrator.
-- Keine echten LLM-/Ollama-Calls in automatisierten Tests.
-- Balancing- und Tuningwerte nach Moeglichkeit datengetrieben halten. Hartcodierte Werte nur als klar erkennbare Prototype-Konstanten.
-- Keine ueberdimensionierten Progression-, Economy- oder Multiplayer-Systeme ohne ausdruecklichen Scope.
-- Patch-State, Turn-Record, Timeline, Recent Story, Memory Summary und Campaign Phase muessen nach Reload konsistent bleiben.
+- Story-Progression muss nachvollziehbar, reproduzierbar und testbar bleiben.
+- Narrator-/LLM-Ausgaben duerfen nicht ungeprueft strukturellen Spielstatus zerstoeren.
+- Game-State, Session-State, Presence-State und persistierte Daten klar unterscheiden.
+- Presence/SSE ist Live-Sync, nicht persistente Wahrheit.
+- Keine Magic Strings fuer zentrale Story-/State-Schluessel, wenn Konstanten oder Types sinnvoll sind.
+- Neue Regeln muessen Edge Cases beruecksichtigen: leere Party, fehlender Save, kaputte Daten, Migration alter Daten, abgebrochene LLM-Antworten.
+- Keine echten Ollama-/LLM-Calls in automatisierten Tests; Fake Narrator, Stubs oder Dependency Injection nutzen.
 
-## 7. Multiplayer-/Presence-Regeln
+## Tests und Verifikation
 
-- Claims, Host-Rechte und Player-Token sind Kerncontracts. Aenderungen daran besonders vorsichtig testen.
-- Presence/SSE ist Live-Sync, nicht persistente Wahrheit. Persistente Wahrheit bleibt Campaign JSON/State.
-- Blocking Actions und Live Activity muessen bei Fehlern sauber beendet werden.
-- Repeated actions, Retry, Undo, Pause/Resume und Reload duerfen keine ungueltigen Zwischenzustaende erzeugen.
-- Bei Multiplayer-Aenderungen mindestens Host, geclaimter Spieler, fremder Spieler und unautorisierter Zugriff als Faelle bedenken.
+- Nach Codeaenderungen passende Tests, Typechecks, Lints oder Builds ausfuehren.
+- Wenn nicht alle Tests sinnvoll sind, gezielt relevante Tests ausfuehren und begruenden.
+- Keine Erfolgsmeldung ohne echte Verifikation.
+- Bei nicht ausfuehrbaren Tests ehrlich sagen, warum sie nicht liefen.
+- Neue Logik nach Moeglichkeit mit Tests absichern.
+- Bugfixes sollen Regressionstests bekommen, wenn der Aufwand vertretbar ist.
+- Tests duerfen nur temporaere Datenpfade oder In-Memory-/Temp-Stores nutzen; `07_runtime/` bleibt unberuehrt.
 
-## 8. Testing-Regeln
-
-- Vor Testarbeit vorhandene Teststruktur pruefen.
-- Backend-Tests liegen unter `01_repo/aelunor-core/tests/`.
-- Kein Docker-Start fuer normale Tests.
-- Kein echter Ollama-Call in Tests. Verwende Fake Narrator, Stub-Funktionen oder injizierte Service-Dependencies.
-- Tests duerfen nur temporaere Daten schreiben. `07_runtime/` bleibt unberuehrt.
-- Bei Turn-/Canon-/State-Aenderungen pruefen: Phase, Turn-Zaehler, Timeline, aktiver Turn-Status, Claims, State vor/nach Reload.
-- Bei Frontend-Aenderungen passende Node-/Type-/Build-Checks ausfuehren, soweit verfuegbar.
-- Wenn ein Check nicht laeuft, dokumentiere Befehl, Fehler, wahrscheinliche Ursache und naechsten Fix.
-
-## 9. Doku-Regeln
-
-- Dokumentation knapp und wartbar halten.
-- README nur fuer Setup, Start, Konfiguration und wichtige Checks erweitern.
-- Architektur- oder Produktdetails gehoeren bevorzugt nach `02_docs/`.
-- Neue Tests oder wichtige Workflows sollen kurz ausfuehrbar beschrieben werden.
-- Keine veralteten Docker-, Ollama- oder Datenpfad-Hinweise stehen lassen.
-
-## 10. Guardrails/Non-Goals
-
-- Kein wildes Feature-Bloating.
-- Keine grossen Architekturumbauten ohne Plan.
-- Keine neue Dependency ohne Begruendung.
-- Keine produktiven Runtime-Daten fuer Tests veraendern.
-- Keine UI-E2E-Browser-Tests als Ersatz fuer Backend-Smoke-Tests.
-- Keine Erweiterung der Legacy-UI, ausser der Nutzer fordert sie explizit.
-- Keine Admin-/Analytics-/Tooling-Oberflaechen, wenn der Story-Spielkern nicht direkt davon profitiert.
-- Keine Multiplayer-, Economy- oder Progression-Grosssysteme ohne klaren Scope.
-
-## 11. Empfohlene Check-Kommandos
-
-Aus `01_repo/aelunor-core/`:
+Empfohlene Checks aus `01_repo/aelunor-core/`:
 
 ```powershell
 python -m pytest tests -q
@@ -111,28 +108,76 @@ python scripts/check_codex_system.py
 python scripts/check_element_system.py
 ```
 
-Fuer gezielte Backend-Arbeit:
+Gezielte Backend-Checks:
 
 ```powershell
 python -m pytest tests/unit -q
 python -m pytest tests/integration -q
 ```
 
-Fuer UI-v1-Arbeit zuerst `01_repo/aelunor-core/ui/package.json` lesen und die dort definierten Scripts verwenden.
+UI-v1-Checks aus `01_repo/aelunor-core/ui/`:
 
-## 12. Output-Konvention fuer Codex-Antworten
+```powershell
+npm run typecheck
+npm run test
+npm run build
+```
 
-Bei Code-Aenderungen knapp berichten:
+Windows-App/Packaging:
 
-- Geaenderte Dateien.
-- Zusammenfassung der Verhaltensaenderung.
-- Tests und Checks mit exakten Befehlen.
-- Bekannte Risiken oder nicht abgedeckte Bereiche.
-- Empfohlener naechster Schritt.
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build-windows.ps1
+```
 
-Bei fehlgeschlagenen Checks immer angeben:
+## Sicherheit und Daten
 
-- Befehl.
-- Fehler.
-- Wahrscheinliche Ursache.
-- Naechster Fix.
+- Keine Secrets, API-Keys, Tokens oder privaten Daten committen.
+- Keine lokalen `.env`-Inhalte ausgeben.
+- Keine echten Nutzer-/Kundendaten in Tests oder Fixtures uebernehmen.
+- Keine gefaehrlichen Shell-Kommandos ohne klaren Grund.
+- Keine Loesch-, Migrations- oder Formatierungsaktionen ohne vorherige Pruefung.
+- Keine produktiven Runtime-Daten fuer Tests veraendern oder als Fixture missbrauchen.
+- Bei externen API-Calls, Kosten, Netzwerkzugriff oder Modellaufrufen explizit dokumentieren, was ausgefuehrt wurde.
+
+## Git- und Aenderungsverhalten
+
+- Vor Beginn den aktuellen Arbeitsbaum pruefen.
+- Bereits vorhandene Nutzeraenderungen nicht ueberschreiben.
+- Nur Dateien aendern, die fuer die Aufgabe relevant sind.
+- Keine unrelated formatting changes.
+- Keine Dependency hinzufuegen ohne klaren Grund.
+- Neue Dependencies nur nach Pruefung von Nutzen, Wartbarkeit und Alternativen.
+- Relevante Installationsdateien aktualisieren, wenn Dependencies geaendert werden.
+- Keine Build-Artefakte, Logs, Cache-Ordner oder generierte Dateien committen, ausser sie sind ausdruecklich Teil des Projekts.
+
+## Agent-Kommunikation
+
+- Kurz und konkret berichten.
+- Keine uebertriebenen Erfolgsaussagen.
+- Unsicherheiten offen markieren.
+- Bei groesseren Aufgaben erst Plan, dann Umsetzung.
+- Bei entdeckten Problemen nicht stillschweigend drumherum bauen, sondern Ursache benennen.
+- Keine Architekturentscheidungen verstecken.
+
+Abschlussberichte bei Codeaenderungen enthalten:
+
+- geaenderte Dateien
+- was geaendert wurde
+- welche Tests/Checks liefen
+- welche Risiken oder offenen Punkte bleiben
+
+## Definition of Done
+
+Eine Aufgabe gilt nur als erledigt, wenn:
+
+- die Aenderung fachlich zur Aufgabe passt
+- Code modular und lesbar bleibt
+- relevante Tests/Checks gelaufen sind oder Nichtausfuehrung begruendet wurde
+- keine offensichtlichen Regressionen entstanden sind
+- der Abschlussbericht die Aenderung nachvollziehbar macht
+
+## Lokale Ergaenzungen
+
+- Fuer spezielle Unterordner duerfen zusaetzliche `AGENTS.md` oder `AGENTS.override.md` Dateien angelegt werden, wenn dort andere Regeln gelten.
+- Root-`AGENTS.md` bleibt bewusst knapp.
+- Ausfuehrliche Spezialregeln gehoeren in separate Docs, auf die verwiesen wird.
