@@ -18,9 +18,11 @@ TURN_ENGINE_RUNTIME_DEPENDENCY_GROUPS: Dict[str, Tuple[str, ...]] = {
         "ERROR_CODE_EXTRACTOR",
         "TURN_ERROR_USER_MESSAGES",
     ),
-    "llm": (
+    "llm_explicit_ports": (
         "call_ollama_json",
         "call_ollama_schema",
+    ),
+    "llm_runtime_config": (
         "OLLAMA_TEMPERATURE",
         "OLLAMA_REPEAT_PENALTY",
         "MAX_TURN_MODEL_ATTEMPTS",
@@ -28,12 +30,13 @@ TURN_ENGINE_RUNTIME_DEPENDENCY_GROUPS: Dict[str, Tuple[str, ...]] = {
         "MAX_STORY_COMPRESS_ATTEMPTS",
         "STORY_REWRITE_SCHEMA",
     ),
-    "extraction": (
+    "extraction_explicit_ports": (
         "build_extractor_context_packet",
         "call_canon_extractor",
         "call_npc_extractor",
         "apply_npc_upserts",
         "normalize_npc_codex_state",
+        "run_canon_gate",
     ),
     "turn_materialization": (
         "active_party",
@@ -62,13 +65,12 @@ TURN_ENGINE_RUNTIME_DEPENDENCY_GROUPS: Dict[str, Tuple[str, ...]] = {
         "ENGLISH_LANGUAGE_MARKERS",
         "GERMAN_LANGUAGE_MARKERS",
     ),
-    "canon_progression": (
+    "progression_skill_codex_runtime": (
         "append_character_change_events",
         "apply_codex_triggers",
         "apply_progression_events",
         "apply_skill_events",
         "collect_codex_triggers",
-        "run_canon_gate",
         "active_pacing_profile",
         "milestone_state_for_turn",
     ),

@@ -110,14 +110,14 @@ def repair_json_payload_with_model(
     timeout: int = 90,
 ) -> Dict[str, Any]:
     repair_user = (
-        "Die folgende Modellantwort sollte JSON sein, ist aber kaputt oder unvollstaendig.\n"
-        "Repariere sie zu einem einzelnen gueltigen JSON-Objekt gemaess Schema.\n"
+        "Die folgende Modellantwort sollte JSON sein, ist aber kaputt oder unvollstÃ¤ndig.\n"
+        "Repariere sie zu einem einzelnen gÃ¼ltigen JSON-Objekt gemÃ¤ÃŸ Schema.\n"
         "Regeln:\n"
         "- Keine Markdown-Fences\n"
-        "- Keine Erklaerung\n"
-        "- Fehlende optionale Felder mit leeren Standardwerten fuellen\n"
-        "- Wenn ein Feld im Schema ein Objekt erwartet, gib kein Array zurueck\n"
-        "- Halte vorhandene Inhalte so gut wie moeglich inhaltlich stabil\n\n"
+        "- Keine ErklÃ¤rung\n"
+        "- Fehlende optionale Felder mit leeren Standardwerten fÃ¼llen\n"
+        "- Wenn ein Feld im Schema ein Objekt erwartet, gib kein Array zurÃ¼ck\n"
+        "- Halte vorhandene Inhalte so gut wie mÃ¶glich inhaltlich stabil\n\n"
         "SCHEMA:\n"
         + json.dumps(schema, ensure_ascii=False)
         + "\n\nKAPUTTE_ANTWORT:\n"
