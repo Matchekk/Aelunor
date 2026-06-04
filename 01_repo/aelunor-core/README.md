@@ -14,7 +14,7 @@ Aelunor Core betreibt ein lokales Multiplayer-Story-RPG. Das Backend persistiert
 | `app/main.py` | App-Wiring, Runtime-Konfiguration, Router-Composition, kleine Public-Fassade |
 | `app/routers/` | HTTP-Router fuer Campaigns, Claims, Setup, Turns, Boards, Context, Presence, Sheets |
 | `app/services/` | Fachlogik fuer Kampagnen, Setup, Claims, Turns, State, Boards, Context, Presence |
-| `app/helpers/` | Hilfslogik fuer Setup und Serialisierung |
+| `app/helpers/` | Hilfslogik fuer Setup; Random Preview und Finalisierung sind aus der Setup-Fassade geteilt |
 | `app/static/` | Statische Brand-/Icon-Assets ohne aktive Legacy-UI |
 | `ui/` | React/Vite-v1-Frontend |
 | `tests/unit/` | Service- und State-Unit-Tests |

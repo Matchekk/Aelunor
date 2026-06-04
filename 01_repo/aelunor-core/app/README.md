@@ -10,6 +10,7 @@ wo Code liegt und welche Grenzen aktuell gelten.
 | `main.py` | FastAPI-App, Runtime-Konfiguration, Router-Wiring, kleine Public-Fassade |
 | `routers/` | HTTP-Adapter; duerfen keine Fachlogik aufnehmen |
 | `services/` | Domain- und Workflow-Logik |
+| `helpers/` | Service-nahe Hilfslogik; Setup ist in Validation/Fassade, Random Preview und Finalisierung geteilt |
 | `dependencies/` | Factory-Funktionen fuer Router-/Service-Dependencies |
 | `schemas/` | Pydantic-Request-/Response-Modelle |
 | `serializers/` | Public-View-Builder, besonders Campaign-Snapshot |
