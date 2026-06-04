@@ -14,7 +14,7 @@ class TurnEngineLlmPortTests(unittest.TestCase):
 
     def test_configure_does_not_overwrite_local_llm_ports_from_runtime_mapping(self) -> None:
         self.assertIn("_TURN_LLM_PORT_NAMES", self.source)
-        self.assertIn("if key not in _TURN_LLM_PORT_NAMES", self.source)
+        self.assertIn("if key not in _TURN_PORT_NAMES", self.source)
 
     def test_turn_engine_exposes_explicit_llm_dependency_configuration(self) -> None:
         function_names = {

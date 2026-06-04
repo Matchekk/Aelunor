@@ -13,6 +13,16 @@ class TurnLlmDependencies:
     call_ollama_schema: Callable[..., Dict[str, Any]]
 
 
+@dataclass(frozen=True)
+class TurnExtractionDependencies:
+    build_extractor_context_packet: Callable[..., Dict[str, Any]]
+    call_canon_extractor: Callable[..., Dict[str, Any]]
+    call_npc_extractor: Callable[..., list[Dict[str, Any]]]
+    apply_npc_upserts: Callable[..., list[Dict[str, Any]]]
+    run_canon_gate: Callable[..., Dict[str, Any]]
+    normalize_npc_codex_state: Callable[..., None]
+
+
 def build_turn_llm_dependencies(
     *,
     adapter: llm_client.ChatAdapter,

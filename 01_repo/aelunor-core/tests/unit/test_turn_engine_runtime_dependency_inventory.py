@@ -11,9 +11,10 @@ class TurnEngineRuntimeDependencyInventoryTests(unittest.TestCase):
     def test_inventory_groups_keep_runtime_bridge_targets_visible(self) -> None:
         self.assertIn("call_ollama_json", dependency_names_for_group("llm_explicit_ports"))
         self.assertIn("OLLAMA_TEMPERATURE", dependency_names_for_group("llm_runtime_config"))
-        self.assertIn("call_canon_extractor", dependency_names_for_group("extraction"))
+        self.assertIn("call_canon_extractor", dependency_names_for_group("extraction_explicit_ports"))
         self.assertIn("build_patch_summary", dependency_names_for_group("turn_materialization"))
-        self.assertIn("run_canon_gate", dependency_names_for_group("canon_progression"))
+        self.assertIn("run_canon_gate", dependency_names_for_group("extraction_explicit_ports"))
+        self.assertIn("apply_progression_events", dependency_names_for_group("progression_skill_codex_runtime"))
         self.assertIn("clean_auto_item_name", dependency_names_for_group("domain_helpers"))
 
     def test_inventory_deduplicates_all_dependency_names(self) -> None:

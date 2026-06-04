@@ -53,13 +53,26 @@ from app.services.turn.story_length_guard import (
     rewrite_story_length_guard as _rewrite_story_length_guard,
 )
 from app.services.turn.dependencies import (
+    TurnExtractionDependencies,
     TurnLlmDependencies,
     build_turn_llm_dependencies,
 )
 
 _CONFIGURED = False
+_TURN_EXTRACTION_DEPS: Optional[TurnExtractionDependencies] = None
 _TURN_LLM_DEPS: Optional[TurnLlmDependencies] = None
 _TURN_LLM_PORT_NAMES = frozenset(("call_ollama_json", "call_ollama_schema"))
+_TURN_EXTRACTION_PORT_NAMES = frozenset(
+    (
+        "build_extractor_context_packet",
+        "call_canon_extractor",
+        "call_npc_extractor",
+        "apply_npc_upserts",
+        "run_canon_gate",
+        "normalize_npc_codex_state",
+    )
+)
+_TURN_PORT_NAMES = _TURN_LLM_PORT_NAMES | _TURN_EXTRACTION_PORT_NAMES
 _PATCH_SANITIZER_DEP_NAMES = (
     "normalize_patch_semantics",
     "deep_copy",
@@ -170,6 +183,38 @@ def configure_turn_llm_dependencies(deps: TurnLlmDependencies) -> None:
     _TURN_LLM_DEPS = deps
 
 
+def configure_turn_extraction_dependencies(deps: TurnExtractionDependencies) -> None:
+    global _TURN_EXTRACTION_DEPS
+    _TURN_EXTRACTION_DEPS = deps
+
+
+def _build_runtime_turn_extraction_dependencies(runtime: Dict[str, Any]) -> Optional[TurnExtractionDependencies]:
+    required_names = (
+        "build_extractor_context_packet",
+        "call_canon_extractor",
+        "call_npc_extractor",
+        "apply_npc_upserts",
+        "run_canon_gate",
+        "normalize_npc_codex_state",
+    )
+    if any(not callable(runtime.get(name)) for name in required_names):
+        return None
+    return TurnExtractionDependencies(
+        build_extractor_context_packet=runtime["build_extractor_context_packet"],
+        call_canon_extractor=runtime["call_canon_extractor"],
+        call_npc_extractor=runtime["call_npc_extractor"],
+        apply_npc_upserts=runtime["apply_npc_upserts"],
+        run_canon_gate=runtime["run_canon_gate"],
+        normalize_npc_codex_state=runtime["normalize_npc_codex_state"],
+    )
+
+
+def turn_extraction_dependencies() -> TurnExtractionDependencies:
+    if _TURN_EXTRACTION_DEPS is None:
+        raise RuntimeError("Turn extraction dependencies are not configured.")
+    return _TURN_EXTRACTION_DEPS
+
+
 def _default_turn_llm_dependencies() -> TurnLlmDependencies:
     from app.adapters.ollama_config import OLLAMA_ADAPTER, OLLAMA_TEMPERATURE, OLLAMA_TIMEOUT_SEC
     from app.catalogs.runtime_catalogs import RESPONSE_SCHEMA
@@ -201,13 +246,44 @@ def call_ollama_schema(system: str, user: str, schema: Dict[str, Any], **kwargs:
     return turn_llm_dependencies().call_ollama_schema(system, user, schema, **kwargs)
 
 
+def build_extractor_context_packet(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+    return turn_extraction_dependencies().build_extractor_context_packet(*args, **kwargs)
+
+
+def call_canon_extractor(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+    return turn_extraction_dependencies().call_canon_extractor(*args, **kwargs)
+
+
+def call_npc_extractor(*args: Any, **kwargs: Any) -> List[Dict[str, Any]]:
+    return turn_extraction_dependencies().call_npc_extractor(*args, **kwargs)
+
+
+def apply_npc_upserts(*args: Any, **kwargs: Any) -> List[Dict[str, Any]]:
+    return turn_extraction_dependencies().apply_npc_upserts(*args, **kwargs)
+
+
+def run_canon_gate(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+    return turn_extraction_dependencies().run_canon_gate(*args, **kwargs)
+
+
+def normalize_npc_codex_state(*args: Any, **kwargs: Any) -> None:
+    turn_extraction_dependencies().normalize_npc_codex_state(*args, **kwargs)
+
+
 def configure(main_globals: Dict[str, Any]) -> None:
     """Inject main-module globals needed by extracted turn engine functions."""
     global _CONFIGURED
     explicit_llm_deps = main_globals.get("turn_llm_dependencies")
     if isinstance(explicit_llm_deps, TurnLlmDependencies):
         configure_turn_llm_dependencies(explicit_llm_deps)
-    globals().update({key: value for key, value in main_globals.items() if key not in _TURN_LLM_PORT_NAMES})
+    explicit_extraction_deps = main_globals.get("turn_extraction_dependencies")
+    if isinstance(explicit_extraction_deps, TurnExtractionDependencies):
+        configure_turn_extraction_dependencies(explicit_extraction_deps)
+    else:
+        runtime_extraction_deps = _build_runtime_turn_extraction_dependencies(main_globals)
+        if runtime_extraction_deps is not None:
+            configure_turn_extraction_dependencies(runtime_extraction_deps)
+    globals().update({key: value for key, value in main_globals.items() if key not in _TURN_PORT_NAMES})
     _configure_patch_sanitizer_if_ready()
     _configure_patch_validator_if_ready()
     _CONFIGURED = True

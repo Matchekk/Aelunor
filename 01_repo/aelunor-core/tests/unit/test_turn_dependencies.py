@@ -2,7 +2,7 @@ import unittest
 from typing import Any, Dict, Optional
 
 from app.services.llm.client import LlmClientSettings
-from app.services.turn.dependencies import build_turn_llm_dependencies
+from app.services.turn.dependencies import TurnExtractionDependencies, build_turn_llm_dependencies
 
 
 class FakeAdapter:
@@ -76,6 +76,25 @@ class TurnDependenciesTests(unittest.TestCase):
         self.assertEqual(result, {"story": "lang"})
         self.assertEqual(adapter.calls[0]["timeout"], 120)
         self.assertEqual(adapter.calls[0]["temperature"], 0.5)
+
+    def test_turn_extraction_dependencies_group_only_extractor_ports(self) -> None:
+        calls: list[str] = []
+        deps = TurnExtractionDependencies(
+            build_extractor_context_packet=lambda *_args, **_kwargs: {"packet": True},
+            call_canon_extractor=lambda *_args, **_kwargs: {"events_add": ["canon"]},
+            call_npc_extractor=lambda *_args, **_kwargs: [{"id": "npc_1"}],
+            apply_npc_upserts=lambda *_args, **_kwargs: [{"id": "npc_1", "applied": True}],
+            run_canon_gate=lambda *_args, **_kwargs: {"patch": {}, "state": {}, "meta": {}},
+            normalize_npc_codex_state=lambda *_args, **_kwargs: calls.append("normalized"),
+        )
+
+        self.assertEqual(deps.build_extractor_context_packet()["packet"], True)
+        self.assertEqual(deps.call_canon_extractor()["events_add"], ["canon"])
+        self.assertEqual(deps.call_npc_extractor()[0]["id"], "npc_1")
+        self.assertTrue(deps.apply_npc_upserts()[0]["applied"])
+        self.assertIn("meta", deps.run_canon_gate())
+        deps.normalize_npc_codex_state({})
+        self.assertEqual(calls, ["normalized"])
 
 
 if __name__ == "__main__":
