@@ -73,12 +73,15 @@ TURN_ENGINE_RUNTIME_DEPENDENCY_GROUPS: Dict[str, Tuple[str, ...]] = {
         "apply_codex_triggers",
         "collect_codex_triggers",
     ),
-    "pacing_timing_runtime": (
+    "pacing_timing_explicit_ports": (
         "active_pacing_profile",
         "build_pacing_instruction_block",
         "compute_turn_budget_estimates",
         "milestone_state_for_turn",
         "update_turn_timing_ema",
+    ),
+    "attribute_meta_explicit_ports": (
+        "normalize_attribute_influence_meta",
     ),
     "domain_helpers": (
         "apply_attribute_bias_to_patch",
@@ -116,7 +119,6 @@ TURN_ENGINE_RUNTIME_DEPENDENCY_GROUPS: Dict[str, Tuple[str, ...]] = {
         "merge_dynamic_skill",
         "next_skill_xp_for_level",
         "normalize_ability_state",
-        "normalize_attribute_influence_meta",
         "normalize_class_current",
         "normalize_dynamic_skill_state",
         "normalize_equipment_slot_key",

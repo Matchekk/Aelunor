@@ -40,9 +40,17 @@ class TurnProgressionCodexPortTests(unittest.TestCase):
             self.assertIn(name, function_names)
 
     def test_pacing_timing_remains_outside_progression_codex_ports(self) -> None:
-        self.assertNotIn("compute_turn_budget_estimates=runtime", self.source)
-        self.assertNotIn("milestone_state_for_turn=runtime", self.source)
-        self.assertNotIn("update_turn_timing_ema=runtime", self.source)
+        progression_group_start = self.source.index("_TURN_PROGRESSION_PORT_NAMES")
+        progression_group_end = self.source.index("_TURN_CODEX_PORT_NAMES")
+        progression_group = self.source[progression_group_start:progression_group_end]
+        codex_group_start = self.source.index("_TURN_CODEX_PORT_NAMES")
+        codex_group_end = self.source.index("_TURN_PACING_PORT_NAMES")
+        codex_group = self.source[codex_group_start:codex_group_end]
+
+        for group in (progression_group, codex_group):
+            self.assertNotIn("compute_turn_budget_estimates", group)
+            self.assertNotIn("milestone_state_for_turn", group)
+            self.assertNotIn("update_turn_timing_ema", group)
 
 
 if __name__ == "__main__":

@@ -53,17 +53,21 @@ from app.services.turn.story_length_guard import (
     rewrite_story_length_guard as _rewrite_story_length_guard,
 )
 from app.services.turn.dependencies import (
+    TurnAttributeDependencies,
     TurnCodexDependencies,
     TurnExtractionDependencies,
     TurnLlmDependencies,
+    TurnPacingDependencies,
     TurnProgressionDependencies,
     build_turn_llm_dependencies,
 )
 
 _CONFIGURED = False
+_TURN_ATTRIBUTE_DEPS: Optional[TurnAttributeDependencies] = None
 _TURN_CODEX_DEPS: Optional[TurnCodexDependencies] = None
 _TURN_EXTRACTION_DEPS: Optional[TurnExtractionDependencies] = None
 _TURN_LLM_DEPS: Optional[TurnLlmDependencies] = None
+_TURN_PACING_DEPS: Optional[TurnPacingDependencies] = None
 _TURN_PROGRESSION_DEPS: Optional[TurnProgressionDependencies] = None
 _TURN_LLM_PORT_NAMES = frozenset(("call_ollama_json", "call_ollama_schema"))
 _TURN_EXTRACTION_PORT_NAMES = frozenset(
@@ -84,11 +88,23 @@ _TURN_PROGRESSION_PORT_NAMES = frozenset(
     )
 )
 _TURN_CODEX_PORT_NAMES = frozenset(("collect_codex_triggers", "apply_codex_triggers"))
+_TURN_PACING_PORT_NAMES = frozenset(
+    (
+        "active_pacing_profile",
+        "milestone_state_for_turn",
+        "compute_turn_budget_estimates",
+        "build_pacing_instruction_block",
+        "update_turn_timing_ema",
+    )
+)
+_TURN_ATTRIBUTE_PORT_NAMES = frozenset(("normalize_attribute_influence_meta",))
 _TURN_PORT_NAMES = (
     _TURN_LLM_PORT_NAMES
     | _TURN_EXTRACTION_PORT_NAMES
     | _TURN_PROGRESSION_PORT_NAMES
     | _TURN_CODEX_PORT_NAMES
+    | _TURN_PACING_PORT_NAMES
+    | _TURN_ATTRIBUTE_PORT_NAMES
 )
 _PATCH_SANITIZER_DEP_NAMES = (
     "normalize_patch_semantics",
@@ -215,6 +231,16 @@ def configure_turn_codex_dependencies(deps: TurnCodexDependencies) -> None:
     _TURN_CODEX_DEPS = deps
 
 
+def configure_turn_pacing_dependencies(deps: TurnPacingDependencies) -> None:
+    global _TURN_PACING_DEPS
+    _TURN_PACING_DEPS = deps
+
+
+def configure_turn_attribute_dependencies(deps: TurnAttributeDependencies) -> None:
+    global _TURN_ATTRIBUTE_DEPS
+    _TURN_ATTRIBUTE_DEPS = deps
+
+
 def _build_runtime_turn_extraction_dependencies(runtime: Dict[str, Any]) -> Optional[TurnExtractionDependencies]:
     required_names = (
         "build_extractor_context_packet",
@@ -264,6 +290,33 @@ def _build_runtime_turn_codex_dependencies(runtime: Dict[str, Any]) -> Optional[
     )
 
 
+def _build_runtime_turn_pacing_dependencies(runtime: Dict[str, Any]) -> Optional[TurnPacingDependencies]:
+    required_names = (
+        "active_pacing_profile",
+        "milestone_state_for_turn",
+        "compute_turn_budget_estimates",
+        "build_pacing_instruction_block",
+        "update_turn_timing_ema",
+    )
+    if any(not callable(runtime.get(name)) for name in required_names):
+        return None
+    return TurnPacingDependencies(
+        active_pacing_profile=runtime["active_pacing_profile"],
+        milestone_state_for_turn=runtime["milestone_state_for_turn"],
+        compute_turn_budget_estimates=runtime["compute_turn_budget_estimates"],
+        build_pacing_instruction_block=runtime["build_pacing_instruction_block"],
+        update_turn_timing_ema=runtime["update_turn_timing_ema"],
+    )
+
+
+def _build_runtime_turn_attribute_dependencies(runtime: Dict[str, Any]) -> Optional[TurnAttributeDependencies]:
+    if not callable(runtime.get("normalize_attribute_influence_meta")):
+        return None
+    return TurnAttributeDependencies(
+        normalize_attribute_influence_meta=runtime["normalize_attribute_influence_meta"],
+    )
+
+
 def turn_extraction_dependencies() -> TurnExtractionDependencies:
     if _TURN_EXTRACTION_DEPS is None:
         raise RuntimeError("Turn extraction dependencies are not configured.")
@@ -280,6 +333,18 @@ def turn_codex_dependencies() -> TurnCodexDependencies:
     if _TURN_CODEX_DEPS is None:
         raise RuntimeError("Turn codex dependencies are not configured.")
     return _TURN_CODEX_DEPS
+
+
+def turn_pacing_dependencies() -> TurnPacingDependencies:
+    if _TURN_PACING_DEPS is None:
+        raise RuntimeError("Turn pacing dependencies are not configured.")
+    return _TURN_PACING_DEPS
+
+
+def turn_attribute_dependencies() -> TurnAttributeDependencies:
+    if _TURN_ATTRIBUTE_DEPS is None:
+        raise RuntimeError("Turn attribute dependencies are not configured.")
+    return _TURN_ATTRIBUTE_DEPS
 
 
 def _default_turn_llm_dependencies() -> TurnLlmDependencies:
@@ -357,6 +422,30 @@ def apply_codex_triggers(*args: Any, **kwargs: Any) -> List[Dict[str, Any]]:
     return turn_codex_dependencies().apply_codex_triggers(*args, **kwargs)
 
 
+def active_pacing_profile(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+    return turn_pacing_dependencies().active_pacing_profile(*args, **kwargs)
+
+
+def milestone_state_for_turn(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+    return turn_pacing_dependencies().milestone_state_for_turn(*args, **kwargs)
+
+
+def compute_turn_budget_estimates(*args: Any, **kwargs: Any) -> None:
+    turn_pacing_dependencies().compute_turn_budget_estimates(*args, **kwargs)
+
+
+def build_pacing_instruction_block(*args: Any, **kwargs: Any) -> str:
+    return turn_pacing_dependencies().build_pacing_instruction_block(*args, **kwargs)
+
+
+def update_turn_timing_ema(*args: Any, **kwargs: Any) -> None:
+    turn_pacing_dependencies().update_turn_timing_ema(*args, **kwargs)
+
+
+def normalize_attribute_influence_meta(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+    return turn_attribute_dependencies().normalize_attribute_influence_meta(*args, **kwargs)
+
+
 def configure(main_globals: Dict[str, Any]) -> None:
     """Inject main-module globals needed by extracted turn engine functions."""
     global _CONFIGURED
@@ -384,6 +473,20 @@ def configure(main_globals: Dict[str, Any]) -> None:
         runtime_codex_deps = _build_runtime_turn_codex_dependencies(main_globals)
         if runtime_codex_deps is not None:
             configure_turn_codex_dependencies(runtime_codex_deps)
+    explicit_pacing_deps = main_globals.get("turn_pacing_dependencies")
+    if isinstance(explicit_pacing_deps, TurnPacingDependencies):
+        configure_turn_pacing_dependencies(explicit_pacing_deps)
+    else:
+        runtime_pacing_deps = _build_runtime_turn_pacing_dependencies(main_globals)
+        if runtime_pacing_deps is not None:
+            configure_turn_pacing_dependencies(runtime_pacing_deps)
+    explicit_attribute_deps = main_globals.get("turn_attribute_dependencies")
+    if isinstance(explicit_attribute_deps, TurnAttributeDependencies):
+        configure_turn_attribute_dependencies(explicit_attribute_deps)
+    else:
+        runtime_attribute_deps = _build_runtime_turn_attribute_dependencies(main_globals)
+        if runtime_attribute_deps is not None:
+            configure_turn_attribute_dependencies(runtime_attribute_deps)
     globals().update({key: value for key, value in main_globals.items() if key not in _TURN_PORT_NAMES})
     _configure_patch_sanitizer_if_ready()
     _configure_patch_validator_if_ready()

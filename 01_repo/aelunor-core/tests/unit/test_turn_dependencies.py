@@ -3,8 +3,10 @@ from typing import Any, Dict, Optional
 
 from app.services.llm.client import LlmClientSettings
 from app.services.turn.dependencies import (
+    TurnAttributeDependencies,
     TurnCodexDependencies,
     TurnExtractionDependencies,
+    TurnPacingDependencies,
     TurnProgressionDependencies,
     build_turn_llm_dependencies,
 )
@@ -122,6 +124,30 @@ class TurnDependenciesTests(unittest.TestCase):
 
         self.assertEqual(deps.collect_codex_triggers()["triggers"][0]["id"], "codex_1")
         self.assertTrue(deps.apply_codex_triggers()[0]["applied"])
+
+    def test_turn_pacing_dependencies_group_only_pacing_and_timing_ports(self) -> None:
+        calls: list[str] = []
+        deps = TurnPacingDependencies(
+            active_pacing_profile=lambda *_args, **_kwargs: {"pace": "normal"},
+            milestone_state_for_turn=lambda *_args, **_kwargs: {"last": 2, "next": 5},
+            compute_turn_budget_estimates=lambda *_args, **_kwargs: calls.append("budget"),
+            build_pacing_instruction_block=lambda *_args, **_kwargs: "Pacing",
+            update_turn_timing_ema=lambda *_args, **_kwargs: calls.append("timing"),
+        )
+
+        self.assertEqual(deps.active_pacing_profile()["pace"], "normal")
+        self.assertEqual(deps.milestone_state_for_turn()["next"], 5)
+        deps.compute_turn_budget_estimates({})
+        self.assertEqual(deps.build_pacing_instruction_block({}), "Pacing")
+        deps.update_turn_timing_ema({}, 1.0, 2.0)
+        self.assertEqual(calls, ["budget", "timing"])
+
+    def test_turn_attribute_dependencies_group_only_attribute_meta_ports(self) -> None:
+        deps = TurnAttributeDependencies(
+            normalize_attribute_influence_meta=lambda meta: {**meta, "normalized": True},
+        )
+
+        self.assertTrue(deps.normalize_attribute_influence_meta({"last_turn": 1})["normalized"])
 
 
 if __name__ == "__main__":
