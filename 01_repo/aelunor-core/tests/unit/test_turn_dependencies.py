@@ -2,7 +2,12 @@ import unittest
 from typing import Any, Dict, Optional
 
 from app.services.llm.client import LlmClientSettings
-from app.services.turn.dependencies import TurnExtractionDependencies, build_turn_llm_dependencies
+from app.services.turn.dependencies import (
+    TurnCodexDependencies,
+    TurnExtractionDependencies,
+    TurnProgressionDependencies,
+    build_turn_llm_dependencies,
+)
 
 
 class FakeAdapter:
@@ -95,6 +100,28 @@ class TurnDependenciesTests(unittest.TestCase):
         self.assertIn("meta", deps.run_canon_gate())
         deps.normalize_npc_codex_state({})
         self.assertEqual(calls, ["normalized"])
+
+    def test_turn_progression_dependencies_group_only_progression_and_skill_ports(self) -> None:
+        calls: list[str] = []
+        deps = TurnProgressionDependencies(
+            append_character_change_events=lambda *_args, **_kwargs: calls.append("changes"),
+            apply_progression_events=lambda *_args, **_kwargs: {"events": [{"id": "progression_1"}]},
+            apply_skill_events=lambda *_args, **_kwargs: [{"id": "skill_1"}],
+        )
+
+        deps.append_character_change_events({}, {}, turn_number=3)
+        self.assertEqual(deps.apply_progression_events()["events"][0]["id"], "progression_1")
+        self.assertEqual(deps.apply_skill_events()[0]["id"], "skill_1")
+        self.assertEqual(calls, ["changes"])
+
+    def test_turn_codex_dependencies_group_only_codex_ports(self) -> None:
+        deps = TurnCodexDependencies(
+            collect_codex_triggers=lambda *_args, **_kwargs: {"triggers": [{"id": "codex_1"}]},
+            apply_codex_triggers=lambda *_args, **_kwargs: [{"id": "codex_1", "applied": True}],
+        )
+
+        self.assertEqual(deps.collect_codex_triggers()["triggers"][0]["id"], "codex_1")
+        self.assertTrue(deps.apply_codex_triggers()[0]["applied"])
 
 
 if __name__ == "__main__":

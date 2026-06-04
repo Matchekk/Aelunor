@@ -38,9 +38,13 @@ class TurnExtractionPortTests(unittest.TestCase):
             self.assertIn(name, function_names)
 
     def test_progression_skill_codex_calls_remain_outside_extraction_port(self) -> None:
-        self.assertNotIn("apply_progression_events=runtime", self.source)
-        self.assertNotIn("apply_skill_events=runtime", self.source)
-        self.assertNotIn("apply_codex_triggers=runtime", self.source)
+        extraction_group_start = self.source.index("_TURN_EXTRACTION_PORT_NAMES")
+        extraction_group_end = self.source.index("_TURN_PROGRESSION_PORT_NAMES")
+        extraction_group = self.source[extraction_group_start:extraction_group_end]
+
+        self.assertNotIn("apply_progression_events", extraction_group)
+        self.assertNotIn("apply_skill_events", extraction_group)
+        self.assertNotIn("apply_codex_triggers", extraction_group)
 
 
 if __name__ == "__main__":

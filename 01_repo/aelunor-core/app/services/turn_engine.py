@@ -53,14 +53,18 @@ from app.services.turn.story_length_guard import (
     rewrite_story_length_guard as _rewrite_story_length_guard,
 )
 from app.services.turn.dependencies import (
+    TurnCodexDependencies,
     TurnExtractionDependencies,
     TurnLlmDependencies,
+    TurnProgressionDependencies,
     build_turn_llm_dependencies,
 )
 
 _CONFIGURED = False
+_TURN_CODEX_DEPS: Optional[TurnCodexDependencies] = None
 _TURN_EXTRACTION_DEPS: Optional[TurnExtractionDependencies] = None
 _TURN_LLM_DEPS: Optional[TurnLlmDependencies] = None
+_TURN_PROGRESSION_DEPS: Optional[TurnProgressionDependencies] = None
 _TURN_LLM_PORT_NAMES = frozenset(("call_ollama_json", "call_ollama_schema"))
 _TURN_EXTRACTION_PORT_NAMES = frozenset(
     (
@@ -72,7 +76,20 @@ _TURN_EXTRACTION_PORT_NAMES = frozenset(
         "normalize_npc_codex_state",
     )
 )
-_TURN_PORT_NAMES = _TURN_LLM_PORT_NAMES | _TURN_EXTRACTION_PORT_NAMES
+_TURN_PROGRESSION_PORT_NAMES = frozenset(
+    (
+        "append_character_change_events",
+        "apply_progression_events",
+        "apply_skill_events",
+    )
+)
+_TURN_CODEX_PORT_NAMES = frozenset(("collect_codex_triggers", "apply_codex_triggers"))
+_TURN_PORT_NAMES = (
+    _TURN_LLM_PORT_NAMES
+    | _TURN_EXTRACTION_PORT_NAMES
+    | _TURN_PROGRESSION_PORT_NAMES
+    | _TURN_CODEX_PORT_NAMES
+)
 _PATCH_SANITIZER_DEP_NAMES = (
     "normalize_patch_semantics",
     "deep_copy",
@@ -188,6 +205,16 @@ def configure_turn_extraction_dependencies(deps: TurnExtractionDependencies) -> 
     _TURN_EXTRACTION_DEPS = deps
 
 
+def configure_turn_progression_dependencies(deps: TurnProgressionDependencies) -> None:
+    global _TURN_PROGRESSION_DEPS
+    _TURN_PROGRESSION_DEPS = deps
+
+
+def configure_turn_codex_dependencies(deps: TurnCodexDependencies) -> None:
+    global _TURN_CODEX_DEPS
+    _TURN_CODEX_DEPS = deps
+
+
 def _build_runtime_turn_extraction_dependencies(runtime: Dict[str, Any]) -> Optional[TurnExtractionDependencies]:
     required_names = (
         "build_extractor_context_packet",
@@ -209,10 +236,50 @@ def _build_runtime_turn_extraction_dependencies(runtime: Dict[str, Any]) -> Opti
     )
 
 
+def _build_runtime_turn_progression_dependencies(runtime: Dict[str, Any]) -> Optional[TurnProgressionDependencies]:
+    required_names = (
+        "append_character_change_events",
+        "apply_progression_events",
+        "apply_skill_events",
+    )
+    if any(not callable(runtime.get(name)) for name in required_names):
+        return None
+    return TurnProgressionDependencies(
+        append_character_change_events=runtime["append_character_change_events"],
+        apply_progression_events=runtime["apply_progression_events"],
+        apply_skill_events=runtime["apply_skill_events"],
+    )
+
+
+def _build_runtime_turn_codex_dependencies(runtime: Dict[str, Any]) -> Optional[TurnCodexDependencies]:
+    required_names = (
+        "collect_codex_triggers",
+        "apply_codex_triggers",
+    )
+    if any(not callable(runtime.get(name)) for name in required_names):
+        return None
+    return TurnCodexDependencies(
+        collect_codex_triggers=runtime["collect_codex_triggers"],
+        apply_codex_triggers=runtime["apply_codex_triggers"],
+    )
+
+
 def turn_extraction_dependencies() -> TurnExtractionDependencies:
     if _TURN_EXTRACTION_DEPS is None:
         raise RuntimeError("Turn extraction dependencies are not configured.")
     return _TURN_EXTRACTION_DEPS
+
+
+def turn_progression_dependencies() -> TurnProgressionDependencies:
+    if _TURN_PROGRESSION_DEPS is None:
+        raise RuntimeError("Turn progression dependencies are not configured.")
+    return _TURN_PROGRESSION_DEPS
+
+
+def turn_codex_dependencies() -> TurnCodexDependencies:
+    if _TURN_CODEX_DEPS is None:
+        raise RuntimeError("Turn codex dependencies are not configured.")
+    return _TURN_CODEX_DEPS
 
 
 def _default_turn_llm_dependencies() -> TurnLlmDependencies:
@@ -270,6 +337,26 @@ def normalize_npc_codex_state(*args: Any, **kwargs: Any) -> None:
     turn_extraction_dependencies().normalize_npc_codex_state(*args, **kwargs)
 
 
+def append_character_change_events(*args: Any, **kwargs: Any) -> None:
+    turn_progression_dependencies().append_character_change_events(*args, **kwargs)
+
+
+def apply_progression_events(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+    return turn_progression_dependencies().apply_progression_events(*args, **kwargs)
+
+
+def apply_skill_events(*args: Any, **kwargs: Any) -> List[Any]:
+    return turn_progression_dependencies().apply_skill_events(*args, **kwargs)
+
+
+def collect_codex_triggers(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+    return turn_codex_dependencies().collect_codex_triggers(*args, **kwargs)
+
+
+def apply_codex_triggers(*args: Any, **kwargs: Any) -> List[Dict[str, Any]]:
+    return turn_codex_dependencies().apply_codex_triggers(*args, **kwargs)
+
+
 def configure(main_globals: Dict[str, Any]) -> None:
     """Inject main-module globals needed by extracted turn engine functions."""
     global _CONFIGURED
@@ -283,6 +370,20 @@ def configure(main_globals: Dict[str, Any]) -> None:
         runtime_extraction_deps = _build_runtime_turn_extraction_dependencies(main_globals)
         if runtime_extraction_deps is not None:
             configure_turn_extraction_dependencies(runtime_extraction_deps)
+    explicit_progression_deps = main_globals.get("turn_progression_dependencies")
+    if isinstance(explicit_progression_deps, TurnProgressionDependencies):
+        configure_turn_progression_dependencies(explicit_progression_deps)
+    else:
+        runtime_progression_deps = _build_runtime_turn_progression_dependencies(main_globals)
+        if runtime_progression_deps is not None:
+            configure_turn_progression_dependencies(runtime_progression_deps)
+    explicit_codex_deps = main_globals.get("turn_codex_dependencies")
+    if isinstance(explicit_codex_deps, TurnCodexDependencies):
+        configure_turn_codex_dependencies(explicit_codex_deps)
+    else:
+        runtime_codex_deps = _build_runtime_turn_codex_dependencies(main_globals)
+        if runtime_codex_deps is not None:
+            configure_turn_codex_dependencies(runtime_codex_deps)
     globals().update({key: value for key, value in main_globals.items() if key not in _TURN_PORT_NAMES})
     _configure_patch_sanitizer_if_ready()
     _configure_patch_validator_if_ready()

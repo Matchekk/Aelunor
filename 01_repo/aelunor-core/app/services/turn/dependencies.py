@@ -23,6 +23,19 @@ class TurnExtractionDependencies:
     normalize_npc_codex_state: Callable[..., None]
 
 
+@dataclass(frozen=True)
+class TurnProgressionDependencies:
+    append_character_change_events: Callable[..., None]
+    apply_progression_events: Callable[..., Dict[str, Any]]
+    apply_skill_events: Callable[..., list[Any]]
+
+
+@dataclass(frozen=True)
+class TurnCodexDependencies:
+    collect_codex_triggers: Callable[..., Dict[str, Any]]
+    apply_codex_triggers: Callable[..., list[Dict[str, Any]]]
+
+
 def build_turn_llm_dependencies(
     *,
     adapter: llm_client.ChatAdapter,
