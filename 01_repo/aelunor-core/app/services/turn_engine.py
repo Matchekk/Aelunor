@@ -317,6 +317,90 @@ def _build_runtime_turn_attribute_dependencies(runtime: Dict[str, Any]) -> Optio
     )
 
 
+def _source_callable(source: Any, name: str) -> Optional[Any]:
+    value = getattr(source, name, None)
+    return value if callable(value) else None
+
+
+def _build_source_turn_extraction_dependencies(source: Any) -> Optional[TurnExtractionDependencies]:
+    required_names = (
+        "build_extractor_context_packet",
+        "call_canon_extractor",
+        "call_npc_extractor",
+        "apply_npc_upserts",
+        "run_canon_gate",
+        "normalize_npc_codex_state",
+    )
+    values = {name: _source_callable(source, name) for name in required_names}
+    if any(value is None for value in values.values()):
+        return None
+    return TurnExtractionDependencies(
+        build_extractor_context_packet=values["build_extractor_context_packet"],
+        call_canon_extractor=values["call_canon_extractor"],
+        call_npc_extractor=values["call_npc_extractor"],
+        apply_npc_upserts=values["apply_npc_upserts"],
+        run_canon_gate=values["run_canon_gate"],
+        normalize_npc_codex_state=values["normalize_npc_codex_state"],
+    )
+
+
+def _build_source_turn_progression_dependencies(source: Any) -> Optional[TurnProgressionDependencies]:
+    required_names = (
+        "append_character_change_events",
+        "apply_progression_events",
+        "apply_skill_events",
+    )
+    values = {name: _source_callable(source, name) for name in required_names}
+    if any(value is None for value in values.values()):
+        return None
+    return TurnProgressionDependencies(
+        append_character_change_events=values["append_character_change_events"],
+        apply_progression_events=values["apply_progression_events"],
+        apply_skill_events=values["apply_skill_events"],
+    )
+
+
+def _build_source_turn_codex_dependencies(source: Any) -> Optional[TurnCodexDependencies]:
+    required_names = (
+        "collect_codex_triggers",
+        "apply_codex_triggers",
+    )
+    values = {name: _source_callable(source, name) for name in required_names}
+    if any(value is None for value in values.values()):
+        return None
+    return TurnCodexDependencies(
+        collect_codex_triggers=values["collect_codex_triggers"],
+        apply_codex_triggers=values["apply_codex_triggers"],
+    )
+
+
+def _build_source_turn_pacing_dependencies(source: Any) -> Optional[TurnPacingDependencies]:
+    required_names = (
+        "active_pacing_profile",
+        "milestone_state_for_turn",
+        "compute_turn_budget_estimates",
+        "build_pacing_instruction_block",
+        "update_turn_timing_ema",
+    )
+    values = {name: _source_callable(source, name) for name in required_names}
+    if any(value is None for value in values.values()):
+        return None
+    return TurnPacingDependencies(
+        active_pacing_profile=values["active_pacing_profile"],
+        milestone_state_for_turn=values["milestone_state_for_turn"],
+        compute_turn_budget_estimates=values["compute_turn_budget_estimates"],
+        build_pacing_instruction_block=values["build_pacing_instruction_block"],
+        update_turn_timing_ema=values["update_turn_timing_ema"],
+    )
+
+
+def _build_source_turn_attribute_dependencies(source: Any) -> Optional[TurnAttributeDependencies]:
+    normalize = _source_callable(source, "normalize_attribute_influence_meta")
+    if normalize is None:
+        return None
+    return TurnAttributeDependencies(normalize_attribute_influence_meta=normalize)
+
+
 def turn_extraction_dependencies() -> TurnExtractionDependencies:
     if _TURN_EXTRACTION_DEPS is None:
         raise RuntimeError("Turn extraction dependencies are not configured.")
@@ -457,36 +541,46 @@ def configure(main_globals: Dict[str, Any]) -> None:
         configure_turn_extraction_dependencies(explicit_extraction_deps)
     else:
         runtime_extraction_deps = _build_runtime_turn_extraction_dependencies(main_globals)
-        if runtime_extraction_deps is not None:
-            configure_turn_extraction_dependencies(runtime_extraction_deps)
+        source_extraction_deps = _build_source_turn_extraction_dependencies(main_globals.get("state_engine"))
+        extraction_deps = runtime_extraction_deps or source_extraction_deps
+        if extraction_deps is not None:
+            configure_turn_extraction_dependencies(extraction_deps)
     explicit_progression_deps = main_globals.get("turn_progression_dependencies")
     if isinstance(explicit_progression_deps, TurnProgressionDependencies):
         configure_turn_progression_dependencies(explicit_progression_deps)
     else:
         runtime_progression_deps = _build_runtime_turn_progression_dependencies(main_globals)
-        if runtime_progression_deps is not None:
-            configure_turn_progression_dependencies(runtime_progression_deps)
+        source_progression_deps = _build_source_turn_progression_dependencies(main_globals.get("state_engine"))
+        progression_deps = runtime_progression_deps or source_progression_deps
+        if progression_deps is not None:
+            configure_turn_progression_dependencies(progression_deps)
     explicit_codex_deps = main_globals.get("turn_codex_dependencies")
     if isinstance(explicit_codex_deps, TurnCodexDependencies):
         configure_turn_codex_dependencies(explicit_codex_deps)
     else:
         runtime_codex_deps = _build_runtime_turn_codex_dependencies(main_globals)
-        if runtime_codex_deps is not None:
-            configure_turn_codex_dependencies(runtime_codex_deps)
+        source_codex_deps = _build_source_turn_codex_dependencies(main_globals.get("state_engine"))
+        codex_deps = runtime_codex_deps or source_codex_deps
+        if codex_deps is not None:
+            configure_turn_codex_dependencies(codex_deps)
     explicit_pacing_deps = main_globals.get("turn_pacing_dependencies")
     if isinstance(explicit_pacing_deps, TurnPacingDependencies):
         configure_turn_pacing_dependencies(explicit_pacing_deps)
     else:
         runtime_pacing_deps = _build_runtime_turn_pacing_dependencies(main_globals)
-        if runtime_pacing_deps is not None:
-            configure_turn_pacing_dependencies(runtime_pacing_deps)
+        source_pacing_deps = _build_source_turn_pacing_dependencies(main_globals.get("state_engine"))
+        pacing_deps = runtime_pacing_deps or source_pacing_deps
+        if pacing_deps is not None:
+            configure_turn_pacing_dependencies(pacing_deps)
     explicit_attribute_deps = main_globals.get("turn_attribute_dependencies")
     if isinstance(explicit_attribute_deps, TurnAttributeDependencies):
         configure_turn_attribute_dependencies(explicit_attribute_deps)
     else:
         runtime_attribute_deps = _build_runtime_turn_attribute_dependencies(main_globals)
-        if runtime_attribute_deps is not None:
-            configure_turn_attribute_dependencies(runtime_attribute_deps)
+        source_attribute_deps = _build_source_turn_attribute_dependencies(main_globals.get("state_engine"))
+        attribute_deps = runtime_attribute_deps or source_attribute_deps
+        if attribute_deps is not None:
+            configure_turn_attribute_dependencies(attribute_deps)
     globals().update({key: value for key, value in main_globals.items() if key not in _TURN_PORT_NAMES})
     _configure_patch_sanitizer_if_ready()
     _configure_patch_validator_if_ready()

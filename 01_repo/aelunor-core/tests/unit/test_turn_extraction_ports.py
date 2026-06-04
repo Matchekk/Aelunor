@@ -14,7 +14,8 @@ class TurnExtractionPortTests(unittest.TestCase):
 
     def test_configure_builds_targeted_extraction_dependencies_from_runtime_mapping(self) -> None:
         self.assertIn("_build_runtime_turn_extraction_dependencies(main_globals)", self.source)
-        self.assertIn("configure_turn_extraction_dependencies(runtime_extraction_deps)", self.source)
+        self.assertIn('_build_source_turn_extraction_dependencies(main_globals.get("state_engine"))', self.source)
+        self.assertIn("configure_turn_extraction_dependencies(extraction_deps)", self.source)
 
     def test_configure_does_not_overwrite_local_extraction_wrappers(self) -> None:
         self.assertIn("_TURN_EXTRACTION_PORT_NAMES", self.source)

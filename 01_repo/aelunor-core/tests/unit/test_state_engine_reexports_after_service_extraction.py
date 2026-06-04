@@ -17,9 +17,30 @@ class StateEngineServiceExtractionTests(unittest.TestCase):
 
     def test_runtime_symbols_keep_internal_transition_path(self) -> None:
         runtime = state_engine.runtime_symbols()
-        self.assertLessEqual(len(runtime), 180)
+        self.assertLessEqual(len(runtime), 150)
         self.assertNotIn("blank_character_state", runtime)
         self.assertNotIn("default_appearance_profile", runtime)
+        for name in (
+            "call_ollama_json",
+            "call_ollama_schema",
+            "build_extractor_context_packet",
+            "call_canon_extractor",
+            "call_npc_extractor",
+            "apply_npc_upserts",
+            "run_canon_gate",
+            "normalize_npc_codex_state",
+            "apply_progression_events",
+            "apply_skill_events",
+            "collect_codex_triggers",
+            "apply_codex_triggers",
+            "active_pacing_profile",
+            "milestone_state_for_turn",
+            "compute_turn_budget_estimates",
+            "build_pacing_instruction_block",
+            "update_turn_timing_ema",
+            "normalize_attribute_influence_meta",
+        ):
+            self.assertNotIn(name, runtime)
         for name in (
             "authenticate_player",
             "build_party_overview",
@@ -47,6 +68,7 @@ class StateEngineServiceExtractionTests(unittest.TestCase):
             "normalize_patch_semantics",
             "ensure_item_shape",
             "normalize_equipment_update_payload",
+            "append_character_change_events",
             "current_question_id",
         ):
             self.assertIs(runtime[name], getattr(state_engine, name))
