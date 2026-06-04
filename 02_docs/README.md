@@ -19,6 +19,9 @@ Diese Dokumentation beschreibt den aktuellen Stand des lokalen Aelunor-Projekts.
 - Root-Setup: `../README.md`
 - Core-Setup und Checks: `../01_repo/aelunor-core/README.md`
 - Projektregeln fuer Codex: `../AGENTS.md`
+- Backend-Kontext fuer Agents: `../01_repo/aelunor-core/app/README.md`
+- Service-Kontext: `../01_repo/aelunor-core/app/services/README.md`
+- Test- und Script-Kontext: `../01_repo/aelunor-core/tests/README.md`, `../01_repo/aelunor-core/scripts/README.md`
 
 ## Pflege-Regeln
 

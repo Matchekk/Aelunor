@@ -7,9 +7,9 @@ Aelunor ist ein lokales, browserbasiertes Multiplayer-Story-RPG mit KI-GM. Der a
 Der spielbare Kernflow ist:
 
 1. Kampagne erstellen oder per Join-Code beitreten.
-2. Welt-Setup und Charakter-Setup abschliessen.
+2. Welt-Setup abschliessen.
 3. Slots claimen.
-4. Gemeinsam spielen.
+4. Character Setup abschliessen.
 5. Story-Turns erzeugen.
 6. Canon/Patch-State konsistent halten.
 7. Live-Updates per Presence/SSE anzeigen.
@@ -30,10 +30,10 @@ MVP-Stabilitaet hat Vorrang vor Feature-Ausbau. UI-Arbeit gehoert in die React/V
 | Pfad | Zweck |
 | --- | --- |
 | `01_repo/aelunor-core/` | Aktiver Code-Stack |
-| `01_repo/aelunor-core/app/` | FastAPI-App, Router, Services und statische Runtime-Assets |
+| `01_repo/aelunor-core/app/` | FastAPI-App, Router, Services und statische Runtime-Assets; siehe dortige Kontext-README |
 | `01_repo/aelunor-core/ui/` | React/Vite-v1-Frontend |
-| `01_repo/aelunor-core/tests/` | Backend-Unit- und Integrationstests |
-| `01_repo/aelunor-core/scripts/` | Smoke-/Audit-/Wartungsskripte |
+| `01_repo/aelunor-core/tests/` | Backend-Unit- und Integrationstests; siehe dortige Kontext-README |
+| `01_repo/aelunor-core/scripts/` | Smoke-/Audit-/Wartungsskripte; siehe dortige Kontext-README |
 | `02_docs/` | Aktuelle Produkt-, Architektur- und UX-Dokumentation |
 | `03_brand/` | Brand-Assets und Referenzbilder |
 | `05_prompts/` | Prompt-Registry und zukuenftige Prompt-Bibliothek |
@@ -112,12 +112,15 @@ Es gibt aktuell kein `npm run lint`.
 - Fachlogik liegt in `app/services/`.
 - `app/main.py` verdrahtet Runtime-Konfiguration, Router und Kompatibilitaets-Exports.
 - `app/services/state_engine.py` und `app/services/turn_engine.py` enthalten noch grosse Altlasten und sind die wichtigsten Refactoring-Ziele.
+- `state_engine.EXPORTED_SYMBOLS` ist bewusst klein: nur `public_turn` und `build_campaign_view`.
+- `state_engine.runtime_symbols()` ist nur eine begrenzte interne Uebergangsbruecke fuer Router-Factories und Turn-Wiring, keine neue Public API.
+- Neue Backend-Kontext-READMEs liegen in `app/`, `app/services/`, `app/routers/`, `tests/` und `scripts/`.
 - v1-Frontend ist feature-orientiert unter `ui/src/features/`, Shared Code unter `ui/src/shared/`.
 - Backend-State bleibt Quelle der Wahrheit; UI darf keine parallele Campaign-/Claim-/Turn-Wahrheit einfuehren.
 
 ## Aktueller Feature-Stand
 
-- Kampagne erstellen/be treten und lokal speichern
+- Kampagne erstellen/beitreten und lokal speichern
 - Setup-Flow fuer Welt und Charaktere
 - Slot-Claims und Spieler-Kontext
 - Story-Turns inklusive Retry/Undo/Edit-Contracts
@@ -128,14 +131,14 @@ Es gibt aktuell kein `npm run lint`.
 
 ## Bekannte Einschraenkungen
 
-- `state_engine.py` ist ein sehr grosser Monolith und sollte schrittweise nach Domain-Bereichen zerlegt werden.
+- `state_engine.py` ist mit ca. 10.5k Zeilen weiterhin ein sehr grosser Monolith, aber erste Domain-Helfer liegen bereits in `app/services/items/`, `characters/`, `setup/`, `llm/`, `world/` und `state/`.
 - Viele Workspace-Ordner sind Platzhalter ohne produktiven Inhalt.
 - `02_docs/` war lange nur als Skelett vorhanden; aktuelle Inhalte muessen weiter code-backed gepflegt werden.
 - Push/Pull sollte nur mit sauberem Worktree erfolgen, da lokale Runtime-/Arbeitsdaten nicht vermischt werden duerfen.
 
 ## Naechste Schritte
 
-1. `state_engine.py` in kleine Module fuer Elemente, Codex, Charakter-State, Patch-Anwendung und Normalisierung zerlegen.
+1. Campaign Lifecycle, Persistence und View-Building aus `state_engine.py` extrahieren.
 2. `turn_engine.py` weiter von Prompt-/LLM-/Canon-Entscheidungen trennen.
 3. Backend-API-Contracts und v1-Frontend-Contracts aus einer dokumentierten Quelle ableiten.
-4. Platzhalter-Ordner entweder mit echten Inhalten befuellen oder nach Bestaetigung entfernen.
+4. Kontext-READMEs pro aktivem Ordner aktuell halten, damit Agents nicht den ganzen Baum scannen muessen.

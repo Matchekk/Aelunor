@@ -1,6 +1,6 @@
 # Aelunor IST-Analyse: Codezustand + Rehaul v1
 
-> Aktualisierung 2026-04-27: Dieses Dokument bleibt als historische IST-Analyse erhalten. Inzwischen belegte Ergänzungen: Composer-Drafts persistieren lokal über `ui/src/features/play/composerDraftStorage.ts`; Backend-Tests umfassen Unit-Tests und einen Kernflow-Smoke-Test unter `tests/integration/`; README und Root-README benennen `/v1` als aktiven React/Vite-Pfad und `/` als Legacy-UI.
+> Aktualisierung 2026-06-04: Dieses Dokument bleibt als historische IST-Analyse erhalten. Inzwischen ist `/` ein Redirect auf `/v1`, die aktive UI liegt in React/Vite-v1, `app/static/` ist kein aktiver Legacy-UI-Pfad mehr, `state_engine.py` liegt bei ca. 10.5k Zeilen, der normale State-Engine-Weg nutzt `configure_dependencies(StateEngineDependencies(...))`, und `state_engine.EXPORTED_SYMBOLS` ist auf `public_turn` und `build_campaign_view` begrenzt. Aeltere Legacy-/Globals-Befunde unten nur als damaligen Befund lesen.
 
 Stand: 11.03.2026  
 Repo: `01_repo/aelunor-core`  

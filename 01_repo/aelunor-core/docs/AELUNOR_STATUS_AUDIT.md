@@ -1,6 +1,6 @@
 # AELUNOR STATUS AUDIT
 
-> Aktualisierung 2026-04-27: Dieses Audit ist eine historische Momentaufnahme. Einige Befunde wurden inzwischen korrigiert. Gesichert aktualisiert sind: Composer-Drafts persistieren lokal in `ui/src/features/play/composerDraftStorage.ts`, Backend-Unit- und Integrationstests liegen unter `tests/`, Frontend-Tests liegen unter `ui/src/**/*.test.ts`, und die README dokumentiert `/v1` als React/Vite-Pfad neben der Legacy-UI unter `/`.
+> Aktualisierung 2026-06-04: Dieses Audit ist eine historische Momentaufnahme. Inzwischen ist `/` ein Redirect auf `/v1`, die aktive UI liegt in React/Vite-v1, `app/static/` ist kein aktiver Legacy-UI-Pfad mehr, `state_engine.EXPORTED_SYMBOLS` ist auf `public_turn` und `build_campaign_view` begrenzt, und neue Kontext-READMEs liegen in `app/`, `app/services/`, `app/routers/`, `tests/` und `scripts/`. Aeltere Legacy-/Globals-Befunde unten nur als damaligen Befund lesen.
 
 Stand: 2026-04-23  
 Scope: `Matchekk/Aelunor`, Projektwurzel `01_repo/aelunor-core`  

@@ -30,6 +30,15 @@ Wichtige Pfade:
 - `05_prompts/`: Prompt-Bibliothek.
 - `07_runtime/`: lokale Runtime-Daten. Nicht fuer Tests oder Experimente beschreiben, ausser der Nutzer fordert es explizit.
 
+Kontext-READMEs fuer Agents:
+
+- `01_repo/aelunor-core/README.md`: Core-Setup, Checks und Architekturregeln.
+- `01_repo/aelunor-core/app/README.md`: Backend-Schichten, Runtime-Wiring, State-Engine-Grenzen.
+- `01_repo/aelunor-core/app/services/README.md`: Service-Landkarte und aktuelle Refactoring-Grenzen.
+- `01_repo/aelunor-core/app/routers/README.md`: Router-Konventionen und Dependency-Factories.
+- `01_repo/aelunor-core/tests/README.md`: Teststruktur, Offline-Regeln, relevante Smoke-Checks.
+- `01_repo/aelunor-core/scripts/README.md`: technische Check-Scripts und wann sie laufen sollen.
+
 ## Arbeitsweise fuer Agents
 
 - Erst verstehen, dann aendern.
@@ -38,6 +47,7 @@ Wichtige Pfade:
 - Kleine, nachvollziehbare Aenderungen bevorzugen.
 - Bestehende Patterns, Ordnergrenzen und Public Contracts respektieren.
 - Bei unklarer Architektur zuerst vorhandene Konventionen suchen.
+- Vor groesseren Backend-Aenderungen zuerst die naechstliegende Kontext-README lesen.
 - Aenderungen so umsetzen, dass sie reviewbar bleiben.
 - Keine kosmetischen Massenaenderungen neben Feature-/Bugfix-Arbeit.
 - Keine Legacy-UI-Arbeit mehr in `app/static/`; aktive UI-Arbeit gehoert nach `ui/`.
@@ -58,6 +68,9 @@ Wichtige Pfade:
 - UI, Domain-Logik, Persistenz, API/IO und Tests sauber trennen.
 - Service-Logik gehoert in `app/services/`; Router bleiben duenne Adapter.
 - `app/main.py` ist Wiring/Composition, kein Ablageort fuer neue Fachlogik.
+- `state_engine.EXPORTED_SYMBOLS` bleibt klein. Alte private/domain Helper nicht wieder als breite Fassade exportieren.
+- `state_engine.runtime_symbols()` ist nur eine begrenzte interne Uebergangsbruecke fuer Runtime-Factories und Turn-Wiring.
+- Der normale `main.py`-Pfad nutzt `configure_dependencies(StateEngineDependencies(...))`; `state_engine.configure(globals())` nicht wieder als App-Hauptmechanismus einfuehren.
 - State-Aenderungen zentral, nachvollziehbar, reload-sicher und typisiert halten.
 - Keine versteckten Side Effects in UI-Komponenten.
 - Story-/Canon-/Narrator-Logik nicht direkt in zufaellige UI-Komponenten schreiben.
@@ -119,7 +132,9 @@ Wichtige Pfade:
 ## 9. Doku-Regeln
 
 - Dokumentation knapp und wartbar halten.
-- README nur fuer Setup, Start, Konfiguration und wichtige Checks erweitern.
+- Root-/Core-README nur fuer Setup, Start, Konfiguration, wichtige Checks und Kontext-Landkarten erweitern.
+- Kontext-READMEs in aktiven Ordnern duerfen kurze Architektur- und Zustandskarten enthalten, damit Agents gezielt arbeiten koennen.
+- Wenn Code verschoben wird, die naechstliegende Kontext-README im selben Slice aktualisieren.
 - Architektur- oder Produktdetails gehoeren bevorzugt nach `02_docs/`.
 - Neue Tests oder wichtige Workflows sollen kurz ausfuehrbar beschrieben werden.
 - Keine veralteten Docker-, Ollama- oder Datenpfad-Hinweise stehen lassen.

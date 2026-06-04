@@ -7,7 +7,7 @@ Aelunor ist derzeit ein einzelner lokaler App-Stack mit FastAPI-Backend, React/V
 ```text
 Browser
   /v1 React/Vite UI
-  / Legacy static UI
+  / redirects to /v1
     |
 FastAPI app.main
     |
@@ -22,11 +22,11 @@ Optional Ollama HTTP API
 
 ## Backend-Schichten
 
-- `app/main.py`: App-Wiring, globale Runtime-Konfiguration, Pydantic-Modelle, Router-Registrierung, Static Mounts, Kompatibilitaets-Exports aus `state_engine`.
+- `app/main.py`: App-Wiring, Runtime-Konfiguration, Pydantic-Modelle, Router-Registrierung, Static Mounts, kleine Public-Fassade aus `state_engine`.
 - `app/routers/`: HTTP-Adapter. Sie lesen Header/Payloads, rufen Services auf und serialisieren Responses.
 - `app/services/`: Domainlogik fuer Campaigns, Claims, Setup, Turns, Boards, Context, Presence, Sheets und State.
 - `app/helpers/`: Setup-/Serializer-Hilfslogik.
-- `app/static/`: Legacy-UI und statische Assets.
+- `app/static/`: statische Brand-/Icon-Assets; keine aktive Legacy-UI.
 
 ## Frontend-Schichten
 
@@ -58,7 +58,7 @@ Diese Contracts nur mit Migration und Tests aendern.
 
 ## Haupt-Schulden
 
-- `app/services/state_engine.py` ist zu gross und enthaelt mehrere Domains.
+- `app/services/state_engine.py` ist mit ca. 10.5k Zeilen zu gross und enthaelt mehrere Domains.
+- `state_engine.runtime_symbols()` ist eine begrenzte interne Uebergangsbruecke; `EXPORTED_SYMBOLS` bleibt klein.
 - `app/services/turn_engine.py` sollte weiter in Narrator-Orchestration, Canon-Gate und LLM-Adapter zerlegt werden.
-- Legacy-UI `app/static/app.js` bleibt gross und sollte nicht aktiv ausgebaut werden.
 - Globale CSS-Regeln sind noch umfangreich; neue Designsysteme sollten in eigene Token-/Layout-Dateien.

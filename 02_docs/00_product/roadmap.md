@@ -3,8 +3,10 @@
 ## Stabilisierung
 
 - State-/Turn-/Presence-Checks weiter gruener halten.
-- `state_engine.py` schrittweise modularisieren.
+- Naechster State-Engine-Slice: Campaign Lifecycle / Persistence / View-Building extrahieren.
+- `runtime_symbols()` nach jedem Refactoring-Slice weiter verkleinern.
 - API-/Frontend-Contracts dokumentieren und testen.
+- Kontext-READMEs in aktiven Ordnern aktuell halten.
 
 ## UX
 

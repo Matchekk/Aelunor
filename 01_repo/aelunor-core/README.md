@@ -10,7 +10,8 @@ Aelunor Core betreibt ein lokales Multiplayer-Story-RPG. Das Backend persistiert
 
 | Pfad | Zweck |
 | --- | --- |
-| `app/main.py` | App-Wiring, Runtime-Konfiguration, Router-Composition, Kompatibilitaets-Exports |
+| `app/README.md` | Backend-Kontextkarte fuer Agents |
+| `app/main.py` | App-Wiring, Runtime-Konfiguration, Router-Composition, kleine Public-Fassade |
 | `app/routers/` | HTTP-Router fuer Campaigns, Claims, Setup, Turns, Boards, Context, Presence, Sheets |
 | `app/services/` | Fachlogik fuer Kampagnen, Setup, Claims, Turns, State, Boards, Context, Presence |
 | `app/helpers/` | Hilfslogik fuer Setup und Serialisierung |
@@ -91,13 +92,16 @@ Automatisierte Tests duerfen keine echten Ollama-Aufrufe ausloesen. Nutze Fake N
 - Router bleiben duenne HTTP-Adapter.
 - Fachlogik gehoert in `app/services/`.
 - `app/main.py` bleibt Wiring/Composition.
+- `state_engine.EXPORTED_SYMBOLS` bleibt auf echte Public-Fassade begrenzt: `public_turn`, `build_campaign_view`.
+- `state_engine.runtime_symbols()` ist eine interne Uebergangsbruecke fuer bestehende Runtime-Factories und Turn-Wiring; keine neue Monolith-API.
+- Neue Domain-Helfer direkt in Zielmodulen testen/importieren, z. B. `app/services/items/`, `characters/`, `setup/`, `llm/`, `world/`.
 - JSON-State-Shape, Campaign-Dateien, Setup-Catalog-Struktur, Turn-Record-Format und UI-Erwartungen sind Public Contracts.
 - `07_runtime/` nicht als Testfixture benutzen und nicht aus Tests beschreiben.
 - UI-Arbeit gehoert in `ui/`; `app/static/` enthaelt keine aktive Legacy-UI mehr.
 
 ## Zentrale technische Schulden
 
-1. `app/services/state_engine.py` ist mit Abstand der groesste Monolith. Zerlegung sollte zuerst reine, testbare Teilbereiche extrahieren: Element-System, Codex, Character-State, Patch-Normalisierung, State-Migration.
+1. `app/services/state_engine.py` ist mit ca. 10.5k Zeilen weiterhin der groesste Monolith. Der naechste sinnvolle Slice ist Campaign Lifecycle / Persistence / View-Building.
 2. `app/services/turn_engine.py` mischt noch Narrator-Orchestrierung, LLM-Fehlerpfade, Patch-/Canon-Auswertung und Prompt-nahe Logik.
 3. `ui/src/shared/styles/globals.css` enthaelt noch sehr viele globale Regeln. Neue Systeme sollten in eigene Token-/Layout-Dateien ausgelagert werden.
 4. Lokale `__pycache__`-Artefakte und Runtime-Logs sind generiert; sie sollten nicht versioniert werden.
@@ -105,3 +109,11 @@ Automatisierte Tests duerfen keine echten Ollama-Aufrufe ausloesen. Nutze Fake N
 ## Dokumentation
 
 Aktuelle, uebergeordnete Produkt-/Architektur-Doku liegt unter `../../02_docs/`. Historische Audits in `docs/` bleiben als Zeitdokumente erhalten und sollten nicht als alleinige Wahrheit gelesen werden.
+
+Fuer schnelle Agent-Orientierung:
+
+- `app/README.md`
+- `app/services/README.md`
+- `app/routers/README.md`
+- `tests/README.md`
+- `scripts/README.md`

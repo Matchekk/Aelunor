@@ -13,9 +13,14 @@ werden.
 - `app/services/state_engine.py` ist weiterhin ein God Module. Es enthaelt
   unter anderem Character State, Skills, Progression, World Normalisierung,
   Elementlogik, Patch-/Canon-Hilfen, Persistence, Claims und LLM-nahe Logik.
-- `configure(main_globals)` mit `globals().update(main_globals)` macht
-  Abhaengigkeiten unsichtbar. Funktionen wirken lokal, brauchen aber Symbole,
-  die erst nach `app.main`-Import oder Service-Wiring vorhanden sind.
+- Der normale `app.main`-Pfad nutzt inzwischen
+  `configure_dependencies(StateEngineDependencies(...))` statt
+  `state_engine.configure(globals())`.
+- `state_engine.runtime_symbols()` bleibt als begrenzte Uebergangsbruecke fuer
+  Router-/Service-Factories und Turn-Wiring bestehen. Sie ist keine Public API
+  und darf nicht als neue Monolith-Fassade wachsen.
+- `state_engine.EXPORTED_SYMBOLS` ist bewusst klein: `public_turn`,
+  `build_campaign_view`.
 - `app/services/world/codex.py` ist fachlich ein sinnvoller Codex-Schnitt, haengt
   aber fuer Race-, Beast-, Element-, Skill- und NPC-Normalisierung weiter an
   injizierten Symbolen aus dem alten Kern.
@@ -28,11 +33,11 @@ werden.
 
 | Funktion | Benoetigte globale Symbole | Vermutete Quelle | Risiko | Spaetere Entkopplungsidee |
 | --- | --- | --- | --- | --- |
-| `normalize_world_codex_structures` | `normalize_race_profile`, `normalize_beast_profile`, `normalize_element_profile`, `ELEMENT_CORE_NAMES`, `element_sort_key`, `build_element_alias_index`, `normalize_element_relations`, `normalize_element_class_paths`, `CODEX_DEFAULT_META`, `deep_copy`, Codex-Konstanten | vor allem `state_engine.py` und `app/main.py` via `state_engine.configure(...)` | Hoch: World-Profile, Codex-Defaults, Element-Aliase und Class Paths werden in einem Schritt normalisiert. Kleine Aenderungen koennen Save-State-Struktur und View-Erwartungen brechen. | Zuerst Race-/Beast-/Element-Normalisierung in explizite World-Module verschieben, dann `normalize_world_codex_structures` ueber kleine Ports/Dependency-Objekte verdrahten. |
+| `normalize_world_codex_structures` | `normalize_race_profile`, `normalize_beast_profile`, `normalize_element_profile`, `ELEMENT_CORE_NAMES`, `element_sort_key`, `build_element_alias_index`, `normalize_element_relations`, `normalize_element_class_paths`, `CODEX_DEFAULT_META`, `deep_copy`, Codex-Konstanten | vor allem `state_engine.py`, World-Module und begrenztes Runtime-Wiring | Hoch: World-Profile, Codex-Defaults, Element-Aliase und Class Paths werden in einem Schritt normalisiert. Kleine Aenderungen koennen Save-State-Struktur und View-Erwartungen brechen. | Zuerst Race-/Beast-/Element-Normalisierung in explizite World-Module verschieben, dann `normalize_world_codex_structures` ueber kleine Ports/Dependency-Objekte verdrahten. |
 | `normalize_npc_codex_state` | `normalize_npc_entry`, `normalize_element_id_list`, `normalize_resource_name`, `normalize_dynamic_skill_state`, `normalize_skill_elements_for_world`, `normalize_npc_alias` | `state_engine.py`, `world/progression.py`, `world/npc.py`, globale Codex-Konfiguration | Hoch: NPCs, Skills und Elementlisten werden gemeinsam bereinigt; fehlerhafte Alias- oder Elementauflosung kann NPC-Codex und Skill-State veraendern. | NPC-Codex-Service mit explizitem ElementResolver und SkillNormalizer einfuehren. |
 | `normalize_npc_entry` | `npc_id_from_name`, `NPC_STATUS_ALLOWED`, `normalize_class_current`, `normalize_resource_name`, `normalize_skill_store`, `next_character_xp_for_level`, `deep_copy` | `world/npc.py`, `world/progression.py`, `state_engine.py`, `app/main.py` | Mittel bis hoch: Die Funktion normalisiert Identitaet, Status, Class, Skills, XP und Ressourcen in einem Dict-Contract. | NPC-State-Model/Validator isolieren; Skill- und Class-Normalisierung als explizite Collaborators uebergeben. |
 | `codex_blocks_for_level` | `CODEX_KNOWLEDGE_LEVEL_MIN`, `CODEX_KNOWLEDGE_LEVEL_MAX`, `RACE_BLOCKS_BY_LEVEL`, `BEAST_BLOCKS_BY_LEVEL`, `CODEX_KIND_RACE`, Block-Order-Konstanten | `app/main.py` via globale Injektion oder Test-Harness | Mittel: Knowledge-Level-Grenzen und freigeschaltete Blocks sind Canon-/UI-relevant. | Codex-Konstanten in ein kleines `codex/constants.py` oder Config-Objekt verschieben. |
-| `normalize_codex_entry_stable` | `deep_copy`, `CODEX_KIND_RACE`, `CODEX_KNOWLEDGE_LEVEL_MIN`, `CODEX_KNOWLEDGE_LEVEL_MAX`, Block-Order-Konstanten | `app/main.py` und `state_engine.configure(...)` | Mittel: Clamping, bekannte Blocks, bekannte Fakten und Race-/Beast-Spezialfelder muessen stabil bleiben. | Reine Entry-Normalisierung mit explizitem `CodexRules`-Objekt ausstatten. |
+| `normalize_codex_entry_stable` | `deep_copy`, `CODEX_KIND_RACE`, `CODEX_KNOWLEDGE_LEVEL_MIN`, `CODEX_KNOWLEDGE_LEVEL_MAX`, Block-Order-Konstanten | World-Codex-Modul und begrenztes Runtime-Wiring | Mittel: Clamping, bekannte Blocks, bekannte Fakten und Race-/Beast-Spezialfelder muessen stabil bleiben. | Reine Entry-Normalisierung mit explizitem `CodexRules`-Objekt ausstatten. |
 | `seed_npc_codex_from_story_cards` | `npc_id_from_name`, `normalize_npc_alias` | `world/npc.py`, im Test aktuell lokal injizierbar | Mittel: Story Cards erzeugen persistente NPC-IDs und Alias-Eintraege; ID-/Alias-Aenderungen wirken reload-uebergreifend. | ID- und Alias-Strategie als kleine NPC-Codex-Abhaengigkeit explizit machen. |
 
 ## Empfohlene sichere Refactoring-Reihenfolge
@@ -165,11 +170,10 @@ weiterhin ausserhalb dieses Refactoring-Strangs.
 weiter, damit bestehende Imports und das globale Turn-Wiring unveraendert
 bleiben.
 
-Dieser Schritt entfernt die globale Wiring-Struktur noch nicht vollstaendig:
-`state_engine.configure(main_globals)` spiegelt die bestehenden Runtime-
-Abhaengigkeiten fuer Injury-/Scar-Normalisierung weiterhin in das World-Modul.
+Dieser Schritt entfernte die Runtime-Wiring-Struktur noch nicht vollstaendig.
 Die Default-State-Helfer selbst brauchen keine globale Injektion mehr. Die Turn
-Pipeline, Patch Sanitizer und Patch Validator wurden dabei nicht umgebaut.
+Pipeline, Patch Sanitizer und Patch Validator wurden dabei noch nicht vollstaendig
+entkoppelt.
 
 ## Refactoring-Schritt: Appearance Default Profile
 
@@ -211,3 +215,30 @@ geaendert.
 - Keine Aenderung am Save-State-Format.
 - Keine Aenderung an API-Vertraegen.
 - Keine neuen Features und keine neuen Dependencies.
+
+## Aktueller Stand: Public API und Runtime-Bridge
+
+`state_engine.EXPORTED_SYMBOLS` enthaelt nur noch:
+
+- `public_turn`
+- `build_campaign_view`
+
+Alte private/domain Helper werden nicht mehr ueber die Public-Fassade erwartet.
+Tests importieren Zielmodule direkt, z. B.:
+
+- `app/services/items/inventory.py`
+- `app/services/characters/derived_stats.py`
+- `app/services/setup/answers.py`
+- `app/services/setup/flow.py`
+- `app/services/world/scene.py`
+- `app/services/llm/json_repair.py`
+- `app/services/state/dependencies.py`
+
+`runtime_symbols()` ist von der alten breiten Uebergangsliste auf eine begrenzte
+interne Bruecke reduziert. Verbleibende Eintraege sind noch noetig fuer
+Router-/Service-Dependency-Factories, Turn-Patch-Sanitizer/-Validator-
+Konfiguration und die Turn-Record-Pipeline.
+
+Check-Scripts wie `check_progression_canon_gate.py`, `check_element_system.py`
+und `check_codex_system.py` nutzen script-lokale explizite Symbolsets, statt die
+Runtime-Bridge wieder aufzublaehen. Alle drei Checks laufen offline.

@@ -1,18 +1,18 @@
 # Aelunor Webapp Architecture Overview
 
-Stand: 2026-06-03
+Stand: 2026-06-04
 
 ## Kurzfassung
 
-Aelunor besteht aus einer FastAPI-App mit zwei UI-Einstiegen: der Legacy-UI unter `/` und der aktiven React/Vite-v1-UI unter `/v1`. Die v1-UI nutzt React Router, TanStack Query fuer Campaign-Snapshots und Mutationen, Zustand fuer lokale UI-Stores sowie SSE fuer Live-Sync. Das Backend gruppiert HTTP-Endpunkte in duenne Router und delegiert Fachlogik an Services. Persistente Wahrheit ist JSON-Dateispeicherung unter `DATA_DIR/campaigns`; Live-Presence ist nur transient im Speicher. Ollama ist der zentrale externe Generator fuer Setup-Texte, Story-Turns, Canon-Extractor, NPC-Extractor und Kontextantworten.
+Aelunor besteht aus einer FastAPI-App mit einer aktiven React/Vite-v1-UI unter `/v1`; `/` leitet auf `/v1` weiter. Die v1-UI nutzt React Router, TanStack Query fuer Campaign-Snapshots und Mutationen, Zustand fuer lokale UI-Stores sowie SSE fuer Live-Sync. Das Backend gruppiert HTTP-Endpunkte in duenne Router und delegiert Fachlogik an Services. Persistente Wahrheit ist JSON-Dateispeicherung unter `DATA_DIR/campaigns`; Live-Presence ist nur transient im Speicher. Ollama ist optionaler externer Generator fuer Setup-Texte, Story-Turns, Canon-Extractor, NPC-Extractor und Kontextantworten; Tests und Check-Scripts muessen ihn faken oder stubs/fallbacks nutzen.
 
 ## Erkannte Hauptbereiche
 
 - Frontend v1: `ui/src/app`, `ui/src/features`, `ui/src/entities`, `ui/src/shared`
-- Legacy-Frontend: `app/static/index.html`, `app/static/app.js`, `app/static/style.css`
+- Statische Assets: `app/static/`; keine aktive Legacy-UI
 - API-Wiring: `app/main.py`
 - Router: `app/routers/*.py`
-- Services: `app/services/*.py`, `app/services/turn/*.py`, `app/services/world/*.py`
+- Services: `app/services/*.py`, `app/services/turn/*.py`, `app/services/world/*.py`, plus extrahierte Zielmodule in `items/`, `characters/`, `setup/`, `llm/`, `state/`
 - API-Schemas und View-Serializer: `app/schemas/api.py`, `app/serializers/campaign_view.py`
 - Persistenz: JSON-Campaign-Dateien in `DATA_DIR/campaigns`; lokale Browserdaten in `localStorage` und `sessionStorage`
 - Extern: Ollama `/api/chat` und `/api/tags`
@@ -24,7 +24,7 @@ flowchart LR
   user["User\nspielt, richtet ein, claimt Slots"] --> browser["Browser"]
 
   subgraph frontend["Frontend"]
-    legacy["Legacy UI\napp/static\nRoute: /"]
+    rootRedirect["Root Redirect\n/ -> /v1"]
     v1["React/Vite UI v1\nui/src\nRoute: /v1/*"]
     router["React Router Gate\nhub / claim / setup / play\napp/routing"]
     workspaces["Feature Workspaces\nSessionHub, Claim,\nSetupWizard, Play"]
@@ -34,7 +34,7 @@ flowchart LR
     sseClient["SSE Client\ncampaign_sync + presence_sync"]
   end
 
-  browser --> legacy
+  browser --> rootRedirect --> v1
   browser --> v1
   v1 --> router
   router --> workspaces
@@ -64,7 +64,6 @@ flowchart LR
   workspaces --> contextRouter
   workspaces --> sheetsRouter
   sseClient -- "POST ticket then EventSource\nno player token in v1 URL" --> presenceRouter
-  legacy -- "direct fetch/EventSource\nsame backend contracts" --> fastapi
 
   fastapi --> campaignsRouter
   fastapi --> setupRouter
@@ -103,7 +102,7 @@ flowchart LR
 
   subgraph engines["Central Logic / Generators"]
     mainGlue["Dependency Wiring + Constants\napp/main.py"]
-    stateEngine["state_engine.py\nnormalization, persistence,\nsetup finalization,\nworld/canon helpers"]
+    stateEngine["state_engine.py\nnormalization, persistence,\nsetup finalization,\nworld/canon helpers\nsmall public facade"]
     turnEngine["turn_engine.py\nturn pipeline orchestration"]
     patchPipeline["turn patch pipeline\nsanitize, validate,\napply, limits"]
     worldModules["world modules\ncodex, progression,\nelements, combat, NPCs"]
@@ -149,7 +148,7 @@ flowchart LR
 ## Haupt-Workflows
 
 - Kampagne erstellen/joinen: `SessionHubWorkspace` -> `/api/campaigns` oder `/api/campaigns/join` -> `campaign_service` -> JSON-Campaign -> lokale Sessiondaten.
-- Setup: `SetupWizardOverlay` -> setup API -> `setup_service` -> `state_engine` fuer AI-Copy, Random Answers, Finalisierung, World/Character Summary -> JSON save -> SSE.
+- Setup: `SetupWizardOverlay` -> setup API -> `setup_service` -> explicit dependencies -> `state_engine`/setup modules fuer AI-Copy, Random Answers, Finalisierung, World/Character Summary -> JSON save -> SSE.
 - Claim: `ClaimWorkspace` -> claim API -> `claim_service` -> Claims im Campaign JSON -> SSE.
 - Spielen: `Composer`/`CampaignWorkspace` -> turns API -> `turn_service` -> `turn_engine` -> Ollama Narrator/Extractors -> Patch-Pipeline -> State save -> SSE -> React Query reload.
 - Live-Sync: Presence-Aktivitaeten gehen in `live_state_service`; persistente Campaign-Aenderungen senden `campaign_sync`; die v1-UI invalidiert danach den Campaign-Snapshot.

@@ -149,9 +149,9 @@ flowchart LR
 
 ## Migrationspfad aus dem Ist-Zustand
 
-1. Legacy-UI absichern: SSE-Ticket-Flow portieren oder Legacy im normalen Pfad deaktivieren.
+1. Aktiven UI-Pfad konsolidieren: `/` -> `/v1` beibehalten und keine neue Arbeit in `app/static/` starten.
 2. LLM-Adapter einfuehren: bestehende Ollama-Funktionen hinter einen kleinen Rollen-Client legen.
 3. `state_engine.py` schrittweise teilen: zuerst Repository/Persistence, danach Setup- und Sheet-Views.
-4. `configure(globals())` reduzieren: pro extrahiertem Modul eine Dependency-Dataclass.
+4. Runtime-Bruecken reduzieren: pro extrahiertem Modul eine Dependency-Dataclass und `runtime_symbols()` weiter verkleinern.
 5. Save/Broadcast entkoppeln: Persistenz als Commit, Broadcast als nachgelagerter Live-Event mit Recovery-Fallback.
 6. v1-UI-State vereinheitlichen: URL fuer offene Oberflaechen, Stores fuer abgeleitete Renderdaten.

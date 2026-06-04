@@ -83,3 +83,35 @@
 - normalize_race_profile - gehoert zum Race-System und bleibt fuer spaeteren race.py-Refactor in state_engine.py.
 - normalize_beast_profile - gehoert zum Beast-System und bleibt fuer spaeteren beast.py-Refactor in state_engine.py.
 - Element-, Skill-, Progression- und Naming-Helfer - bleiben bewusst in state_engine.py, um diesen Schritt auf das Codex-Subsystem zu begrenzen.
+
+## Aktualisierung 2026-06-04: State-Engine-Stabilisierung
+
+Zusaetzlich zum Codex-Strang wurden weitere Zielmodule angelegt oder stabilisiert:
+
+- `app/services/items/inventory.py`
+- `app/services/characters/derived_stats.py`
+- `app/services/setup/answers.py`
+- `app/services/setup/flow.py`
+- `app/services/world/scene.py`
+- `app/services/llm/json_repair.py`
+- `app/services/state/dependencies.py`
+
+`state_engine.EXPORTED_SYMBOLS` ist jetzt bewusst klein und enthaelt nur noch:
+
+- `public_turn`
+- `build_campaign_view`
+
+`runtime_symbols()` ist keine Public API. Die Bridge bleibt nur fuer noch nicht
+voll umgestellte Router-/Service-Factories, Turn-Patch-Konfiguration und
+Turn-Record-Wiring erhalten. Check-Scripts verwenden eigene explizite Symbolsets
+und laufen offline.
+
+Aktuelle Absicherung:
+
+- `tests/unit/test_state_dependencies.py`
+- `tests/unit/test_main_state_engine_config.py`
+- `tests/unit/test_state_engine_reexports_after_service_extraction.py`
+- Full Suite zuletzt gruen: 306 passed.
+
+Naechster empfohlener Slice: Campaign Lifecycle / Persistence / View-Building aus
+`state_engine.py` extrahieren.
