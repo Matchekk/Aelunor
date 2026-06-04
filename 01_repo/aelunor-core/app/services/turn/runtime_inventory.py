@@ -18,9 +18,11 @@ TURN_ENGINE_RUNTIME_DEPENDENCY_GROUPS: Dict[str, Tuple[str, ...]] = {
         "ERROR_CODE_EXTRACTOR",
         "TURN_ERROR_USER_MESSAGES",
     ),
-    "llm": (
+    "llm_explicit_ports": (
         "call_ollama_json",
         "call_ollama_schema",
+    ),
+    "llm_runtime_config": (
         "OLLAMA_TEMPERATURE",
         "OLLAMA_REPEAT_PENALTY",
         "MAX_TURN_MODEL_ATTEMPTS",

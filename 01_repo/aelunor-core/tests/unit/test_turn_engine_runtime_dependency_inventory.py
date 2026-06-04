@@ -9,7 +9,8 @@ from app.services.turn.runtime_inventory import (
 
 class TurnEngineRuntimeDependencyInventoryTests(unittest.TestCase):
     def test_inventory_groups_keep_runtime_bridge_targets_visible(self) -> None:
-        self.assertIn("call_ollama_json", dependency_names_for_group("llm"))
+        self.assertIn("call_ollama_json", dependency_names_for_group("llm_explicit_ports"))
+        self.assertIn("OLLAMA_TEMPERATURE", dependency_names_for_group("llm_runtime_config"))
         self.assertIn("call_canon_extractor", dependency_names_for_group("extraction"))
         self.assertIn("build_patch_summary", dependency_names_for_group("turn_materialization"))
         self.assertIn("run_canon_gate", dependency_names_for_group("canon_progression"))
