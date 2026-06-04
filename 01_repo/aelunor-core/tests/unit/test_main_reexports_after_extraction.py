@@ -155,7 +155,8 @@ class MainReexportsAfterExtractionTests(unittest.TestCase):
         runtime = main.state_engine_runtime()
 
         setup_deps = main.setup_service_dependencies()
-        self.assertIs(setup_deps.load_campaign, runtime["load_campaign"])
+        self.assertNotIn("load_campaign", runtime)
+        self.assertTrue(callable(setup_deps.load_campaign))
         self.assertIs(setup_deps.clear_live_activity, main.live_state_service.clear_live_activity)
         self.assertIs(setup_deps.world_question_map, main.WORLD_QUESTION_MAP)
 
@@ -169,7 +170,8 @@ class MainReexportsAfterExtractionTests(unittest.TestCase):
         self.assertIs(campaign_deps.clear_live_campaign_state, main.live_state_service.clear_campaign_state)
 
         boards_deps = main.boards_service_dependencies()
-        self.assertIs(boards_deps.default_player_diary_entry, runtime["default_player_diary_entry"])
+        self.assertNotIn("default_player_diary_entry", runtime)
+        self.assertTrue(callable(boards_deps.default_player_diary_entry))
         self.assertIs(boards_deps.make_id, main.make_id)
 
 

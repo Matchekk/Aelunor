@@ -269,6 +269,10 @@ from app.services.patch_payloads import (
     normalize_patch_payload,
     normalize_patch_semantics,
 )
+from app.services.campaigns import lifecycle as campaign_lifecycle
+from app.services.campaigns import persistence as campaign_persistence
+from app.services.campaigns import views as campaign_views
+from app.services.migrations import campaign_slots as campaign_slot_migration
 from app.services import live_state_service as _default_live_state_service
 from app.services.turn_engine import emit_turn_phase_event, turn_flow_error
 from app.services.llm.json_repair import (
@@ -635,6 +639,7 @@ _STATE_ENGINE_RUNTIME_SYMBOLS = (
     'UNIVERSAL_SKILL_LIKE_NAMES',
     'WORLD_QUESTION_MAP',
     'active_pacing_profile',
+    # Turn engine still reads these campaign helpers through the transition bridge.
     'active_party',
     'active_turns',
     'append_character_change_events',
@@ -651,7 +656,6 @@ _STATE_ENGINE_RUNTIME_SYMBOLS = (
     'apply_world_summary_to_boards',
     'apply_world_time_advance',
     'attribute_cap_for_campaign',
-    'authenticate_player',
     'blank_patch',
     'build_character_question_state',
     'build_character_sheet_view',
@@ -664,7 +668,6 @@ _STATE_ENGINE_RUNTIME_SYMBOLS = (
     'build_extractor_context_packet',
     'build_npc_sheet_view',
     'build_pacing_instruction_block',
-    'build_party_overview',
     'build_patch_summary',
     'build_random_setup_preview',
     'build_reduced_context_snippets',
@@ -675,9 +678,7 @@ _STATE_ENGINE_RUNTIME_SYMBOLS = (
     'call_npc_extractor',
     'call_ollama_json',
     'call_ollama_schema',
-    'campaign_path',
     'campaign_slots',
-    'can_start_adventure',
     'canonical_resource_deltas_from_update',
     'canonical_resources_set_from_payload',
     'clamp',
@@ -691,17 +692,14 @@ _STATE_ENGINE_RUNTIME_SYMBOLS = (
     'compute_turn_budget_estimates',
     'context_result_to_answer_text',
     'context_state_signature',
-    'create_campaign_record',
     'current_question_id',
     'deep_copy',
     'default_class_current',
-    'default_player_diary_entry',
     'derive_attribute_relevance',
     'deterministic_context_result_from_entry',
     'display_name_for_slot',
     'effective_skill_progress_multiplier',
     'emit_turn_phase_event',
-    'ensure_campaign_storage',
     'ensure_character_progression_core',
     'ensure_class_rank_core_skills',
     'ensure_item_shape',
@@ -710,15 +708,12 @@ _STATE_ENGINE_RUNTIME_SYMBOLS = (
     'extract_story_target_evidence',
     'finalize_character_setup',
     'finalize_world_setup',
-    'find_campaign_by_join_code',
     'hash_secret',
     'infer_combat_context',
     'infer_item_slot_from_definition',
     'infer_skill_cost_deltas_from_text',
-    'intro_state',
     'is_continue_story_content',
     'is_generic_scene_identifier',
-    'is_host',
     'is_plausible_scene_name',
     'is_skill_manifestation_name_plausible',
     'is_slot_id',
@@ -726,13 +721,11 @@ _STATE_ENGINE_RUNTIME_SYMBOLS = (
     'item_matches_equipment_slot',
     'legacy_misc_resource_deltas_from_update',
     'legacy_misc_resources_set_from_payload',
-    'load_campaign',
     'log_board_revision',
     'make_id',
     'merge_dynamic_skill',
     'merge_patch_payloads',
     'milestone_state_for_turn',
-    'new_player',
     'next_skill_xp_for_level',
     'normalize_ability_state',
     'normalize_attribute_influence_meta',
@@ -757,21 +750,17 @@ _STATE_ENGINE_RUNTIME_SYMBOLS = (
     'normalize_world_time',
     'normalized_eval_text',
     'parse_context_intent',
-    'player_claim',
     'progress_payload',
     'rebuild_all_character_derived',
     'rebuild_character_derived',
     'rebuild_memory_summary',
     'reconcile_canonical_resources',
     'remember_recent_story',
-    'require_claim',
-    'require_host',
     'resolve_class_element_id',
     'resolve_context_target',
     'resolve_injury_healing',
     'resource_name_for_character',
     'run_canon_gate',
-    'save_campaign',
     'skill_id_from_name',
     'slot_index',
     'store_setup_answer',
@@ -1840,32 +1829,7 @@ def looks_like_legacy_seeded_skills(skills: Dict[str, Any]) -> bool:
     return True
 
 def default_boards(player_id: Optional[str] = None) -> Dict[str, Any]:
-    now = utc_now()
-    return {
-        "plot_essentials": {
-            "premise": "",
-            "current_goal": "",
-            "current_threat": "",
-            "active_scene": "",
-            "open_loops": [],
-            "tone": "",
-            "updated_at": now,
-            "updated_by": player_id,
-        },
-        "authors_note": {
-            "content": "",
-            "updated_at": now,
-            "updated_by": player_id,
-        },
-        "story_cards": [],
-        "world_info": [],
-        "memory_summary": {
-            "content": "Noch keine Zusammenfassung vorhanden.",
-            "updated_through_turn": 0,
-            "updated_at": now,
-        },
-        "player_diaries": {},
-    }
+    return campaign_lifecycle.default_boards(player_id)
 
 def resource_delta_payload() -> Dict[str, int]:
     return {key: 0 for key in RESOURCE_KEYS}
@@ -4847,26 +4811,23 @@ def default_character_setup_node() -> Dict[str, Any]:
     }
 
 def campaign_repository() -> CampaignRepository:
-    configured = _STATE_ENGINE_DEPS.campaign_repository
-    if (
-        isinstance(configured, CampaignRepository)
-        and configured.data_dir == DATA_DIR
-        and configured.campaigns_dir == CAMPAIGNS_DIR
-    ):
-        return configured
-    return CampaignRepository(data_dir=DATA_DIR, campaigns_dir=CAMPAIGNS_DIR)
+    return campaign_persistence.resolve_campaign_repository(
+        configured=_STATE_ENGINE_DEPS.campaign_repository,
+        data_dir=DATA_DIR,
+        campaigns_dir=CAMPAIGNS_DIR,
+    )
 
 def save_json(path: str, payload: Dict[str, Any]) -> None:
-    campaign_repository().save_json(path, payload)
+    campaign_persistence.save_json(campaign_repository(), path, payload)
 
 def load_json(path: str) -> Dict[str, Any]:
-    return campaign_repository().load_json(path)
+    return campaign_persistence.load_json(campaign_repository(), path)
 
 def campaign_path(campaign_id: str) -> str:
-    return campaign_repository().campaign_path(campaign_id)
+    return campaign_persistence.campaign_path(campaign_repository(), campaign_id)
 
 def list_campaign_ids() -> List[str]:
-    return campaign_repository().list_campaign_ids()
+    return campaign_persistence.list_campaign_ids(campaign_repository())
 
 def build_rules_profile(campaign: Dict[str, Any]) -> Dict[str, Any]:
     summary = campaign.get("setup", {}).get("world", {}).get("summary", {})
@@ -4899,186 +4860,65 @@ def attribute_cap_for_campaign(campaign: Dict[str, Any]) -> int:
     return max(1, int(world_attribute_scale(campaign)["max"] or 10))
 
 def campaign_slots(campaign: Dict[str, Any]) -> List[str]:
-    keys = list((campaign.get("state", {}).get("characters") or {}).keys())
-    if not keys:
-        keys = list((campaign.get("claims") or {}).keys())
-    if not keys:
-        keys = list((campaign.get("setup", {}).get("characters") or {}).keys())
-    return ordered_slots([key for key in keys if is_slot_id(key)])
+    return campaign_views.campaign_slots(campaign)
 
 def player_claim(campaign: Dict[str, Any], player_id: Optional[str]) -> Optional[str]:
-    if not player_id:
-        return None
-    for slot_name, claimed_player_id in (campaign.get("claims") or {}).items():
-        if claimed_player_id == player_id:
-            return slot_name
-    return None
+    return campaign_views.player_claim(campaign, player_id)
 
 def display_name_for_slot(campaign: Dict[str, Any], slot_name: str) -> str:
-    bio = (campaign.get("state", {}).get("characters", {}).get(slot_name) or {}).get("bio", {})
-    return bio.get("name") or f"Slot {slot_index(slot_name)}"
+    return campaign_views.display_name_for_slot(campaign, slot_name)
 
 def active_party(campaign: Dict[str, Any]) -> List[str]:
-    slots = []
-    setup_chars = campaign.get("setup", {}).get("characters", {})
-    for slot_name in campaign_slots(campaign):
-        if campaign.get("claims", {}).get(slot_name) and setup_chars.get(slot_name, {}).get("completed"):
-            slots.append(slot_name)
-    return slots
+    return campaign_views.active_party(campaign)
 
 def expected_setup_slots(campaign: Dict[str, Any]) -> List[str]:
-    summary = ((campaign.get("setup") or {}).get("world") or {}).get("summary") or {}
-    count = int(summary.get("player_count") or 1)
-    count = max(1, min(MAX_PLAYERS, count))
-    slots = campaign_slots(campaign)
-    if len(slots) >= count:
-        return slots[:count]
-    return [slot_id(index) for index in range(1, count + 1)]
+    return campaign_views.expected_setup_slots(campaign)
 
 def setup_slot_statuses(campaign: Dict[str, Any]) -> List[Dict[str, Any]]:
-    setup_chars = ((campaign.get("setup") or {}).get("characters") or {})
-    statuses: List[Dict[str, Any]] = []
-    for slot_name in expected_setup_slots(campaign):
-        owner = (campaign.get("claims") or {}).get(slot_name)
-        node = setup_chars.get(slot_name) or {}
-        if not owner:
-            status = "unclaimed"
-        elif node.get("completed"):
-            status = "ready"
-        else:
-            status = "in_progress"
-        statuses.append(
-            {
-                "slot_id": slot_name,
-                "display_name": display_name_for_slot(campaign, slot_name),
-                "claimed_by": owner,
-                "status": status,
-                "completed": bool(node.get("completed")),
-            }
-        )
-    return statuses
+    return campaign_views.setup_slot_statuses(campaign)
 
 def public_player(player_id: str, player: Dict[str, Any]) -> Dict[str, Any]:
-    return {
-        "player_id": player_id,
-        "display_name": player.get("display_name", ""),
-        "joined_at": player.get("joined_at"),
-        "last_seen_at": player.get("last_seen_at"),
-    }
+    return campaign_views.public_player(player_id, player)
 
 def default_player_diary_entry(player_id: str, display_name: str) -> Dict[str, Any]:
-    now = utc_now()
-    return {
-        "player_id": player_id,
-        "display_name": display_name,
-        "content": "",
-        "updated_at": now,
-        "updated_by": player_id,
-    }
+    return campaign_views.default_player_diary_entry(player_id, display_name)
+
+def _campaign_view_ports() -> campaign_views.CampaignViewPorts:
+    live_state = _STATE_ENGINE_DEPS.live_state_service or _default_live_state_service
+    return campaign_views.CampaignViewPorts(
+        normalize_campaign=normalize_campaign,
+        deep_copy=deep_copy,
+        derive_scene_name=derive_scene_name,
+        normalize_character_state=normalize_character_state,
+        blank_character_state=blank_character_state,
+        normalize_class_current=normalize_class_current,
+        next_character_xp_for_level=next_character_xp_for_level,
+        resource_name_for_character=resource_name_for_character,
+        clamp=clamp,
+        normalize_world_time=normalize_world_time,
+        build_world_question_state=build_world_question_state,
+        build_character_question_state=build_character_question_state,
+        progress_payload=progress_payload,
+        setup_global_progress=setup_global_progress,
+        setup_chapter_config=setup_chapter_config,
+        setup_question_chapter_key=setup_question_chapter_key,
+        setup_chapter_progress=setup_chapter_progress,
+        setup_phase_display=setup_phase_display,
+        setup_summary_preview=setup_summary_preview,
+        normalize_requests_payload=normalize_requests_payload,
+        blank_patch=blank_patch,
+        public_turn=public_turn,
+        live_snapshot=live_state.live_snapshot,
+    )
 
 def available_slots(campaign: Dict[str, Any]) -> List[Dict[str, Any]]:
-    players = campaign.get("players", {})
-    out = []
-    for slot_name in campaign_slots(campaign):
-        owner = campaign.get("claims", {}).get(slot_name)
-        owner_name = players.get(owner, {}).get("display_name") if owner else None
-        setup_node = campaign.get("setup", {}).get("characters", {}).get(slot_name, {})
-        character = (campaign.get("state", {}).get("characters", {}) or {}).get(slot_name) or blank_character_state(slot_name)
-        character = normalize_character_state(character, slot_name, campaign.get("state", {}).get("items", {}) or {})
-        current_class = normalize_class_current(character.get("class_current"))
-        out.append(
-            {
-                "slot_id": slot_name,
-                "claimed_by": owner,
-                "claimed_by_name": owner_name,
-                "completed": bool(setup_node.get("completed")),
-                "display_name": display_name_for_slot(campaign, slot_name),
-                "summary": setup_node.get("summary", {}),
-                "class_name": (current_class or {}).get("name", ""),
-                "class_rank": (current_class or {}).get("rank", ""),
-                "class_level": (current_class or {}).get("level", 0),
-                "class_level_max": (current_class or {}).get("level_max", 10),
-            }
-        )
-    return out
+    return campaign_views.available_slots(campaign, ports=_campaign_view_ports())
 
 def compact_conditions(character: Dict[str, Any]) -> List[str]:
-    names = []
-    for effect in character.get("effects", []) or []:
-        if effect.get("visible", True) and effect.get("name"):
-            names.append(effect["name"])
-    if not names:
-        names = [entry for entry in character.get("conditions", []) or [] if entry]
-    return names[:3]
+    return campaign_views.compact_conditions(character)
 
 def build_party_overview(campaign: Dict[str, Any]) -> List[Dict[str, Any]]:
-    overview = []
-    world_settings = (((campaign.get("state") or {}).get("world") or {}).get("settings") or {})
-    for slot_name in campaign_slots(campaign):
-        character = (campaign.get("state", {}).get("characters", {}) or {}).get(slot_name) or blank_character_state(slot_name)
-        character = normalize_character_state(character, slot_name, campaign.get("state", {}).get("items", {}) or {})
-        current_class = normalize_class_current(character.get("class_current"))
-        overview.append(
-            {
-                "slot_id": slot_name,
-                "display_name": display_name_for_slot(campaign, slot_name),
-                "claimed_by": campaign.get("claims", {}).get(slot_name),
-                "claimed_by_name": campaign.get("players", {}).get(campaign.get("claims", {}).get(slot_name), {}).get("display_name"),
-                "scene_id": character.get("scene_id", ""),
-                "scene_name": derive_scene_name(campaign, slot_name),
-                "class_name": (current_class or {}).get("name", ""),
-                "class_rank": (current_class or {}).get("rank", ""),
-                "class_level": (current_class or {}).get("level"),
-                "class_level_max": (current_class or {}).get("level_max"),
-                "level": int(character.get("level", 1) or 1),
-                "xp_current": int(character.get("xp_current", 0) or 0),
-                "xp_to_next": int(character.get("xp_to_next", next_character_xp_for_level(int(character.get("level", 1) or 1))) or next_character_xp_for_level(int(character.get("level", 1) or 1))),
-                "hp_current": int(character.get("hp_current", 0) or 0),
-                "hp_max": int(character.get("hp_max", 0) or 0),
-                "sta_current": int(character.get("sta_current", 0) or 0),
-                "sta_max": int(character.get("sta_max", 0) or 0),
-                "res_current": int(character.get("res_current", 0) or 0),
-                "res_max": int(character.get("res_max", 0) or 0),
-                "resource_name": resource_name_for_character(character, world_settings),
-                "carry_current": int(character.get("carry_current", 0) or 0),
-                "carry_max": int(character.get("carry_max", 0) or 0),
-                "hp_pct": clamp(
-                    int(
-                        round(
-                            (int(character.get("hp_current", 0) or 0) / max(1, int(character.get("hp_max", 1) or 1))) * 100
-                        )
-                    ),
-                    0,
-                    100,
-                ),
-                "sta_pct": clamp(
-                    int(
-                        round(
-                            (int(character.get("sta_current", 0) or 0) / max(1, int(character.get("sta_max", 1) or 1))) * 100
-                        )
-                    ),
-                    0,
-                    100,
-                ),
-                "res_pct": clamp(
-                    int(
-                        round(
-                            (int(character.get("res_current", 0) or 0) / max(1, int(character.get("res_max", 1) or 1))) * 100
-                        )
-                    ),
-                    0,
-                    100,
-                ),
-                "injury_count": len(character.get("injuries", []) or []),
-                "scar_count": len(character.get("scars", []) or []),
-                "conditions": compact_conditions(character),
-                "in_combat": bool(((character.get("derived") or {}).get("combat_flags") or {}).get("in_combat", False)),
-                "appearance_short": ((character.get("appearance") or {}).get("summary_short") or ""),
-                "age": int(((character.get("bio") or {}).get("age_years", 0) or 0)),
-                "age_stage": str(((character.get("bio") or {}).get("age_stage", "")) or ""),
-            }
-        )
-    return overview
+    return campaign_views.build_party_overview(campaign, ports=_campaign_view_ports())
 
 def build_character_sheet_view(campaign: Dict[str, Any], slot_name: str) -> Dict[str, Any]:
     character = (campaign.get("state", {}).get("characters", {}) or {}).get(slot_name)
@@ -8156,151 +7996,30 @@ def apply_character_summary_to_state(campaign: Dict[str, Any], slot_name: str) -
     sync_scars_into_appearance(character)
 
 def is_legacy_campaign(campaign: Dict[str, Any]) -> bool:
-    chars = list((campaign.get("state", {}).get("characters") or {}).keys())
-    claims = list((campaign.get("claims") or {}).keys())
-    if any(name in LEGACY_CHARACTERS for name in chars):
-        return True
-    if any(name in LEGACY_CHARACTERS for name in claims):
-        return True
-    setup = campaign.get("setup", {})
-    if setup and setup.get("version") == 2:
-        return False
-    return bool(chars or claims) and not all(is_slot_id(name) for name in chars + claims if name)
+    return campaign_slot_migration.is_legacy_campaign(campaign)
 
 def remap_turn_context_slot_names(turn: Dict[str, Any], mapping: Dict[str, str]) -> None:
-    if turn.get("actor") in mapping:
-        turn["actor"] = mapping[turn["actor"]]
-    patch_chars = (turn.get("patch") or {}).get("characters")
-    if isinstance(patch_chars, dict):
-        turn["patch"]["characters"] = {mapping.get(key, key): value for key, value in patch_chars.items()}
-    for state_key in ("state_before", "state_after"):
-        state_snapshot = turn.get(state_key) or {}
-        chars = state_snapshot.get("characters")
-        if isinstance(chars, dict):
-            state_snapshot["characters"] = {mapping.get(key, key): value for key, value in chars.items()}
-    prompt_context = ((turn.get("prompt_payload") or {}).get("context") or {})
-    if prompt_context:
-        chars = prompt_context.get("characters")
-        if isinstance(chars, dict):
-            prompt_context["characters"] = {mapping.get(key, key): value for key, value in chars.items()}
-        claims = prompt_context.get("claims")
-        if isinstance(claims, dict):
-            prompt_context["claims"] = {mapping.get(key, key): value for key, value in claims.items()}
-        active = prompt_context.get("active_party")
-        if isinstance(active, list):
-            prompt_context["active_party"] = [mapping.get(entry, entry) for entry in active]
-        display = prompt_context.get("display_party")
-        if isinstance(display, list):
-            for entry in display:
-                if isinstance(entry, dict) and entry.get("slot_id") in mapping:
-                    entry["slot_id"] = mapping[entry["slot_id"]]
-    for request in turn.get("requests", []):
-        if isinstance(request, dict) and request.get("actor") in mapping:
-            request["actor"] = mapping[request["actor"]]
+    campaign_slot_migration.remap_turn_context_slot_names(turn, mapping)
 
 def migrate_campaign_to_dynamic_slots(campaign: Dict[str, Any]) -> None:
-    mapping = {name: slot_id(index + 1) for index, name in enumerate(LEGACY_CHARACTERS)}
-    world_question = WORLD_QUESTION_MAP
-    char_question = CHARACTER_QUESTION_MAP
-    state = campaign.setdefault("state", deep_copy(INITIAL_STATE))
-    old_characters = state.get("characters") or {}
-    new_characters: Dict[str, Any] = {}
-    old_claims = campaign.get("claims") or {}
-    new_claims: Dict[str, Any] = {}
-    for index, legacy_name in enumerate(LEGACY_CHARACTERS, start=1):
-        new_slot = slot_id(index)
-        old_char = deep_copy(old_characters.get(legacy_name) or blank_character_state(new_slot))
-        old_char["slot_id"] = new_slot
-        new_characters[new_slot] = old_char
-        new_claims[new_slot] = old_claims.get(legacy_name)
-    state["characters"] = new_characters
-    campaign["claims"] = new_claims
-
-    old_setup = campaign.get("setup") or {}
-    new_setup = default_setup()
-    world_setup = (old_setup.get("world") or {})
-    legacy_campaign_length = normalize_campaign_length_choice((((state.get("world") or {}).get("settings") or {}).get("campaign_length")))
-    if legacy_campaign_length == "short":
-        legacy_campaign_length_label = "Kurz"
-    elif legacy_campaign_length == "open":
-        legacy_campaign_length_label = "Unbestimmt"
-    else:
-        legacy_campaign_length_label = "Mittel"
-    world_answers = {
-        "theme": legacy_select_answer_payload(world_question["theme"], world_setup.get("theme", "")),
-        "player_count": {"selected": str(max(1, len([owner for owner in new_claims.values() if owner]) or 1)), "other_text": ""},
-        "campaign_length": legacy_select_answer_payload(world_question["campaign_length"], legacy_campaign_length_label),
-        "tone": legacy_select_answer_payload(world_question["tone"], world_setup.get("tone", "")),
-        "difficulty": legacy_select_answer_payload(world_question["difficulty"], "Brutal"),
-        "death_possible": True,
-        "monsters_density": legacy_select_answer_payload(world_question["monsters_density"], "Regelmäßig"),
-        "resource_scarcity": legacy_select_answer_payload(world_question["resource_scarcity"], "Mittel"),
-        "resource_name": legacy_select_answer_payload(
-            world_question["resource_name"],
-            normalize_resource_name((((state.get("world") or {}).get("settings") or {}).get("resource_name") or "Aether")),
+    campaign_slot_migration.migrate_campaign_to_dynamic_slots(
+        campaign,
+        ports=campaign_slot_migration.CampaignSlotMigrationPorts(
+            slot_id=slot_id,
+            deep_copy=deep_copy,
+            blank_character_state=blank_character_state,
+            default_setup=default_setup,
+            normalize_campaign_length_choice=normalize_campaign_length_choice,
+            legacy_select_answer_payload=legacy_select_answer_payload,
+            normalize_resource_name=normalize_resource_name,
+            build_world_summary=build_world_summary,
+            extract_text_answer=extract_text_answer,
+            parse_earth_items=parse_earth_items,
+            normalize_class_current=normalize_class_current,
+            default_character_setup_node=default_character_setup_node,
+            build_character_summary=build_character_summary,
         ),
-        "healing_frequency": legacy_select_answer_payload(world_question["healing_frequency"], "Normal"),
-        "ruleset": legacy_select_answer_payload(world_question["ruleset"], "Konsequent"),
-        "attribute_range": legacy_select_answer_payload(world_question["attribute_range"], "1-10"),
-        "outcome_model": legacy_select_answer_payload(world_question["outcome_model"], "Erfolg / Teilerfolg / Misserfolg-mit-Preis"),
-        "world_structure": legacy_select_answer_payload(world_question["world_structure"], world_setup.get("world_structure", "")),
-        "world_laws": {"selected": [], "other_values": []},
-        "central_conflict": str(world_setup.get("conflict", "") or campaign.get("boards", {}).get("plot_essentials", {}).get("current_threat", "")).strip(),
-        "factions": "\n".join(
-            entry.get("title", "")
-            for entry in campaign.get("boards", {}).get("world_info", [])
-            if entry.get("category") == "faction"
-        ),
-        "taboos": str(world_setup.get("special_notes", "")).strip(),
-    }
-    new_setup["world"]["answers"] = world_answers
-    new_setup["world"]["summary"] = build_world_summary({"setup": {"world": {"answers": world_answers}}})
-    new_setup["world"]["completed"] = state.get("meta", {}).get("phase") in ("character_setup", "character_setup_open", "adventure", "active", "ready_to_start")
-
-    old_setup_chars = old_setup.get("characters") or {}
-    for legacy_name, new_slot in mapping.items():
-        old_answers = ((old_setup_chars.get(legacy_name) or {}).get("answers") or {})
-        bio = (new_characters[new_slot].get("bio") or {})
-        legacy_gender = bio.get("gender") or extract_text_answer(old_answers.get("char_gender"))
-        legacy_age = bio.get("age") or extract_text_answer(old_answers.get("char_age"))
-        legacy_strength = bio.get("strength") or extract_text_answer(old_answers.get("strength"))
-        legacy_weakness = bio.get("weakness") or extract_text_answer(old_answers.get("weakness"))
-        legacy_focus = bio.get("focus") or extract_text_answer(old_answers.get("current_focus"))
-        legacy_price = bio.get("isekai_price") or extract_text_answer(old_answers.get("isekai_price"))
-        legacy_items = bio.get("earth_items") or parse_earth_items(extract_text_answer(old_answers.get("earth_items")))
-        current_class = normalize_class_current(new_characters[new_slot].get("class_current"))
-        node = default_character_setup_node()
-        node["answers"] = {
-            "char_name": bio.get("name", ""),
-            "char_gender": legacy_select_answer_payload(char_question["char_gender"], legacy_gender),
-            "char_age": legacy_select_answer_payload(char_question["char_age"], legacy_age),
-            "earth_life": bio.get("earth_life", old_answers.get("earth_life", "")),
-            "personality_tags": {"selected": bio.get("personality", []), "other_values": []},
-            "strength": legacy_select_answer_payload(char_question["strength"], legacy_strength),
-            "weakness": legacy_select_answer_payload(char_question["weakness"], legacy_weakness),
-            "class_start_mode": legacy_select_answer_payload(char_question["class_start_mode"], "Erst in der Story"),
-            "class_seed": "",
-            "class_custom_name": (current_class or {}).get("name", ""),
-            "class_custom_description": (current_class or {}).get("description", ""),
-            "class_custom_tags": ", ".join((current_class or {}).get("affinity_tags", [])),
-            "current_focus": legacy_select_answer_payload(char_question["current_focus"], legacy_focus),
-            "first_goal": bio.get("goal", ""),
-            "isekai_price": legacy_select_answer_payload(char_question["isekai_price"], legacy_price),
-            "earth_items": ", ".join(legacy_items),
-            "signature_item": bio.get("signature_item", ""),
-        }
-        node["summary"] = build_character_summary({"setup": {"characters": {new_slot: node}}}, new_slot)
-        node["completed"] = bool(node["summary"].get("display_name")) or state.get("meta", {}).get("phase") in {"adventure", "active"}
-        new_setup["characters"][new_slot] = node
-
-    campaign["setup"] = new_setup
-    for turn in campaign.get("turns", []):
-        remap_turn_context_slot_names(turn, mapping)
-
-    campaign["legacy_migration"] = {
-        "original_schema": "fixed_3_slots_v1",
-        "migrated_at": utc_now(),
-    }
+    )
 
 def normalize_campaign(campaign: Dict[str, Any]) -> Dict[str, Any]:
     campaign.setdefault("state", deep_copy(INITIAL_STATE))
@@ -8475,10 +8194,13 @@ def normalize_campaign(campaign: Dict[str, Any]) -> Dict[str, Any]:
     return campaign
 
 def load_campaign(campaign_id: str) -> Dict[str, Any]:
-    path = campaign_path(campaign_id)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="Kampagne nicht gefunden.")
-    return normalize_campaign(load_json(path))
+    return campaign_persistence.load_campaign(
+        campaign_id,
+        ports=campaign_persistence.CampaignLoadPorts(
+            repository=campaign_repository(),
+            normalize_campaign=normalize_campaign,
+        ),
+    )
 
 def save_campaign(
     campaign: Dict[str, Any],
@@ -8486,90 +8208,29 @@ def save_campaign(
     reason: str = "campaign_updated",
     trace_ctx: Optional[Dict[str, Any]] = None,
 ) -> None:
-    try:
-        emit_turn_phase_event(trace_ctx, phase="normalize", success=True, extra={"reason": reason})
-        campaign = normalize_campaign(campaign)
-        emit_turn_phase_event(trace_ctx, phase="normalize", success=True, extra={"reason": reason, "result": "ok"})
-    except Exception as exc:
-        emit_turn_phase_event(
-            trace_ctx,
-            phase="normalize",
-            success=False,
-            error_code=ERROR_CODE_NORMALIZE,
-            error_class=exc.__class__.__name__,
-            message=str(exc)[:240],
-            extra={"reason": reason},
-        )
-        if trace_ctx is not None:
-            raise turn_flow_error(
-                error_code=ERROR_CODE_NORMALIZE,
-                phase="normalize",
-                trace_ctx=trace_ctx,
-                exc=exc,
-            )
-        raise
-
-    campaign["campaign_meta"]["updated_at"] = utc_now()
-    campaign_id = campaign["campaign_meta"]["campaign_id"]
-
-    try:
-        emit_turn_phase_event(trace_ctx, phase="persist_save", success=True, extra={"reason": reason})
-        save_json(campaign_path(campaign_id), campaign)
-        emit_turn_phase_event(trace_ctx, phase="persist_save", success=True, extra={"reason": reason, "result": "ok"})
-    except Exception as exc:
-        emit_turn_phase_event(
-            trace_ctx,
-            phase="persist_save",
-            success=False,
-            error_code=ERROR_CODE_PERSISTENCE,
-            error_class=exc.__class__.__name__,
-            message=str(exc)[:240],
-            extra={"reason": reason},
-        )
-        if trace_ctx is not None:
-            raise turn_flow_error(
-                error_code=ERROR_CODE_PERSISTENCE,
-                phase="persist_save",
-                trace_ctx=trace_ctx,
-                exc=exc,
-            )
-        raise
-
-    try:
-        emit_turn_phase_event(trace_ctx, phase="sse_broadcast", success=True, extra={"reason": reason})
-        live_state = _STATE_ENGINE_DEPS.live_state_service or _default_live_state_service
-        live_state.broadcast_campaign_sync(campaign_id, reason=reason)
-        emit_turn_phase_event(trace_ctx, phase="sse_broadcast", success=True, extra={"reason": reason, "result": "ok"})
-    except Exception as exc:
-        emit_turn_phase_event(
-            trace_ctx,
-            phase="sse_broadcast",
-            success=False,
-            error_code=ERROR_CODE_SSE_BROADCAST,
-            error_class=exc.__class__.__name__,
-            message=str(exc)[:240],
-            extra={"reason": reason},
-        )
-        logger = _STATE_ENGINE_DEPS.logger
-        if logger is not None:
-            logger.warning(
-                "campaign_saved_but_sse_broadcast_failed",
-                extra={
-                    "campaign_id": campaign_id,
-                    "reason": reason,
-                    "error_class": exc.__class__.__name__,
-                    "error": str(exc)[:240],
-                },
-            )
+    campaign_persistence.save_campaign(
+        campaign,
+        reason=reason,
+        trace_ctx=trace_ctx,
+        ports=campaign_persistence.CampaignSavePorts(
+            repository=campaign_repository(),
+            normalize_campaign=normalize_campaign,
+            utc_now=utc_now,
+            emit_turn_phase_event=emit_turn_phase_event,
+            turn_flow_error=turn_flow_error,
+            live_state_service=_STATE_ENGINE_DEPS.live_state_service or _default_live_state_service,
+            logger=_STATE_ENGINE_DEPS.logger,
+        ),
+    )
 
 def active_turns(campaign: Dict[str, Any]) -> List[Dict[str, Any]]:
-    return campaign_view_serializer.active_turns(campaign)
+    return campaign_views.active_turns(campaign)
 
 def is_host(campaign: Dict[str, Any], player_id: Optional[str]) -> bool:
-    return campaign_view_serializer.is_host(campaign, player_id)
+    return campaign_views.is_host(campaign, player_id)
 
 def is_campaign_player(campaign: Dict[str, Any], player_id: Optional[str]) -> bool:
-    return campaign_view_serializer.is_campaign_player(campaign, player_id)
+    return campaign_views.is_campaign_player(campaign, player_id)
 
 def build_patch_summary(patch: Dict[str, Any]) -> Dict[str, Any]:
     return campaign_view_serializer.build_patch_summary(patch)
@@ -8632,122 +8293,19 @@ def build_character_question_state(campaign: Dict[str, Any], slot_name: str) -> 
     }
 
 def build_viewer_context(campaign: Dict[str, Any], player_id: Optional[str]) -> Dict[str, Any]:
-    player = campaign.get("players", {}).get(player_id or "")
-    claimed_slot = player_claim(campaign, player_id)
-    pending_setup_question = None
-    current_phase = str(campaign["state"]["meta"].get("phase") or "")
-    if not campaign["setup"]["world"].get("completed", False) and current_phase in {"lobby", "world_setup"}:
-        pending_setup_question = build_world_question_state(campaign, player_id)
-    elif claimed_slot and current_phase in {"character_setup_open", "ready_to_start"}:
-        pending_setup_question = build_character_question_state(campaign, claimed_slot)
-    return {
-        "player_id": player_id,
-        "display_name": player.get("display_name") if player else None,
-        "is_host": is_host(campaign, player_id),
-        "claimed_slot_id": claimed_slot,
-        "claimed_character": claimed_slot,
-        "phase": current_phase,
-        "needs_world_setup": not campaign["setup"]["world"].get("completed", False),
-        "needs_character_setup": (
-            current_phase in {"character_setup_open", "ready_to_start"}
-            and bool(claimed_slot)
-            and not campaign["setup"]["characters"].get(claimed_slot, {}).get("completed", False)
-        ),
-        "pending_setup_question": pending_setup_question,
-    }
+    return campaign_views.build_viewer_context(campaign, player_id, ports=_campaign_view_ports())
 
 def build_setup_runtime(campaign: Dict[str, Any], viewer_id: Optional[str]) -> Dict[str, Any]:
-    current_phase = str(campaign["state"]["meta"].get("phase") or "")
-    claimed_slot = player_claim(campaign, viewer_id)
-    world_node = campaign["setup"]["world"]
-    world_question_state = build_world_question_state(campaign, viewer_id)
-    world_chapter_key = setup_question_chapter_key("world", (world_question_state or {}).get("question", {}).get("question_id", ""))
-    world_chapter_cfg = setup_chapter_config("world").get(world_chapter_key, {})
-    world_slots = setup_slot_statuses(campaign)
-    world_ready_count = sum(1 for entry in world_slots if entry.get("status") == "ready")
-    world_total_count = len(world_slots)
-    character_state = build_character_question_state(campaign, claimed_slot) if claimed_slot else None
-    character_node = (((campaign.get("setup") or {}).get("characters") or {}).get(claimed_slot or "")) or {}
-    char_chapter_key = setup_question_chapter_key("character", (character_state or {}).get("question", {}).get("question_id", ""))
-    char_chapter_cfg = setup_chapter_config("character").get(char_chapter_key, {})
-    return {
-        "phase": current_phase,
-        "phase_display": setup_phase_display(current_phase),
-        "world": {
-            "completed": world_node.get("completed", False),
-            "progress": progress_payload(world_node),
-            "global_progress": setup_global_progress(world_node),
-            "next_question": world_question_state,
-            "chapter_key": world_chapter_key,
-            "chapter_label": world_chapter_cfg.get("label", "Welt"),
-            "chapter_index": list(setup_chapter_config("world").keys()).index(world_chapter_key) + 1 if world_chapter_key in setup_chapter_config("world") else 1,
-            "chapter_total": len(setup_chapter_config("world")),
-            "chapter_progress": setup_chapter_progress(world_node, "world", world_chapter_key),
-            "is_review_step": bool(world_node.get("completed")) or (
-                bool((world_question_state or {}).get("progress", {}).get("total"))
-                and int((world_question_state or {}).get("progress", {}).get("step", 0) or 0)
-                >= int((world_question_state or {}).get("progress", {}).get("total", 0) or 0)
-            ),
-            "summary_preview": setup_summary_preview(campaign, "world"),
-            "slot_statuses": world_slots,
-            "ready_counter": {"ready": world_ready_count, "total": world_total_count},
-        },
-        "claimed_slot_id": claimed_slot,
-        "character": (
-            {
-                **(character_state or {}),
-                "global_progress": setup_global_progress(character_node),
-                "chapter_key": char_chapter_key,
-                "chapter_label": char_chapter_cfg.get("label", "Figur"),
-                "chapter_index": list(setup_chapter_config("character").keys()).index(char_chapter_key) + 1 if char_chapter_key in setup_chapter_config("character") else 1,
-                "chapter_total": len(setup_chapter_config("character")),
-                "chapter_progress": setup_chapter_progress(character_node, "character", char_chapter_key),
-                "is_review_step": bool((character_node.get("completed"))) or (
-                    bool((character_state or {}).get("progress", {}).get("total"))
-                    and int((character_state or {}).get("progress", {}).get("step", 0) or 0)
-                    >= int((character_state or {}).get("progress", {}).get("total", 0) or 0)
-                ),
-                "summary_preview": setup_summary_preview(campaign, "character", claimed_slot),
-            }
-            if claimed_slot
-            else None
-        ),
-        "slot_statuses": world_slots,
-        "ready_counter": {"ready": world_ready_count, "total": world_total_count},
-        "is_ready_to_start": current_phase == "ready_to_start",
-    }
+    return campaign_views.build_setup_runtime(campaign, viewer_id, ports=_campaign_view_ports())
 
 def filter_private_diary_content(content: Any, viewer_is_owner: bool) -> str:
-    return campaign_view_serializer.filter_private_diary_content(content, viewer_is_owner)
+    return campaign_views.filter_private_diary_content(content, viewer_is_owner)
 
 def build_public_boards(campaign: Dict[str, Any], viewer_id: Optional[str]) -> Dict[str, Any]:
-    return campaign_view_serializer.build_public_boards(
-        campaign,
-        viewer_id,
-        deep_copy=deep_copy,
-        filter_private_diary_content_fn=filter_private_diary_content,
-    )
+    return campaign_views.build_public_boards(campaign, viewer_id, ports=_campaign_view_ports())
 
 def build_campaign_view(campaign: Dict[str, Any], viewer_id: Optional[str]) -> Dict[str, Any]:
-    live_state = _STATE_ENGINE_DEPS.live_state_service or _default_live_state_service
-    dependencies = campaign_view_serializer.CampaignViewDependencies(
-        normalize_campaign=normalize_campaign,
-        deep_copy=deep_copy,
-        build_setup_runtime=build_setup_runtime,
-        available_slots=available_slots,
-        active_party=active_party,
-        display_name_for_slot=display_name_for_slot,
-        normalize_world_time=normalize_world_time,
-        build_public_boards=build_public_boards,
-        active_turns=active_turns,
-        public_turn=public_turn,
-        build_party_overview=build_party_overview,
-        campaign_slots=campaign_slots,
-        public_player=public_player,
-        build_viewer_context=build_viewer_context,
-        live_snapshot=live_state.live_snapshot,
-    )
-    return campaign_view_serializer.build_campaign_view(campaign, viewer_id, deps=dependencies)
+    return campaign_views.build_campaign_view(campaign, viewer_id, ports=_campaign_view_ports())
 
 def remember_recent_story(campaign: Dict[str, Any]) -> None:
     campaign["state"]["recent_story"] = [turn["gm_text_display"] for turn in active_turns(campaign)][-20:]
@@ -10339,22 +9897,10 @@ def log_board_revision(
     )
 
 def intro_state(campaign: Dict[str, Any]) -> Dict[str, Any]:
-    return campaign.setdefault("state", {}).setdefault("meta", {}).setdefault("intro_state", default_intro_state())
+    return campaign_lifecycle.intro_state(campaign)
 
 def can_start_adventure(campaign: Dict[str, Any]) -> bool:
-    if not campaign["setup"]["world"].get("completed"):
-        return False
-    required_slots = expected_setup_slots(campaign)
-    setup_chars = (campaign.get("setup", {}).get("characters") or {})
-    claims = campaign.get("claims", {}) or {}
-    if not required_slots:
-        return False
-    for slot_name in required_slots:
-        if not claims.get(slot_name):
-            return False
-        if not (setup_chars.get(slot_name) or {}).get("completed"):
-            return False
-    return True
+    return campaign_lifecycle.can_start_adventure(campaign)
 
 def try_generate_adventure_intro(campaign: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     normalize_campaign(campaign)
@@ -10414,11 +9960,7 @@ def maybe_start_adventure(campaign: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return turn
 
 def new_player(display_name: str) -> Dict[str, str]:
-    return {
-        "player_id": make_id("player"),
-        "player_token": secrets.token_urlsafe(24),
-        "display_name": display_name.strip(),
-    }
+    return campaign_lifecycle.new_player(display_name)
 
 def create_campaign_record(
     title: str,
@@ -10428,116 +9970,55 @@ def create_campaign_record(
     imported_turns: Optional[List[Dict[str, Any]]] = None,
     legacy_flag: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    identity = new_player(display_name or "Host")
-    join_code = make_join_code()
-    now = utc_now()
-    state = deep_copy(legacy_state if legacy_state is not None else INITIAL_STATE)
-    state.setdefault("characters", {})
-    campaign_id = make_id("camp")
-    campaign = {
-        "campaign_meta": {
-            "campaign_id": campaign_id,
-            "title": title.strip() or "Neue Aelunor-Kampagne",
-            "join_code_hash": hash_secret(join_code),
-            "host_player_id": identity["player_id"],
-            "created_at": now,
-            "updated_at": now,
-            "status": "active",
-        },
-        "players": {
-            identity["player_id"]: {
-                "display_name": identity["display_name"],
-                "player_token_hash": hash_secret(identity["player_token"]),
-                "joined_at": now,
-                "last_seen_at": now,
-            }
-        },
-        "claims": {},
-        "state": state,
-        "turns": imported_turns or [],
-        "boards": default_boards(identity["player_id"]),
-        "setup": default_setup(),
-        "board_revisions": [],
-        "legacy_migration": legacy_flag,
-    }
-    campaign.setdefault("state", {}).setdefault("meta", {})["phase"] = "lobby"
-    normalize_campaign(campaign)
-    first_world_qid = current_question_id(campaign["setup"]["world"])
-    if first_world_qid:
-        ensure_question_ai_copy(campaign, setup_type="world", question_id=first_world_qid)
-    remember_recent_story(campaign)
-    rebuild_memory_summary(campaign)
-    save_campaign(campaign)
-    return {
-        "campaign": campaign,
-        "join_code": join_code,
-        "player_id": identity["player_id"],
-        "player_token": identity["player_token"],
-    }
-
-def ensure_campaign_storage() -> None:
-    ensure_storage_dirs(data_dir=DATA_DIR, campaigns_dir=CAMPAIGNS_DIR)
-    if list_campaign_ids():
-        return
-    if not os.path.exists(LEGACY_STATE_PATH):
-        return
-    legacy_state = load_json(LEGACY_STATE_PATH)
-    now = utc_now()
-    imported_turns = []
-    for index, story in enumerate(legacy_state.get("recent_story", []), start=1):
-        snapshot = deep_copy(legacy_state)
-        imported_turns.append(
-            {
-                "turn_id": make_id("turn"),
-                "turn_number": index,
-                "status": "active",
-                "actor": "SYSTEM",
-                "player_id": None,
-                "action_type": "story",
-                "input_text_raw": "Importierte Story",
-                "input_text_display": "Importierte Story",
-                "gm_text_raw": story,
-                "gm_text_display": story,
-                "requests": [],
-                "patch": blank_patch(),
-                "state_before": snapshot,
-                "state_after": snapshot,
-                "retry_of_turn_id": None,
-                "edited_at": None,
-                "created_at": now,
-                "updated_at": now,
-                "edit_history": [],
-                "prompt_payload": {"imported": True},
-            }
-        )
-    create_campaign_record(
-        "Legacy Campaign",
-        "Legacy Host",
+    return campaign_lifecycle.create_campaign_record(
+        title,
+        display_name,
         legacy_state=legacy_state,
         imported_turns=imported_turns,
-        legacy_flag={"source": "state.json", "migrated_at": now},
+        legacy_flag=legacy_flag,
+        ports=campaign_lifecycle.CampaignCreatePorts(
+            make_join_code=make_join_code,
+            deep_copy=deep_copy,
+            initial_state=INITIAL_STATE,
+            default_boards=default_boards,
+            default_setup=default_setup,
+            normalize_campaign=normalize_campaign,
+            current_question_id=current_question_id,
+            ensure_question_ai_copy=ensure_question_ai_copy,
+            remember_recent_story=remember_recent_story,
+            rebuild_memory_summary=rebuild_memory_summary,
+            save_campaign=save_campaign,
+        ),
+    )
+
+def ensure_campaign_storage() -> None:
+    campaign_lifecycle.ensure_campaign_storage(
+        ports=campaign_lifecycle.CampaignStoragePorts(
+            data_dir=DATA_DIR,
+            campaigns_dir=CAMPAIGNS_DIR,
+            legacy_state_path=LEGACY_STATE_PATH,
+            ensure_storage_dirs=ensure_storage_dirs,
+            list_campaign_ids=list_campaign_ids,
+            load_json=load_json,
+            deep_copy=deep_copy,
+            make_turn_id=lambda: make_id("turn"),
+            blank_patch=blank_patch,
+            create_campaign_record=create_campaign_record,
+        )
     )
 
 def find_campaign_by_join_code(join_code: str) -> Optional[Dict[str, Any]]:
-    join_hash = hash_secret(join_code.strip().upper())
-    for campaign_id in list_campaign_ids():
-        path = campaign_path(campaign_id)
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                if join_hash not in f.read():
-                    continue
-        except OSError:
-            continue
-
-        campaign = load_campaign(campaign_id)
-        if campaign.get("campaign_meta", {}).get("join_code_hash") == join_hash:
-            return campaign
-    return None
+    return campaign_lifecycle.find_campaign_by_join_code(
+        join_code,
+        ports=campaign_lifecycle.JoinCodeLookupPorts(
+            list_campaign_ids=list_campaign_ids,
+            campaign_path=campaign_path,
+            load_campaign=load_campaign,
+        ),
+    )
 
 def touch_player(campaign: Dict[str, Any], player_id: str) -> None:
-    player = campaign["players"].get(player_id)
-    if player:
-        player["last_seen_at"] = utc_now()
+    campaign_lifecycle.touch_player(campaign, player_id)
 
 def authenticate_player(
     campaign: Dict[str, Any],
@@ -10546,25 +10027,15 @@ def authenticate_player(
     *,
     required: bool = True,
 ) -> Optional[Dict[str, Any]]:
-    if not player_id or not player_token:
-        if required:
-            raise HTTPException(status_code=401, detail="Session fehlt oder ist unvollständig.")
-        return None
-    player = campaign.get("players", {}).get(player_id)
-    if not player:
-        raise HTTPException(status_code=401, detail="Unbekannter Spieler.")
-    if hash_secret(player_token) != player.get("player_token_hash"):
-        raise HTTPException(status_code=401, detail="Ungültiger Spieler-Token.")
-    touch_player(campaign, player_id)
-    return player
+    return campaign_lifecycle.authenticate_player(
+        campaign,
+        player_id,
+        player_token,
+        required=required,
+    )
 
 def require_host(campaign: Dict[str, Any], player_id: Optional[str]) -> None:
-    if not is_host(campaign, player_id):
-        raise HTTPException(status_code=403, detail="Nur der Host darf diese Aktion ausführen.")
+    campaign_lifecycle.require_host(campaign, player_id)
 
 def require_claim(campaign: Dict[str, Any], player_id: str, actor: str) -> None:
-    claimed_player_id = campaign["claims"].get(actor)
-    if not claimed_player_id:
-        raise HTTPException(status_code=403, detail="Dieser Slot ist nicht geclaimt.")
-    if claimed_player_id != player_id:
-        raise HTTPException(status_code=403, detail="Du darfst nur deinen geclaimten Slot spielen.")
+    campaign_lifecycle.require_claim(campaign, player_id, actor)

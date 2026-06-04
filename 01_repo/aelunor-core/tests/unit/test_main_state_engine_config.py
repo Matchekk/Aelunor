@@ -107,9 +107,9 @@ class MainStateEngineConfigTests(unittest.TestCase):
                 patch.object(state_engine, "DATA_DIR", temp_dir),
                 patch.object(state_engine, "CAMPAIGNS_DIR", campaigns_dir),
             ):
-                runtime = state_engine.runtime_symbols()
-                runtime["ensure_campaign_storage"]()
-                created = runtime["create_campaign_record"]("Path Check", "Host")
+                deps = main.campaign_service_dependencies()
+                deps.ensure_campaign_storage()
+                created = deps.create_campaign_record("Path Check", "Host")
                 campaign_id = created["campaign"]["campaign_meta"]["campaign_id"]
                 self.assertTrue((Path(campaigns_dir) / f"{campaign_id}.json").is_file())
 
