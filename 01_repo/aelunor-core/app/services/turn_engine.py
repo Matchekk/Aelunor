@@ -52,8 +52,14 @@ from app.services.turn.setup_context import prepare_turn_working_state
 from app.services.turn.story_length_guard import (
     rewrite_story_length_guard as _rewrite_story_length_guard,
 )
+from app.services.turn.dependencies import (
+    TurnLlmDependencies,
+    build_turn_llm_dependencies,
+)
 
 _CONFIGURED = False
+_TURN_LLM_DEPS: Optional[TurnLlmDependencies] = None
+_TURN_LLM_PORT_NAMES = frozenset(("call_ollama_json", "call_ollama_schema"))
 _PATCH_SANITIZER_DEP_NAMES = (
     "normalize_patch_semantics",
     "deep_copy",
@@ -159,10 +165,49 @@ def _configure_patch_validator_if_ready() -> None:
         )
     )
 
+def configure_turn_llm_dependencies(deps: TurnLlmDependencies) -> None:
+    global _TURN_LLM_DEPS
+    _TURN_LLM_DEPS = deps
+
+
+def _default_turn_llm_dependencies() -> TurnLlmDependencies:
+    from app.adapters.ollama_config import OLLAMA_ADAPTER, OLLAMA_TEMPERATURE, OLLAMA_TIMEOUT_SEC
+    from app.catalogs.runtime_catalogs import RESPONSE_SCHEMA
+    from app.config.errors import ERROR_CODE_JSON_REPAIR as DEFAULT_ERROR_CODE_JSON_REPAIR
+    from app.services.llm.client import build_default_llm_client_settings
+
+    return build_turn_llm_dependencies(
+        adapter=OLLAMA_ADAPTER,
+        settings=build_default_llm_client_settings(
+            timeout_sec=OLLAMA_TIMEOUT_SEC,
+            temperature=OLLAMA_TEMPERATURE,
+            response_schema=RESPONSE_SCHEMA,
+            error_code_json_repair=globals().get("ERROR_CODE_JSON_REPAIR", DEFAULT_ERROR_CODE_JSON_REPAIR),
+        ),
+        emit_turn_phase_event=emit_turn_phase_event,
+        turn_flow_error=turn_flow_error,
+    )
+
+
+def turn_llm_dependencies() -> TurnLlmDependencies:
+    return _TURN_LLM_DEPS or _default_turn_llm_dependencies()
+
+
+def call_ollama_json(system: str, user: str, **kwargs: Any) -> Dict[str, Any]:
+    return turn_llm_dependencies().call_ollama_json(system, user, **kwargs)
+
+
+def call_ollama_schema(system: str, user: str, schema: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
+    return turn_llm_dependencies().call_ollama_schema(system, user, schema, **kwargs)
+
+
 def configure(main_globals: Dict[str, Any]) -> None:
     """Inject main-module globals needed by extracted turn engine functions."""
     global _CONFIGURED
-    globals().update(main_globals)
+    explicit_llm_deps = main_globals.get("turn_llm_dependencies")
+    if isinstance(explicit_llm_deps, TurnLlmDependencies):
+        configure_turn_llm_dependencies(explicit_llm_deps)
+    globals().update({key: value for key, value in main_globals.items() if key not in _TURN_LLM_PORT_NAMES})
     _configure_patch_sanitizer_if_ready()
     _configure_patch_validator_if_ready()
     _CONFIGURED = True
