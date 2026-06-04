@@ -113,5 +113,27 @@ Aktuelle Absicherung:
 - `tests/unit/test_state_engine_reexports_after_service_extraction.py`
 - Full Suite zuletzt gruen: 306 passed.
 
-Naechster empfohlener Slice: Campaign Lifecycle / Persistence / View-Building aus
-`state_engine.py` extrahieren.
+## Aktualisierung 2026-06-04: Campaign- und Turn-Ports
+
+Der zuvor empfohlene Campaign-Slice ist umgesetzt:
+
+- Campaign Persistence, Lifecycle, Views, Party und Normalization liegen in
+  `app/services/campaigns/`.
+- `main.py` nutzt weiter `configure_dependencies(StateEngineDependencies(...))`;
+  `state_engine.configure(globals())` ist nicht in den normalen App-Pfad
+  zurueckgekehrt.
+- `EXPORTED_SYMBOLS` bleibt klein: `public_turn`, `build_campaign_view`.
+
+Die Turn-Pipeline ist fuer mehrere Subsysteme auf explizite Ports umgestellt:
+
+- `TurnLlmDependencies`
+- `TurnExtractionDependencies`
+- `TurnProgressionDependencies`
+- `TurnCodexDependencies`
+- `TurnPacingDependencies`
+- `TurnAttributeDependencies`
+
+`runtime_symbols()` ist damit nicht mehr der Zielort fuer diese Turn-
+Abhaengigkeiten. Naechster empfohlener Slice: `runtime_symbols()` anhand der
+expliziten Ports tatsaechlich reduzieren und danach Turn-Materialization sowie
+Patch-Sanitizer/-Validator-Grenzen weiter isolieren.

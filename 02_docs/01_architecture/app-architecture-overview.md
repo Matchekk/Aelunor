@@ -12,7 +12,7 @@ Aelunor besteht aus einer FastAPI-App mit einer aktiven React/Vite-v1-UI unter `
 - Statische Assets: `app/static/`; keine aktive Legacy-UI
 - API-Wiring: `app/main.py`
 - Router: `app/routers/*.py`
-- Services: `app/services/*.py`, `app/services/turn/*.py`, `app/services/world/*.py`, plus extrahierte Zielmodule in `items/`, `characters/`, `setup/`, `llm/`, `state/`
+- Services: `app/services/*.py`, `app/services/campaigns/*.py`, `app/services/turn/*.py`, `app/services/world/*.py`, plus extrahierte Zielmodule in `items/`, `characters/`, `setup/`, `llm/`, `state/`
 - API-Schemas und View-Serializer: `app/schemas/api.py`, `app/serializers/campaign_view.py`
 - Persistenz: JSON-Campaign-Dateien in `DATA_DIR/campaigns`; lokale Browserdaten in `localStorage` und `sessionStorage`
 - Extern: Ollama `/api/chat` und `/api/tags`
@@ -103,7 +103,7 @@ flowchart LR
   subgraph engines["Central Logic / Generators"]
     mainGlue["Dependency Wiring + Constants\napp/main.py"]
     stateEngine["state_engine.py\nnormalization, persistence,\nsetup finalization,\nworld/canon helpers\nsmall public facade"]
-    turnEngine["turn_engine.py\nturn pipeline orchestration"]
+    turnEngine["turn_engine.py\nturn pipeline orchestration\nexplicit LLM/extraction/progression/pacing ports"]
     patchPipeline["turn patch pipeline\nsanitize, validate,\napply, limits"]
     worldModules["world modules\ncodex, progression,\nelements, combat, NPCs"]
     liveState["live_state_service.py\nin-memory presence,\nblocking action, SSE broadcast"]
@@ -120,7 +120,7 @@ flowchart LR
   mainGlue --> stateEngine
   turnEngine --> patchPipeline
   stateEngine --> worldModules
-  turnEngine --> stateEngine
+  turnEngine -. "remaining legacy bridge only" .-> stateEngine
 
   subgraph storage["Storage"]
     campaignJson["Campaign JSON files\nDATA_DIR/campaigns/*.json\npersistent truth"]
@@ -137,8 +137,8 @@ flowchart LR
     ollama["Ollama\n/api/chat + /api/tags"]
   end
 
-  stateEngine -- "setup copy, random setup,\nextractors, context, intro" --> ollama
-  turnEngine -- "narrator call,\nstory rewrite guard,\ncanon/NPC extraction" --> ollama
+  stateEngine -- "setup copy, random setup,\ncontext, intro" --> ollama
+  turnEngine -- "explicit LLM + extractor ports\nnarrator, repair, canon/NPC extraction" --> ollama
 
   campaignJson -- "campaign_sync after save" --> liveState
   liveState -- "SSE event\ninvalidate query / update presence" --> sseClient
@@ -150,6 +150,6 @@ flowchart LR
 - Kampagne erstellen/joinen: `SessionHubWorkspace` -> `/api/campaigns` oder `/api/campaigns/join` -> `campaign_service` -> JSON-Campaign -> lokale Sessiondaten.
 - Setup: `SetupWizardOverlay` -> setup API -> `setup_service` -> explicit dependencies -> `state_engine`/setup modules fuer AI-Copy, Random Answers, Finalisierung, World/Character Summary -> JSON save -> SSE.
 - Claim: `ClaimWorkspace` -> claim API -> `claim_service` -> Claims im Campaign JSON -> SSE.
-- Spielen: `Composer`/`CampaignWorkspace` -> turns API -> `turn_service` -> `turn_engine` -> Ollama Narrator/Extractors -> Patch-Pipeline -> State save -> SSE -> React Query reload.
+- Spielen: `Composer`/`CampaignWorkspace` -> turns API -> `turn_service` -> `turn_engine` mit expliziten LLM-/Extraction-/Progression-/Codex-/Pacing-Ports -> Ollama Narrator/Extractors -> Patch-Pipeline -> State save -> SSE -> React Query reload.
 - Live-Sync: Presence-Aktivitaeten gehen in `live_state_service`; persistente Campaign-Aenderungen senden `campaign_sync`; die v1-UI invalidiert danach den Campaign-Snapshot.
 - Context und Sheets: UI fragt read-only Views ab; `context_service` prueft per State-Signature, dass Context Queries keinen State veraendern.

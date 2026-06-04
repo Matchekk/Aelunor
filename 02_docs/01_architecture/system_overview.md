@@ -25,6 +25,8 @@ Optional Ollama HTTP API
 - `app/main.py`: App-Wiring, Runtime-Konfiguration, Pydantic-Modelle, Router-Registrierung, Static Mounts, kleine Public-Fassade aus `state_engine`.
 - `app/routers/`: HTTP-Adapter. Sie lesen Header/Payloads, rufen Services auf und serialisieren Responses.
 - `app/services/`: Domainlogik fuer Campaigns, Claims, Setup, Turns, Boards, Context, Presence, Sheets und State.
+- `app/services/campaigns/`: ausgelagerte Campaign Persistence, Lifecycle, Views, Party und Normalization.
+- `app/services/turn/dependencies.py`: explizite Turn-Ports fuer LLM, Extraction/Canon/NPC, Progression/Skill/Codex, Pacing/Timing und Attribute-Meta.
 - `app/helpers/`: Setup-/Serializer-Hilfslogik.
 - `app/static/`: statische Brand-/Icon-Assets; keine aktive Legacy-UI.
 
@@ -58,7 +60,7 @@ Diese Contracts nur mit Migration und Tests aendern.
 
 ## Haupt-Schulden
 
-- `app/services/state_engine.py` ist mit ca. 10.5k Zeilen zu gross und enthaelt mehrere Domains.
+- `app/services/state_engine.py` ist weiterhin zu gross, aber Campaign-Subsysteme und wichtige Turn-Abhaengigkeiten sind aus der alten Bridge herausgezogen.
 - `state_engine.runtime_symbols()` ist eine begrenzte interne Uebergangsbruecke; `EXPORTED_SYMBOLS` bleibt klein.
-- `app/services/turn_engine.py` sollte weiter in Narrator-Orchestration, Canon-Gate und LLM-Adapter zerlegt werden.
+- `app/services/turn_engine.py` sollte weiter in Materialization, Patch-Flow, Retry-Policy und kleinere Orchestrierungsbausteine zerlegt werden.
 - Globale CSS-Regeln sind noch umfangreich; neue Designsysteme sollten in eigene Token-/Layout-Dateien.

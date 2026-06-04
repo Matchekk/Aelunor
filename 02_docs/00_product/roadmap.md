@@ -3,8 +3,8 @@
 ## Stabilisierung
 
 - State-/Turn-/Presence-Checks weiter gruener halten.
-- Naechster State-Engine-Slice: Campaign Lifecycle / Persistence / View-Building extrahieren.
-- `runtime_symbols()` nach jedem Refactoring-Slice weiter verkleinern.
+- Naechster State-Engine-Slice: `runtime_symbols()` anhand der expliziten Turn-Ports reduzieren.
+- Verbleibende Turn-Materialization-, Patch- und Domain-Helper-Abhaengigkeiten aus der Runtime-Bridge loesen.
 - API-/Frontend-Contracts dokumentieren und testen.
 - Kontext-READMEs in aktiven Ordnern aktuell halten.
 

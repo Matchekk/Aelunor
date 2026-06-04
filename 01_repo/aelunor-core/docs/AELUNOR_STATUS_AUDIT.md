@@ -1,6 +1,6 @@
 # AELUNOR STATUS AUDIT
 
-> Aktualisierung 2026-06-04: Dieses Audit ist eine historische Momentaufnahme. Inzwischen ist `/` ein Redirect auf `/v1`, die aktive UI liegt in React/Vite-v1, `app/static/` ist kein aktiver Legacy-UI-Pfad mehr, `state_engine.EXPORTED_SYMBOLS` ist auf `public_turn` und `build_campaign_view` begrenzt, und neue Kontext-READMEs liegen in `app/`, `app/services/`, `app/routers/`, `tests/` und `scripts/`. Aeltere Legacy-/Globals-Befunde unten nur als damaligen Befund lesen.
+> Aktualisierung 2026-06-04: Dieses Audit ist eine historische Momentaufnahme. Inzwischen ist `/` ein Redirect auf `/v1`, die aktive UI liegt in React/Vite-v1, `app/static/` ist kein aktiver Legacy-UI-Pfad mehr, `state_engine.EXPORTED_SYMBOLS` ist auf `public_turn` und `build_campaign_view` begrenzt, Campaign-Subsysteme sind in `app/services/campaigns/` extrahiert, wichtige Turn-Abhaengigkeiten laufen ueber explizite Ports in `app/services/turn/dependencies.py`, und neue Kontext-READMEs liegen in `app/`, `app/services/`, `app/routers/`, `tests/` und `scripts/`. Aeltere Legacy-/Globals-Befunde unten nur als damaligen Befund lesen.
 
 Stand: 2026-04-23  
 Scope: `Matchekk/Aelunor`, Projektwurzel `01_repo/aelunor-core`  

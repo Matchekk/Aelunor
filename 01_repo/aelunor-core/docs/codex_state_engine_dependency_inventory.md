@@ -17,8 +17,11 @@ werden.
   `configure_dependencies(StateEngineDependencies(...))` statt
   `state_engine.configure(globals())`.
 - `state_engine.runtime_symbols()` bleibt als begrenzte Uebergangsbruecke fuer
-  Router-/Service-Factories und Turn-Wiring bestehen. Sie ist keine Public API
-  und darf nicht als neue Monolith-Fassade wachsen.
+  Router-/Service-Factories und verbleibendes Legacy-Turn-Wiring bestehen. Sie
+  ist keine Public API und darf nicht als neue Monolith-Fassade wachsen.
+- `app/services/turn_engine.py` nutzt inzwischen explizite Turn-Ports fuer
+  LLM, Extraction/Canon/NPC, Progression/Skill/Codex, Pacing/Timing und
+  Attribute-Meta. Diese Ports liegen in `app/services/turn/dependencies.py`.
 - `state_engine.EXPORTED_SYMBOLS` ist bewusst klein: `public_turn`,
   `build_campaign_view`.
 - `app/services/world/codex.py` ist fachlich ein sinnvoller Codex-Schnitt, haengt
@@ -56,9 +59,11 @@ P1:
 
 P2:
 
-- Turn Pipeline aufteilen.
-- Patch Validator und Patch Sanitizer extrahieren.
-- LLM Client isolieren.
+- `runtime_symbols()` anhand der expliziten Turn-Ports reduzieren.
+- Turn-Materialization-, Patch Validator- und Patch Sanitizer-Grenzen weiter
+  isolieren.
+- LLM Client, Extraction, Progression/Codex und Pacing nicht wieder ueber die
+  Runtime-Bridge verdrahten.
 
 P3:
 
@@ -237,7 +242,30 @@ Tests importieren Zielmodule direkt, z. B.:
 `runtime_symbols()` ist von der alten breiten Uebergangsliste auf eine begrenzte
 interne Bruecke reduziert. Verbleibende Eintraege sind noch noetig fuer
 Router-/Service-Dependency-Factories, Turn-Patch-Sanitizer/-Validator-
-Konfiguration und die Turn-Record-Pipeline.
+Konfiguration und verbleibende Legacy-Abhaengigkeiten der Turn-Record-Pipeline.
+
+## Aktualisierung 2026-06-04: Campaign- und Turn-Port-Slices
+
+Seit der letzten Inventarisierung sind weitere Monolith-Grenzen geklaert:
+
+- Campaign Persistence, Lifecycle, Views, Party und Normalization liegen in
+  `app/services/campaigns/` statt als direkte Campaign-Arbeit in
+  `state_engine.py`.
+- `turn_engine.py` nutzt:
+  - `TurnLlmDependencies`
+  - `TurnExtractionDependencies`
+  - `TurnProgressionDependencies`
+  - `TurnCodexDependencies`
+  - `TurnPacingDependencies`
+  - `TurnAttributeDependencies`
+- `app/services/turn/runtime_inventory.py` markiert die entsprechenden
+  LLM-, Extraction-, Progression-, Codex-, Pacing-/Timing- und
+  Attribute-Meta-Namen als explizite Ports.
+
+Empfohlener naechster Schritt: `state_engine.runtime_symbols()` nicht mehr nur
+inventarisieren, sondern um die jetzt portierten Turn-Abhaengigkeiten reduzieren.
+Danach koennen Turn-Materialization und Patch-Sanitizer/-Validator gezielt als
+naechste kleine Grenzen vorbereitet werden.
 
 Check-Scripts wie `check_progression_canon_gate.py`, `check_element_system.py`
 und `check_codex_system.py` nutzen script-lokale explizite Symbolsets, statt die

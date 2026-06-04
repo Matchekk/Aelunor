@@ -11,11 +11,12 @@ oder in passende Unterordner, nicht in `app/main.py` und nicht in Router.
 | `setup_service.py` | World-/Character-Setup, Antworten, Random Preview, Finalisierung |
 | `claim_service.py` | Slot-Claim, Takeover, Unclaim |
 | `turn_service.py` | Turn-Endpoint-Guards und Fehlerabbildung |
-| `turn_engine.py` | Turn-Pipeline-Orchestrierung, noch grosser Uebergangsbereich |
-| `state_engine.py` | State-, Campaign-, Canon-, World- und Compatibility-Monolith |
+| `turn_engine.py` | Turn-Pipeline-Orchestrierung mit expliziten Ports fuer LLM, Extraction, Progression/Codex und Pacing |
+| `state_engine.py` | grosser State-, Canon-, World- und Compatibility-Kern mit reduzierter Public-Fassade |
 | `boards_service.py`, `context_service.py`, `sheets_service.py` | Views und spielnahe Hilfsflows |
 | `presence_service.py`, `live_state_service.py` | SSE-Tickets, Presence, Blocking Actions |
-| `turn/` | Patch sanitize/validate/apply Module und Turn-Helfer |
+| `campaigns/` | Campaign Persistence, Lifecycle, Views, Party, Normalization und State-Shape-Helfer |
+| `turn/` | Patch sanitize/validate/apply Module, Turn-Helfer und explizite Dependency-Ports |
 | `world/` | Codex, Progression, Elemente, Combat, NPCs, Defaults, Text/Naming |
 | `items/` | Inventory-/Equipment-Normalisierung |
 | `characters/` | abgeleitete Werte und Character-Stats |
@@ -30,15 +31,22 @@ oder in passende Unterordner, nicht in `app/main.py` und nicht in Router.
 - `runtime_symbols()` enthaelt nur noch eine begrenzte interne Bruecke fuer:
   - Router-/Service-Dependency-Factories,
   - Turn-Patch-Sanitizer/-Validator-Konfiguration,
-  - die noch nicht voll entkoppelte Turn-Record-Pipeline.
+  - verbleibende Legacy-Abhaengigkeiten der Turn-Record-Pipeline.
+- Turn-Engine-Subsysteme sind bereits explizit modelliert:
+  - `TurnLlmDependencies`
+  - `TurnExtractionDependencies`
+  - `TurnProgressionDependencies`
+  - `TurnCodexDependencies`
+  - `TurnPacingDependencies`
+  - `TurnAttributeDependencies`
 - Diese Bridge nicht als neue Monolith-API verwenden.
 
 ## Refactoring-Reihenfolge
 
-1. Campaign Lifecycle / Persistence / View-Building aus `state_engine.py` ziehen.
-2. Turn-Pipeline weiter in LLM, Canon-Gate, Patch-Flow und Retry-Policy trennen.
+1. `runtime_symbols()` anhand der expliziten Turn-Ports weiter reduzieren.
+2. Verbleibende Turn-Materialization-, Patch-Sanitizer/-Validator- und Domain-Helper-Abhaengigkeiten entkoppeln.
 3. Weitere World-/Skill-/Progression-Helfer in echte Zielmodule bewegen.
-4. `runtime_symbols()` nach jedem Slice weiter verkleinern.
+4. `turn_engine.py` erst nach gesicherten Ports in kleinere Orchestrierungsbausteine teilen.
 
 ## Test-Hinweise
 

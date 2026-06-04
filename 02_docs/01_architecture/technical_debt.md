@@ -9,15 +9,17 @@ Stand: 2026-06-04
 - v1-Designsystem wurde zuletzt in eigene Token-/Layout-Dateien ausgelagert.
 - Backend-Kontext-READMEs existieren fuer `app/`, `services/`, `routers/`, `tests/` und `scripts/`.
 - `state_engine.EXPORTED_SYMBOLS` ist auf die echte Public-Fassade begrenzt; `runtime_symbols()` ist von der alten breiten Fassade auf eine begrenzte interne Uebergangsbruecke reduziert.
+- Campaign Persistence, Lifecycle, Views, Party und Normalization sind aus `state_engine.py` in `app/services/campaigns/` extrahiert.
+- `turn_engine.py` nutzt explizite Ports fuer LLM, Extraction/Canon/NPC, Progression/Skill/Codex sowie Pacing/Timing/Attribute-Meta.
 - `check_progression_canon_gate.py`, `check_element_system.py` und `check_codex_system.py` laufen offline und gruen.
 
 ## Hohe Prioritaet
 
 | Bereich | Problem | Empfohlene Richtung |
 | --- | --- | --- |
-| `app/services/state_engine.py` | Sehr grosser Monolith mit ca. 10.5k Zeilen und mehreren Domains | Naechster Slice: Campaign Lifecycle / Persistence / View-Building extrahieren |
-| `app/services/turn_engine.py` | Orchestrierung, LLM, Canon, Fehlerklassifikation vermischt | Narrator adapter, canon gate, extraction und retry policy trennen |
-| `state_engine.runtime_symbols()` | Interne Uebergangsbruecke fuer Runtime-Factories und Turn-Wiring | Nach jedem Refactor-Slice verkleinern und nicht als Public API verwenden |
+| `app/services/state_engine.py` | Weiterhin grosser Kern mit mehreren Domains, aber Campaign- und wichtige Turn-Wiring-Pfade sind bereits entkoppelt | Naechster Slice: `runtime_symbols()` gezielt reduzieren und verbleibende Domain-Helper in Zielmodule schieben |
+| `app/services/turn_engine.py` | Orchestriert noch viel Turn-Flow, aber LLM/Extraction/Progression/Codex/Pacing laufen ueber explizite Ports | Materialization-, Patch- und Retry-Policy-Grenzen weiter trennen |
+| `state_engine.runtime_symbols()` | Interne Uebergangsbruecke fuer verbleibende Runtime-Factories und Legacy-Turn-Wiring | Explizite Ports nutzen, Bridge nach jedem Slice verkleinern und nicht als Public API verwenden |
 | `ui/src/shared/styles/globals.css` | Globale Regeln sehr breit | Neue Systeme in Tokens/Layout-Dateien halten und schrittweise alte Regeln reduzieren |
 | Placeholder-Ordner | Viele leere Workspace-Bereiche ohne Inhalt | Nach Bestaetigung loeschen oder mit echten READMEs/Assets befuellen |
 

@@ -4,7 +4,7 @@ Stand: 2026-06-04
 
 ## Kurzfassung
 
-Die Kernarchitektur ist spielbar und testbar, aber mehrere Bereiche sind schwer wartbar oder fragil. Die groessten Risiken liegen in der sehr grossen zentralen State-/Generatorlogik, dem noch breiten Turn-Wiring, lokaler Token-Speicherung und einigen Live-Sync-/Fehlerpfaden. Die aktive UI ist React/Vite-v1 unter `/v1`; `/` leitet dorthin weiter. Rot markierte Knoten sind problematische Stellen; gestrichelte rote Kanten zeigen Drift-, Kopplungs- oder Fragilitaetsrisiken.
+Die Kernarchitektur ist spielbar und testbar, aber mehrere Bereiche sind schwer wartbar oder fragil. Die groessten Risiken liegen in der weiterhin grossen zentralen State-/Generatorlogik, den verbleibenden Runtime-Bridge-Resten, lokaler Token-Speicherung und einigen Live-Sync-/Fehlerpfaden. Die aktive UI ist React/Vite-v1 unter `/v1`; `/` leitet dorthin weiter. Rot markierte Knoten sind problematische Stellen; gestrichelte rote Kanten zeigen Drift-, Kopplungs- oder Fragilitaetsrisiken.
 
 ## Diagramm
 
@@ -64,9 +64,9 @@ flowchart LR
   routers --> presenceService
 
   subgraph engines["Central Logic"]
-    runtimeBridge["runtime_symbols()\nProblem: temporary bridge still broad"]
-    stateEngine["state_engine.py\n~10.5k lines\nProblem: god module"]
-    turnEngine["turn_engine.py\n1309 lines\norchestrates turn pipeline"]
+    runtimeBridge["runtime_symbols()\nProblem: temporary bridge remains"]
+    stateEngine["state_engine.py\nlarge legacy core\nProblem: too many domains"]
+    turnEngine["turn_engine.py\norchestrates turn pipeline\nexplicit subsystem ports"]
     patchModules["Patch appliers\nmany small modules\nbetter direction"]
     liveState["live_state_service.py\nin-memory live registry"]
     streamTickets["presence_service.py\nin-memory stream tickets"]
@@ -74,7 +74,7 @@ flowchart LR
 
   main -. "bounded runtime mapping" .-> runtimeBridge
   runtimeBridge -. "transition coupling" .-> stateEngine
-  runtimeBridge -. "transition coupling" .-> turnEngine
+  runtimeBridge -. "remaining legacy transition coupling" .-> turnEngine
   turnService --> turnEngine
   turnEngine --> patchModules
   turnEngine --> stateEngine
@@ -130,14 +130,14 @@ flowchart LR
 ### Architekturprobleme
 
 2. `app/services/state_engine.py`
-   - Problem: Sehr grosses Modul mit Persistenz, Normalisierung, Setup, Kontext, Generatoren, Canon, World, Sheets und Kompatibilitaet in einem Laufzeitraum.
+   - Problem: Sehr grosses Modul mit Normalisierung, Setup, Kontext, Generatoren, Canon, World, Sheets und Kompatibilitaet in einem Laufzeitraum. Campaign-Subsysteme sind bereits ausgelagert, der Kern ist aber weiter zu breit.
    - Warum problematisch: Aenderungen haben hohe Seiteneffekte; Review und Tests muessen viel Kontext halten.
    - Bessere Loesung: Weiter entlang bestehender Subsysteme extrahieren: Persistence, Setup Finalization, Context Index, Sheet Views, Generator Clients.
 
 3. `app/services/state_engine.py:runtime_symbols()` und `app/services/turn_engine.py:configure`
-   - Problem: Die breite Globals-Injektion ist im normalen State-Engine-Pfad entfernt, aber Turn-Wiring und Router-Factories brauchen noch eine begrenzte Runtime-Symbol-Bruecke.
-   - Warum problematisch: Dependencies sind besser sichtbar als vorher, aber noch nicht vollstaendig explizit.
-   - Bessere Loesung: Weitere explizite Dependency-Dataclasses fuer Turn-Engine-Cluster und Service-Factories einfuehren; `runtime_symbols()` nach jedem Slice verkleinern.
+   - Problem: Die breite Globals-Injektion ist im normalen State-Engine-Pfad entfernt. Turn-Wiring nutzt inzwischen explizite Ports fuer LLM, Extraction, Progression/Codex und Pacing, aber `runtime_symbols()` bleibt fuer Restpfade und Factories bestehen.
+   - Warum problematisch: Dependencies sind deutlich sichtbarer, aber die alte Bridge kann wieder wachsen, wenn neue Abhaengigkeiten dort abgelegt werden.
+   - Bessere Loesung: `runtime_symbols()` anhand der expliziten Ports reduzieren; verbleibende Materialization-, Patch- und Domain-Helper-Grenzen als kleine Ports oder Zielmodule modellieren.
 
 4. `app/main.py`
    - Problem: App-Wiring, Runtime-Konstanten, Prompt-/Schema-Erweiterung und Glue-Funktionen leben zusammen.
@@ -183,9 +183,9 @@ flowchart LR
 ### Fehlende oder fragile Fehlerbehandlung
 
 11. `app/services/state_engine.py`, `app/services/turn_engine.py`
-    - Problem: Ollama wird fuer viele Rollen direkt genutzt: Narrator, JSON repair, Setup Copy, Random Answers, Extractors, Context.
-    - Warum problematisch: Fehlerklassifikation existiert vor allem im Turn-Flow; Setup/Context koennen anders ausfallen oder unterschiedliche Fallbacks nutzen.
-    - Bessere Loesung: Einheitlichen LLM-Client mit Timeouts, Rollen, Telemetrie, Fallback-Kontrakt und testbaren Fake-Adaptern einfuehren.
+    - Problem: Ollama wird fuer mehrere Rollen genutzt: Narrator, JSON repair, Setup Copy, Random Answers, Extractors, Context.
+    - Warum problematisch: Der Turn-Flow hat jetzt explizite LLM-Ports, Setup/Context koennen aber weiter andere Fallbacks und Fehlerpfade haben.
+    - Bessere Loesung: LLM-Client-Grenzen weiter vereinheitlichen und Setup/Context ebenfalls mit testbaren Fake-Adaptern absichern.
 
 12. `app/services/presence_service.py`
     - Problem: Stream-Tickets liegen in einem Modul-globalen Dict.

@@ -28,4 +28,5 @@ Diese Dokumentation beschreibt den aktuellen Stand des lokalen Aelunor-Projekts.
 - Dokumentiere nur belegbare Architektur und tatsaechliche Kommandos.
 - Roadmap-Eintraege als Planung kennzeichnen, nicht als existierende Features.
 - Historische Audits in `01_repo/aelunor-core/docs/` nicht loeschen, sondern bei Bedarf mit aktuellem Status referenzieren.
+- Zeitdokumente und externe Analyseordner nicht still umschreiben; bei aktiven Architekturthemen lieber aktuelle Kontext-READMEs und `02_docs/01_architecture/` pflegen.
 - Runtime-Daten aus `07_runtime/` nie als Doku-Quelle fuer Tests oder Beispiele verwenden.

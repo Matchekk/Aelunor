@@ -111,9 +111,10 @@ Es gibt aktuell kein `npm run lint`.
 - Router in `app/routers/` sind HTTP-Adapter.
 - Fachlogik liegt in `app/services/`.
 - `app/main.py` verdrahtet Runtime-Konfiguration, Router und Kompatibilitaets-Exports.
-- `app/services/state_engine.py` und `app/services/turn_engine.py` enthalten noch grosse Altlasten und sind die wichtigsten Refactoring-Ziele.
+- `app/services/state_engine.py` enthaelt noch Altlasten, aber Campaign Persistence, Lifecycle, Views, Party und Normalization sind in Zielmodule gewandert.
+- `app/services/turn_engine.py` bleibt der Turn-Orchestrator; LLM-, Extraction-/Canon-/NPC-, Progression-/Skill-/Codex- sowie Pacing-/Timing-/Attribute-Meta-Pfade laufen ueber explizite Turn-Dependency-Ports.
 - `state_engine.EXPORTED_SYMBOLS` ist bewusst klein: nur `public_turn` und `build_campaign_view`.
-- `state_engine.runtime_symbols()` ist nur eine begrenzte interne Uebergangsbruecke fuer Router-Factories und Turn-Wiring, keine neue Public API.
+- `state_engine.runtime_symbols()` ist nur noch eine begrenzte interne Uebergangsbruecke fuer verbleibende Factory- und Legacy-Turn-Wiring-Pfade, keine neue Public API.
 - Neue Backend-Kontext-READMEs liegen in `app/`, `app/services/`, `app/routers/`, `tests/` und `scripts/`.
 - v1-Frontend ist feature-orientiert unter `ui/src/features/`, Shared Code unter `ui/src/shared/`.
 - Backend-State bleibt Quelle der Wahrheit; UI darf keine parallele Campaign-/Claim-/Turn-Wahrheit einfuehren.
@@ -131,14 +132,14 @@ Es gibt aktuell kein `npm run lint`.
 
 ## Bekannte Einschraenkungen
 
-- `state_engine.py` ist mit ca. 10.5k Zeilen weiterhin ein sehr grosser Monolith, aber erste Domain-Helfer liegen bereits in `app/services/items/`, `characters/`, `setup/`, `llm/`, `world/` und `state/`.
+- `state_engine.py` bleibt gross, ist aber nicht mehr der alleinige Campaign- oder Turn-Abhaengigkeitsknoten. Campaign-Helfer liegen in `app/services/campaigns/`; Turn-Wiring nutzt explizite Ports in `app/services/turn/dependencies.py`; weitere Domain-Helfer liegen in `items/`, `characters/`, `setup/`, `llm/`, `world/` und `state/`.
 - Viele Workspace-Ordner sind Platzhalter ohne produktiven Inhalt.
 - `02_docs/` war lange nur als Skelett vorhanden; aktuelle Inhalte muessen weiter code-backed gepflegt werden.
 - Push/Pull sollte nur mit sauberem Worktree erfolgen, da lokale Runtime-/Arbeitsdaten nicht vermischt werden duerfen.
 
 ## Naechste Schritte
 
-1. Campaign Lifecycle, Persistence und View-Building aus `state_engine.py` extrahieren.
-2. `turn_engine.py` weiter von Prompt-/LLM-/Canon-Entscheidungen trennen.
+1. `state_engine.runtime_symbols()` anhand der inzwischen expliziten Turn-Ports weiter reduzieren.
+2. Verbleibende Turn-Materialization-, Patch-Sanitizer/-Validator- und Domain-Helper-Abhaengigkeiten aus der Runtime-Bridge loesen.
 3. Backend-API-Contracts und v1-Frontend-Contracts aus einer dokumentierten Quelle ableiten.
 4. Kontext-READMEs pro aktivem Ordner aktuell halten, damit Agents nicht den ganzen Baum scannen muessen.

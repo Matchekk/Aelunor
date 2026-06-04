@@ -25,6 +25,7 @@ python -m pytest tests -q --basetemp .pytest_tmp --cache-clear -o cache_dir=.pyt
 python -m pytest tests/unit -q
 python -m pytest tests/integration -q
 python -m pytest tests/unit/test_state_dependencies.py tests/unit/test_main_state_engine_config.py tests/unit/test_state_engine_reexports_after_service_extraction.py -q
+python -m pytest tests/unit/test_turn_dependencies.py tests/unit/test_turn_engine_llm_ports.py tests/unit/test_turn_extraction_ports.py tests/unit/test_turn_progression_codex_ports.py tests/unit/test_turn_pacing_attribute_ports.py tests/unit/test_turn_engine_runtime_dependency_inventory.py -q
 ```
 
 Bei State-/Turn-Aenderungen besonders pruefen:
@@ -35,3 +36,7 @@ Bei State-/Turn-Aenderungen besonders pruefen:
 - Claims,
 - State vor/nach Reload,
 - Canon-/Progression-Gate.
+
+Turn-Port-Tests pruefen bewusst offline, dass LLM-, Extraction-/Canon-/NPC-,
+Progression-/Skill-/Codex- und Pacing-/Attribute-Abhaengigkeiten ueber explizite
+Ports laufen. Sie duerfen keine echten Ollama-/HTTP-Aufrufe ausloesen.

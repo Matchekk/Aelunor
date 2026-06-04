@@ -93,16 +93,17 @@ Automatisierte Tests duerfen keine echten Ollama-Aufrufe ausloesen. Nutze Fake N
 - Fachlogik gehoert in `app/services/`.
 - `app/main.py` bleibt Wiring/Composition.
 - `state_engine.EXPORTED_SYMBOLS` bleibt auf echte Public-Fassade begrenzt: `public_turn`, `build_campaign_view`.
-- `state_engine.runtime_symbols()` ist eine interne Uebergangsbruecke fuer bestehende Runtime-Factories und Turn-Wiring; keine neue Monolith-API.
-- Neue Domain-Helfer direkt in Zielmodulen testen/importieren, z. B. `app/services/items/`, `characters/`, `setup/`, `llm/`, `world/`.
+- `state_engine.runtime_symbols()` ist eine interne Uebergangsbruecke fuer verbleibende Runtime-Factories und Legacy-Turn-Wiring; keine neue Monolith-API.
+- Neue Domain-Helfer direkt in Zielmodulen testen/importieren, z. B. `app/services/campaigns/`, `items/`, `characters/`, `setup/`, `llm/`, `turn/`, `world/`.
+- Turn-Engine-Abhaengigkeiten fuer LLM, Extraction/Canon/NPC, Progression/Skill/Codex sowie Pacing/Timing/Attribute-Meta laufen ueber explizite Dataclasses in `app/services/turn/dependencies.py`.
 - JSON-State-Shape, Campaign-Dateien, Setup-Catalog-Struktur, Turn-Record-Format und UI-Erwartungen sind Public Contracts.
 - `07_runtime/` nicht als Testfixture benutzen und nicht aus Tests beschreiben.
 - UI-Arbeit gehoert in `ui/`; `app/static/` enthaelt keine aktive Legacy-UI mehr.
 
 ## Zentrale technische Schulden
 
-1. `app/services/state_engine.py` ist mit ca. 10.5k Zeilen weiterhin der groesste Monolith. Der naechste sinnvolle Slice ist Campaign Lifecycle / Persistence / View-Building.
-2. `app/services/turn_engine.py` mischt noch Narrator-Orchestrierung, LLM-Fehlerpfade, Patch-/Canon-Auswertung und Prompt-nahe Logik.
+1. `app/services/state_engine.py` ist weiterhin der groesste Monolith, aber Campaign Persistence/Lifecycle/Views/Party/Normalization sind ausgelagert. Naechster sinnvoller Slice: `runtime_symbols()` anhand der expliziten Ports weiter reduzieren.
+2. `app/services/turn_engine.py` orchestriert weiter den Turn-Flow. Die wichtigsten Runtime-Bridge-Pfade fuer LLM, Extraction, Progression/Codex und Pacing sind explizit portiert; offen bleiben Materialization-, Patch- und einzelne Domain-Helper-Grenzen.
 3. `ui/src/shared/styles/globals.css` enthaelt noch sehr viele globale Regeln. Neue Systeme sollten in eigene Token-/Layout-Dateien ausgelagert werden.
 4. Lokale `__pycache__`-Artefakte und Runtime-Logs sind generiert; sie sollten nicht versioniert werden.
 

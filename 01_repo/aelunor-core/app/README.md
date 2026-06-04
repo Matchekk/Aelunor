@@ -26,7 +26,14 @@ wo Code liegt und welche Grenzen aktuell gelten.
 - `main.py` re-exportiert nur `state_engine.EXPORTED_SYMBOLS`.
 - `state_engine.EXPORTED_SYMBOLS` bleibt klein: `public_turn`, `build_campaign_view`.
 - `state_engine.runtime_symbols()` ist eine interne Uebergangsbruecke fuer
-  bestehende Dependency-Factories und Turn-Wiring. Sie ist keine Public API.
+  verbleibende Dependency-Factories und Legacy-Turn-Wiring. Sie ist keine
+  Public API.
+- `turn_engine.py` nutzt fuer die wichtigen Turn-Subsysteme explizite Ports:
+  `TurnLlmDependencies`, `TurnExtractionDependencies`,
+  `TurnProgressionDependencies`, `TurnCodexDependencies`,
+  `TurnPacingDependencies` und `TurnAttributeDependencies`.
+- Neue Turn-Abhaengigkeiten zuerst in `app/services/turn/dependencies.py`
+  modellieren, statt `runtime_symbols()` oder `main.py` wieder zu erweitern.
 
 ## Wichtige Guards
 
