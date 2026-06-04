@@ -270,7 +270,9 @@ from app.services.patch_payloads import (
     normalize_patch_semantics,
 )
 from app.services.campaigns import lifecycle as campaign_lifecycle
+from app.services.campaigns import normalization as campaign_normalization
 from app.services.campaigns import persistence as campaign_persistence
+from app.services.campaigns import state_shape as campaign_state_shape
 from app.services.campaigns import views as campaign_views
 from app.services.migrations import campaign_slots as campaign_slot_migration
 from app.services import live_state_service as _default_live_state_service
@@ -4801,14 +4803,9 @@ def level_one_attributes_from_weights(campaign: Dict[str, Any], weights: Dict[st
     )
 
 def default_character_setup_node() -> Dict[str, Any]:
-    return {
-        "completed": False,
-        "question_queue": build_character_question_queue(),
-        "answers": {},
-        "summary": {},
-        "raw_transcript": [],
-        "question_runtime": {},
-    }
+    return campaign_state_shape.default_character_setup_node(
+        build_character_question_queue=build_character_question_queue,
+    )
 
 def campaign_repository() -> CampaignRepository:
     return campaign_persistence.resolve_campaign_repository(
@@ -7790,119 +7787,27 @@ def build_character_summary(campaign: Dict[str, Any], slot_name: str) -> Dict[st
     return setup_helpers.build_character_summary(campaign, slot_name, deps=setup_helper_dependencies())
 
 def apply_world_summary_to_boards(campaign: Dict[str, Any], updated_by: Optional[str]) -> None:
-    summary = campaign["setup"]["world"]["summary"]
-    boards = campaign.setdefault("boards", {})
-    if not isinstance(boards, dict):
-        boards = {}
-        campaign["boards"] = boards
+    campaign_state_shape.apply_world_summary_to_boards(
+        campaign,
+        updated_by,
+        ports=campaign_state_shape.WorldSummaryBoardPorts(
+            make_id=make_id,
+            utc_now=utc_now,
+        ),
+    )
 
-    boards["plot_essentials"] = {
-        "premise": summary.get("premise", ""),
-        "current_goal": "",
-        "current_threat": summary.get("central_conflict", ""),
-        "active_scene": "",
-        "open_loops": [],
-        "tone": summary.get("tone", ""),
-        "updated_at": utc_now(),
-        "updated_by": updated_by,
-    }
-    authors_lines = [
-        f"Theme: {summary.get('theme', '')}",
-        f"Ton: {summary.get('tone', '')}",
-        f"Schwierigkeit: {summary.get('difficulty', '')}",
-        f"Wertebereich: {summary.get('attribute_range_label', '')}",
-        f"Kraftquelle: {summary.get('resource_name', '')}",
-        f"Tod: {summary.get('death_policy', '')}",
-        f"Ressourcen: {summary.get('resource_scarcity', '')}",
-        f"Heilung: {summary.get('healing_frequency', '')}",
-        f"Monsterdichte: {summary.get('monsters_density', '')}",
-        f"Erzählrahmen: {summary.get('ruleset', '')}",
-        f"Outcome-Modell: {summary.get('outcome_model', '')}",
-        f"Weltstruktur: {summary.get('world_structure', '')}",
-        f"Weltgesetze: {', '.join(summary.get('world_laws', []))}",
-        f"Zentraler Konflikt: {summary.get('central_conflict', '')}",
-        f"Tabus/Notizen: {summary.get('taboos', '')}",
-    ]
-    boards["authors_note"] = {
-        "content": "\n".join(line for line in authors_lines if line.split(": ", 1)[1]),
-        "updated_at": utc_now(),
-        "updated_by": updated_by,
-    }
-    world_info_entries: List[Dict[str, Any]] = [
-        {
-            "entry_id": make_id("world"),
-            "title": "Weltstruktur",
-            "category": "world",
-            "content": summary.get("world_structure", ""),
-            "tags": ["setup"],
-            "updated_at": utc_now(),
-            "updated_by": updated_by,
-        },
-        {
-            "entry_id": make_id("world"),
-            "title": "Wertebereich",
-            "category": "rule",
-            "content": summary.get("attribute_range_label", ""),
-            "tags": ["setup", "rule"],
-            "updated_at": utc_now(),
-            "updated_by": updated_by,
-        },
-        {
-            "entry_id": make_id("world"),
-            "title": "Kraftquelle",
-            "category": "rule",
-            "content": summary.get("resource_name", ""),
-            "tags": ["setup", "rule"],
-            "updated_at": utc_now(),
-            "updated_by": updated_by,
-        },
-        {
-            "entry_id": make_id("world"),
-            "title": "Weltgesetze",
-            "category": "rule",
-            "content": ", ".join(summary.get("world_laws", [])),
-            "tags": ["setup"],
-            "updated_at": utc_now(),
-            "updated_by": updated_by,
-        },
-        {
-            "entry_id": make_id("world"),
-            "title": "Zentraler Konflikt",
-            "category": "conflict",
-            "content": summary.get("central_conflict", ""),
-            "tags": ["setup"],
-            "updated_at": utc_now(),
-            "updated_by": updated_by,
-        },
-    ]
-    factions = summary.get("factions", [])
-    if not isinstance(factions, list):
-        factions = []
-    for faction in factions:
-        if not isinstance(faction, dict):
-            continue
-        world_info_entries.append(
-            {
-                "entry_id": make_id("world"),
-                "title": faction.get("name", "Fraktion"),
-                "category": "faction",
-                "content": f"Ziel: {faction.get('goal', '')} Methoden: {faction.get('methods', '')}".strip(),
-                "tags": ["setup", "faction"],
-                "updated_at": utc_now(),
-                "updated_by": updated_by,
-            }
-        )
-    boards["world_info"] = world_info_entries
 
 def initialize_dynamic_slots(campaign: Dict[str, Any], player_count: int) -> None:
-    player_count = max(1, min(MAX_PLAYERS, int(player_count)))
-    campaign["claims"] = {}
-    campaign["state"]["characters"] = {}
-    for index in range(1, player_count + 1):
-        current_slot = slot_id(index)
-        campaign["claims"][current_slot] = None
-        campaign["state"]["characters"][current_slot] = blank_character_state(current_slot)
-        campaign["setup"]["characters"].setdefault(current_slot, default_character_setup_node())
+    campaign_state_shape.initialize_dynamic_slots(
+        campaign,
+        player_count,
+        ports=campaign_state_shape.DynamicSlotPorts(
+            slot_id=slot_id,
+            blank_character_state=blank_character_state,
+            default_character_setup_node=default_character_setup_node,
+        ),
+    )
+
 
 def apply_character_summary_to_state(campaign: Dict[str, Any], slot_name: str) -> None:
     setup_node = campaign["setup"]["characters"][slot_name]
@@ -7995,203 +7900,66 @@ def apply_character_summary_to_state(campaign: Dict[str, Any], slot_name: str) -
         write_legacy_shadow_fields(character, (((campaign.get("state") or {}).get("world") or {}).get("settings") or {}))
     sync_scars_into_appearance(character)
 
-def is_legacy_campaign(campaign: Dict[str, Any]) -> bool:
-    return campaign_slot_migration.is_legacy_campaign(campaign)
+def _campaign_slot_migration_ports() -> campaign_slot_migration.CampaignSlotMigrationPorts:
+    return campaign_slot_migration.CampaignSlotMigrationPorts(
+        slot_id=slot_id,
+        deep_copy=deep_copy,
+        blank_character_state=blank_character_state,
+        default_setup=default_setup,
+        normalize_campaign_length_choice=normalize_campaign_length_choice,
+        legacy_select_answer_payload=legacy_select_answer_payload,
+        normalize_resource_name=normalize_resource_name,
+        build_world_summary=build_world_summary,
+        extract_text_answer=extract_text_answer,
+        parse_earth_items=parse_earth_items,
+        normalize_class_current=normalize_class_current,
+        default_character_setup_node=default_character_setup_node,
+        build_character_summary=build_character_summary,
+    )
 
-def remap_turn_context_slot_names(turn: Dict[str, Any], mapping: Dict[str, str]) -> None:
-    campaign_slot_migration.remap_turn_context_slot_names(turn, mapping)
-
-def migrate_campaign_to_dynamic_slots(campaign: Dict[str, Any]) -> None:
-    campaign_slot_migration.migrate_campaign_to_dynamic_slots(
-        campaign,
-        ports=campaign_slot_migration.CampaignSlotMigrationPorts(
-            slot_id=slot_id,
-            deep_copy=deep_copy,
-            blank_character_state=blank_character_state,
-            default_setup=default_setup,
-            normalize_campaign_length_choice=normalize_campaign_length_choice,
-            legacy_select_answer_payload=legacy_select_answer_payload,
-            normalize_resource_name=normalize_resource_name,
-            build_world_summary=build_world_summary,
-            extract_text_answer=extract_text_answer,
-            parse_earth_items=parse_earth_items,
-            normalize_class_current=normalize_class_current,
-            default_character_setup_node=default_character_setup_node,
-            build_character_summary=build_character_summary,
+def _campaign_normalization_ports() -> campaign_normalization.CampaignNormalizationPorts:
+    return campaign_normalization.CampaignNormalizationPorts(
+        deep_copy=deep_copy,
+        initial_state=INITIAL_STATE,
+        is_legacy_campaign=campaign_slot_migration.is_legacy_campaign,
+        migrate_campaign_to_dynamic_slots=lambda campaign: campaign_slot_migration.migrate_campaign_to_dynamic_slots(
+            campaign,
+            ports=_campaign_slot_migration_ports(),
         ),
+        default_intro_state=default_intro_state,
+        default_setup=default_setup,
+        default_character_setup_node=default_character_setup_node,
+        build_world_question_queue=build_world_question_queue,
+        build_character_question_queue=build_character_question_queue,
+        normalize_world_time=normalize_world_time,
+        normalize_world_settings=normalize_world_settings,
+        normalize_meta_timing=normalize_meta_timing,
+        normalize_combat_meta=normalize_combat_meta,
+        normalize_attribute_influence_meta=normalize_attribute_influence_meta,
+        normalize_extraction_quarantine_meta=normalize_extraction_quarantine_meta,
+        normalize_meta_migrations=normalize_meta_migrations,
+        active_pacing_profile=active_pacing_profile,
+        milestone_state_for_turn=milestone_state_for_turn,
+        normalize_world_codex_structures=normalize_world_codex_structures,
+        normalize_npc_codex_state=normalize_npc_codex_state,
+        seed_npc_codex_from_story_cards=seed_npc_codex_from_story_cards,
+        ensure_world_codex_from_setup=ensure_world_codex_from_setup,
+        blank_character_state=blank_character_state,
+        normalize_character_state=normalize_character_state,
+        normalize_element_id_list=normalize_element_id_list,
+        normalize_class_current=normalize_class_current,
+        resolve_class_element_id=resolve_class_element_id,
+        resource_name_for_character=resource_name_for_character,
+        normalize_dynamic_skill_state=normalize_dynamic_skill_state,
+        normalize_skill_elements_for_world=normalize_skill_elements_for_world,
+        reconcile_creator_inventory_items=reconcile_creator_inventory_items,
+        initialize_dynamic_slots=initialize_dynamic_slots,
+        run_legacy_normalize_backfill=run_legacy_normalize_backfill,
+        compute_turn_budget_estimates=compute_turn_budget_estimates,
     )
 
 def normalize_campaign(campaign: Dict[str, Any]) -> Dict[str, Any]:
-    campaign.setdefault("state", deep_copy(INITIAL_STATE))
-    campaign.setdefault("players", {})
-    campaign.setdefault("boards", default_boards())
-    campaign.setdefault("claims", {})
-    campaign.setdefault("turns", [])
-    campaign.setdefault("board_revisions", [])
-    campaign.setdefault("legacy_migration", None)
-
-    if is_legacy_campaign(campaign):
-        migrate_campaign_to_dynamic_slots(campaign)
-
-    state = campaign["state"]
-    state.setdefault("meta", deep_copy(INITIAL_STATE["meta"]))
-    if state["meta"].get("phase") == "character_creation":
-        state["meta"]["phase"] = "character_setup_open"
-    if state["meta"].get("phase") == "character_setup":
-        state["meta"]["phase"] = "character_setup_open"
-    if state["meta"].get("phase") == "adventure":
-        state["meta"]["phase"] = "active"
-    if state["meta"].get("phase") not in PHASES:
-        state["meta"]["phase"] = "lobby"
-    existing_intro_state = state["meta"].get("intro_state")
-    if isinstance(existing_intro_state, dict):
-        normalized_intro_state = default_intro_state()
-        normalized_intro_state.update(existing_intro_state)
-        existing_intro_state.clear()
-        existing_intro_state.update(normalized_intro_state)
-        state["meta"]["intro_state"] = existing_intro_state
-    else:
-        state["meta"]["intro_state"] = default_intro_state()
-    state["meta"]["world_time"] = normalize_world_time(state["meta"])
-    state.setdefault("world", deep_copy(INITIAL_STATE["world"]))
-    state["world"].setdefault("settings", {})
-    state["world"]["settings"] = normalize_world_settings(state["world"].get("settings") or {})
-    state["world"].setdefault("elements", {})
-    state["world"].setdefault("element_relations", {})
-    state["world"].setdefault("element_alias_index", {})
-    state["world"].setdefault("element_class_paths", {})
-    state["world"]["day"] = state["meta"]["world_time"]["day"]
-    state["world"]["time"] = state["meta"]["world_time"]["time_of_day"]
-    state["world"]["weather"] = state["meta"]["world_time"]["weather"]
-    normalize_meta_timing(state["meta"])
-    normalize_combat_meta(state["meta"])
-    normalize_attribute_influence_meta(state["meta"])
-    normalize_extraction_quarantine_meta(state["meta"])
-    migrations_meta = normalize_meta_migrations(state["meta"])
-    milestone_defaults = milestone_state_for_turn(int(state["meta"].get("turn", 0) or 0), active_pacing_profile(state))
-    state["meta"]["last_milestone_turn"] = int(state["meta"].get("last_milestone_turn", milestone_defaults["last"]) or milestone_defaults["last"])
-    state["meta"]["next_milestone_turn"] = int(state["meta"].get("next_milestone_turn", milestone_defaults["next"]) or milestone_defaults["next"])
-    state.setdefault("map", {"nodes": {}, "edges": []})
-    state.setdefault("plotpoints", [])
-    state.setdefault("scenes", {})
-    state.setdefault("items", {})
-    state.setdefault("characters", {})
-    state.setdefault("recent_story", [])
-    state.setdefault("events", [])
-    state.setdefault("codex", {"races": {}, "beasts": {}, "meta": deep_copy(CODEX_DEFAULT_META)})
-    state.setdefault("npc_codex", {})
-    state.setdefault("npc_alias_index", {})
-    normalize_world_codex_structures(state)
-
-    boards = campaign["boards"]
-    boards.setdefault("plot_essentials", default_boards()["plot_essentials"])
-    boards.setdefault("authors_note", default_boards()["authors_note"])
-    boards.setdefault("story_cards", [])
-    boards.setdefault("world_info", [])
-    boards.setdefault("memory_summary", default_boards()["memory_summary"])
-    boards.setdefault("player_diaries", {})
-    for player_id, player in (campaign.get("players") or {}).items():
-        boards["player_diaries"].setdefault(
-            player_id,
-            default_player_diary_entry(player_id, player.get("display_name", "")),
-        )
-        boards["player_diaries"][player_id]["display_name"] = player.get("display_name", "")
-
-    normalize_npc_codex_state(campaign)
-    should_seed_npc_codex = not bool(migrations_meta.get("npc_codex_seeded_from_story_cards"))
-    if should_seed_npc_codex:
-        if not state.get("npc_codex"):
-            seed_npc_codex_from_story_cards(campaign)
-            normalize_npc_codex_state(campaign)
-        migrations_meta["npc_codex_seeded_from_story_cards"] = True
-
-    setup = campaign.setdefault("setup", default_setup())
-    if setup.get("version") != 4:
-        fallback = default_setup()
-        fallback["world"].update(setup.get("world", {}))
-        fallback["characters"].update(setup.get("characters", {}))
-        setup = campaign["setup"] = fallback
-    setup.setdefault("engine", {})
-    setup["engine"]["world_catalog_version"] = CATALOG_VERSION
-    setup["engine"]["character_catalog_version"] = CATALOG_VERSION
-    setup.setdefault("world", default_setup()["world"])
-    setup["world"]["question_queue"] = build_world_question_queue()
-    setup["world"].setdefault("answers", {})
-    setup["world"].setdefault("summary", {})
-    setup["world"].setdefault("raw_transcript", [])
-    setup["world"].setdefault("question_runtime", {})
-    setup.setdefault("characters", {})
-    if setup["world"].get("completed"):
-        ensure_world_codex_from_setup(state, setup["world"].get("summary") or {})
-
-    effective_world_time = normalize_world_time(state["meta"])
-    for slot_name in campaign_slots(campaign):
-        state["characters"].setdefault(slot_name, blank_character_state(slot_name))
-        state["characters"][slot_name] = normalize_character_state(
-            state["characters"][slot_name],
-            slot_name,
-            state.get("items", {}),
-            effective_world_time,
-        )
-        state["characters"][slot_name]["element_affinities"] = normalize_element_id_list(
-            state["characters"][slot_name].get("element_affinities") or [],
-            state.get("world") or {},
-        )
-        state["characters"][slot_name]["element_resistances"] = normalize_element_id_list(
-            state["characters"][slot_name].get("element_resistances") or [],
-            state.get("world") or {},
-        )
-        state["characters"][slot_name]["element_weaknesses"] = normalize_element_id_list(
-            state["characters"][slot_name].get("element_weaknesses") or [],
-            state.get("world") or {},
-        )
-        normalized_class = normalize_class_current(state["characters"][slot_name].get("class_current"))
-        if normalized_class:
-            resolved_class_element = resolve_class_element_id(normalized_class, state.get("world") or {})
-            if resolved_class_element:
-                normalized_class["element_id"] = resolved_class_element
-                normalized_class["element_tags"] = list(
-                    dict.fromkeys([*(normalized_class.get("element_tags") or []), resolved_class_element])
-                )
-            state["characters"][slot_name]["class_current"] = normalize_class_current(normalized_class)
-        resource_name = resource_name_for_character(state["characters"][slot_name], state["world"].get("settings") or {})
-        normalized_skills: Dict[str, Dict[str, Any]] = {}
-        for skill_id, skill_value in ((state["characters"][slot_name].get("skills") or {}).items()):
-            normalized_skill = normalize_dynamic_skill_state(skill_value, skill_id=str(skill_id), resource_name=resource_name)
-            normalized_skill = normalize_skill_elements_for_world(normalized_skill, state.get("world") or {})
-            normalized_skills[normalized_skill["id"]] = normalized_skill
-        state["characters"][slot_name]["skills"] = normalized_skills
-        reconcile_creator_inventory_items(state, state["characters"][slot_name])
-        setup["characters"].setdefault(slot_name, default_character_setup_node())
-        setup["characters"][slot_name]["question_queue"] = build_character_question_queue()
-        setup["characters"][slot_name].setdefault("answers", {})
-        setup["characters"][slot_name].setdefault("summary", {})
-        setup["characters"][slot_name].setdefault("raw_transcript", [])
-        setup["characters"][slot_name].setdefault("question_runtime", {})
-        campaign["claims"].setdefault(slot_name, None)
-
-    if setup["world"].get("completed") and not campaign_slots(campaign):
-        initialize_dynamic_slots(campaign, int(setup["world"].get("summary", {}).get("player_count") or 1))
-
-    if campaign.get("turns") and any(turn.get("status") == "active" for turn in campaign.get("turns", [])):
-        state["meta"]["phase"] = "active"
-        if state["meta"]["intro_state"].get("status") in ("idle", "pending", "failed"):
-            state["meta"]["intro_state"]["status"] = "generated"
-        if not state["meta"]["intro_state"].get("generated_turn_id"):
-            state["meta"]["intro_state"]["generated_turn_id"] = active_turns(campaign)[0]["turn_id"]
-    elif setup["world"].get("completed"):
-        state["meta"]["phase"] = "ready_to_start" if can_start_adventure(campaign) else "character_setup_open"
-    else:
-        if state["meta"].get("phase") not in {"lobby", "world_setup"}:
-            state["meta"]["phase"] = "world_setup"
-
-    # normalize_campaign stays structurally passive by default.
-    # Legacy backfill is explicit opt-in only.
-    if ENABLE_HEURISTIC_NORMALIZE_BACKFILL:
-        run_legacy_normalize_backfill(campaign)
-    compute_turn_budget_estimates(state)
-
-    return campaign
+    return campaign_normalization.normalize_campaign(campaign, ports=_campaign_normalization_ports())
 
 def load_campaign(campaign_id: str) -> Dict[str, Any]:
     return campaign_persistence.load_campaign(
