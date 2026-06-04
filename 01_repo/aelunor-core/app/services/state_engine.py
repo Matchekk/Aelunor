@@ -13,6 +13,181 @@ from app.helpers import setup_helpers
 from app.adapters.llm import OllamaAdapter, OllamaSettings
 from app.repositories.campaign_repository import CampaignRepository
 
+from app.catalogs.runtime_catalogs import (
+    CANON_EXTRACTOR_SCHEMA,
+    PROGRESSION_EXTRACTOR_SCHEMA,
+    RESPONSE_SCHEMA,
+)
+from app.config.attributes import (
+    ATTRIBUTE_INFLUENCE_DISTRIBUTION,
+    ATTRIBUTE_INFLUENCE_STRENGTH,
+)
+from app.config.canon import (
+    CANON_CHARACTER_FIELDS,
+    CANON_GATE_ACTIVE_DOMAINS,
+    CANON_GATE_DOMAINS_SUPPORTED,
+)
+from app.config.codex import (
+    BEAST_BLOCKS_BY_LEVEL,
+    BEAST_CODEX_BLOCK_ORDER,
+    CODEX_BEAST_TRIGGER_ABILITY,
+    CODEX_BEAST_TRIGGER_COMBAT,
+    CODEX_BEAST_TRIGGER_DEFEAT,
+    CODEX_DEFAULT_META,
+    CODEX_KIND_BEAST,
+    CODEX_KIND_RACE,
+    CODEX_KNOWLEDGE_LEVEL_MAX,
+    CODEX_KNOWLEDGE_LEVEL_MIN,
+    CODEX_RACE_TRIGGER_CONTACT,
+    CODEX_RACE_TRIGGER_LORE,
+    NPC_STATUS_ALLOWED,
+    RACE_BLOCKS_BY_LEVEL,
+    RACE_CODEX_BLOCK_ORDER,
+)
+from app.config.elements import (
+    ELEMENT_CLASS_PATH_MAX,
+    ELEMENT_CLASS_PATH_MIN,
+    ELEMENT_CLASS_PATH_RANKS,
+    ELEMENT_CORE_NAMES,
+    ELEMENT_GENERATED_NAMES_FALLBACK,
+    ELEMENT_RELATION_SCORE,
+    ELEMENT_RELATIONS,
+    ELEMENT_SIMILARITY_BLACKLIST,
+    ELEMENT_TOTAL_COUNT,
+)
+from app.config.errors import (
+    ERROR_CODE_EXTRACTOR,
+    ERROR_CODE_JSON_REPAIR,
+    ERROR_CODE_NARRATOR_RESPONSE,
+    ERROR_CODE_NORMALIZE,
+    ERROR_CODE_PATCH_APPLY,
+    ERROR_CODE_PATCH_SANITIZE,
+    ERROR_CODE_PERSISTENCE,
+    ERROR_CODE_SCHEMA_VALIDATION,
+    ERROR_CODE_SSE_BROADCAST,
+    ERROR_CODE_TURN_INTERNAL,
+    TURN_ERROR_USER_MESSAGES,
+)
+from app.config.feature_flags import (
+    ENABLE_HEURISTIC_NORMALIZE_BACKFILL,
+    ENABLE_LEGACY_SHADOW_WRITEBACK,
+)
+from app.config.injuries import (
+    INJURY_HEALING_STAGES,
+    INJURY_SEVERITIES,
+)
+from app.config.migrations import (
+    LEGACY_SHADOW_FIELDS,
+    MIGRATION_ONLY_FIELDS,
+)
+from app.config.progression import (
+    ATTRIBUTE_KEYS,
+    CLASS_ASCENSION_STATUSES,
+    DEFAULT_DYNAMIC_SKILL_LEVEL_MAX,
+    DEFAULT_NUMERIC_SKILL_DELTA_XP,
+    FIRST_SKILL_FORCE_PROBABILITY,
+    LEGACY_ROLE_CLASS_MAP,
+    LEGACY_SKILL_NAME_MAP,
+    LEGACY_SKILL_TAGS,
+    PROGRESSION_CLAIM_TYPES,
+    PROGRESSION_DENSITY_CAP_MILESTONE,
+    PROGRESSION_DENSITY_CAP_NON_MILESTONE,
+    PROGRESSION_EVENT_BASE_XP,
+    PROGRESSION_EVENT_PRIORITY,
+    PROGRESSION_EVENT_SEVERITIES,
+    PROGRESSION_EVENT_SEVERITY_MULTIPLIER,
+    PROGRESSION_EVENT_TYPES,
+    PROGRESSION_EXTRACTOR_CONFIDENCE_ORDER,
+    PROGRESSION_EXTRACTOR_CONFIDENCE_SCORE,
+    PROGRESSION_EXTRACTOR_CONFIDENCE_THRESHOLDS,
+    PROGRESSION_SET_DIRECT_KEYS,
+    RESOURCE_KEYS,
+    RESISTANCE_KEYS,
+    SKILL_ATTRIBUTE_MAP,
+    SKILL_EVOLUTIONS,
+    SKILL_FUSIONS,
+    SKILL_KEYS,
+    SKILL_OUTCOME_XP,
+    SKILL_PATHS,
+    SKILL_RANK_ORDER,
+    SKILL_RANK_THRESHOLDS,
+    SKILL_RANKS,
+)
+from app.config.runtime import (
+    ACTION_TYPES,
+    AI_LATENCY_CLAMP,
+    CAMPAIGN_LENGTHS,
+    CONTINUE_STORY_MARKER,
+    EXTRACTION_QUARANTINE_DEFAULT_MAX,
+    EXTRACTION_REASON_AMBIGUOUS_CLASS,
+    EXTRACTION_REASON_CONFLICT_WITH_LLM,
+    EXTRACTION_REASON_DUPLICATE,
+    EXTRACTION_REASON_ENV_OBJECT,
+    EXTRACTION_REASON_GENERIC_LOCATION,
+    EXTRACTION_REASON_LOW_CONFIDENCE,
+    EXTRACTION_REASON_MISSING_ACQUIRE,
+    EXTRACTION_REASON_VERB_STYLE_SKILL,
+    LEGACY_CHARACTERS,
+    MAX_PLAYERS,
+    MAX_STORY_COMPRESS_ATTEMPTS,
+    MAX_TURN_MODEL_ATTEMPTS,
+    MIN_STORY_REWRITE_ATTEMPTS,
+    PACING_PROFILE_DEFAULTS,
+    PHASES,
+    PLAYER_LATENCY_CLAMP,
+    TARGET_TURNS_DEFAULTS,
+    TIMING_DEFAULTS,
+    TIMING_EMA_ALPHA,
+)
+from app.config.setup import (
+    CHAR_SETUP_CHAPTERS,
+    LEGACY_SELECT_ALIASES,
+    WORLD_SETUP_CHAPTERS,
+)
+from app.core.ids import (
+    SLOT_PREFIX,
+    deep_copy,
+    make_id,
+    utc_now,
+)
+from app.schemas.llm import (
+    CONTEXT_RESPONSE_SCHEMA,
+    ELEMENT_GENERATOR_SCHEMA,
+)
+from app.text.patterns import (
+    ABILITY_UNLOCK_GENERIC_NAMES,
+    ABILITY_UNLOCK_TRIGGER_PATTERNS,
+    ACTION_STOPWORDS,
+    AUTO_INJURY_PATTERNS,
+    AUTO_ITEM_ACQUIRE_PATTERNS,
+    AUTO_ITEM_EQUIP_PATTERNS,
+    AUTO_ITEM_GENERIC_NAMES,
+    CONTEXT_META_DRIFT_MARKERS,
+    ENGLISH_LANGUAGE_MARKERS,
+    EQUIPMENT_CANONICAL_SLOTS,
+    EQUIPMENT_SLOT_ALIASES,
+    GERMAN_LANGUAGE_MARKERS,
+    ITEM_CHEST_KEYWORDS,
+    ITEM_DETAIL_CLAUSE_MARKERS,
+    ITEM_OFFHAND_KEYWORDS,
+    ITEM_TRINKET_KEYWORDS,
+    ITEM_WEAPON_KEYWORDS,
+    MANIFESTATION_COST_CUES,
+    MANIFESTATION_EFFECT_CUES,
+    MANIFESTATION_MOTIF_GROUPS,
+    MANIFESTATION_STRONG_CUES,
+    MANIFESTATION_TACTICAL_CUES,
+    MANIFESTATION_WORLD_REACTION_CUES,
+    NPC_GENERIC_NAME_TOKENS,
+    PROGRESSION_CLAIM_CUES,
+    SKILL_MANIFESTATION_NAME_STOPWORDS,
+    SKILL_MANIFESTATION_NAME_TOKEN_BLACKLIST,
+    SKILL_MANIFESTATION_VERB_BLACKLIST,
+    STORY_ACTION_CUES,
+    STORY_EXPLORE_CUES,
+    STORY_LEARN_CUES,
+    UNIVERSAL_SKILL_LIKE_NAMES,
+)
 from app.services.patch_payloads import (
     merge_character_patch_update,
     merge_patch_payloads,
@@ -20,12 +195,59 @@ from app.services.patch_payloads import (
     normalize_patch_semantics,
 )
 from app.services.state_basics import (
-    blank_patch as _blank_patch,
-    is_slot_id as _is_slot_id,
-    make_join_code as _make_join_code,
+    blank_patch,
+    is_slot_id,
+    make_join_code,
     ordered_slots as _ordered_slots,
     slot_id as _slot_id,
     slot_index as _slot_index,
+)
+from app.services.characters.defaults import blank_character_state
+from app.services.characters import appearance_state as _appearance_state_module
+from app.services.characters.appearance_state import (
+    age_character_if_needed,
+    build_age_modifiers,
+    build_class_visuals,
+    build_corruption_visuals,
+    build_faction_visuals,
+    build_stat_based_appearance,
+    corruption_bucket,
+    derive_age_stage,
+    infer_age_years,
+    normalize_age_fields,
+    normalize_appearance_state,
+)
+from app.services.characters.appearance_summary import (
+    build_appearance_summary_full,
+    build_appearance_summary_short,
+    rebuild_character_appearance,
+)
+from app.services.characters import resource_maxima as _resource_maxima_module
+from app.services.characters import resources as _character_resources_module
+from app.services.characters.resource_maxima import (
+    calculate_base_resource_maxima,
+    calculate_bonus_resource_maxima,
+    ensure_character_modifier_shape,
+    item_modifier_value,
+    item_weight,
+    iter_equipped_item_ids,
+    list_inventory_items,
+    migrate_legacy_resource_bonus_modifiers,
+    modifier_resource_key,
+    rebuild_resource_maxima,
+)
+from app.services.characters.resources import (
+    build_compat_resources_view,
+    canonical_resource_field_name,
+    ingest_legacy_resources_into_canonical,
+    legacy_misc_resource_deltas_from_update,
+    legacy_misc_resources_set_from_payload,
+    reconcile_canonical_resources,
+    resource_name_for_character,
+    strip_legacy_resource_shadows,
+    strip_legacy_shadow_fields,
+    sync_canonical_resources,
+    write_legacy_shadow_fields,
 )
 from app.services.world.collections import stable_sorted_mapping
 from app.services.world.element_profiles import (
@@ -77,7 +299,13 @@ from app.services.world.element_entities import (
     entity_element_profile_for_npc as _entity_element_profile_for_npc,
 )
 from app.services.world.math_utils import clamp
-from app.services.world.naming import strip_name_parenthetical
+from app.services.world.naming import (
+    fantasy_syllables_for_anchor,
+    generate_unique_fantasy_name as _generate_unique_fantasy_name,
+    generate_world_name as _generate_world_name,
+    pick_world_theme_anchor as _pick_world_theme_anchor,
+    strip_name_parenthetical,
+)
 from app.services.world.npc import npc_id_from_name, normalize_npc_alias
 from app.services.world.species_profiles import (
     beast_id_from_name as _beast_id_from_name,
@@ -86,6 +314,10 @@ from app.services.world.species_profiles import (
     normalize_beast_profile as _normalize_beast_profile,
     normalize_race_profile as _normalize_race_profile,
     race_id_from_name as _race_id_from_name,
+)
+from app.services.world.species_generation import (
+    generate_world_beast_profiles as _generate_world_beast_profiles,
+    generate_world_race_profiles as _generate_world_race_profiles,
 )
 from app.services.world.progression import (
     default_class_current,
@@ -195,15 +427,23 @@ def configure(main_globals: Dict[str, Any]) -> None:
     """Inject main-module globals needed by extracted state-engine helpers."""
     global _CONFIGURED
     globals().update(main_globals)
+    configured_globals = {
+        name: value
+        for name, value in globals().items()
+        if not name.startswith("__") and name != "configure"
+    }
 
     # Subsysteme mitinitialisieren
     from app.services.world import codex as _codex_module
     from app.services.world import injury_state as _injury_state_module
     from app.services.world import npc as _npc_module
     from app.services.world import progression as _progression_module
-    _npc_module.configure(main_globals)
-    _progression_module.configure(main_globals)
-    _codex_module.configure(main_globals)
+    _appearance_state_module.configure(configured_globals)
+    _character_resources_module.configure(configured_globals)
+    _resource_maxima_module.configure(configured_globals)
+    _npc_module.configure(configured_globals)
+    _progression_module.configure(configured_globals)
+    _codex_module.configure(configured_globals)
     for _name in (
         "deep_copy",
         "make_id",
@@ -721,23 +961,14 @@ EXPORTED_SYMBOLS = [
     "require_claim",
 ]
 
-def make_join_code() -> str:
-    return _make_join_code()
-
 def slot_id(index: int) -> str:
     return _slot_id(index, slot_prefix=SLOT_PREFIX)
 
 def slot_index(value: str) -> int:
     return _slot_index(value, slot_prefix=SLOT_PREFIX)
 
-def is_slot_id(value: str) -> bool:
-    return _is_slot_id(value)
-
 def ordered_slots(keys: List[str]) -> List[str]:
     return _ordered_slots(keys, slot_prefix=SLOT_PREFIX)
-
-def blank_patch() -> Dict[str, Any]:
-    return _blank_patch()
 
 def race_id_from_name(name: str) -> str:
     return _race_id_from_name(
@@ -1036,47 +1267,7 @@ def resolve_class_path_rank_node(world: Dict[str, Any], current_class: Optional[
     )
 
 def pick_world_theme_anchor(summary: Dict[str, Any]) -> str:
-    theme = normalize_codex_alias_text(summary.get("theme", ""))
-    if "wuest" in theme or "sand" in theme:
-        return "desert"
-    if "wald" in theme or "forest" in theme:
-        return "forest"
-    if "urban" in theme or "stadt" in theme:
-        return "urban"
-    if "isekai" in theme or "hybrid" in theme:
-        return "hybrid"
-    return "default"
-
-def fantasy_syllables_for_anchor(anchor: str) -> Tuple[List[str], List[str], List[str]]:
-    if anchor == "desert":
-        return (
-            ["ash", "zar", "qir", "sah", "tal", "mir", "kha"],
-            ["a", "e", "o", "u", "ir", "ar"],
-            ["dun", "kar", "mir", "zar", "thar", "ren"],
-        )
-    if anchor == "forest":
-        return (
-            ["sil", "tha", "fen", "lor", "ny", "ael", "bri"],
-            ["a", "e", "i", "ia", "ae", "el"],
-            ["wen", "lith", "rien", "vale", "dor", "mir"],
-        )
-    if anchor == "urban":
-        return (
-            ["vor", "ka", "dra", "ser", "mor", "lin", "tek"],
-            ["a", "e", "i", "o", "ur", "en"],
-            ["gard", "port", "vex", "tarn", "heim", "crest"],
-        )
-    if anchor == "hybrid":
-        return (
-            ["neo", "ae", "ry", "sol", "ky", "zen", "myr"],
-            ["a", "e", "io", "ae", "u", "i"],
-            ["flux", "lume", "veil", "core", "ryn", "nex"],
-        )
-    return (
-        ["el", "ka", "mor", "val", "rin", "tor", "lys"],
-        ["a", "e", "i", "o", "ae", "ia"],
-        ["dor", "ria", "en", "or", "is", "ane"],
-    )
+    return _pick_world_theme_anchor(summary, normalize_codex_alias_text=normalize_codex_alias_text)
 
 def generate_unique_fantasy_name(
     rng: random.Random,
@@ -1086,212 +1277,43 @@ def generate_unique_fantasy_name(
     suffixes: List[str],
     max_attempts: int = 40,
 ) -> str:
-    prefixes, middles, tails = fantasy_syllables_for_anchor(anchor)
-    for _ in range(max_attempts):
-        parts = [rng.choice(prefixes), rng.choice(middles), rng.choice(tails)]
-        if rng.random() < 0.3:
-            parts.insert(2, rng.choice(["n", "r", "l", "th"]))
-        base = "".join(parts).replace(" ", "")
-        raw_name = f"{base}{rng.choice(suffixes)}".strip()
-        name = raw_name[:1].upper() + raw_name[1:]
-        key = normalize_codex_alias_text(name)
-        if key and key not in used:
-            used.add(key)
-            return name
-    fallback = f"{rng.choice(['Ael', 'Vor', 'Kael', 'Nyx'])}{rng.randint(100, 999)}"
-    used.add(normalize_codex_alias_text(fallback))
-    return fallback
+    return _generate_unique_fantasy_name(
+        rng,
+        used,
+        anchor=anchor,
+        suffixes=suffixes,
+        normalize_codex_alias_text=normalize_codex_alias_text,
+        max_attempts=max_attempts,
+    )
 
 def generate_world_name(summary: Dict[str, Any], seed_hint: str) -> str:
-    anchor = pick_world_theme_anchor(summary)
-    seed_text = json.dumps(
-        {
-            "theme": summary.get("theme", ""),
-            "tone": summary.get("tone", ""),
-            "seed": seed_hint,
-        },
-        ensure_ascii=False,
-        sort_keys=True,
-    )
-    rng = random.Random(int(hashlib.sha1(seed_text.encode("utf-8")).hexdigest(), 16) % (2**32))
-    used: Set[str] = set()
-    return generate_unique_fantasy_name(rng, used, anchor=anchor, suffixes=["", "ia", "or", "is"])
+    return _generate_world_name(summary, seed_hint, normalize_codex_alias_text=normalize_codex_alias_text)
 
 def generate_world_race_profiles(summary: Dict[str, Any], *, seed_hint: str = "") -> Dict[str, Dict[str, Any]]:
-    anchor = pick_world_theme_anchor(summary)
-    seed_text = json.dumps(
-        {
-            "theme": summary.get("theme", ""),
-            "tone": summary.get("tone", ""),
-            "conflict": summary.get("central_conflict", ""),
-            "anchor": anchor,
-            "seed": seed_hint,
-        },
-        ensure_ascii=False,
-        sort_keys=True,
+    return _generate_world_race_profiles(
+        summary,
+        seed_hint=seed_hint,
+        normalize_codex_alias_text=normalize_codex_alias_text,
+        clamp=clamp,
+        race_id_from_name=race_id_from_name,
+        normalize_race_profile=normalize_race_profile,
+        default_race_profile=default_race_profile,
+        stable_sorted_mapping=stable_sorted_mapping,
+        world_codex_sort_key=world_codex_sort_key,
     )
-    rng = random.Random(int(hashlib.sha1(seed_text.encode("utf-8")).hexdigest(), 16) % (2**32))
-    race_count = clamp(5 + rng.randint(0, 2), 5, 7)
-    used_names: Set[str] = set()
-    race_suffixes = ["ar", "en", "iden", "ari", "orn", "eth", "yr"]
-    temperaments = ["ruhig", "wachsam", "stur", "berechnend", "pflichtbewusst", "wechselhaft", "intensiv"]
-    archetypes = [
-        {
-            "kind": "menschenvolk",
-            "rarity": "gewöhnlich",
-            "description_short": "Anpassungsfähiges Volk mit schneller sozialer Dynamik.",
-            "appearance": "Vielfältige Erscheinungsbilder und praktische Reiseausrüstung.",
-            "homeland": "Grenzstädte und Handelsachsen",
-            "culture": "Pragmatisch, fraktionsnah und zielorientiert",
-            "strength_tags": ["anpassung", "diplomatie", "handwerk"],
-            "weakness_tags": ["interne_spaltung", "kurze_lebensspanne"],
-            "class_affinities": ["ritter", "schuetze", "haendler"],
-            "skill_affinities": ["führung", "taktik", "überleben"],
-            "social_reputation": "dominant, aber umkämpft",
-            "notable_traits": ["schnelle lernkurve", "fraktionsnetzwerke"],
-        },
-        {
-            "kind": "langlebiges magiervolk",
-            "rarity": "selten",
-            "description_short": "Langlebiges Volk mit strenger Erinnerungskultur und arkaner Disziplin.",
-            "appearance": "Feine Gesichtszüge und leuchtende Runenlinien.",
-            "homeland": "Haine, Archive und uralte Observatorien",
-            "culture": "Ritualisiert und wissenszentriert",
-            "strength_tags": ["arkane_praezision", "mentale_disziplin"],
-            "weakness_tags": ["fragile_koerper", "ueberheblichkeit"],
-            "class_affinities": ["runenweber", "mystiker", "hüter"],
-            "skill_affinities": ["analyse", "barrieren", "kanalisierung"],
-            "social_reputation": "respektiert und gefürchtet",
-            "notable_traits": ["langes gedächtnis", "rituelle namenbindung"],
-        },
-        {
-            "kind": "robustes bergvolk",
-            "rarity": "ungewöhnlich",
-            "description_short": "Robustes Volk mit strikten Eiden und handwerklicher Kriegskultur.",
-            "appearance": "Massiger Körperbau, Narben und metallene Tätowierungen.",
-            "homeland": "Gebirgsschächte, Basaltfesten und Erzpfade",
-            "culture": "Ehrenkodex, Schuldbücher und Werkbanktradition",
-            "strength_tags": ["zähigkeit", "rüstungshandwerk", "nahkampf"],
-            "weakness_tags": ["starre_riten", "langsame_anpassung"],
-            "class_affinities": ["vorhut", "schmied", "waechter"],
-            "skill_affinities": ["schildtechnik", "metallkunde", "standhaftigkeit"],
-            "social_reputation": "verlässlich, aber unnachgiebig",
-            "notable_traits": ["eidsiegel", "steinlieder"],
-        },
-    ]
-    while len(archetypes) < race_count:
-        archetypes.append(
-            {
-                "kind": rng.choice(["schleierkultur", "resonanzvolk", "nomadenvolk", "karglandvolk", "lichtordenvolk"]),
-                "rarity": rng.choice(["gewöhnlich", "ungewöhnlich", "selten"]),
-                "description_short": rng.choice(
-                    [
-                        "Eigenständiges Volk mit starker Bindung an lokale Weltgesetze.",
-                        "Grenzvolk, dessen Überleben auf strengen Pakten beruht.",
-                        "Kultur mit ausgeprägter Ritual- und Verpflichtungslogik.",
-                    ]
-                ),
-                "appearance": rng.choice(
-                    [
-                        "Markante Hautmuster und rituelle Kleidungsschichten.",
-                        "Körpermale, die bei Ressourcennutzung sichtbar pulsieren.",
-                        "Praktische Panzerstoffe mit kulturellen Siegelzeichen.",
-                    ]
-                ),
-                "homeland": rng.choice(
-                    [
-                        "Nebelgrenzen und zerfallene Grenzruinen",
-                        "Aschepfade, Kraterfelder und Schutzzelte",
-                        "Klüfte, Archive und halbversunkene Bastionen",
-                    ]
-                ),
-                "culture": rng.choice(
-                    [
-                        "Schwurbündnisse, Ahnenpfade und strenge Mentorenlinien",
-                        "Tauschrituale, Schuldzeichen und Pflichtkataloge",
-                        "Prüfpfade, Bündnisrecht und Überlebensethos",
-                    ]
-                ),
-                "strength_tags": rng.sample(["täuschung", "resonanz", "ausdauer", "spurlesen", "barriere", "segen"], 3),
-                "weakness_tags": rng.sample(["lichtempfindlich", "dogmatisch", "starre_riten", "wasserknappheit", "überlastung"], 2),
-                "class_affinities": rng.sample(["späher", "hexer", "hüter", "katalysator", "jäger", "totemkrieger"], 3),
-                "skill_affinities": rng.sample(["verschleierung", "kanalisierung", "fährtenlesen", "durchhaltewillen", "sigillen"], 3),
-                "social_reputation": rng.choice(["misstrauisch beobachtet", "politisch umkämpft", "respektiert als Grenzmacht"]),
-                "notable_traits": rng.sample(["namensmasken", "resonanzkrisen", "ahnenmasken", "wahrheitssiegel", "schuldbänder"], 2),
-            }
-        )
-    races: Dict[str, Dict[str, Any]] = {}
-    for template in archetypes[:race_count]:
-        name = generate_unique_fantasy_name(rng, used_names, anchor=anchor, suffixes=race_suffixes)
-        race_id = race_id_from_name(name)
-        temperament = rng.choice(temperaments)
-        races[race_id] = normalize_race_profile({**template, "id": race_id}, fallback_id=race_id) or default_race_profile(race_id, template.get("name", ""))
-        races[race_id]["name"] = name
-        races[race_id]["temperament"] = temperament
-        races[race_id]["aliases"] = [f"Volk von {name}", f"{name}er"]
-    return stable_sorted_mapping(races, key_fn=world_codex_sort_key)
 
 def generate_world_beast_profiles(summary: Dict[str, Any], *, seed_hint: str = "") -> Dict[str, Dict[str, Any]]:
-    anchor = pick_world_theme_anchor(summary)
-    seed_text = json.dumps(
-        {
-            "theme": summary.get("theme", ""),
-            "tone": summary.get("tone", ""),
-            "density": summary.get("monsters_density", ""),
-            "anchor": anchor,
-            "seed": seed_hint,
-        },
-        ensure_ascii=False,
-        sort_keys=True,
+    return _generate_world_beast_profiles(
+        summary,
+        seed_hint=seed_hint,
+        normalize_codex_alias_text=normalize_codex_alias_text,
+        clamp=clamp,
+        beast_id_from_name=beast_id_from_name,
+        normalize_beast_profile=normalize_beast_profile,
+        default_beast_profile=default_beast_profile,
+        stable_sorted_mapping=stable_sorted_mapping,
+        world_codex_sort_key=world_codex_sort_key,
     )
-    rng = random.Random(int(hashlib.sha1(seed_text.encode("utf-8")).hexdigest(), 16) % (2**32))
-    beast_count = clamp(6 + rng.randint(0, 6), 6, 12)
-    used_names: Set[str] = set()
-    beast_suffixes = ["fang", "wyrm", "krall", "stachel", "geist", "mimik", "hydra", "schnitter"]
-    categories = ["bestie", "aberration", "flugbestie", "koloss", "geistbestie", "schwarm", "konstrukt", "wasserbestie"]
-    habitats = [
-        "Nebelwälder",
-        "Obeliskenruinen",
-        "Kraterpfade",
-        "Grenzgräben und Ruinenfelder",
-        "Felsstädte und Kapellenruinen",
-        "Vergiftete Feuchtlande",
-        "Versunkene Tempel",
-    ]
-    behaviors = [
-        "jagt aus dem Hinterhalt und umkreist verwundete Ziele",
-        "patrouilliert feste Reviere und reagiert auf Ressourcenimpulse",
-        "lockt Gruppen in ungünstige Positionen",
-        "verteidigt Brutreviere aggressiv",
-    ]
-    beasts: Dict[str, Dict[str, Any]] = {}
-    for _ in range(beast_count):
-        name = generate_unique_fantasy_name(rng, used_names, anchor=anchor, suffixes=beast_suffixes)
-        beast_id = beast_id_from_name(name)
-        template = {
-            "id": beast_id,
-            "name": name,
-            "category": rng.choice(categories),
-            "danger_rating": clamp(2 + rng.randint(0, 10), 1, 20),
-            "habitat": rng.choice(habitats),
-            "behavior": rng.choice(behaviors),
-            "appearance": rng.choice(
-                [
-                    "Panzerartige Hautsegmente mit unruhigem Schimmer.",
-                    "Sehniger Körperbau mit markanten Klingen- und Hornstrukturen.",
-                    "Schattenhafte Konturen, die im Kampf flackern.",
-                ]
-            ),
-            "strength_tags": rng.sample(["hinterhalt", "wucht", "regeneration", "schnelligkeit", "panzerung", "schwarmdruck"], 2),
-            "weakness_tags": rng.sample(["blendlicht", "feuer", "eis", "resonanzzauber", "netzfallen", "ritualkreide"], 2),
-            "combat_style": rng.choice(["schnelle Flankenangriffe", "Dauerdruck über Reichweite", "kurze Burst-Angriffe aus Tarnung", "wuchtige Zonenangriffe"]),
-            "known_abilities": rng.sample(["Nebeltritt", "Kernstoß", "Dornenwurf", "Kältefessel", "Truemmerwelle", "Sogkante"], 2),
-            "loot_tags": rng.sample(["kernsplitter", "sehnenfaser", "schuppenstück", "geiststaub", "kralle"], 2),
-            "lore_notes": [rng.choice(["Meidet geweihte Feuerlinien.", "Reagiert stark auf resonierende Metallklänge.", "Wird bei knapper Ressource aggressiver."])],
-            "aliases": [f"{name}-Typ", f"{name}rudel"],
-        }
-        beasts[beast_id] = normalize_beast_profile(template, fallback_id=beast_id) or default_beast_profile(beast_id, name)
-    return stable_sorted_mapping(beasts, key_fn=world_codex_sort_key)
 
 from app.services.world.injury_state import (
     default_injury_state,
@@ -1299,163 +1321,6 @@ from app.services.world.injury_state import (
     normalize_injury_state,
     normalize_scar_state,
 )
-
-def blank_character_state(slot_name: str) -> Dict[str, Any]:
-    return {
-        "slot_id": slot_name,
-        "bio": {
-            "name": "",
-            "gender": "",
-            "age": "",
-            "age_years": 0,
-            "age_stage": "young",
-            "earth_life": "",
-            "personality": [],
-            "goal": "",
-            "isekai_price": "",
-            "background_tags": [],
-            "strength": "",
-            "weakness": "",
-            "focus": "",
-            "earth_items": [],
-            "signature_item": "",
-        },
-        "scene_id": "",
-        "appearance": default_appearance_profile(),
-        "appearance_history": [],
-        "class_current": None,
-        "faction_memberships": [],
-        "aging": {
-            "arrival_absolute_day": 1,
-            "days_since_arrival": 0,
-            "last_aged_absolute_day": 1,
-            "age_effects_applied": [],
-        },
-        "modifiers": default_character_modifiers(),
-        "resources": {
-            "hp": {"current": 10, "base_max": 10, "bonus_max": 0, "max": 10},
-            "stamina": {"current": 10, "base_max": 10, "bonus_max": 0, "max": 10},
-            "aether": {"current": 5, "base_max": 5, "bonus_max": 0, "max": 5},
-            "stress": {"current": 0, "base_max": 10, "bonus_max": 0, "max": 10},
-            "corruption": {"current": 0, "base_max": 10, "bonus_max": 0, "max": 10},
-            "wounds": {"current": 0, "base_max": 3, "bonus_max": 0, "max": 3},
-        },
-        "hp_current": 10,
-        "hp_max": 10,
-        "sta_current": 10,
-        "sta_max": 10,
-        "res_current": 5,
-        "res_max": 5,
-        "element_affinities": [],
-        "element_resistances": [],
-        "element_weaknesses": [],
-        "carry_current": 0,
-        "carry_max": 10,
-        "level": 1,
-        "xp_total": 0,
-        "xp_current": 0,
-        "xp_to_next": 120,
-        "recent_progression_events": [],
-        "class_path_seeds": [],
-        "attributes": {
-            "str": 0,
-            "dex": 0,
-            "con": 0,
-            "int": 0,
-            "wis": 0,
-            "cha": 0,
-            "luck": 0,
-        },
-        "derived": {
-            "defense": 10,
-            "armor": 0,
-            "attack_rating_mainhand": 0,
-            "attack_rating_offhand": 0,
-            "initiative": 0,
-            "carry_limit": 10,
-            "carry_weight": 0,
-            "encumbrance_state": "normal",
-            "age_modifiers": {
-                "stage": "young",
-                "resource_deltas": {"hp_max": 0, "stamina_max": 0},
-                "skill_bonuses": {},
-                "notes": [],
-            },
-            "resistances": {
-                "physical": 0,
-                "fire": 0,
-                "cold": 0,
-                "lightning": 0,
-                "poison": 0,
-                "bleed": 0,
-                "shadow": 0,
-                "holy": 0,
-                "curse": 0,
-                "fear": 0,
-            },
-            "combat_flags": {
-                "in_combat": False,
-                "downed": False,
-                "can_act": True,
-            },
-        },
-        "skills": {},
-        "abilities": [],
-        "effects": [],
-        "inventory": {
-            "items": [],
-            "quick_slots": {
-                "slot_1": "",
-                "slot_2": "",
-                "slot_3": "",
-                "slot_4": "",
-            },
-        },
-        "equipment": {
-            "weapon": "",
-            "offhand": "",
-            "head": "",
-            "chest": "",
-            "gloves": "",
-            "boots": "",
-            "amulet": "",
-            "ring_1": "",
-            "ring_2": "",
-            "trinket": "",
-        },
-        "progression": {
-            "rank": 1,
-            "xp": 0,
-            "next_xp": 100,
-            "system_level": 1,
-            "system_xp": 0,
-            "next_system_xp": 100,
-            "resource_name": "Aether",
-            "resource_current": 5,
-            "resource_max": 5,
-            "system_fragments": 0,
-            "system_cores": 0,
-            "attribute_points": 0,
-            "skill_points": 0,
-            "talent_points": 0,
-            "paths": [],
-            "potential_cards": [],
-        },
-        "injuries": [],
-        "scars": [],
-        "journal": {
-            "notes": [],
-            "npc_relationships": [],
-            "reputation": [],
-            "personal_plotpoints": [],
-        },
-        # compatibility mirrors for older turns/UI
-        "hp": 10,
-        "stamina": 10,
-        "conditions": [],
-        "equip": {"weapon": "", "armor": "", "trinket": ""},
-        "potential": [],
-    }
 
 def skill_rank_for_level(level: int) -> str:
     return _skill_rank_for_level(level, skill_rank_thresholds=SKILL_RANK_THRESHOLDS)
@@ -1590,14 +1455,6 @@ def normalize_ability_state(value: Any, owner_slot: str = "") -> Dict[str, Any]:
     ability["unlocks"] = [str(entry).strip() for entry in (ability.get("unlocks") or []) if str(entry).strip()]
     ability["notes"] = str(ability.get("notes", "") or "").strip()
     return ability
-
-def resource_name_for_character(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> str:
-    progression = character.get("progression", {}) or {}
-    resource_name = normalize_resource_name(progression.get("resource_name", ""))
-    if resource_name:
-        return resource_name
-    world_settings = world_settings or {}
-    return normalize_resource_name(world_settings.get("resource_name", ""), "Aether")
 
 def skill_id_from_name(name: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "_", normalized_eval_text(name)).strip("_")
@@ -2111,190 +1968,6 @@ def setup_question_is_applicable(setup_node: Dict[str, Any], question_id: str) -
         return "selbst" in class_start_mode
     return True
 
-def canonical_resource_field_name(raw_name: Any) -> str:
-    normalized = normalized_eval_text(raw_name)
-    if normalized in {"hp", "health", "leben", "lebenspunkte"}:
-        return "hp"
-    if normalized in {"sta", "stamina", "ausdauer"}:
-        return "stamina"
-    if normalized in {"res", "resource", "mana", "aether", "äther", "qi", "ki", "energie"}:
-        return "aether"
-    if normalized in {"stress"}:
-        return "stress"
-    if normalized in {"corruption", "verderbnis"}:
-        return "corruption"
-    if normalized in {"wounds", "wound", "wunde", "wunden"}:
-        return "wounds"
-    return ""
-
-def ingest_legacy_resources_into_canonical(
-    character: Dict[str, Any],
-    world_settings: Optional[Dict[str, Any]] = None,
-    *,
-    source_character: Optional[Dict[str, Any]] = None,
-) -> None:
-    source = source_character if isinstance(source_character, dict) else character
-    resources = source.get("resources", {}) if isinstance(source.get("resources"), dict) else {}
-    progression = character.setdefault("progression", {})
-    resource_label = normalize_resource_name(
-        ((world_settings or {}).get("resource_name")) or progression.get("resource_name") or "Aether",
-        "Aether",
-    )
-    hp_res = resources.get("hp") or {}
-    sta_res = resources.get("stamina") or {}
-    legacy_res = resources.get("aether") or {}
-    if not legacy_res:
-        dynamic_key = re.sub(r"[^a-z0-9]+", "_", normalized_eval_text(resource_label)).strip("_")
-        if dynamic_key:
-            legacy_res = resources.get(dynamic_key) or {}
-
-    if "hp_max" not in source:
-        character["hp_max"] = max(1, int(hp_res.get("max", 10) or 10))
-    if "hp_current" not in source:
-        default_hp_current = hp_res.get("current", character.get("hp_max", 10))
-        character["hp_current"] = max(0, int(default_hp_current or 0))
-    if "sta_max" not in source:
-        character["sta_max"] = max(0, int(sta_res.get("max", 10) or 10))
-    if "sta_current" not in source:
-        default_sta_current = sta_res.get("current", character.get("sta_max", 10))
-        character["sta_current"] = max(0, int(default_sta_current or 0))
-    if "res_max" not in source:
-        default_res_max = legacy_res.get("max", progression.get("resource_max", 5))
-        character["res_max"] = max(0, int(default_res_max or 5))
-    if "res_current" not in source:
-        default_res_current = legacy_res.get("current", progression.get("resource_current", character.get("res_max", 5)))
-        character["res_current"] = max(0, int(default_res_current or 0))
-    if "carry_max" not in source:
-        carry_limit = int(((character.get("derived") or {}).get("carry_limit", 10)) or 10)
-        character["carry_max"] = max(0, carry_limit)
-    if "carry_current" not in source:
-        carry_weight = int(((character.get("derived") or {}).get("carry_weight", 0)) or 0)
-        character["carry_current"] = max(0, carry_weight)
-    if "hp" in source and "hp_current" not in source and not isinstance(resources.get("hp"), dict):
-        character["hp_current"] = max(0, int(character.get("hp", 0) or 0))
-    if "stamina" in source and "sta_current" not in source and not isinstance(resources.get("stamina"), dict):
-        character["sta_current"] = max(0, int(character.get("stamina", 0) or 0))
-    progression["resource_name"] = resource_label
-
-def reconcile_canonical_resources(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> None:
-    progression = character.setdefault("progression", {})
-    resource_label = normalize_resource_name(
-        ((world_settings or {}).get("resource_name")) or progression.get("resource_name") or "Aether",
-        "Aether",
-    )
-    character["hp_max"] = max(1, int(character.get("hp_max", 10) or 10))
-    character["hp_current"] = clamp(int(character.get("hp_current", character["hp_max"]) or character["hp_max"]), 0, character["hp_max"])
-    character["sta_max"] = max(0, int(character.get("sta_max", 10) or 10))
-    character["sta_current"] = clamp(int(character.get("sta_current", character["sta_max"]) or character["sta_max"]), 0, character["sta_max"])
-    character["res_max"] = max(0, int(character.get("res_max", 5) or 5))
-    character["res_current"] = clamp(int(character.get("res_current", character["res_max"]) or character["res_max"]), 0, character["res_max"])
-    character["carry_max"] = max(0, int(character.get("carry_max", 10) or 10))
-    character["carry_current"] = clamp(int(character.get("carry_current", 0) or 0), 0, character["carry_max"])
-    progression["resource_name"] = resource_label
-    progression["resource_current"] = int(character.get("res_current", 0) or 0)
-    progression["resource_max"] = int(character.get("res_max", 0) or 0)
-    character.setdefault("derived", {})["carry_limit"] = int(character["carry_max"])
-    character.setdefault("derived", {})["carry_weight"] = int(character["carry_current"])
-
-def build_compat_resources_view(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> Dict[str, Dict[str, int]]:
-    resource_label = resource_name_for_character(character, world_settings)
-    resource_key = re.sub(r"[^a-z0-9]+", "_", normalized_eval_text(resource_label)).strip("_") or "resource"
-    hp_max = max(1, int(character.get("hp_max", 10) or 10))
-    sta_max = max(0, int(character.get("sta_max", 10) or 10))
-    res_max = max(0, int(character.get("res_max", 5) or 5))
-    hp_payload = {"current": clamp(int(character.get("hp_current", hp_max) or hp_max), 0, hp_max), "base_max": hp_max, "bonus_max": 0, "max": hp_max}
-    sta_payload = {"current": clamp(int(character.get("sta_current", sta_max) or sta_max), 0, sta_max), "base_max": sta_max, "bonus_max": 0, "max": sta_max}
-    res_payload = {"current": clamp(int(character.get("res_current", res_max) or res_max), 0, res_max), "base_max": res_max, "bonus_max": 0, "max": res_max}
-    view = {
-        "hp": dict(hp_payload),
-        "stamina": dict(sta_payload),
-        "aether": dict(res_payload),
-    }
-    view[resource_key] = dict(res_payload)
-    for key in ("stress", "corruption", "wounds"):
-        raw = ((character.get("resources") or {}).get(key) or {}) if isinstance(character.get("resources"), dict) else {}
-        fallback_max = 10 if key != "wounds" else 3
-        entry_max = max(0, int(raw.get("max", fallback_max) or fallback_max))
-        view[key] = {
-            "current": clamp(int(raw.get("current", 0) or 0), 0, entry_max),
-            "base_max": max(0, int(raw.get("base_max", entry_max) or entry_max)),
-            "bonus_max": int(raw.get("bonus_max", 0) or 0),
-            "max": entry_max,
-        }
-    return view
-
-def strip_legacy_resource_shadows(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> None:
-    if ENABLE_LEGACY_SHADOW_WRITEBACK:
-        return
-    resources = character.get("resources")
-    if not isinstance(resources, dict):
-        return
-    resource_label = resource_name_for_character(character, world_settings)
-    dynamic_key = re.sub(r"[^a-z0-9]+", "_", normalized_eval_text(resource_label)).strip("_")
-    for key in ("hp", "stamina", "aether", dynamic_key):
-        if key and key in resources and key not in {"stress", "corruption", "wounds"}:
-            resources.pop(key, None)
-
-def strip_legacy_shadow_fields(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> None:
-    if ENABLE_LEGACY_SHADOW_WRITEBACK:
-        return
-    strip_legacy_resource_shadows(character, world_settings)
-    for field_name in ("hp", "stamina", "equip", "abilities", "potential", "class_state"):
-        character.pop(field_name, None)
-
-def legacy_misc_resources_set_from_payload(resources_set_payload: Any) -> Dict[str, Dict[str, int]]:
-    out: Dict[str, Dict[str, int]] = {}
-    if not isinstance(resources_set_payload, dict):
-        return out
-    for raw_key, raw_value in resources_set_payload.items():
-        mapped = canonical_resource_field_name(raw_key)
-        if mapped not in {"stress", "corruption", "wounds"}:
-            continue
-        if not isinstance(raw_value, dict):
-            continue
-        entry = {
-            "current": max(0, int(raw_value.get("current", 0) or 0)),
-            "max": max(0, int(raw_value.get("max", 0) or 0)),
-        }
-        if entry["max"] > 0:
-            entry["current"] = clamp(entry["current"], 0, entry["max"])
-        out[mapped] = entry
-    return out
-
-def legacy_misc_resource_deltas_from_update(upd: Dict[str, Any]) -> Dict[str, int]:
-    out = {"stress": 0, "corruption": 0, "wounds": 0}
-    raw_deltas = upd.get("resources_delta") if isinstance(upd.get("resources_delta"), dict) else {}
-    for raw_key, raw_value in raw_deltas.items():
-        mapped = canonical_resource_field_name(raw_key)
-        if mapped in out:
-            out[mapped] += int(raw_value or 0)
-    return out
-
-def write_legacy_shadow_fields(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> None:
-    resources_view = build_compat_resources_view(character, world_settings)
-    character["resources"] = deep_copy(resources_view)
-    character["hp"] = int(character.get("hp_current", 0) or 0)
-    character["stamina"] = int(character.get("sta_current", 0) or 0)
-    character["equip"] = {
-        "weapon": ((character.get("equipment") or {}).get("weapon", "") if isinstance(character.get("equipment"), dict) else ""),
-        "armor": ((character.get("equipment") or {}).get("chest", "") if isinstance(character.get("equipment"), dict) else ""),
-        "trinket": ((character.get("equipment") or {}).get("trinket", "") if isinstance(character.get("equipment"), dict) else ""),
-    }
-    character["potential"] = [
-        card.get("name", card.get("id", ""))
-        for card in (character.get("progression", {}).get("potential_cards") or [])
-        if isinstance(card, dict)
-    ]
-
-def sync_canonical_resources(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> None:
-    # Backward-compatible wrapper: canonical-first by default, optional legacy shadow writeback.
-    ingest_legacy_resources_into_canonical(character, world_settings)
-    reconcile_canonical_resources(character, world_settings)
-    if ENABLE_LEGACY_SHADOW_WRITEBACK:
-        write_legacy_shadow_fields(character, world_settings)
-    else:
-        strip_legacy_shadow_fields(character, world_settings)
-
 def sync_scars_into_appearance(character: Dict[str, Any]) -> None:
     appearance = character.setdefault("appearance", {})
     appearance["scars"] = [
@@ -2466,333 +2139,8 @@ def normalize_world_time(meta: Dict[str, Any]) -> Dict[str, Any]:
     world_time["weather"] = str(world_time.get("weather", "") or "")
     return world_time
 
-def infer_age_years(age_text: str) -> int:
-    text = normalized_eval_text(age_text)
-    if not text:
-        return 22
-    explicit = re.search(r"\b(\d{1,3})\b", str(age_text))
-    if explicit:
-        return max(12, min(90, int(explicit.group(1))))
-    if "teen" in text:
-        return 18
-    if "jung" in text or "young" in text:
-        return 22
-    if "erwachsen" in text or "adult" in text:
-        return 30
-    if "alter" in text or "älter" in text or "aelter" in text or "older" in text:
-        return 42
-    return 22
-
-def derive_age_stage(age_years: int) -> str:
-    if age_years <= 19:
-        return "teen"
-    if age_years <= 29:
-        return "young"
-    if age_years <= 44:
-        return "adult"
-    return "older"
-
-def normalize_appearance_state(character: Dict[str, Any]) -> Dict[str, Any]:
-    appearance = deep_copy(default_appearance_profile())
-    appearance.update(character.get("appearance", {}) or {})
-    appearance["eyes"] = {**default_appearance_profile()["eyes"], **(appearance.get("eyes") or {})}
-    appearance["hair"] = {**default_appearance_profile()["hair"], **(appearance.get("hair") or {})}
-    appearance["skin_marks"] = [str(entry) for entry in (appearance.get("skin_marks") or []) if str(entry).strip()]
-    appearance["visual_modifiers"] = [deep_copy(entry) for entry in (appearance.get("visual_modifiers") or []) if isinstance(entry, dict)]
-    appearance["scars"] = [deep_copy(entry) for entry in (appearance.get("scars") or []) if isinstance(entry, dict)]
-    appearance["height"] = str(appearance.get("height", "average") or "average")
-    appearance["build"] = str(appearance.get("build", "neutral") or "neutral")
-    appearance["muscle"] = clamp(int(appearance.get("muscle", 0) or 0), 0, 5)
-    appearance["fat"] = clamp(int(appearance.get("fat", 0) or 0), 0, 5)
-    appearance["aura"] = str(appearance.get("aura", "none") or "none")
-    appearance["voice_tone"] = str(appearance.get("voice_tone", "") or "")
-    appearance["summary_short"] = str(appearance.get("summary_short", "") or "")
-    appearance["summary_full"] = str(appearance.get("summary_full", "") or "")
-    return appearance
-
-def normalize_age_fields(character: Dict[str, Any], world_time: Dict[str, Any]) -> None:
-    bio = character.setdefault("bio", {})
-    aging = character.setdefault(
-        "aging",
-        {
-            "arrival_absolute_day": world_time["absolute_day"],
-            "days_since_arrival": 0,
-            "last_aged_absolute_day": world_time["absolute_day"],
-            "age_effects_applied": [],
-        },
-    )
-    age_years = int(bio.get("age_years", 0) or 0)
-    if age_years <= 0:
-        age_years = infer_age_years(str(bio.get("age", "") or ""))
-    bio["age_years"] = age_years
-    bio["age_stage"] = derive_age_stage(age_years)
-    aging["arrival_absolute_day"] = max(1, int(aging.get("arrival_absolute_day", world_time["absolute_day"]) or world_time["absolute_day"]))
-    aging["last_aged_absolute_day"] = max(aging["arrival_absolute_day"], int(aging.get("last_aged_absolute_day", aging["arrival_absolute_day"]) or aging["arrival_absolute_day"]))
-    aging["days_since_arrival"] = max(0, int(world_time["absolute_day"]) - aging["arrival_absolute_day"])
-    aging["age_effects_applied"] = [str(entry) for entry in (aging.get("age_effects_applied") or []) if str(entry).strip()]
-    if not str(bio.get("age", "")).strip():
-        bio["age"] = f"{bio['age_years']} Jahre"
-
-def age_character_if_needed(character: Dict[str, Any], world_time: Dict[str, Any]) -> None:
-    bio = character.setdefault("bio", {})
-    aging = character.setdefault("aging", {})
-    last_aged = max(1, int(aging.get("last_aged_absolute_day", world_time["absolute_day"]) or world_time["absolute_day"]))
-    absolute_day = int(world_time["absolute_day"])
-    while absolute_day - last_aged >= 360:
-        bio["age_years"] = int(bio.get("age_years", 0) or 0) + 1
-        last_aged += 360
-    aging["last_aged_absolute_day"] = last_aged
-    bio["age_stage"] = derive_age_stage(int(bio.get("age_years", 0) or 0))
-    bio["age"] = f"{bio['age_years']} Jahre"
-    aging["days_since_arrival"] = max(0, absolute_day - int(aging.get("arrival_absolute_day", absolute_day) or absolute_day))
-
-def build_age_modifiers(character: Dict[str, Any]) -> Dict[str, Any]:
-    stage = str(((character.get("bio") or {}).get("age_stage", "young")) or "young")
-    modifiers = {
-        "stage": stage,
-        "resource_deltas": {"hp_max": 0, "stamina_max": 0},
-        "skill_bonuses": {},
-        "notes": [],
-    }
-    if stage == "teen":
-        modifiers["resource_deltas"]["stamina_max"] = 1
-        modifiers["notes"].append("Jugendliche Ausdauer")
-    elif stage == "adult":
-        modifiers["resource_deltas"]["stamina_max"] = -1
-        modifiers["skill_bonuses"]["willpower"] = 1
-        modifiers["notes"].append("Reifere Entschlossenheit")
-    elif stage == "older":
-        modifiers["resource_deltas"]["stamina_max"] = -2
-        if int((character.get("attributes") or {}).get("con", 0) or 0) < 3:
-            modifiers["resource_deltas"]["hp_max"] = -1
-        modifiers["skill_bonuses"]["willpower"] = 1
-        modifiers["skill_bonuses"]["intimidation"] = 1
-        modifiers["notes"].append("Alternde Ausdauer")
-        modifiers["notes"].append("Erfahrene Präsenz")
-    return modifiers
-
-def item_weight(item: Dict[str, Any]) -> int:
-    try:
-        return int(item.get("weight", 0) or 0)
-    except (TypeError, ValueError):
-        return 0
-
-def item_modifier_value(item: Dict[str, Any], *, kind: str, stat: Optional[str] = None) -> int:
-    total = 0
-    for modifier in item.get("modifiers", []) or []:
-        if modifier.get("kind") != kind:
-            continue
-        if stat is not None and modifier.get("stat") != stat:
-            continue
-        try:
-            total += int(modifier.get("value", 0) or 0)
-        except (TypeError, ValueError):
-            continue
-    return total
-
-def ensure_character_modifier_shape(character: Dict[str, Any]) -> Dict[str, Any]:
-    modifiers = character.setdefault("modifiers", {})
-    defaults = default_character_modifiers()
-    for key, value in defaults.items():
-        modifiers.setdefault(key, deep_copy(value))
-    return modifiers
-
-def modifier_resource_key(modifier: Dict[str, Any]) -> str:
-    return str(modifier.get("resource") or modifier.get("stat") or "").strip().lower()
-
-def calculate_base_resource_maxima(character: Dict[str, Any], age_modifiers: Dict[str, Any]) -> Dict[str, int]:
-    attrs = character.get("attributes", {}) or {}
-    current_class = normalize_class_current(character.get("class_current")) or {}
-    class_tags = {normalized_eval_text(tag) for tag in (current_class.get("affinity_tags") or []) if normalized_eval_text(tag)}
-    class_level = max(1, int((current_class.get("level", 1) if current_class else 1) or 1))
-    class_rank = str((current_class.get("rank", "F") if current_class else "F") or "F").upper()
-    rank_bonus = {"F": 0, "E": 1, "D": 2, "C": 3, "B": 4, "A": 5, "S": 7}.get(class_rank, 0)
-
-    hp_skill_bonus = 0
-    sta_skill_bonus = 0
-    res_skill_bonus = 0
-    for raw_skill in (character.get("skills") or {}).values():
-        if not isinstance(raw_skill, dict):
-            continue
-        level = max(1, int(raw_skill.get("level", 1) or 1))
-        tags = {normalized_eval_text(tag) for tag in (raw_skill.get("tags") or []) if normalized_eval_text(tag)}
-        if tags & {"körper", "koerper", "vital", "regeneration", "tank", "defense", "schutz"}:
-            hp_skill_bonus += max(0, level // 3)
-        if tags & {"ausdauer", "bewegung", "kampf", "technik", "athletik", "endurance"}:
-            sta_skill_bonus += max(0, level // 4)
-        if tags & {"magie", "aether", "mana", "qi", "rune", "arcane", "shadow", "holy", "zauber"}:
-            res_skill_bonus += max(0, level // 4)
-
-    class_hp_bonus = rank_bonus + (class_level // 4 if class_tags & {"körper", "koerper", "schutz", "kampf", "tank"} else 0)
-    class_sta_bonus = rank_bonus + (class_level // 4 if class_tags & {"bewegung", "kampf", "technik", "ausdauer", "athletik"} else 0)
-    class_res_bonus = rank_bonus + (class_level // 4 if class_tags & {"magie", "rune", "arcane", "shadow", "holy", "focus"} else 0)
-
-    return {
-        "hp": max(
-            1,
-            8
-            + (int(attrs.get("con", 0) or 0) * 2)
-            + int(age_modifiers["resource_deltas"].get("hp_max", 0) or 0)
-            + class_hp_bonus
-            + hp_skill_bonus,
-        ),
-        "stamina": max(
-            1,
-            8
-            + int(attrs.get("con", 0) or 0)
-            + int(attrs.get("dex", 0) or 0)
-            + int(age_modifiers["resource_deltas"].get("stamina_max", 0) or 0)
-            + class_sta_bonus
-            + sta_skill_bonus,
-        ),
-        "aether": max(
-            1,
-            4
-            + int(attrs.get("int", 0) or 0)
-            + int(round(int(attrs.get("wis", 0) or 0) * 0.5))
-            + class_res_bonus
-            + res_skill_bonus,
-        ),
-        "stress": 10,
-        "corruption": 100 if int((((character.get("resources") or {}).get("corruption") or {}).get("max", 0)) or 0) > 10 else 10,
-        "wounds": 3,
-    }
-
-def calculate_bonus_resource_maxima(character: Dict[str, Any], items_db: Dict[str, Any]) -> Dict[str, int]:
-    bonuses = {key: 0 for key in RESOURCE_KEYS}
-    modifiers = ensure_character_modifier_shape(character)
-    for entry in modifiers.get("resource_max", []) or []:
-        if not isinstance(entry, dict):
-            continue
-        resource_key = modifier_resource_key(entry)
-        if resource_key not in bonuses:
-            continue
-        bonuses[resource_key] += int(entry.get("value", 0) or 0)
-    for item_id in iter_equipped_item_ids(character):
-        item = items_db.get(item_id, {})
-        for modifier in item.get("modifiers", []) or []:
-            if modifier.get("kind") != "resource_max":
-                continue
-            resource_key = modifier_resource_key(modifier)
-            if resource_key not in bonuses:
-                continue
-            bonuses[resource_key] += int(modifier.get("value", 0) or 0)
-    for effect in character.get("effects", []) or []:
-        for modifier in effect.get("modifiers", []) or []:
-            if modifier.get("kind") != "resource_max":
-                continue
-            resource_key = modifier_resource_key(modifier)
-            if resource_key not in bonuses:
-                continue
-            bonuses[resource_key] += int(modifier.get("value", 0) or 0)
-    return bonuses
-
-def migrate_legacy_resource_bonus_modifiers(
-    character: Dict[str, Any],
-    base_maxima: Dict[str, int],
-    known_bonus: Dict[str, int],
-    layer_presence: Dict[str, Dict[str, bool]],
-) -> None:
-    modifiers = ensure_character_modifier_shape(character)
-    existing_entries = modifiers.setdefault("resource_max", [])
-    by_resource = {
-        entry.get("resource"): entry
-        for entry in existing_entries
-        if isinstance(entry, dict) and entry.get("source") == "legacy:max"
-    }
-    resources = character.get("resources", {}) or {}
-    for resource_key in ("hp", "stamina", "aether"):
-        resource = resources.get(resource_key, {}) or {}
-        presence = layer_presence.get(resource_key, {})
-        if presence.get("base_max") or presence.get("bonus_max"):
-            continue
-        existing_max = int(resource.get("max", 0) or 0)
-        inferred_bonus = max(0, existing_max - (int(base_maxima.get(resource_key, 0) or 0) + int(known_bonus.get(resource_key, 0) or 0)))
-        if inferred_bonus <= 0:
-            continue
-        if resource_key in by_resource:
-            by_resource[resource_key]["value"] = inferred_bonus
-        else:
-            existing_entries.append(
-                {
-                    "resource": resource_key,
-                    "value": inferred_bonus,
-                    "source": "legacy:max",
-                }
-            )
-
-def rebuild_resource_maxima(character: Dict[str, Any], items_db: Dict[str, Any], age_modifiers: Dict[str, Any]) -> Dict[str, Dict[str, int]]:
-    existing_resources = character.get("resources", {}) if isinstance(character.get("resources"), dict) else {}
-    layer_presence: Dict[str, Dict[str, bool]] = {}
-    for resource_key in RESOURCE_KEYS:
-        resource = existing_resources.get(resource_key) if isinstance(existing_resources.get(resource_key), dict) else {}
-        layer_presence[resource_key] = {
-            "base_max": "base_max" in resource,
-            "bonus_max": "bonus_max" in resource,
-        }
-
-    base_maxima = calculate_base_resource_maxima(character, age_modifiers)
-    known_bonus = calculate_bonus_resource_maxima(character, items_db)
-    migrate_legacy_resource_bonus_modifiers(character, base_maxima, known_bonus, layer_presence)
-    total_bonus = calculate_bonus_resource_maxima(character, items_db)
-
-    runtime_layers: Dict[str, Dict[str, int]] = {}
-    for resource_key in RESOURCE_KEYS:
-        existing_layer = existing_resources.get(resource_key) if isinstance(existing_resources.get(resource_key), dict) else {}
-        base_max = max(0, int(base_maxima.get(resource_key, existing_layer.get("base_max", existing_layer.get("max", 0))) or 0))
-        bonus_max = int(total_bonus.get(resource_key, existing_layer.get("bonus_max", 0)) or 0)
-        max_value = max(0, base_max + bonus_max)
-        current_seed = int(existing_layer.get("current", 0) or 0)
-        runtime_layers[resource_key] = {
-            "current": clamp(current_seed, 0, max_value),
-            "base_max": base_max,
-            "bonus_max": bonus_max,
-            "max": max_value,
-        }
-
-    hp_layer = runtime_layers.get("hp", {"current": 10, "max": 10})
-    sta_layer = runtime_layers.get("stamina", {"current": 10, "max": 10})
-    res_layer = runtime_layers.get("aether", {"current": 5, "max": 5})
-    character["hp_max"] = max(1, int(hp_layer.get("max", character.get("hp_max", 10)) or character.get("hp_max", 10) or 10))
-    character["sta_max"] = max(0, int(sta_layer.get("max", character.get("sta_max", 10)) or character.get("sta_max", 10) or 10))
-    character["res_max"] = max(0, int(res_layer.get("max", character.get("res_max", 5)) or character.get("res_max", 5) or 5))
-    character["hp_current"] = clamp(int(character.get("hp_current", hp_layer.get("current", character["hp_max"])) or hp_layer.get("current", character["hp_max"]) or character["hp_max"]), 0, character["hp_max"])
-    character["sta_current"] = clamp(int(character.get("sta_current", sta_layer.get("current", character["sta_max"])) or sta_layer.get("current", character["sta_max"]) or character["sta_max"]), 0, character["sta_max"])
-    character["res_current"] = clamp(int(character.get("res_current", res_layer.get("current", character["res_max"])) or res_layer.get("current", character["res_max"]) or character["res_max"]), 0, character["res_max"])
-
-    if ENABLE_LEGACY_SHADOW_WRITEBACK:
-        character.setdefault("resources", {})
-        for key in RESOURCE_KEYS:
-            character["resources"][key] = deep_copy(runtime_layers[key])
-    else:
-        resources_shadow = character.setdefault("resources", {})
-        if not isinstance(resources_shadow, dict):
-            resources_shadow = {}
-            character["resources"] = resources_shadow
-        for key in ("stress", "corruption", "wounds"):
-            resources_shadow[key] = deep_copy(runtime_layers.get(key, {"current": 0, "base_max": 0, "bonus_max": 0, "max": 0}))
-        strip_legacy_resource_shadows(character)
-
-    return runtime_layers
-
 def item_by_id(state: Dict[str, Any], item_id: str) -> Dict[str, Any]:
     return deep_copy((state.get("items") or {}).get(item_id) or {})
-
-def list_inventory_items(character: Dict[str, Any]) -> List[Dict[str, Any]]:
-    items = character.get("inventory", {}).get("items", [])
-    if isinstance(items, list):
-        out = []
-        for entry in items:
-            if isinstance(entry, dict):
-                out.append({"item_id": entry.get("item_id", ""), "stack": max(1, int(entry.get("stack", 1) or 1))})
-            elif entry:
-                out.append({"item_id": str(entry), "stack": 1})
-        return out
-    return []
-
-def iter_equipped_item_ids(character: Dict[str, Any]) -> List[str]:
-    equipment = character.get("equipment", {}) or {}
-    return [value for value in equipment.values() if value]
 
 def ensure_item_shape(item_id: str, item: Dict[str, Any]) -> Dict[str, Any]:
     normalized = {
@@ -2954,229 +2302,6 @@ def calculate_skill_modifier_bonus(character: Dict[str, Any], items_db: Dict[str
                 total += int(modifier.get("value", 0) or 0)
     total += int((((character.get("derived") or {}).get("age_modifiers") or {}).get("skill_bonuses") or {}).get(skill_name, 0) or 0)
     return total
-
-def build_stat_based_appearance(character: Dict[str, Any], appearance: Dict[str, Any]) -> Dict[str, Any]:
-    attrs = character.get("attributes", {}) or {}
-    strength = int(attrs.get("str", 0) or 0)
-    dexterity = int(attrs.get("dex", 0) or 0)
-    constitution = int(attrs.get("con", 0) or 0)
-    muscle = 0
-    if strength >= 12:
-        muscle = 5
-    elif strength >= 10:
-        muscle = 4
-    elif strength >= 8:
-        muscle = 3
-    elif strength >= 6:
-        muscle = 2
-    elif strength >= 4:
-        muscle = 1
-    build = "neutral"
-    if constitution >= 4:
-        build = "robust"
-    if dexterity >= 4 and build == "neutral":
-        build = "lean"
-    if dexterity >= 8 and strength < 8:
-        build = "lean"
-    if strength >= 10:
-        build = "broad"
-    elif strength >= 8 and build == "robust":
-        build = "broad"
-    return {
-        "height": appearance.get("height", "average") or "average",
-        "build": build,
-        "muscle": muscle,
-        "fat": clamp(int(appearance.get("fat", 0) or 0), 0, 5),
-    }
-
-def corruption_bucket(corruption_value: int) -> int:
-    if corruption_value >= 80:
-        return 4
-    if corruption_value >= 60:
-        return 3
-    if corruption_value >= 40:
-        return 2
-    if corruption_value >= 20:
-        return 1
-    return 0
-
-def build_corruption_visuals(character: Dict[str, Any], appearance: Dict[str, Any]) -> List[Dict[str, Any]]:
-    current = int((((character.get("resources") or {}).get("corruption") or {}).get("current", 0)) or 0)
-    bucket = corruption_bucket(current)
-    modifiers: List[Dict[str, Any]] = []
-    if bucket <= 0:
-        return modifiers
-    aura_by_bucket = {1: "faint", 2: "dark", 3: "ominous", 4: "abyssal"}
-    eyes_by_bucket = {
-        1: "mit einem schwachen violetten Schimmer",
-        2: "zu dunkel und schattenumrandet",
-        3: "unruhig dunkel, als würde Licht darin versinken",
-        4: "abgründig schwarz mit kaltem Restglanz",
-    }
-    skin_by_bucket = {
-        2: "feine dunkle Linien unter der Haut",
-        3: "deutliche Schattenadern am Hals",
-        4: "schwarze Risslinien entlang der Haut",
-    }
-    voice_by_bucket = {
-        2: "rauer",
-        3: "hohl",
-        4: "unheimlich ruhig",
-    }
-    modifiers.append(
-        {
-            "source_type": "corruption",
-            "source_id": f"corruption_{bucket}",
-            "kind": "aura",
-            "value": aura_by_bucket[bucket],
-            "active": True,
-        }
-    )
-    modifiers.append(
-        {
-            "source_type": "corruption",
-            "source_id": f"corruption_{bucket}",
-            "kind": "eyes",
-            "value": eyes_by_bucket[bucket],
-            "active": True,
-        }
-    )
-    if bucket in skin_by_bucket:
-        modifiers.append(
-            {
-                "source_type": "corruption",
-                "source_id": f"corruption_{bucket}",
-                "kind": "skin_mark",
-                "value": skin_by_bucket[bucket],
-                "active": True,
-            }
-        )
-    if bucket in voice_by_bucket:
-        modifiers.append(
-            {
-                "source_type": "corruption",
-                "source_id": f"corruption_{bucket}",
-                "kind": "voice_tone",
-                "value": voice_by_bucket[bucket],
-                "active": True,
-            }
-        )
-    return modifiers
-
-def build_faction_visuals(character: Dict[str, Any]) -> List[Dict[str, Any]]:
-    visuals = []
-    for membership in character.get("faction_memberships", []) or []:
-        if not membership.get("active", True):
-            continue
-        faction_id = membership.get("faction_id", "")
-        for modifier in membership.get("visual_modifiers", []) or []:
-            if not isinstance(modifier, dict):
-                continue
-            visuals.append(
-                {
-                    "source_type": "faction",
-                    "source_id": faction_id,
-                    "kind": modifier.get("kind", ""),
-                    "value": modifier.get("value", ""),
-                    "active": True,
-                }
-            )
-    return visuals
-
-def build_class_visuals(character: Dict[str, Any]) -> List[Dict[str, Any]]:
-    class_state = normalize_class_current(character.get("class_current")) or {}
-    visuals = []
-    class_id = class_state.get("id", "")
-    for modifier in class_state.get("visual_modifiers", []) or []:
-        if not isinstance(modifier, dict):
-            continue
-        visuals.append(
-            {
-                "source_type": "class",
-                "source_id": class_id,
-                "kind": modifier.get("kind", ""),
-                "value": modifier.get("value", ""),
-                "active": True,
-            }
-        )
-    return visuals
-
-def build_appearance_summary_short(character: Dict[str, Any]) -> str:
-    appearance = character.get("appearance", {}) or {}
-    parts = []
-    build = appearance.get("build")
-    if build == "lean":
-        parts.append("drahtig")
-    elif build == "robust":
-        parts.append("robust")
-    elif build == "broad":
-        parts.append("breit gebaut")
-    elif build == "frail":
-        parts.append("schmächtig")
-    if int(appearance.get("muscle", 0) or 0) >= 3:
-        parts.append("breitere Schultern")
-    scars = [entry for entry in (appearance.get("scars") or []) if entry.get("visible", True)]
-    if scars:
-        parts.append(f"{len(scars)} Narben")
-    aura = appearance.get("aura", "none")
-    if aura and aura != "none":
-        aura_labels = {
-            "faint": "schwache Schattenaura",
-            "grim": "düstere Aura",
-            "dark": "dunkle Aura",
-            "ominous": "unheilvolle Aura",
-            "abyssal": "abyssale Aura",
-        }
-        parts.append(aura_labels.get(aura, aura))
-    extra_mark = next(
-        (
-            modifier.get("value", "")
-            for modifier in (appearance.get("visual_modifiers") or [])
-            if modifier.get("kind") == "skin_mark"
-        ),
-        "",
-    )
-    if extra_mark:
-        parts.append(extra_mark)
-    return ", ".join(part for part in parts if part) or "unauffällig"
-
-def build_appearance_summary_full(character: Dict[str, Any]) -> str:
-    appearance = character.get("appearance", {}) or {}
-    parts = [build_appearance_summary_short(character)]
-    if appearance.get("eyes", {}).get("current"):
-        parts.append(f"Augen: {appearance['eyes']['current']}")
-    if appearance.get("hair", {}).get("current"):
-        parts.append(f"Haare: {appearance['hair']['current']}")
-    if appearance.get("voice_tone"):
-        parts.append(f"Stimme: {appearance['voice_tone']}")
-    skin_marks = [str(entry) for entry in (appearance.get("skin_marks") or []) if str(entry).strip()]
-    if skin_marks:
-        parts.append(f"Hautzeichen: {', '.join(skin_marks)}")
-    return " • ".join(part for part in parts if part)
-
-def rebuild_character_appearance(character: Dict[str, Any], world_time: Dict[str, Any]) -> None:
-    appearance = normalize_appearance_state(character)
-    stat_layer = build_stat_based_appearance(character, appearance)
-    modifiers = build_corruption_visuals(character, appearance) + build_class_visuals(character) + build_faction_visuals(character)
-    appearance["height"] = stat_layer["height"]
-    appearance["build"] = stat_layer["build"]
-    appearance["muscle"] = stat_layer["muscle"]
-    appearance["fat"] = stat_layer["fat"]
-    appearance["visual_modifiers"] = modifiers
-    eye_base = str((appearance.get("eyes") or {}).get("base", "") or "")
-    eye_suffix = next((entry.get("value", "") for entry in modifiers if entry.get("kind") == "eyes"), "")
-    appearance["eyes"]["current"] = (
-        f"{eye_base} {eye_suffix}".strip()
-        if eye_base and eye_suffix
-        else eye_suffix or eye_base
-    )
-    hair = appearance.get("hair", {}) or {}
-    appearance["hair"]["current"] = ", ".join(part for part in [hair.get("color", ""), hair.get("style", "")] if part).strip(", ")
-    appearance["aura"] = next((entry.get("value", "none") for entry in modifiers if entry.get("kind") == "aura"), "none")
-    appearance["voice_tone"] = next((entry.get("value", "") for entry in modifiers if entry.get("kind") == "voice_tone"), appearance.get("voice_tone", ""))
-    appearance["summary_short"] = build_appearance_summary_short({"appearance": appearance})
-    appearance["summary_full"] = build_appearance_summary_full({"appearance": appearance})
-    character["appearance"] = appearance
 
 def appearance_event_id(slot_name: str, kind: str, source: str, turn_number: int, absolute_day: int, new_value: str) -> str:
     return _appearance_event_id(slot_name, kind, source, turn_number, absolute_day, new_value)
