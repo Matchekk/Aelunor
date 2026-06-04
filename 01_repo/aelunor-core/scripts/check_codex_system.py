@@ -32,6 +32,14 @@ def runtime_module(module: Any) -> Any:
     runtime = dict(module.__dict__)
     runtime.update(module.state_engine_runtime())
     runtime.update({name: getattr(state_engine, name) for name in _SCRIPT_STATE_ENGINE_SYMBOLS})
+    campaign_deps = module.campaign_service_dependencies()
+    runtime.update(
+        {
+            "campaign_path": campaign_deps.campaign_path,
+            "create_campaign_record": campaign_deps.create_campaign_record,
+            "load_campaign": campaign_deps.load_campaign,
+        }
+    )
     return SimpleNamespace(**runtime)
 
 
