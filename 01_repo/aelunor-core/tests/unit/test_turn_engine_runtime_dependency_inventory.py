@@ -18,7 +18,9 @@ class TurnEngineRuntimeDependencyInventoryTests(unittest.TestCase):
         self.assertIn("apply_skill_events", dependency_names_for_group("progression_explicit_ports"))
         self.assertIn("apply_codex_triggers", dependency_names_for_group("codex_explicit_ports"))
         self.assertIn("collect_codex_triggers", dependency_names_for_group("codex_explicit_ports"))
-        self.assertIn("milestone_state_for_turn", dependency_names_for_group("pacing_timing_runtime"))
+        self.assertIn("milestone_state_for_turn", dependency_names_for_group("pacing_timing_explicit_ports"))
+        self.assertIn("update_turn_timing_ema", dependency_names_for_group("pacing_timing_explicit_ports"))
+        self.assertIn("normalize_attribute_influence_meta", dependency_names_for_group("attribute_meta_explicit_ports"))
         self.assertIn("clean_auto_item_name", dependency_names_for_group("domain_helpers"))
 
     def test_inventory_deduplicates_all_dependency_names(self) -> None:

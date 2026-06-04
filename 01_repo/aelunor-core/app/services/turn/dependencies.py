@@ -36,6 +36,20 @@ class TurnCodexDependencies:
     apply_codex_triggers: Callable[..., list[Dict[str, Any]]]
 
 
+@dataclass(frozen=True)
+class TurnPacingDependencies:
+    active_pacing_profile: Callable[..., Dict[str, Any]]
+    milestone_state_for_turn: Callable[..., Dict[str, Any]]
+    compute_turn_budget_estimates: Callable[..., None]
+    build_pacing_instruction_block: Callable[..., str]
+    update_turn_timing_ema: Callable[..., None]
+
+
+@dataclass(frozen=True)
+class TurnAttributeDependencies:
+    normalize_attribute_influence_meta: Callable[..., Dict[str, Any]]
+
+
 def build_turn_llm_dependencies(
     *,
     adapter: llm_client.ChatAdapter,
