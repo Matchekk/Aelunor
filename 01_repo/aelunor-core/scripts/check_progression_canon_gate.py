@@ -2,14 +2,28 @@ import copy
 import importlib
 import os
 import sys
+from types import SimpleNamespace
 from typing import Any, Dict
+
+_SCRIPT_STATE_ENGINE_SYMBOLS = (
+    "blank_character_state",
+    "blank_patch",
+    "call_progression_canon_extractor",
+    "run_canon_gate",
+)
 
 
 def load_main() -> Any:
     root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     if root not in sys.path:
         sys.path.insert(0, root)
-    return importlib.import_module("app.main")
+    module = importlib.import_module("app.main")
+    from app.services import state_engine
+
+    runtime = dict(module.__dict__)
+    runtime.update(module.state_engine_runtime())
+    runtime.update({name: getattr(state_engine, name) for name in _SCRIPT_STATE_ENGINE_SYMBOLS})
+    return SimpleNamespace(**runtime)
 
 
 def fixture(main_module: Any) -> Dict[str, Any]:

@@ -4,23 +4,72 @@ import math
 import os
 import random
 import re
+import secrets
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple
+from difflib import SequenceMatcher
+from typing import Any, Dict, List, Mapping, Optional, Set, Tuple
 
 from fastapi import HTTPException
 from app.helpers import setup_helpers
+from app.services.setup.answers import (
+    extract_text_answer,
+    legacy_select_answer_payload,
+    load_setup_catalog,
+    parse_earth_items,
+    parse_factions,
+    parse_lines,
+    split_creator_item_blocks,
+    summarize_creator_item_name,
+)
+from app.services.setup.flow import (
+    answered_count,
+    build_character_question_queue,
+    build_world_question_queue,
+    current_question_id,
+    default_setup,
+    progress_payload,
+    setup_chapter_config,
+    setup_chapter_progress,
+    setup_global_progress,
+    setup_phase_display,
+    setup_question_chapter_key,
+    setup_question_is_applicable,
+)
 from app.adapters.llm import OllamaAdapter, OllamaSettings
+from app.adapters.ollama_config import (
+    OLLAMA_ADAPTER,
+    OLLAMA_MODEL,
+    OLLAMA_NUM_CTX,
+    OLLAMA_REPEAT_LAST_N,
+    OLLAMA_REPEAT_PENALTY,
+    OLLAMA_SEED,
+    OLLAMA_TEMPERATURE,
+    OLLAMA_TIMEOUT_SEC,
+    OLLAMA_URL,
+)
 from app.repositories.campaign_repository import CampaignRepository
+from app.serializers import campaign_view as campaign_view_serializer
 
 from app.catalogs.runtime_catalogs import (
     CANON_EXTRACTOR_SCHEMA,
+    CATALOG_VERSION,
+    CHARACTER_FORM_CATALOG,
+    CHARACTER_QUESTION_MAP,
+    INITIAL_STATE,
     PROGRESSION_EXTRACTOR_SCHEMA,
     RESPONSE_SCHEMA,
+    SETUP_CATALOG,
+    WORLD_FORM_CATALOG,
+    WORLD_QUESTION_MAP,
 )
 from app.config.attributes import (
     ATTRIBUTE_INFLUENCE_DISTRIBUTION,
     ATTRIBUTE_INFLUENCE_STRENGTH,
+)
+from app.config.combat import (
+    COMBAT_END_HINTS,
+    COMBAT_NARRATIVE_HINTS,
 )
 from app.config.canon import (
     CANON_CHARACTER_FIELDS,
@@ -147,12 +196,38 @@ from app.config.setup import (
 from app.core.ids import (
     SLOT_PREFIX,
     deep_copy,
+    hash_secret,
     make_id,
     utc_now,
 )
+from app.core.paths import (
+    CAMPAIGNS_DIR,
+    DATA_DIR,
+    LEGACY_STATE_PATH,
+    ensure_storage_dirs,
+)
+from app.prompts.system_prompts import (
+    CANON_EXTRACTOR_JSON_CONTRACT,
+    CANON_EXTRACTOR_SYSTEM_PROMPT,
+    CHARACTER_ATTRIBUTE_SYSTEM_PROMPT,
+    CONTEXT_ASSISTANT_SYSTEM_PROMPT,
+    MANIFESTATION_SKILL_NAME_SYSTEM_PROMPT,
+    MEMORY_SYSTEM_PROMPT,
+    NPC_EXTRACTOR_JSON_CONTRACT,
+    NPC_EXTRACTOR_SYSTEM_PROMPT,
+    PROGRESSION_EXTRACTOR_JSON_CONTRACT,
+    PROGRESSION_EXTRACTOR_SYSTEM_PROMPT,
+    SETUP_QUESTION_SYSTEM_PROMPT,
+    SETUP_RANDOM_SYSTEM_PROMPT,
+    TURN_RESPONSE_JSON_CONTRACT,
+)
 from app.schemas.llm import (
+    CHARACTER_ATTRIBUTE_SCHEMA,
     CONTEXT_RESPONSE_SCHEMA,
     ELEMENT_GENERATOR_SCHEMA,
+    MANIFESTATION_SKILL_NAME_SCHEMA,
+    NPC_EXTRACTOR_SCHEMA,
+    SETUP_RANDOM_SCHEMA,
 )
 from app.text.patterns import (
     ABILITY_UNLOCK_GENERIC_NAMES,
@@ -194,6 +269,18 @@ from app.services.patch_payloads import (
     normalize_patch_payload,
     normalize_patch_semantics,
 )
+from app.services import live_state_service as _default_live_state_service
+from app.services.turn_engine import emit_turn_phase_event, turn_flow_error
+from app.services.llm.json_repair import (
+    extract_json_payload,
+    first_balanced_json_object,
+    is_turn_response_schema,
+    ollama_format_fallback_needed,
+    repair_truncated_json_object,
+    schema_fallback_instruction,
+    strip_json_fences,
+)
+from app.services.state.dependencies import StateEngineDependencies
 from app.services.state_basics import (
     blank_patch,
     is_slot_id,
@@ -235,6 +322,17 @@ from app.services.characters.resource_maxima import (
     migrate_legacy_resource_bonus_modifiers,
     modifier_resource_key,
     rebuild_resource_maxima,
+)
+from app.services.characters import derived_stats as _derived_stats
+from app.services.characters.derived_stats import (
+    calculate_armor,
+    calculate_carry_limit,
+    calculate_carry_weight,
+    calculate_defense,
+    calculate_derived_bonus,
+    calculate_initiative,
+    calculate_resistances,
+    calculate_skill_modifier_bonus,
 )
 from app.services.characters.resources import (
     build_compat_resources_view,
@@ -325,7 +423,15 @@ from app.services.world.progression import (
     normalize_class_current,
     normalize_resource_name,
 )
-from app.services.world.text_normalization import normalized_eval_text
+from app.services.world.text_normalization import first_sentences, normalized_eval_text
+from app.services.items.inventory import (
+    ensure_item_shape,
+    infer_item_slot_from_definition,
+    item_by_id,
+    item_matches_equipment_slot,
+    normalize_equipment_slot_key,
+    normalize_equipment_update_payload,
+)
 
 # -- Codex-Subsystem (ausgelagert nach app/services/world/codex.py) --
 from app.services.world.codex import (
@@ -408,6 +514,14 @@ from app.services.world.skill_state import (
     normalize_skill_element_fields as _normalize_skill_element_fields,
     normalize_skill_progression_fields as _normalize_skill_progression_fields,
 )
+from app.services.world.scene import (
+    canonical_scene_id,
+    clean_scene_name,
+    extract_descriptive_scene_name,
+    extract_scene_candidates,
+    is_generic_scene_identifier,
+    is_plausible_scene_name,
+)
 from app.services.world.combat import (
     apply_combat_scaling_to_patch as _apply_combat_scaling_to_patch,
     build_combat_scaling_context as _build_combat_scaling_context,
@@ -422,16 +536,28 @@ from app.services.world.combat import (
 )
 
 _CONFIGURED = False
+_STATE_ENGINE_DEPS = StateEngineDependencies(
+    ollama_adapter=OLLAMA_ADAPTER,
+    live_state_service=_default_live_state_service,
+)
 
-def configure(main_globals: Dict[str, Any]) -> None:
-    """Inject main-module globals needed by extracted state-engine helpers."""
-    global _CONFIGURED
-    globals().update(main_globals)
-    configured_globals = {
+
+def _legacy_config_snapshot(extra: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+    snapshot = {
         name: value
         for name, value in globals().items()
-        if not name.startswith("__") and name != "configure"
+        if not name.startswith("__") and name not in {"configure", "configure_dependencies"}
     }
+    if extra:
+        snapshot.update(dict(extra))
+    return snapshot
+
+
+def configure_dependencies(deps: StateEngineDependencies) -> None:
+    """Configure explicit runtime ports for the state engine."""
+    global _CONFIGURED, _STATE_ENGINE_DEPS
+    _STATE_ENGINE_DEPS = _STATE_ENGINE_DEPS.merged(deps)
+    configured_globals = _legacy_config_snapshot()
 
     # Subsysteme mitinitialisieren
     from app.services.world import codex as _codex_module
@@ -455,511 +581,211 @@ def configure(main_globals: Dict[str, Any]) -> None:
 
     _CONFIGURED = True
 
+
+def configure(main_globals: Mapping[str, Any] | StateEngineDependencies) -> None:
+    """Legacy adapter for older callers.
+
+    The mapping form intentionally no longer performs ``globals().update``.
+    It extracts explicit runtime ports and forwards a bounded snapshot to the
+    few legacy submodules that still expose configure().
+    """
+    if isinstance(main_globals, StateEngineDependencies):
+        configure_dependencies(main_globals)
+        return
+    deps = StateEngineDependencies.from_mapping(main_globals)
+    configure_dependencies(deps)
+
+# Public state-engine facade kept intentionally small. Domain helpers live in
+# their target modules; runtime_symbols() is the temporary app-internal bridge.
 EXPORTED_SYMBOLS = [
-    "make_join_code",
-    "slot_id",
-    "slot_index",
-    "is_slot_id",
-    "ordered_slots",
-    "blank_patch",
-    "npc_id_from_name",
-    "normalize_npc_alias",
-    "normalize_codex_alias_text",
-    "strip_name_parenthetical",
-    "strip_codex_name_prefix",
-    "safe_last_token_variants",
-    "build_entity_alias_variants",
-    "race_id_from_name",
-    "beast_id_from_name",
-    "default_race_profile",
-    "default_beast_profile",
-    "normalize_race_profile",
-    "normalize_beast_profile",
-    "element_id_from_name",
-    "default_element_profile",
-    "normalize_element_profile",
-    "element_sort_key",
-    "relation_sort_value",
-    "normalize_element_relation",
-    "build_element_alias_index",
-    "build_default_element_relations",
-    "_set_element_relation",
-    "element_pair_rule_ids",
-    "apply_element_anchor_relation_rules",
-    "normalize_element_relations",
-    "generated_element_too_similar",
-    "_theme_flavor",
-    "generate_world_elements_fallback",
-    "generate_world_elements_with_llm",
-    "generate_world_element_profiles",
-    "generate_element_relations",
-    "next_element_path_name",
-    "generate_element_class_paths",
-    "normalize_class_path_rank_node",
-    "normalize_element_class_paths",
-    "ensure_world_element_system_from_setup",
-    "resolve_element_relation",
-    "get_element_relation",
-    "normalize_element_id_list",
-    "normalize_skill_elements_for_world",
-    "resolve_class_element_id",
-    "resolve_class_path_rank_node",
-    "stable_sorted_mapping",
-    "codex_block_order",
-    "codex_blocks_for_level",
-    "merge_known_facts_stable",
-    "stable_sorted_unique_strings",
-    "default_race_codex_entry",
-    "default_beast_codex_entry",
-    "normalize_codex_entry_stable",
-    "race_profile_block_facts",
-    "beast_profile_block_facts",
-    "codex_facts_for_blocks",
-    "build_world_alias_indexes",
-    "build_world_exact_name_index",
-    "resolve_codex_entity_ids",
-    "world_codex_sort_key",
-    "normalize_world_codex_structures",
-    "pick_world_theme_anchor",
-    "codex_seed_for_state",
-    "fantasy_syllables_for_anchor",
-    "generate_unique_fantasy_name",
-    "generate_world_name",
-    "generate_world_race_profiles",
-    "generate_world_beast_profiles",
-    "ensure_world_codex_from_setup",
-    "default_npc_entry",
-    "normalize_npc_entry",
-    "normalize_npc_codex_state",
-    "seed_npc_codex_from_story_cards",
-    "default_world_time",
-    "default_intro_state",
-    "default_appearance_profile",
-    "default_character_modifiers",
-    "default_class_current",
-    "default_injury_state",
-    "default_scar_state",
-    "blank_character_state",
-    "skill_rank_for_level",
-    "next_skill_xp_for_level",
-    "next_character_xp_for_level",
-    "next_class_xp_for_level",
-    "default_skill_state",
-    "normalize_skill_state",
-    "ability_id_from_name",
-    "next_ability_xp_for_level",
-    "default_ability_state",
-    "normalize_ability_state",
-    "normalize_resource_name",
-    "resource_name_for_character",
-    "skill_id_from_name",
-    "display_skill_name_from_id",
-    "clean_extracted_skill_name",
-    "split_extracted_skill_names",
-    "infer_skill_name_from_description",
-    "normalize_skill_store",
-    "dynamic_skill_default",
-    "normalize_skill_rank",
-    "normalize_dynamic_skill_state",
-    "merge_dynamic_skill",
-    "skill_rank_sort_value",
-    "extract_skill_entries_for_character",
-    "build_skill_fusion_hints",
-    "skill_display_name",
-    "skill_level_value",
-    "role_key",
-    "class_rank_sort_value",
-    "normalize_class_current",
-    "normalize_injury_state",
-    "normalize_scar_state",
-    "migrate_legacy_role_to_class",
-    "class_affinity_match",
-    "sentence_mentions_actor_name",
-    "effective_skill_progress_multiplier",
-    "setup_question_is_applicable",
-    "canonical_resource_field_name",
-    "ingest_legacy_resources_into_canonical",
-    "reconcile_canonical_resources",
-    "build_compat_resources_view",
-    "strip_legacy_resource_shadows",
-    "strip_legacy_shadow_fields",
-    "legacy_misc_resources_set_from_payload",
-    "legacy_misc_resource_deltas_from_update",
-    "write_legacy_shadow_fields",
-    "sync_canonical_resources",
-    "sync_scars_into_appearance",
-    "resolve_injury_healing",
-    "looks_like_legacy_seeded_skills",
-    "default_boards",
-    "resource_delta_payload",
-    "canonical_resources_set_from_payload",
-    "canonical_resource_deltas_from_update",
-    "clamp",
-    "normalize_world_time",
-    "infer_age_years",
-    "derive_age_stage",
-    "normalize_appearance_state",
-    "normalize_age_fields",
-    "age_character_if_needed",
-    "build_age_modifiers",
-    "item_weight",
-    "item_modifier_value",
-    "ensure_character_modifier_shape",
-    "modifier_resource_key",
-    "calculate_base_resource_maxima",
-    "calculate_bonus_resource_maxima",
-    "migrate_legacy_resource_bonus_modifiers",
-    "rebuild_resource_maxima",
-    "item_by_id",
-    "list_inventory_items",
-    "iter_equipped_item_ids",
-    "ensure_item_shape",
-    "normalize_equipment_slot_key",
-    "normalize_equipment_update_payload",
-    "infer_item_slot_from_definition",
-    "item_matches_equipment_slot",
-    "sync_legacy_character_fields",
-    "calculate_carry_limit",
-    "calculate_carry_weight",
-    "calculate_resistances",
-    "calculate_derived_bonus",
-    "calculate_skill_modifier_bonus",
-    "build_stat_based_appearance",
-    "corruption_bucket",
-    "build_corruption_visuals",
-    "build_faction_visuals",
-    "build_class_visuals",
-    "build_appearance_summary_short",
-    "build_appearance_summary_full",
-    "rebuild_character_appearance",
-    "appearance_event_id",
-    "format_appearance_message",
-    "record_appearance_change",
-    "sync_appearance_changes",
-    "append_character_change_events",
-    "calculate_armor",
-    "calculate_defense",
-    "calculate_initiative",
-    "calculate_attack_rating",
-    "calculate_combat_flags",
-    "skill_effective_bonus",
-    "ensure_progression_shape",
-    "ensure_character_progression_core",
-    "progression_speed_multiplier",
-    "normalize_progression_event_severity",
-    "normalize_progression_event",
-    "is_skill_manifestation_name_plausible",
-    "canonicalize_manifested_skill_payload",
-    "append_recent_progression_event",
-    "resolve_skill_id_for_event",
-    "apply_system_xp",
-    "apply_class_xp",
-    "build_elemental_core_skill_payload",
-    "ensure_class_rank_core_skills",
-    "refresh_skill_progression",
-    "grant_skill_xp",
-    "parse_skill_event",
-    "normalize_progression_event_list",
-    "progression_event_priority",
-    "_event_origin",
-    "reduce_progression_event_density",
-    "patch_has_explicit_skill_progression_for_actor",
-    "normalize_progression_claim_type",
-    "progression_claim_text_for_actor",
-    "detect_progression_claim_types",
-    "progression_claim_coverage_for_actor_patch",
-    "normalized_progression_claims",
-    "progression_missing_claim_types",
-    "normalize_progression_extractor_character_patch",
-    "progression_event_dedupe_key",
-    "merge_progression_patch_additive",
-    "evaluate_progression_extractor_confidence",
-    "call_progression_canon_extractor",
-    "run_canon_gate",
-    "manifestation_seed_from_skill",
-    "upsert_class_path_seed",
-    "infer_manifested_skill_name_with_llm",
-    "infer_manifestation_progression_events_from_story",
-    "infer_progression_events_from_patch",
-    "apply_progression_event_xp",
-    "manifest_skill_from_progression_event",
-    "apply_progression_events",
-    "build_skill_system_requests",
-    "apply_skill_events",
-    "rebuild_character_derived",
-    "migrate_effects_from_conditions",
-    "normalize_character_state",
-    "rebuild_all_character_derived",
-    "derive_scene_name",
-    "build_world_question_queue",
-    "build_character_question_queue",
-    "default_setup",
-    "normalize_answer_summary_defaults",
-    "default_campaign_length_settings",
-    "default_meta_timing",
-    "clamp_float",
-    "default_combat_meta",
-    "default_attribute_influence_meta",
-    "default_extraction_quarantine",
-    "normalize_extraction_quarantine_meta",
-    "normalize_meta_migrations",
-    "normalize_world_settings",
-    "normalize_meta_timing",
-    "normalize_combat_meta",
-    "normalize_attribute_influence_meta",
-    "active_pacing_profile",
-    "compute_turn_budget_estimates",
-    "update_turn_timing_ema",
-    "milestone_state_for_turn",
-    "build_pacing_instruction_block",
-    "_hash_unit_interval",
-    "derive_attribute_relevance",
-    "compute_attribute_bias",
-    "compose_attribute_prompt_hints",
-    "apply_attribute_bias_to_resolution",
-    "_scale_negative_delta",
-    "apply_attribute_bias_to_patch",
-    "infer_skill_cost_deltas_from_text",
-    "apply_skill_cost_deltas_to_patch",
-    "skill_rank_power_weight",
-    "entity_element_profile_for_character",
-    "entity_element_profile_for_npc",
-    "element_matchup_multiplier",
-    "compute_character_combat_score",
-    "compute_npc_combat_score",
-    "build_combat_scaling_context",
-    "apply_combat_scaling_to_patch",
-    "infer_combat_context",
-    "patch_has_combat_signal",
-    "update_combat_meta_after_turn",
-    "normalize_ruleset_choice",
-    "normalize_campaign_length_choice",
-    "parse_attribute_range",
-    "world_attribute_scale",
-    "level_one_attribute_budget",
-    "level_one_attribute_cap",
-    "normalize_attribute_weight_pool",
-    "allocate_weighted_attributes",
-    "fallback_character_attribute_weights",
-    "generate_character_attribute_weights",
-    "level_one_attributes_from_weights",
-    "default_character_setup_node",
-    "save_json",
-    "load_json",
-    "campaign_path",
-    "list_campaign_ids",
-    "extract_text_answer",
-    "parse_lines",
-    "split_creator_item_blocks",
-    "summarize_creator_item_name",
-    "parse_earth_items",
-    "parse_factions",
-    "legacy_select_answer_payload",
-    "load_setup_catalog",
-    "build_rules_profile",
-    "attribute_cap_for_campaign",
-    "campaign_slots",
-    "player_claim",
-    "display_name_for_slot",
-    "active_party",
-    "expected_setup_slots",
-    "setup_slot_statuses",
-    "public_player",
-    "default_player_diary_entry",
-    "available_slots",
-    "compact_conditions",
-    "build_party_overview",
-    "build_character_sheet_view",
-    "build_npc_sheet_view",
-    "current_question_id",
-    "answered_count",
-    "progress_payload",
-    "setup_chapter_config",
-    "setup_question_chapter_key",
-    "setup_chapter_progress",
-    "setup_global_progress",
-    "setup_phase_display",
-    "setup_summary_preview",
-    "ollama_request_seed",
-    "call_ollama_text",
-    "ollama_format_fallback_needed",
-    "is_turn_response_schema",
-    "schema_fallback_instruction",
-    "strip_json_fences",
-    "first_balanced_json_object",
-    "extract_json_payload",
-    "repair_truncated_json_object",
-    "normalize_plotpoint_entry",
-    "normalize_plotpoint_update_entry",
-    "normalize_event_entry",
-    "repair_json_payload_with_model",
-    "normalize_patch_payload",
-    "normalize_patch_semantics",
-    "merge_character_patch_update",
-    "merge_patch_payloads",
-    "canonical_scene_id",
-    "clean_scene_name",
-    "is_plausible_scene_name",
-    "is_generic_scene_identifier",
-    "extract_scene_candidates",
-    "extract_descriptive_scene_name",
-    "build_scene_patch_from_text",
-    "infer_scene_name_from_recent_story",
-    "reconcile_scene_ids_with_story",
-    "infer_injury_severity",
-    "infer_injury_effects",
-    "clean_auto_injury_title",
-    "extract_auto_story_injuries",
-    "sorted_npc_codex_entries",
-    "build_npc_codex_summary",
-    "sorted_world_profiles",
-    "build_race_codex_summary",
-    "build_beast_codex_summary",
-    "build_world_element_summary",
-    "build_extractor_context_packet",
-    "normalize_extractor_output_patch",
-    "resolve_extractor_conflicts",
-    "make_extraction_candidate",
-    "candidate_status_rank",
-    "item_name_in_character_inventory",
-    "extract_environment_item_mentions",
-    "build_heuristic_candidates",
-    "classify_heuristic_candidate",
-    "split_candidates",
-    "append_extraction_quarantine",
-    "safe_candidates_to_patch",
-    "merge_safe_patch_additive",
-    "call_canon_extractor",
-    "scene_name_from_state",
-    "existing_pc_aliases",
-    "is_generic_npc_name",
-    "resolve_npc_scene_hint",
-    "best_matching_npc_id",
-    "npc_relevance_score",
-    "pick_more_specific_text",
-    "apply_npc_upserts",
-    "contains_any_normalized_token",
-    "collect_beast_observed_abilities",
-    "collect_codex_triggers",
-    "apply_codex_triggers",
-    "build_npc_extractor_context_packet",
-    "call_npc_extractor",
-    "normalize_request_option_text",
-    "normalize_request_entry",
-    "normalize_requests_payload",
-    "normalize_model_output_payload",
-    "call_ollama_chat",
-    "call_ollama_json",
-    "call_ollama_schema",
-    "clean_setup_ai_copy",
-    "is_bad_setup_ai_copy",
-    "generate_setup_ai_copy",
-    "get_persisted_question_ai_copy",
-    "store_question_ai_copy",
-    "ensure_question_ai_copy",
-    "build_setup_option_context",
-    "append_context_hint",
-    "dynamic_option_description",
-    "dynamic_other_hint",
-    "build_dynamic_option_entries",
-    "build_question_payload",
-    "setup_helper_dependencies",
-    "validate_answer_payload",
-    "fallback_random_text",
-    "fallback_random_answer_payload",
-    "generate_random_setup_answer",
-    "store_setup_answer",
-    "setup_answer_to_input_payload",
-    "setup_answer_preview_text",
-    "build_random_setup_preview",
-    "apply_random_setup_preview",
-    "finalize_world_setup",
-    "finalize_character_setup",
-    "build_world_summary",
-    "build_character_summary",
-    "apply_world_summary_to_boards",
-    "initialize_dynamic_slots",
-    "apply_character_summary_to_state",
-    "is_legacy_campaign",
-    "remap_turn_context_slot_names",
-    "migrate_campaign_to_dynamic_slots",
-    "normalize_campaign",
-    "load_campaign",
-    "save_campaign",
-    "active_turns",
-    "is_host",
-    "is_campaign_player",
-    "build_patch_summary",
-    "is_continue_story_content",
-    "public_turn",
-    "build_world_question_state",
-    "build_character_question_state",
-    "build_viewer_context",
-    "build_setup_runtime",
-    "filter_private_diary_content",
-    "build_public_boards",
-    "build_campaign_view",
-    "remember_recent_story",
-    "heuristic_memory_summary",
-    "rebuild_memory_summary",
-    "build_context_packet",
-    "is_suspicious_story_text",
-    "normalized_eval_text",
-    "context_state_signature",
-    "strip_markdown_like",
-    "parse_context_intent",
-    "build_context_knowledge_index",
-    "resolve_context_target",
-    "build_context_result_payload",
-    "deterministic_context_result_from_entry",
-    "context_meta_drift_detected",
-    "build_reduced_context_snippets",
-    "build_context_result_via_llm",
-    "extract_story_target_evidence",
-    "context_result_to_answer_text",
-    "clean_auto_ability_name",
-    "clean_auto_item_name",
-    "actor_relevant_story_sentences",
-    "infer_item_slot_from_text",
-    "build_auto_item_stub",
-    "clean_creator_item_name",
-    "item_id_from_name",
-    "materialize_inventory_item",
-    "normalize_creator_item_list",
-    "reconcile_creator_inventory_items",
-    "infer_auto_skill_tags",
-    "infer_auto_class_tags",
-    "normalize_class_rank_text",
-    "clean_auto_class_name",
-    "extract_auto_class_change",
-    "extract_auto_learned_abilities",
-    "extract_auto_story_item_events",
-    "extract_auto_story_items",
-    "story_sentences_for_actor",
-    "build_turn_journal_notes",
-    "inject_turn_story_journal",
-    "inject_story_unlock_abilities",
-    "materialize_character_ability",
-    "inject_story_items",
-    "inject_story_injuries",
-    "materialize_story_items_from_turn_history",
-    "materialize_story_abilities_from_turn_history",
-    "run_legacy_normalize_backfill",
-    "apply_world_time_advance",
-    "log_board_revision",
-    "intro_state",
-    "can_start_adventure",
-    "try_generate_adventure_intro",
-    "maybe_start_adventure",
-    "new_player",
-    "create_campaign_record",
-    "ensure_campaign_storage",
-    "find_campaign_by_join_code",
-    "touch_player",
-    "authenticate_player",
-    "require_host",
-    "require_claim",
+    'public_turn', 'build_campaign_view',
 ]
+
+# Temporary app-internal bridge for runtime consumers that still accept a
+# globals-style mapping: router dependency factories, turn patch sanitizer/
+# validator configuration, and the turn record pipeline. This is deliberately
+# not the public API; remove entries as those consumers gain explicit ports.
+_STATE_ENGINE_RUNTIME_SYMBOLS = (
+    'ACTION_STOPWORDS',
+    'ATTRIBUTE_KEYS',
+    'CANON_EXTRACTOR_SYSTEM_PROMPT',
+    'CHARACTER_QUESTION_MAP',
+    'DEFAULT_DYNAMIC_SKILL_LEVEL_MAX',
+    'DEFAULT_NUMERIC_SKILL_DELTA_XP',
+    'ENABLE_LEGACY_SHADOW_WRITEBACK',
+    'ERROR_CODE_EXTRACTOR',
+    'ERROR_CODE_JSON_REPAIR',
+    'ERROR_CODE_NARRATOR_RESPONSE',
+    'ERROR_CODE_PATCH_APPLY',
+    'ERROR_CODE_PATCH_SANITIZE',
+    'ERROR_CODE_SCHEMA_VALIDATION',
+    'ERROR_CODE_TURN_INTERNAL',
+    'INJURY_HEALING_STAGES',
+    'INJURY_SEVERITIES',
+    'MAX_STORY_COMPRESS_ATTEMPTS',
+    'MAX_TURN_MODEL_ATTEMPTS',
+    'MIN_STORY_REWRITE_ATTEMPTS',
+    'OLLAMA_REPEAT_PENALTY',
+    'OLLAMA_TEMPERATURE',
+    'PACING_PROFILE_DEFAULTS',
+    'PROGRESSION_SET_DIRECT_KEYS',
+    'TARGET_TURNS_DEFAULTS',
+    'TURN_ERROR_USER_MESSAGES',
+    'TURN_RESPONSE_JSON_CONTRACT',
+    'UNIVERSAL_SKILL_LIKE_NAMES',
+    'WORLD_QUESTION_MAP',
+    'active_pacing_profile',
+    'active_party',
+    'active_turns',
+    'append_character_change_events',
+    'apply_attribute_bias_to_patch',
+    'apply_attribute_bias_to_resolution',
+    'apply_character_summary_to_state',
+    'apply_codex_triggers',
+    'apply_combat_scaling_to_patch',
+    'apply_npc_upserts',
+    'apply_progression_events',
+    'apply_random_setup_preview',
+    'apply_skill_cost_deltas_to_patch',
+    'apply_skill_events',
+    'apply_world_summary_to_boards',
+    'apply_world_time_advance',
+    'attribute_cap_for_campaign',
+    'authenticate_player',
+    'blank_patch',
+    'build_character_question_state',
+    'build_character_sheet_view',
+    'build_character_summary',
+    'build_combat_scaling_context',
+    'build_context_knowledge_index',
+    'build_context_packet',
+    'build_context_result_payload',
+    'build_context_result_via_llm',
+    'build_extractor_context_packet',
+    'build_npc_sheet_view',
+    'build_pacing_instruction_block',
+    'build_party_overview',
+    'build_patch_summary',
+    'build_random_setup_preview',
+    'build_reduced_context_snippets',
+    'build_skill_system_requests',
+    'build_world_question_state',
+    'build_world_summary',
+    'call_canon_extractor',
+    'call_npc_extractor',
+    'call_ollama_json',
+    'call_ollama_schema',
+    'campaign_path',
+    'campaign_slots',
+    'can_start_adventure',
+    'canonical_resource_deltas_from_update',
+    'canonical_resources_set_from_payload',
+    'clamp',
+    'class_rank_sort_value',
+    'clean_auto_item_name',
+    'clean_creator_item_name',
+    'clean_scene_name',
+    'collect_codex_triggers',
+    'compose_attribute_prompt_hints',
+    'compute_attribute_bias',
+    'compute_turn_budget_estimates',
+    'context_result_to_answer_text',
+    'context_state_signature',
+    'create_campaign_record',
+    'current_question_id',
+    'deep_copy',
+    'default_class_current',
+    'default_player_diary_entry',
+    'derive_attribute_relevance',
+    'deterministic_context_result_from_entry',
+    'display_name_for_slot',
+    'effective_skill_progress_multiplier',
+    'emit_turn_phase_event',
+    'ensure_campaign_storage',
+    'ensure_character_progression_core',
+    'ensure_class_rank_core_skills',
+    'ensure_item_shape',
+    'ensure_progression_shape',
+    'ensure_question_ai_copy',
+    'extract_story_target_evidence',
+    'finalize_character_setup',
+    'finalize_world_setup',
+    'find_campaign_by_join_code',
+    'hash_secret',
+    'infer_combat_context',
+    'infer_item_slot_from_definition',
+    'infer_skill_cost_deltas_from_text',
+    'intro_state',
+    'is_continue_story_content',
+    'is_generic_scene_identifier',
+    'is_host',
+    'is_plausible_scene_name',
+    'is_skill_manifestation_name_plausible',
+    'is_slot_id',
+    'is_suspicious_story_text',
+    'item_matches_equipment_slot',
+    'legacy_misc_resource_deltas_from_update',
+    'legacy_misc_resources_set_from_payload',
+    'load_campaign',
+    'log_board_revision',
+    'make_id',
+    'merge_dynamic_skill',
+    'merge_patch_payloads',
+    'milestone_state_for_turn',
+    'new_player',
+    'next_skill_xp_for_level',
+    'normalize_ability_state',
+    'normalize_attribute_influence_meta',
+    'normalize_class_current',
+    'normalize_dynamic_skill_state',
+    'normalize_equipment_slot_key',
+    'normalize_equipment_update_payload',
+    'normalize_event_entry',
+    'normalize_injury_state',
+    'normalize_model_output_payload',
+    'normalize_npc_codex_state',
+    'normalize_patch_semantics',
+    'normalize_plotpoint_entry',
+    'normalize_plotpoint_update_entry',
+    'normalize_progression_event_list',
+    'normalize_requests_payload',
+    'normalize_scar_state',
+    'normalize_skill_elements_for_world',
+    'normalize_skill_rank',
+    'normalize_skill_store',
+    'normalize_world_settings',
+    'normalize_world_time',
+    'normalized_eval_text',
+    'parse_context_intent',
+    'player_claim',
+    'progress_payload',
+    'rebuild_all_character_derived',
+    'rebuild_character_derived',
+    'rebuild_memory_summary',
+    'reconcile_canonical_resources',
+    'remember_recent_story',
+    'require_claim',
+    'require_host',
+    'resolve_class_element_id',
+    'resolve_context_target',
+    'resolve_injury_healing',
+    'resource_name_for_character',
+    'run_canon_gate',
+    'save_campaign',
+    'skill_id_from_name',
+    'slot_index',
+    'store_setup_answer',
+    'strip_legacy_shadow_fields',
+    'sync_scars_into_appearance',
+    'try_generate_adventure_intro',
+    'update_combat_meta_after_turn',
+    'update_turn_timing_ema',
+    'utc_now',
+    'validate_answer_payload',
+    'write_legacy_shadow_fields',
+)
+def runtime_symbols() -> Dict[str, Any]:
+    return {name: globals()[name] for name in _STATE_ENGINE_RUNTIME_SYMBOLS if name in globals()}
 
 def slot_id(index: int) -> str:
     return _slot_id(index, slot_prefix=SLOT_PREFIX)
@@ -1955,19 +1781,6 @@ def effective_skill_progress_multiplier(character: Dict[str, Any], skill: Dict[s
         return float(world_settings.get("onclass_xp_multiplier", 1.0) or 1.0)
     return float(world_settings.get("offclass_xp_multiplier", 0.7) or 0.7)
 
-def setup_question_is_applicable(setup_node: Dict[str, Any], question_id: str) -> bool:
-    if question_id not in CHARACTER_QUESTION_MAP:
-        return True
-    answers = setup_node.get("answers", {}) or {}
-    class_start_mode = normalized_eval_text(extract_text_answer(answers.get("class_start_mode")))
-    if not class_start_mode:
-        return True
-    if question_id == "class_seed":
-        return "ki" in class_start_mode
-    if question_id in {"class_custom_name", "class_custom_description", "class_custom_tags"}:
-        return "selbst" in class_start_mode
-    return True
-
 def sync_scars_into_appearance(character: Dict[str, Any]) -> None:
     appearance = character.setdefault("appearance", {})
     appearance["scars"] = [
@@ -2139,76 +1952,6 @@ def normalize_world_time(meta: Dict[str, Any]) -> Dict[str, Any]:
     world_time["weather"] = str(world_time.get("weather", "") or "")
     return world_time
 
-def item_by_id(state: Dict[str, Any], item_id: str) -> Dict[str, Any]:
-    return deep_copy((state.get("items") or {}).get(item_id) or {})
-
-def ensure_item_shape(item_id: str, item: Dict[str, Any]) -> Dict[str, Any]:
-    normalized = {
-        "id": item_id,
-        "name": item.get("name", item_id),
-        "rarity": item.get("rarity", "common"),
-        "slot": item.get("slot", ""),
-        "weight": item_weight(item),
-        "stackable": bool(item.get("stackable", False)),
-        "max_stack": int(item.get("max_stack", 1) or 1),
-        "weapon_profile": item.get("weapon_profile", {}),
-        "modifiers": item.get("modifiers", []) or [],
-        "effects": item.get("effects", []) or [],
-        "durability": item.get("durability", {"current": 100, "max": 100}),
-        "cursed": bool(item.get("cursed", False)),
-        "curse_text": item.get("curse_text", ""),
-        "tags": item.get("tags", []) or [],
-    }
-    if not normalized["slot"]:
-        normalized["slot"] = ""
-    return normalized
-
-def normalize_equipment_slot_key(slot_name: Any) -> str:
-    normalized = normalized_eval_text(slot_name)
-    if not normalized:
-        return ""
-    return EQUIPMENT_SLOT_ALIASES.get(normalized, normalized if normalized in EQUIPMENT_CANONICAL_SLOTS else "")
-
-def normalize_equipment_update_payload(payload: Any) -> Dict[str, str]:
-    if not isinstance(payload, dict):
-        return {}
-    normalized: Dict[str, str] = {}
-    for raw_slot, raw_value in payload.items():
-        slot = normalize_equipment_slot_key(raw_slot)
-        if not slot:
-            continue
-        normalized[slot] = str(raw_value or "").strip()
-    return normalized
-
-def infer_item_slot_from_definition(item: Dict[str, Any]) -> str:
-    slot = normalize_equipment_slot_key(item.get("slot"))
-    if slot:
-        return slot
-    tags = {normalized_eval_text(tag) for tag in (item.get("tags") or []) if normalized_eval_text(tag)}
-    name = normalized_eval_text(item.get("name", ""))
-    if "weapon" in tags or any(keyword in name for keyword in ITEM_WEAPON_KEYWORDS):
-        return "weapon"
-    if "offhand" in tags or any(keyword in name for keyword in ITEM_OFFHAND_KEYWORDS):
-        return "offhand"
-    if "armor" in tags or any(keyword in name for keyword in ITEM_CHEST_KEYWORDS):
-        return "chest"
-    if "trinket" in tags or any(keyword in name for keyword in ITEM_TRINKET_KEYWORDS):
-        return "trinket"
-    return ""
-
-def item_matches_equipment_slot(item: Dict[str, Any], equip_slot: str) -> bool:
-    slot = normalize_equipment_slot_key(equip_slot)
-    if not slot:
-        return False
-    if slot in {"ring_1", "ring_2"}:
-        return infer_item_slot_from_definition(item) in {"ring_1", "ring_2", "trinket", "amulet", ""}
-    inferred = infer_item_slot_from_definition(item)
-    if not inferred:
-        return slot in {"trinket", "amulet"}
-    if slot == "amulet":
-        return inferred in {"amulet", "trinket"}
-    return inferred == slot
-
 def sync_legacy_character_fields(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> None:
     # Deprecated compatibility helper. Only active when explicit legacy writeback is enabled.
     if not ENABLE_LEGACY_SHADOW_WRITEBACK:
@@ -2219,89 +1962,6 @@ def sync_legacy_character_fields(character: Dict[str, Any], world_settings: Opti
         for effect in (character.get("effects") or [])
         if effect.get("visible", True) and effect.get("name")
     ][:6]
-
-def calculate_carry_limit(character: Dict[str, Any]) -> int:
-    return 10 + (int((character.get("attributes") or {}).get("str", 0) or 0) * 2)
-
-def calculate_carry_weight(character: Dict[str, Any], items_db: Dict[str, Any]) -> int:
-    total = 0
-    for entry in list_inventory_items(character):
-        total += item_weight(items_db.get(entry["item_id"], {})) * entry["stack"]
-    for item_id in iter_equipped_item_ids(character):
-        total += item_weight(items_db.get(item_id, {}))
-    return total
-
-def calculate_resistances(character: Dict[str, Any], items_db: Dict[str, Any]) -> Dict[str, int]:
-    res = {key: 0 for key in RESISTANCE_KEYS}
-    for item_id in iter_equipped_item_ids(character):
-        item = items_db.get(item_id, {})
-        for key in RESISTANCE_KEYS:
-            res[key] += item_modifier_value(item, kind="resistance", stat=key)
-    for effect in character.get("effects", []) or []:
-        for modifier in effect.get("modifiers", []) or []:
-            if modifier.get("kind") == "resistance" and modifier.get("stat") in res:
-                res[modifier["stat"]] += int(modifier.get("value", 0) or 0)
-    for modifier in (ensure_character_modifier_shape(character).get("derived") or []):
-        if not isinstance(modifier, dict):
-            continue
-        stat_name = str(modifier.get("stat", "") or "")
-        if not stat_name.startswith("resistance:"):
-            continue
-        resistance_key = stat_name.split(":", 1)[1]
-        if resistance_key in res:
-            res[resistance_key] += int(modifier.get("value", 0) or 0)
-    return res
-
-def calculate_derived_bonus(character: Dict[str, Any], items_db: Dict[str, Any], stat_name: str) -> int:
-    total = 0
-    modifiers = ensure_character_modifier_shape(character)
-    for modifier in modifiers.get("derived", []) or []:
-        if not isinstance(modifier, dict):
-            continue
-        if str(modifier.get("stat", "") or "") != stat_name:
-            continue
-        total += int(modifier.get("value", 0) or 0)
-    for item_id in iter_equipped_item_ids(character):
-        item = items_db.get(item_id, {})
-        total += item_modifier_value(item, kind=stat_name)
-        if stat_name.startswith("attack_rating_"):
-            total += item_modifier_value(item, kind="attack", stat=stat_name)
-    for effect in character.get("effects", []) or []:
-        for modifier in effect.get("modifiers", []) or []:
-            kind = str(modifier.get("kind", "") or "")
-            if kind == stat_name:
-                total += int(modifier.get("value", 0) or 0)
-            if stat_name.startswith("attack_rating_") and kind == "attack":
-                mod_stat = str(modifier.get("stat", "") or "")
-                if mod_stat in ("", stat_name):
-                    total += int(modifier.get("value", 0) or 0)
-    if stat_name == "initiative":
-        for ability in character.get("abilities", []) or []:
-            if ability.get("active") and ability.get("type") == "passive":
-                total += int((ability.get("initiative_bonus") or 0))
-    return total
-
-def calculate_skill_modifier_bonus(character: Dict[str, Any], items_db: Dict[str, Any], skill_name: str) -> int:
-    total = 0
-    modifiers = ensure_character_modifier_shape(character)
-    for modifier in modifiers.get("skill_effective", []) or []:
-        if not isinstance(modifier, dict):
-            continue
-        if str(modifier.get("skill", modifier.get("stat", "")) or "") != skill_name:
-            continue
-        total += int(modifier.get("value", 0) or 0)
-    for item_id in iter_equipped_item_ids(character):
-        item = items_db.get(item_id, {})
-        total += item_modifier_value(item, kind="skill", stat=skill_name)
-        total += item_modifier_value(item, kind="skill_effective", stat=skill_name)
-    for effect in character.get("effects", []) or []:
-        for modifier in effect.get("modifiers", []) or []:
-            kind = str(modifier.get("kind", "") or "")
-            stat = str(modifier.get("stat", "") or "")
-            if kind in ("skill", "skill_effective") and stat == skill_name:
-                total += int(modifier.get("value", 0) or 0)
-    total += int((((character.get("derived") or {}).get("age_modifiers") or {}).get("skill_bonuses") or {}).get(skill_name, 0) or 0)
-    return total
 
 def appearance_event_id(slot_name: str, kind: str, source: str, turn_number: int, absolute_day: int, new_value: str) -> str:
     return _appearance_event_id(slot_name, kind, source, turn_number, absolute_day, new_value)
@@ -2461,48 +2121,14 @@ def append_character_change_events(
         state_after["events"].extend(messages)
     return messages
 
-def calculate_armor(character: Dict[str, Any], items_db: Dict[str, Any]) -> int:
-    armor = 0
-    for item_id in iter_equipped_item_ids(character):
-        item = items_db.get(item_id, {})
-        armor += item_modifier_value(item, kind="armor")
-        weapon_profile = item.get("weapon_profile", {}) or {}
-        armor += int(weapon_profile.get("armor_bonus", 0) or 0)
-    return armor
-
-def calculate_defense(character: Dict[str, Any], items_db: Dict[str, Any]) -> int:
-    dex = int((character.get("attributes") or {}).get("dex", 0) or 0)
-    defense = 10 + dex + calculate_armor(character, items_db)
-    return defense + calculate_derived_bonus(character, items_db, "defense")
-
-def calculate_initiative(character: Dict[str, Any], items_db: Dict[str, Any]) -> int:
-    dex = int((character.get("attributes") or {}).get("dex", 0) or 0)
-    return dex + calculate_derived_bonus(character, items_db, "initiative")
-
 def calculate_attack_rating(character: Dict[str, Any], hand: str, items_db: Dict[str, Any]) -> int:
-    equipment = character.get("equipment", {}) or {}
-    item = items_db.get(equipment.get(hand, ""), {})
-    weapon_profile = item.get("weapon_profile", {}) or {}
-    scaling_stat = weapon_profile.get("scaling_stat")
-    if not scaling_stat:
-        category = weapon_profile.get("category", "")
-        if category in ("finesse", "ranged"):
-            scaling_stat = "dex"
-        elif category == "focus":
-            scaling_stat = "int"
-        else:
-            scaling_stat = "str"
-    base = int((character.get("attributes") or {}).get(scaling_stat, 0) or 0)
-    bonus = int(weapon_profile.get("attack_bonus", 0) or 0)
-    skill_bonus = 0
-    if scaling_stat == "dex":
-        skill_bonus = skill_level_value(character, "athletics")
-    elif scaling_stat in ("int", "wis"):
-        skill_bonus = skill_level_value(character, "lore_occult")
-    else:
-        skill_bonus = skill_level_value(character, "athletics")
-    effect_bonus = calculate_derived_bonus(character, items_db, f"attack_rating_{'mainhand' if hand == 'weapon' else 'offhand'}")
-    return base + bonus + skill_bonus + effect_bonus
+    return _derived_stats.calculate_attack_rating(
+        character,
+        hand,
+        items_db,
+        skill_level_value=skill_level_value,
+    )
+
 
 def calculate_combat_flags(character: Dict[str, Any]) -> Dict[str, Any]:
     hp_current = int(character.get("hp_current", 0) or 0)
@@ -2529,15 +2155,15 @@ def calculate_combat_flags(character: Dict[str, Any]) -> Dict[str, Any]:
         can_act = False
     return {"in_combat": in_combat, "downed": downed, "can_act": can_act}
 
+
 def skill_effective_bonus(character: Dict[str, Any], skill_name: str, items_db: Optional[Dict[str, Any]] = None) -> int:
-    skill_data = normalize_skill_state(skill_name, (character.get("skills") or {}).get(skill_name, default_skill_state(skill_name)))
-    skill_rank = int(skill_data.get("level", 1) or 1)
-    if skill_rank <= 0:
-        return 0
-    stat_name = SKILL_ATTRIBUTE_MAP.get(skill_name, "int")
-    stat_value = int((character.get("attributes") or {}).get(stat_name, 0) or 0)
-    bonus = skill_rank + stat_value
-    return bonus + calculate_skill_modifier_bonus(character, items_db or {}, skill_name)
+    return _derived_stats.skill_effective_bonus(
+        character,
+        skill_name,
+        items_db,
+        normalize_skill_state=normalize_skill_state,
+        default_skill_state=default_skill_state,
+    )
 
 def ensure_progression_shape(character: Dict[str, Any]) -> None:
     progression = character.setdefault("progression", {})
@@ -3606,14 +3232,16 @@ def run_canon_gate(
     gate_patch = blank_patch()
     gate_patch["characters"][actor] = deep_copy((merged_with_gate.get("characters") or {}).get(actor) or {})
     try:
+        from app.services import turn_engine as _turn_engine
+
         emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": "canon_gate"})
-        gate_patch = sanitize_patch(state_after, gate_patch)
+        gate_patch = _turn_engine.sanitize_patch(state_after, gate_patch)
         emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": "canon_gate", "result": "ok"})
         emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": "canon_gate"})
-        validate_patch(state_after, gate_patch)
+        _turn_engine.validate_patch(state_after, gate_patch)
         emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": "canon_gate", "result": "ok"})
         emit_turn_phase_event(trace_ctx, phase="patch_apply", success=True, extra={"stage": "canon_gate"})
-        state_after = apply_patch(state_after, gate_patch, attribute_cap=attribute_cap_for_campaign(campaign))
+        state_after = _turn_engine.apply_patch(state_after, gate_patch, attribute_cap=attribute_cap_for_campaign(campaign))
         emit_turn_phase_event(trace_ctx, phase="patch_apply", success=True, extra={"stage": "canon_gate", "result": "ok"})
         merged_patch = merge_patch_payloads(merged_patch, gate_patch)
     except Exception as exc:
@@ -4564,34 +4192,6 @@ def derive_scene_name(campaign: Dict[str, Any], slot_name: str) -> str:
         return "Ort: ???"
     return scene_id
 
-def build_world_question_queue() -> List[str]:
-    required = [entry["id"] for entry in WORLD_FORM_CATALOG if entry.get("required")]
-    optional = [entry["id"] for entry in WORLD_FORM_CATALOG if not entry.get("required")]
-    return required + optional
-
-def build_character_question_queue() -> List[str]:
-    required = [entry["id"] for entry in CHARACTER_FORM_CATALOG if entry.get("required")]
-    optional = [entry["id"] for entry in CHARACTER_FORM_CATALOG if not entry.get("required")]
-    return required + optional
-
-def default_setup() -> Dict[str, Any]:
-    return {
-        "version": 4,
-        "engine": {
-            "world_catalog_version": CATALOG_VERSION,
-            "character_catalog_version": CATALOG_VERSION,
-        },
-        "world": {
-            "completed": False,
-            "question_queue": build_world_question_queue(),
-            "answers": {},
-            "summary": {},
-            "raw_transcript": [],
-            "question_runtime": {},
-        },
-        "characters": {},
-    }
-
 def normalize_answer_summary_defaults() -> Dict[str, Any]:
     return {
         "premise": "",
@@ -5247,7 +4847,7 @@ def default_character_setup_node() -> Dict[str, Any]:
     }
 
 def campaign_repository() -> CampaignRepository:
-    configured = globals().get("CAMPAIGN_REPOSITORY")
+    configured = _STATE_ENGINE_DEPS.campaign_repository
     if (
         isinstance(configured, CampaignRepository)
         and configured.data_dir == DATA_DIR
@@ -5267,193 +4867,6 @@ def campaign_path(campaign_id: str) -> str:
 
 def list_campaign_ids() -> List[str]:
     return campaign_repository().list_campaign_ids()
-
-def extract_text_answer(answer: Any) -> str:
-    if answer is None:
-        return ""
-    if isinstance(answer, bool):
-        return "Ja" if answer else "Nein"
-    if isinstance(answer, str):
-        return answer.strip()
-    if isinstance(answer, list):
-        return ", ".join(str(entry).strip() for entry in answer if str(entry).strip())
-    if isinstance(answer, dict):
-        if "selected" in answer:
-            selected = answer.get("selected")
-            if isinstance(selected, list):
-                values = [str(entry).strip() for entry in selected if str(entry).strip()]
-                values.extend(str(entry).strip() for entry in answer.get("other_values", []) if str(entry).strip())
-                return ", ".join(values)
-            text = str(selected or "").strip()
-            if answer.get("other_text"):
-                extra = str(answer["other_text"]).strip()
-                return ", ".join(part for part in [text, extra] if part)
-            return text
-        if "value" in answer:
-            return extract_text_answer(answer["value"])
-    return str(answer).strip()
-
-def parse_lines(value: str) -> List[str]:
-    if not value:
-        return []
-    chunks = []
-    for raw in value.replace("\r", "\n").split("\n"):
-        for part in raw.split(";"):
-            text = part.strip(" ,-")
-            if text:
-                chunks.append(text)
-    return chunks
-
-def split_creator_item_blocks(value: str) -> List[str]:
-    text = str(value or "").replace("\r", "\n").strip()
-    if not text:
-        return []
-    lines = [line.strip() for line in text.split("\n") if line.strip()]
-    blocks: List[str] = []
-    current = ""
-    bullet_pattern = re.compile(r"^\s*(?:\d+[\.\)]|[-*•])\s+")
-    for line in lines:
-        if bullet_pattern.match(line):
-            if current:
-                blocks.append(current.strip())
-            current = bullet_pattern.sub("", line).strip()
-            continue
-        if current:
-            current = f"{current} {line}".strip()
-        else:
-            current = line
-    if current:
-        blocks.append(current.strip())
-    if len(blocks) > 1:
-        return blocks
-
-    parts: List[str] = []
-    buffer = ""
-    depth = 0
-    for char in text:
-        if char == "(":
-            depth += 1
-        elif char == ")" and depth > 0:
-            depth -= 1
-        if char == ";" and depth == 0:
-            if buffer.strip():
-                parts.append(buffer.strip())
-            buffer = ""
-            continue
-        if char == "," and depth == 0:
-            lookback = buffer.rstrip()
-            if re.search(r"\b(?:und|oder)$", lookback, flags=re.IGNORECASE):
-                buffer += char
-                continue
-            if buffer.strip():
-                parts.append(buffer.strip())
-            buffer = ""
-            continue
-        buffer += char
-    if buffer.strip():
-        parts.append(buffer.strip())
-    return parts if len(parts) > 1 else [text]
-
-def summarize_creator_item_name(raw_name: str) -> str:
-    text = str(raw_name or "").replace("\n", " ").strip()
-    text = re.sub(r"^\s*(?:\d+[\.\)]|[-*•])\s+", "", text)
-    text = re.sub(r"\s+", " ", text).strip(" ,-")
-    text = re.sub(r"\((.*?)\)", "", text).strip(" ,-")
-    text = re.sub(r"\s+(?:der|die|das)\s+in\s+dieser\s+welt\b.*$", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s+(?:welche|welcher|welches)\b.*$", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s+(?:für|fuer)\s+.*$", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s+", " ", text).strip(" ,-.")
-    text = re.sub(r"^(?:ein|eine|einen|einem|einer)\s+", "", text, flags=re.IGNORECASE)
-    text = text[:72].strip(" ,-.'\"")
-    return text
-
-def parse_earth_items(value: str) -> List[str]:
-    items = []
-    for chunk in split_creator_item_blocks(value):
-        text = summarize_creator_item_name(chunk)
-        if text:
-            items.append(text)
-    return items[:6]
-
-def parse_factions(value: str) -> List[Dict[str, str]]:
-    factions = []
-    for chunk in parse_lines(value):
-        cleaned = re.sub(r"^\d+\.\s*", "", chunk).strip()
-        if not cleaned:
-            continue
-        markdown_match = re.match(r"^\*{0,2}([^:*]+?)\*{0,2}\s*:\s*(.+)$", cleaned)
-        if markdown_match:
-            name = markdown_match.group(1).strip()
-            detail = markdown_match.group(2).strip()
-            goal_match = re.search(r"Ziel:\s*(.+?)(?:\s+Methoden:\s*(.+))?$", detail, flags=re.IGNORECASE)
-            if goal_match:
-                factions.append(
-                    {
-                        "name": name,
-                        "goal": goal_match.group(1).strip(),
-                        "methods": (goal_match.group(2) or "").strip(),
-                    }
-                )
-                continue
-            factions.append({"name": name, "goal": detail, "methods": ""})
-            continue
-        parts = [part.strip() for part in re.split(r"\s+\|\s+|\s+-\s+", cleaned, maxsplit=2) if part.strip()]
-        if not parts:
-            parts = [part.strip() for part in cleaned.split(":", 1) if part.strip()]
-        if not parts:
-            continue
-        factions.append(
-            {
-                "name": parts[0],
-                "goal": parts[1] if len(parts) > 1 else cleaned,
-                "methods": parts[2] if len(parts) > 2 else "",
-            }
-        )
-    return factions[:6]
-
-def legacy_select_answer_payload(question: Dict[str, Any], raw_value: Any) -> Dict[str, Any]:
-    raw_text = extract_text_answer(raw_value)
-    allow_other = bool(question.get("allow_other"))
-    if not raw_text:
-        return {"selected": "", "other_text": ""}
-
-    options = [str(option).strip() for option in question.get("options", [])]
-    normalized_options = {normalized_eval_text(option): option for option in options if option}
-    normalized_raw = normalized_eval_text(raw_text)
-    aliases = LEGACY_SELECT_ALIASES.get(question["id"], {})
-
-    if raw_text in options:
-        return {"selected": raw_text, "other_text": ""}
-    if normalized_raw in normalized_options:
-        return {"selected": normalized_options[normalized_raw], "other_text": ""}
-    if normalized_raw in aliases:
-        return {"selected": aliases[normalized_raw], "other_text": ""}
-
-    if question["id"] == "char_age":
-        inferred_age = infer_age_years(raw_text)
-        if 16 <= inferred_age <= 19:
-            return {"selected": "Teen (16-19)", "other_text": ""}
-        if 20 <= inferred_age <= 25:
-            return {"selected": "Jung (20-25)", "other_text": ""}
-        if 26 <= inferred_age <= 35:
-            return {"selected": "Erwachsen (26-35)", "other_text": ""}
-        if inferred_age >= 36:
-            return {"selected": "Älter (36+)", "other_text": ""}
-
-    if normalized_options:
-        closest_key, closest_value = max(
-            normalized_options.items(),
-            key=lambda item: SequenceMatcher(None, normalized_raw, item[0]).ratio(),
-        )
-        if closest_key and SequenceMatcher(None, normalized_raw, closest_key).ratio() >= 0.72:
-            return {"selected": closest_value, "other_text": ""}
-
-    if allow_other:
-        return {"selected": "Sonstiges", "other_text": raw_text}
-    return {"selected": "", "other_text": ""}
-
-def load_setup_catalog() -> Dict[str, Any]:
-    return SETUP_CATALOG
 
 def build_rules_profile(campaign: Dict[str, Any]) -> Dict[str, Any]:
     summary = campaign.get("setup", {}).get("world", {}).get("summary", {})
@@ -5884,69 +5297,6 @@ def build_npc_sheet_view(campaign: Dict[str, Any], npc_id: str) -> Dict[str, Any
         "scars": npc_entry.get("scars", []),
     }
 
-def current_question_id(setup_node: Dict[str, Any]) -> Optional[str]:
-    answers = setup_node.get("answers", {})
-    for qid in setup_node.get("question_queue", []):
-        if not setup_question_is_applicable(setup_node, qid):
-            continue
-        if qid not in answers:
-            return qid
-    return None
-
-def answered_count(setup_node: Dict[str, Any]) -> int:
-    answers = setup_node.get("answers", {})
-    return sum(
-        1
-        for qid in setup_node.get("question_queue", [])
-        if setup_question_is_applicable(setup_node, qid) and qid in answers
-    )
-
-def progress_payload(setup_node: Dict[str, Any]) -> Dict[str, int]:
-    total = sum(1 for qid in setup_node.get("question_queue", []) if setup_question_is_applicable(setup_node, qid))
-    return {
-        "answered": answered_count(setup_node),
-        "total": total,
-        "step": min(answered_count(setup_node) + 1, total) if total else 0,
-    }
-
-def setup_chapter_config(setup_type: str) -> Dict[str, Dict[str, Any]]:
-    return WORLD_SETUP_CHAPTERS if setup_type == "world" else CHAR_SETUP_CHAPTERS
-
-def setup_question_chapter_key(setup_type: str, question_id: str) -> str:
-    for chapter_key, config in setup_chapter_config(setup_type).items():
-        if question_id in (config.get("questions") or set()):
-            return chapter_key
-    return "general"
-
-def setup_chapter_progress(setup_node: Dict[str, Any], setup_type: str, chapter_key: str) -> Dict[str, int]:
-    config = setup_chapter_config(setup_type).get(chapter_key) or {}
-    questions = [qid for qid in setup_node.get("question_queue", []) if qid in (config.get("questions") or set())]
-    total = 0
-    answered = 0
-    for qid in questions:
-        if not setup_question_is_applicable(setup_node, qid):
-            continue
-        total += 1
-        if qid in (setup_node.get("answers") or {}):
-            answered += 1
-    return {"answered": answered, "total": total}
-
-def setup_global_progress(setup_node: Dict[str, Any]) -> Dict[str, int]:
-    payload = progress_payload(setup_node)
-    return {"answered": int(payload.get("answered", 0) or 0), "total": int(payload.get("total", 0) or 0)}
-
-def setup_phase_display(phase: str) -> str:
-    phase = str(phase or "").strip().lower()
-    if phase == "world_setup":
-        return "Weltaufbau"
-    if phase == "character_setup_open":
-        return "Charakterwerdung"
-    if phase == "ready_to_start":
-        return "Bereit zum Start"
-    if phase == "active":
-        return "Aktive Spielphase"
-    return "Kampagne"
-
 def setup_summary_preview(campaign: Dict[str, Any], setup_type: str, slot_name: Optional[str] = None) -> Dict[str, Any]:
     if setup_type == "world":
         summary = ((campaign.get("setup") or {}).get("world") or {}).get("summary") or {}
@@ -5982,7 +5332,7 @@ def ollama_request_seed() -> Optional[int]:
     return ollama_adapter().request_seed()
 
 def ollama_adapter() -> OllamaAdapter:
-    configured = globals().get("OLLAMA_ADAPTER")
+    configured = _STATE_ENGINE_DEPS.ollama_adapter
     if isinstance(configured, OllamaAdapter):
         return configured
     return OllamaAdapter(
@@ -6006,140 +5356,6 @@ def call_ollama_text(system: str, user: str) -> str:
         temperature=0.35,
         num_ctx=4096,
     )
-
-def ollama_format_fallback_needed(message: str) -> bool:
-    lowered = str(message or "").lower()
-    return (
-        "failed to load model vocabulary required for format" in lowered
-        or ("does not support" in lowered and "format" in lowered)
-        or "failed to parse grammar" in lowered
-        or "grammar_init" in lowered
-        or "failed to initialize grammar" in lowered
-        or "unexpected end of input" in lowered
-        or "expecting ')'" in lowered
-    )
-
-def is_turn_response_schema(schema: Optional[Dict[str, Any]]) -> bool:
-    if not isinstance(schema, dict):
-        return False
-    required = schema.get("required") or []
-    return all(key in required for key in ("story", "patch", "requests"))
-
-def schema_fallback_instruction(schema: Optional[Dict[str, Any]]) -> str:
-    if is_turn_response_schema(schema):
-        return TURN_RESPONSE_JSON_CONTRACT
-    if not isinstance(schema, dict):
-        return "Antworte ausschließlich mit gültigem JSON ohne Markdown."
-    return (
-        "Antworte ausschließlich mit gültigem JSON ohne Markdown. "
-        "Halte dich an dieses Schema:\n"
-        + json.dumps(schema, ensure_ascii=False)
-    )
-
-def strip_json_fences(text: str) -> str:
-    content = str(text or "").strip()
-    fenced = re.match(r"^```(?:json)?\s*(.*?)\s*```$", content, flags=re.IGNORECASE | re.DOTALL)
-    if fenced:
-        return fenced.group(1).strip()
-    return content
-
-def first_balanced_json_object(text: str) -> Optional[str]:
-    content = str(text or "")
-    start = content.find("{")
-    if start == -1:
-        return None
-    depth = 0
-    in_string = False
-    escape = False
-    for index in range(start, len(content)):
-        char = content[index]
-        if in_string:
-            if escape:
-                escape = False
-            elif char == "\\":
-                escape = True
-            elif char == '"':
-                in_string = False
-            continue
-        if char == '"':
-            in_string = True
-            continue
-        if char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-            if depth == 0:
-                return content[start : index + 1]
-    return None
-
-def extract_json_payload(text: str) -> Dict[str, Any]:
-    content = strip_json_fences(text)
-    if not content:
-        raise RuntimeError("Model returned empty content.")
-    try:
-        return json.loads(content)
-    except json.JSONDecodeError:
-        pass
-    snippet = first_balanced_json_object(content)
-    if snippet:
-        try:
-            return json.loads(snippet)
-        except json.JSONDecodeError:
-            pass
-    repaired = repair_truncated_json_object(content)
-    if repaired is not None:
-        return repaired
-    raise RuntimeError(f"Model returned non-JSON content. First 500 chars:\n{content[:500]}")
-
-def repair_truncated_json_object(text: str) -> Optional[Dict[str, Any]]:
-    content = strip_json_fences(text)
-    start = content.find("{")
-    if start < 0:
-        return None
-    in_string = False
-    escape = False
-    stack: List[str] = []
-    safe_points: List[Tuple[int, str, Tuple[str, ...]]] = []
-    for index in range(start, len(content)):
-        char = content[index]
-        if in_string:
-            if escape:
-                escape = False
-            elif char == "\\":
-                escape = True
-            elif char == '"':
-                in_string = False
-            continue
-        if char == '"':
-            in_string = True
-            continue
-        if char in "{[":
-            stack.append(char)
-            continue
-        if char in "}]":
-            if not stack:
-                break
-            opener = stack.pop()
-            if (opener == "{" and char != "}") or (opener == "[" and char != "]"):
-                break
-            safe_points.append((index, char, tuple(stack)))
-            continue
-        if char == ",":
-            safe_points.append((index, char, tuple(stack)))
-    for index, char, stack_snapshot in reversed(safe_points):
-        prefix = content[start:index] if char == "," else content[start : index + 1]
-        prefix = prefix.rstrip().rstrip(",").rstrip()
-        if not prefix:
-            continue
-        closing = "".join("}" if opener == "{" else "]" for opener in reversed(stack_snapshot))
-        attempt = prefix + closing
-        try:
-            parsed = json.loads(attempt)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(parsed, dict):
-            return parsed
-    return None
 
 def normalize_plotpoint_entry(raw: Any) -> Optional[Dict[str, Any]]:
     if isinstance(raw, str):
@@ -6237,169 +5453,6 @@ def repair_json_payload_with_model(
         repeat_penalty=1.05,
     )
     return extract_json_payload(repaired)
-
-def canonical_scene_id(name: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", normalized_eval_text(name)).strip("-")
-    slug = slug[:40] or make_id("scene")
-    return f"scene_{slug}"
-
-def clean_scene_name(raw_name: str) -> str:
-    name = str(raw_name or "").strip(" .,:;!?\"“”„'()[]{}")
-    name = re.sub(r"\s+", " ", name).strip()
-    stop_suffixes = (
-        " und",
-        " oder",
-        " als",
-        " wobei",
-        " während",
-        " doch",
-        " dann",
-        " dort",
-        " wieder",
-        " jetzt",
-    )
-    lowered = normalized_eval_text(name)
-    for suffix in stop_suffixes:
-        if lowered.endswith(suffix):
-            cut = len(name) - len(suffix)
-            name = name[:cut].strip(" .,:;!?\"“”„'")
-            lowered = normalized_eval_text(name)
-    return name
-
-def is_plausible_scene_name(name: str) -> bool:
-    normalized = normalized_eval_text(name)
-    if not normalized or len(normalized) < 3:
-        return False
-    generic = {
-        "welt",
-        "nacht",
-        "tag",
-        "morgen",
-        "abend",
-        "dunkelheit",
-        "schatten",
-        "regen",
-        "wind",
-        "ferne",
-        "stille",
-        "chaos",
-        "richtung",
-        "bezug",
-        "ort",
-        "gebiet",
-        "pfad",
-        "weg",
-        "gang",
-        "unterholz",
-        "vegetation",
-        "schlucht",
-        "wand",
-        "nische",
-        "raum",
-        "kammer",
-    }
-    if normalized in generic:
-        return False
-    if normalized.startswith(("scene_", "node_", "plotpoint_")):
-        return False
-    return True
-
-def is_generic_scene_identifier(scene_id: str, scene_name: str) -> bool:
-    normalized_id = normalized_eval_text(scene_id)
-    normalized_name = normalized_eval_text(scene_name)
-    generic_tokens = {
-        "richtung",
-        "ort",
-        "gebiet",
-        "pfad",
-        "weg",
-        "gang",
-        "nische",
-        "kammer",
-        "raum",
-        "unterholz",
-        "vegetation",
-        "schlucht",
-        "wand",
-    }
-    if normalized_id in {"", "scene"}:
-        return True
-    if normalized_id.startswith(("scene_richtung", "scene_ort", "scene_gebiet", "scene_pfad", "scene_weg")):
-        return True
-    if normalized_name in generic_tokens:
-        return True
-    return False
-
-def extract_scene_candidates(text: str, actor_display: str) -> List[Dict[str, str]]:
-    content = str(text or "")
-    if not content.strip():
-        return []
-    name_pattern = r"([A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9'’\-]+(?:\s+[A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9'’\-]+){0,5})"
-    article_prefix = r"(?:den|die|das|dem|der|ein|eine|einen|einem|einer)\s+"
-    arrival_patterns = (
-        (rf"\bDie Gruppe (?:ist jetzt in|erreicht|betritt|gelangt nach|geht nach|zieht nach|kommt in|kommt nach)\s+(?:{article_prefix})?{name_pattern}", "group"),
-        (rf"\bIhr (?:erreicht|betretet|gelangt nach|geht nach|kommt in|kommt nach|zieht nach)\s+(?:{article_prefix})?{name_pattern}", "group"),
-        (rf"\bDie Gruppe [^.!?\n]*?\b(?:steht|steht jetzt|befindet sich|lagert|ruht|kämpft)\s+(?:in|an|auf|unter)\s+(?:{article_prefix})?{name_pattern}", "group"),
-        (rf"\bIhr [^.!?\n]*?\b(?:steht|steht jetzt|befindet euch|seid|lagert|ruht|kämpft)\s+(?:in|an|auf|unter)\s+(?:{article_prefix})?{name_pattern}", "group"),
-        (rf"\bDie Gruppe [^.!?\n]*?\bin den Ruinen von\s+(?:{article_prefix})?{name_pattern}", "group"),
-        (rf"\bIhr [^.!?\n]*?\bin den Ruinen von\s+(?:{article_prefix})?{name_pattern}", "group"),
-        (rf"\b{re.escape(actor_display)} (?:ist jetzt in|erreicht|betritt|gelangt nach|geht nach|zieht nach|kommt in|kommt nach)\s+(?:{article_prefix})?{name_pattern}", "actor"),
-        (rf"\b{re.escape(actor_display)} [^.!?\n]*?\b(?:steht|steht jetzt|befindet sich|lagert|ruht|kämpft)\s+(?:in|an|auf|unter)\s+(?:{article_prefix})?{name_pattern}", "actor"),
-        (rf"\b{re.escape(actor_display)} [^.!?\n]*?\bin den Ruinen von\s+(?:{article_prefix})?{name_pattern}", "actor"),
-        (rf"\b(?:er|sie) (?:ist jetzt in|erreicht|betritt|gelangt nach|geht nach|zieht nach|kommt in|kommt nach)\s+(?:{article_prefix})?{name_pattern}", "actor"),
-        (rf"\b(?:er|sie) [^.!?\n]*?\b(?:steht|steht jetzt|befindet sich|lagert|ruht|kämpft)\s+(?:in|an|auf|unter)\s+(?:{article_prefix})?{name_pattern}", "actor"),
-        (rf"\b(?:er|sie) [^.!?\n]*?\bin den Ruinen von\s+(?:{article_prefix})?{name_pattern}", "actor"),
-    )
-    mention_patterns = (
-        (rf"\bin den Ruinen von\s+{name_pattern}", "mention"),
-        (rf"\bin der Nähe von\s+{name_pattern}", "mention"),
-        (rf"\bnahe\s+{name_pattern}", "mention"),
-        (rf"\bam\s+{name_pattern}", "mention"),
-        (rf"\bauf dem\s+{name_pattern}", "mention"),
-        (rf"\bauf der\s+{name_pattern}", "mention"),
-        (rf"\bentlang der\s+{name_pattern}", "mention"),
-        (rf"\bvor euch liegt\s+{name_pattern}", "mention"),
-        (rf"\bvor ihnen liegt\s+{name_pattern}", "mention"),
-        (rf"\bdie Stadt\s+{name_pattern}", "mention"),
-        (rf"\bdas Dorf\s+{name_pattern}", "mention"),
-        (rf"\bdie Festung\s+{name_pattern}", "mention"),
-        (rf"\bdie Ruinen von\s+{name_pattern}", "mention"),
-        (rf"\bdas Gebiet\s+{name_pattern}", "mention"),
-        (rf"\bam Ort\s+{name_pattern}", "mention"),
-    )
-    found: List[Dict[str, str]] = []
-    seen = set()
-    for pattern, scope in (*arrival_patterns, *mention_patterns):
-        for match in re.finditer(pattern, content):
-            raw_name = clean_scene_name(match.group(1) or "")
-            normalized_name = normalized_eval_text(raw_name)
-            if not raw_name or len(normalized_name) < 3 or not is_plausible_scene_name(raw_name):
-                continue
-            key = (scope, normalized_name)
-            if key in seen:
-                continue
-            seen.add(key)
-            found.append({"scope": scope, "name": raw_name})
-    return found
-
-def extract_descriptive_scene_name(text: str) -> Optional[str]:
-    content = str(text or "")
-    descriptor_patterns = (
-        r"\bin (?:einer|einem|der|dem|eine|ein)\s+([a-zäöüß][a-zäöüß\-\s]{2,48}?(?:nische|kammer|gang|krypta|ruine|tempel|lichtung|schlucht))\b",
-        r"\bam (?:rand|eingang) (?:von|der)\s+([a-zäöüß][a-zäöüß\-\s]{2,48}?(?:ruine|krypta|lichtung|schlucht|festung|tempel))\b",
-    )
-    for pattern in descriptor_patterns:
-        match = re.search(pattern, content, flags=re.IGNORECASE)
-        if not match:
-            continue
-        candidate = clean_scene_name(match.group(1) or "")
-        if not candidate:
-            continue
-        normalized = normalized_eval_text(candidate)
-        if not normalized or not is_plausible_scene_name(candidate):
-            continue
-        return candidate[:80].strip()
-    return None
 
 def build_scene_patch_from_text(campaign: Dict[str, Any], state: Dict[str, Any], actor: str, text: str) -> Dict[str, Any]:
     actor_display = display_name_for_slot(campaign, actor)
@@ -9484,7 +8537,8 @@ def save_campaign(
 
     try:
         emit_turn_phase_event(trace_ctx, phase="sse_broadcast", success=True, extra={"reason": reason})
-        live_state_service.broadcast_campaign_sync(campaign_id, reason=reason)
+        live_state = _STATE_ENGINE_DEPS.live_state_service or _default_live_state_service
+        live_state.broadcast_campaign_sync(campaign_id, reason=reason)
         emit_turn_phase_event(trace_ctx, phase="sse_broadcast", success=True, extra={"reason": reason, "result": "ok"})
     except Exception as exc:
         emit_turn_phase_event(
@@ -9496,7 +8550,7 @@ def save_campaign(
             message=str(exc)[:240],
             extra={"reason": reason},
         )
-        logger = globals().get("LOGGER")
+        logger = _STATE_ENGINE_DEPS.logger
         if logger is not None:
             logger.warning(
                 "campaign_saved_but_sse_broadcast_failed",
@@ -9675,6 +8729,7 @@ def build_public_boards(campaign: Dict[str, Any], viewer_id: Optional[str]) -> D
     )
 
 def build_campaign_view(campaign: Dict[str, Any], viewer_id: Optional[str]) -> Dict[str, Any]:
+    live_state = _STATE_ENGINE_DEPS.live_state_service or _default_live_state_service
     dependencies = campaign_view_serializer.CampaignViewDependencies(
         normalize_campaign=normalize_campaign,
         deep_copy=deep_copy,
@@ -9690,7 +8745,7 @@ def build_campaign_view(campaign: Dict[str, Any], viewer_id: Optional[str]) -> D
         campaign_slots=campaign_slots,
         public_player=public_player,
         build_viewer_context=build_viewer_context,
-        live_snapshot=live_state_service.live_snapshot,
+        live_snapshot=live_state.live_snapshot,
     )
     return campaign_view_serializer.build_campaign_view(campaign, viewer_id, deps=dependencies)
 
@@ -11421,7 +10476,7 @@ def create_campaign_record(
     }
 
 def ensure_campaign_storage() -> None:
-    ensure_data_dirs()
+    ensure_storage_dirs(data_dir=DATA_DIR, campaigns_dir=CAMPAIGNS_DIR)
     if list_campaign_ids():
         return
     if not os.path.exists(LEGACY_STATE_PATH):

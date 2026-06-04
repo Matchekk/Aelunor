@@ -78,9 +78,9 @@ class CoreFlowHttpSmokeTests(unittest.TestCase):
                     "raw_transcript": [],
                     "question_runtime": {},
                 }
-                character = main.blank_character_state(SLOT_ID)
+                character = state_engine.blank_character_state(SLOT_ID)
                 character["bio"]["name"] = "Aria"
-                character["class_current"] = main.default_class_current()
+                character["class_current"] = state_engine.default_class_current()
                 character["class_current"]["id"] = "class_http_smoke"
                 character["class_current"]["name"] = "HTTP Smoke"
                 campaign["state"].setdefault("characters", {})[SLOT_ID] = character
@@ -110,9 +110,9 @@ class CoreFlowHttpSmokeTests(unittest.TestCase):
                     "gm_text_raw": FAKE_NARRATOR_TEXT,
                     "gm_text_display": FAKE_NARRATOR_TEXT,
                     "requests": [],
-                    "patch": main.blank_patch(),
-                    "narrator_patch": main.blank_patch(),
-                    "extractor_patch": main.blank_patch(),
+                    "patch": state_engine.blank_patch(),
+                    "narrator_patch": state_engine.blank_patch(),
+                    "extractor_patch": state_engine.blank_patch(),
                     "state_before": state_before,
                     "state_after": copy.deepcopy(campaign["state"]),
                     "retry_of_turn_id": None,
@@ -123,7 +123,7 @@ class CoreFlowHttpSmokeTests(unittest.TestCase):
                     "prompt_payload": {"fake_narrator": "http_smoke"},
                 }
                 campaign.setdefault("turns", []).append(turn)
-                main.remember_recent_story(campaign)
+                state_engine.remember_recent_story(campaign)
                 return turn
 
             def fail_real_ollama_post(*_args: Any, **_kwargs: Any) -> None:
@@ -150,10 +150,10 @@ class CoreFlowHttpSmokeTests(unittest.TestCase):
                 patch.object(main, "CAMPAIGNS_DIR", campaigns_dir),
                 patch.object(state_engine, "DATA_DIR", temp_dir),
                 patch.object(state_engine, "CAMPAIGNS_DIR", campaigns_dir),
-                patch.object(main, "ensure_question_ai_copy", fake_ensure_question_ai_copy),
-                patch.object(main, "apply_random_setup_preview", fake_apply_random_setup_preview),
-                patch.object(main, "finalize_world_setup", fake_finalize_world_setup),
-                patch.object(main, "finalize_character_setup", fake_finalize_character_setup),
+                patch.object(state_engine, "ensure_question_ai_copy", fake_ensure_question_ai_copy),
+                patch.object(state_engine, "apply_random_setup_preview", fake_apply_random_setup_preview),
+                patch.object(state_engine, "finalize_world_setup", fake_finalize_world_setup),
+                patch.object(state_engine, "finalize_character_setup", fake_finalize_character_setup),
                 patch.object(main, "create_turn_record", fake_turn_record),
                 patch.object(main.requests, "post", fail_real_ollama_post),
             ]
@@ -170,7 +170,7 @@ class CoreFlowHttpSmokeTests(unittest.TestCase):
                 patches[8],
                 patches[9],
             ):
-                main.ensure_campaign_storage()
+                state_engine.ensure_campaign_storage()
                 with TestClient(main.app) as client:
                     create_response = client.post(
                         "/api/campaigns",
@@ -217,8 +217,8 @@ class CoreFlowHttpSmokeTests(unittest.TestCase):
                     bad_stream_response = client.get(f"/api/campaigns/{campaign_id}/events?stream_token=not-a-ticket")
                     self.assertEqual(bad_stream_response.status_code, 401)
 
-                    raw_campaign = main.load_campaign(campaign_id)
-                    world_question_id = main.current_question_id(raw_campaign["setup"]["world"])
+                    raw_campaign = state_engine.load_campaign(campaign_id)
+                    world_question_id = state_engine.current_question_id(raw_campaign["setup"]["world"])
                     self.assertTrue(world_question_id)
                     world_response = client.post(
                         f"/api/campaigns/{campaign_id}/setup/world/random/apply",
@@ -290,10 +290,10 @@ class CoreFlowHttpSmokeTests(unittest.TestCase):
                     self.assertEqual(reloaded["active_turns"][-1]["gm_text_display"], FAKE_NARRATOR_TEXT)
                     self.assertIn(FAKE_NARRATOR_TEXT, reloaded["state"]["events"][-1])
 
-                    raw_reload = main.load_campaign(campaign_id)
+                    raw_reload = state_engine.load_campaign(campaign_id)
                     self.assertEqual(raw_reload["claims"][SLOT_ID], player_id)
                     self.assertEqual(raw_reload["turns"][-1]["turn_id"], turn_payload["turn_id"])
-                    self.assertEqual(raw_reload["turns"][-1]["patch"], main.blank_patch())
+                    self.assertEqual(raw_reload["turns"][-1]["patch"], state_engine.blank_patch())
                     self.assertEqual(raw_reload["turns"][-1]["state_after"]["meta"]["turn"], 2)
                     self.assertEqual(raw_reload["turns"][-1]["prompt_payload"], {"fake_narrator": "http_smoke"})
 

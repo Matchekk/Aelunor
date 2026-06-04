@@ -342,7 +342,14 @@ find_turn = turn_engine.find_turn
 reset_turn_branch = turn_engine.reset_turn_branch
 
 # Extracted normalization/world/codex/progression/state-mutation engine cluster
-state_engine.configure(globals())
+state_engine.configure_dependencies(
+    state_engine.StateEngineDependencies(
+        campaign_repository=CAMPAIGN_REPOSITORY,
+        ollama_adapter=OLLAMA_ADAPTER,
+        live_state_service=live_state_service,
+        logger=LOGGER,
+    )
+)
 for _name in state_engine.EXPORTED_SYMBOLS:
     globals()[_name] = getattr(state_engine, _name)
 del _name
@@ -382,35 +389,47 @@ def get_state() -> Dict[str, Any]:
 def get_llm_status() -> Dict[str, Any]:
     return OLLAMA_ADAPTER.status_payload()
 
+def state_engine_runtime() -> Dict[str, Any]:
+    runtime = dict(globals())
+    runtime.update(state_engine.runtime_symbols())
+    return runtime
+
 def setup_service_dependencies() -> setup_service.SetupServiceDependencies:
-    return build_setup_service_dependencies(globals(), setup_service=setup_service, live_state_service=live_state_service)
+    return build_setup_service_dependencies(state_engine_runtime(), setup_service=setup_service, live_state_service=live_state_service)
 
 def claim_service_dependencies() -> claim_service.ClaimServiceDependencies:
-    return build_claim_service_dependencies(globals(), claim_service=claim_service)
+    return build_claim_service_dependencies(state_engine_runtime(), claim_service=claim_service)
 
 def turn_service_dependencies() -> turn_service.TurnServiceDependencies:
-    turn_engine.configure(globals())
-    return build_turn_service_dependencies(globals(), turn_service=turn_service, live_state_service=live_state_service)
+    turn_engine.configure(state_engine_runtime())
+    return build_turn_service_dependencies(state_engine_runtime(), turn_service=turn_service, live_state_service=live_state_service)
 
 def context_service_dependencies() -> context_service.ContextServiceDependencies:
-    return build_context_service_dependencies(globals(), context_service=context_service)
+    return build_context_service_dependencies(state_engine_runtime(), context_service=context_service)
 
 def campaign_service_dependencies() -> campaign_service.CampaignServiceDependencies:
-    return build_campaign_service_dependencies(globals(), campaign_service=campaign_service, live_state_service=live_state_service)
+    return build_campaign_service_dependencies(state_engine_runtime(), campaign_service=campaign_service, live_state_service=live_state_service)
 
 def presence_service_dependencies() -> presence_service.PresenceServiceDependencies:
-    return build_presence_service_dependencies(globals(), presence_service=presence_service, live_state_service=live_state_service)
+    return build_presence_service_dependencies(state_engine_runtime(), presence_service=presence_service, live_state_service=live_state_service)
 
 def sheets_service_dependencies() -> sheets_service.SheetsServiceDependencies:
-    return build_sheets_service_dependencies(globals(), sheets_service=sheets_service)
+    return build_sheets_service_dependencies(state_engine_runtime(), sheets_service=sheets_service)
 
 def boards_service_dependencies() -> boards_service.BoardsServiceDependencies:
-    return build_boards_service_dependencies(globals(), boards_service=boards_service)
+    return build_boards_service_dependencies(state_engine_runtime(), boards_service=boards_service)
 
 # Reconfigure once after all constants are declared so extracted state-engine
 # functions receive the complete symbol set (e.g. SKILL_RANK_ORDER).
-state_engine.configure(globals())
-turn_engine.configure(globals())
+state_engine.configure_dependencies(
+    state_engine.StateEngineDependencies(
+        campaign_repository=CAMPAIGN_REPOSITORY,
+        ollama_adapter=OLLAMA_ADAPTER,
+        live_state_service=live_state_service,
+        logger=LOGGER,
+    )
+)
+turn_engine.configure(state_engine_runtime())
 
 app.include_router(
     campaigns_router_module.build_campaigns_router(

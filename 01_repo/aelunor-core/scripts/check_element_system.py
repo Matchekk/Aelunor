@@ -4,11 +4,36 @@ import sys
 import tempfile
 from copy import deepcopy
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, Tuple
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
+
+_SCRIPT_STATE_ENGINE_SYMBOLS = (
+    "blank_character_state",
+    "build_combat_scaling_context",
+    "canonicalize_manifested_skill_payload",
+    "ensure_class_rank_core_skills",
+    "generated_element_too_similar",
+    "get_element_relation",
+    "normalize_campaign",
+    "normalize_class_current",
+    "normalize_codex_alias_text",
+    "normalize_element_relation",
+    "normalize_npc_entry",
+    "save_json",
+)
+
+
+def runtime_module(module: Any) -> Any:
+    from app.services import state_engine
+
+    runtime = dict(module.__dict__)
+    runtime.update(module.state_engine_runtime())
+    runtime.update({name: getattr(state_engine, name) for name in _SCRIPT_STATE_ENGINE_SYMBOLS})
+    return SimpleNamespace(**runtime)
 
 
 def prepare_campaign(module: Any) -> Tuple[Dict[str, Any], str]:
@@ -39,7 +64,7 @@ def main() -> None:
 
     import app.main as main_module
 
-    main_module = importlib.reload(main_module)
+    main_module = runtime_module(importlib.reload(main_module))
 
     # 1) Weltgenerierung erzeugt genau 12 Elemente inkl. 6 Anker
     campaign, slot_id = prepare_campaign(main_module)

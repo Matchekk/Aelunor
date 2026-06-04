@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import inspect
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -30,6 +31,13 @@ class MainStateEngineConfigTests(unittest.TestCase):
         self.assertTrue(getattr(state_engine, "_CONFIGURED", False))
         self.assertTrue(getattr(turn_engine, "_CONFIGURED", False))
         self.assertTrue(getattr(codex, "_CONFIGURED", False))
+
+    def test_main_uses_explicit_state_engine_dependency_configuration(self) -> None:
+        source = inspect.getsource(main)
+
+        self.assertIn("state_engine.configure_dependencies(", source)
+        self.assertIn("StateEngineDependencies(", source)
+        self.assertNotIn("state_engine.configure(globals())", source)
 
     def test_core_injected_helpers_are_callable_without_network(self) -> None:
         for module in (state_engine, turn_engine, codex):
@@ -99,8 +107,9 @@ class MainStateEngineConfigTests(unittest.TestCase):
                 patch.object(state_engine, "DATA_DIR", temp_dir),
                 patch.object(state_engine, "CAMPAIGNS_DIR", campaigns_dir),
             ):
-                main.ensure_campaign_storage()
-                created = main.create_campaign_record("Path Check", "Host")
+                runtime = state_engine.runtime_symbols()
+                runtime["ensure_campaign_storage"]()
+                created = runtime["create_campaign_record"]("Path Check", "Host")
                 campaign_id = created["campaign"]["campaign_meta"]["campaign_id"]
                 self.assertTrue((Path(campaigns_dir) / f"{campaign_id}.json").is_file())
 

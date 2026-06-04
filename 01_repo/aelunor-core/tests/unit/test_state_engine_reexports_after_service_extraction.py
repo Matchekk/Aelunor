@@ -1,128 +1,61 @@
-import re
 import unittest
 
 from app import main
-from app.services import state_engine, turn_engine
-from app.services.characters import appearance_state, appearance_summary, defaults, resource_maxima, resources
-from app.services.world import naming
+from app.services import state_engine
+from app.services.characters import derived_stats
+from app.services.items import inventory
+from app.services.llm import json_repair
+from app.services.setup import answers, flow
+from app.services.world import scene
 
 
 class StateEngineServiceExtractionTests(unittest.TestCase):
-    def test_state_engine_reexports_extracted_state_basics(self) -> None:
-        self.assertIn("blank_patch", state_engine.EXPORTED_SYMBOLS)
-        self.assertIs(state_engine.blank_patch, main.blank_patch)
-        self.assertIs(state_engine.make_join_code, main.make_join_code)
-        self.assertIs(state_engine.is_slot_id, main.is_slot_id)
+    def test_public_state_engine_exports_are_intentionally_small(self) -> None:
+        self.assertEqual(set(state_engine.EXPORTED_SYMBOLS), {"public_turn", "build_campaign_view"})
+        self.assertIs(main.public_turn, state_engine.public_turn)
+        self.assertIs(main.build_campaign_view, state_engine.build_campaign_view)
 
-        self.assertEqual(state_engine.slot_id(3), "slot_3")
-        self.assertEqual(state_engine.slot_index("slot_10"), 10)
-        self.assertEqual(state_engine.slot_index("invalid"), 9999)
-        self.assertEqual(state_engine.ordered_slots(["slot_10", "slot_2", "slot_1"]), ["slot_1", "slot_2", "slot_10"])
-        self.assertRegex(state_engine.make_join_code(), re.compile(r"^[A-HJ-NP-Z2-9]{6}$"))
-        self.assertEqual(
-            state_engine.blank_patch(),
-            {
-                "meta": {},
-                "characters": {},
-                "items_new": {},
-                "plotpoints_add": [],
-                "plotpoints_update": [],
-                "map_add_nodes": [],
-                "map_add_edges": [],
-                "events_add": [],
-            },
-        )
-
-    def test_character_default_builder_preserves_shape_and_fresh_mutables(self) -> None:
-        self.assertIn("blank_character_state", state_engine.EXPORTED_SYMBOLS)
-        self.assertIs(state_engine.blank_character_state, defaults.blank_character_state)
-
-        first = state_engine.blank_character_state("slot_1")
-        second = state_engine.blank_character_state("slot_1")
-        self.assertEqual(first["slot_id"], "slot_1")
-        self.assertEqual(first["hp_current"], 10)
-        self.assertEqual(first["resources"]["aether"]["current"], 5)
-        self.assertEqual(first["progression"]["resource_name"], "Aether")
-        self.assertEqual(first["bio"]["age_stage"], "young")
-
-        first["inventory"]["items"].append({"id": "item_1"})
-        self.assertEqual(second["inventory"]["items"], [])
-
-    def test_resource_helpers_preserve_reexports_and_behavior(self) -> None:
-        for name, module in {
-            "resource_name_for_character": resources,
-            "canonical_resource_field_name": resources,
-            "sync_canonical_resources": resources,
-            "strip_legacy_resource_shadows": resources,
-            "rebuild_resource_maxima": resource_maxima,
-            "calculate_base_resource_maxima": resource_maxima,
-        }.items():
-            self.assertIn(name, state_engine.EXPORTED_SYMBOLS)
-            self.assertIs(getattr(state_engine, name), getattr(module, name), name)
-
-        character = state_engine.blank_character_state("slot_1")
-        character["progression"]["resource_name"] = "Mana"
-        self.assertEqual(state_engine.resource_name_for_character(character, {"resource_name": "Aether"}), "Mana")
-        self.assertEqual(state_engine.canonical_resource_field_name("Lebenspunkte"), "hp")
-
-        state_engine.sync_canonical_resources(character)
-        self.assertEqual(character["hp_current"], 10)
-        self.assertEqual(character["hp_max"], 10)
-        self.assertEqual(character["progression"]["resource_current"], 5)
-        self.assertNotIn("hp", character["resources"])
-
-    def test_world_naming_and_species_wrappers_preserve_constraints(self) -> None:
-        self.assertIn("fantasy_syllables_for_anchor", state_engine.EXPORTED_SYMBOLS)
-        self.assertIs(state_engine.fantasy_syllables_for_anchor, naming.fantasy_syllables_for_anchor)
-
-        summary = {"theme": "Nebel", "tone": "dunkel", "central_conflict": "Grenzkrieg", "monsters_density": "hoch"}
-        world_name = state_engine.generate_world_name(summary, "seed-a")
-        self.assertEqual(world_name, state_engine.generate_world_name(summary, "seed-a"))
-        self.assertGreaterEqual(len(world_name), 4)
-
-        races = state_engine.generate_world_race_profiles(summary, seed_hint="seed-a")
-        beasts = state_engine.generate_world_beast_profiles(summary, seed_hint="seed-a")
-        self.assertGreaterEqual(len(races), 5)
-        self.assertLessEqual(len(races), 7)
-        self.assertGreaterEqual(len(beasts), 6)
-        self.assertLessEqual(len(beasts), 12)
-        self.assertTrue(all(key.startswith("race_") for key in races))
-        self.assertTrue(all(key.startswith("beast_") for key in beasts))
-
-    def test_appearance_helpers_preserve_reexports_and_behavior(self) -> None:
-        for name, module in {
-            "infer_age_years": appearance_state,
-            "derive_age_stage": appearance_state,
-            "normalize_appearance_state": appearance_state,
-            "build_appearance_summary_short": appearance_summary,
-            "rebuild_character_appearance": appearance_summary,
-        }.items():
-            self.assertIn(name, state_engine.EXPORTED_SYMBOLS)
-            self.assertIs(getattr(state_engine, name), getattr(module, name), name)
-
-        self.assertEqual(state_engine.infer_age_years("42 Jahre"), 42)
-        self.assertEqual(state_engine.derive_age_stage(42), "adult")
-        appearance = state_engine.normalize_appearance_state({"appearance": {"muscle": 99, "scars_visible": ["Wangenriss"]}})
-        self.assertEqual(appearance["muscle"], 5)
-        self.assertEqual(appearance["scars_visible"], ["Wangenriss"])
-
-        character = state_engine.blank_character_state("slot_1")
-        state_engine.rebuild_character_appearance(character, {"absolute_day": 1})
-        self.assertIn("summary_short", character["appearance"])
-        self.assertIn("summary_full", character["appearance"])
-
-    def test_configure_bridge_still_exposes_extracted_names(self) -> None:
-        self.assertTrue(getattr(state_engine, "_CONFIGURED", False))
-        self.assertTrue(getattr(turn_engine, "_CONFIGURED", False))
+    def test_runtime_symbols_keep_internal_transition_path(self) -> None:
+        runtime = state_engine.runtime_symbols()
+        self.assertLessEqual(len(runtime), 200)
+        self.assertNotIn("blank_character_state", runtime)
+        self.assertNotIn("default_appearance_profile", runtime)
         for name in (
-            "blank_character_state",
-            "resource_name_for_character",
-            "rebuild_resource_maxima",
-            "normalize_appearance_state",
-            "generate_world_race_profiles",
+            "blank_patch",
+            "normalize_patch_semantics",
+            "ensure_item_shape",
+            "normalize_equipment_update_payload",
+            "current_question_id",
+            "save_campaign",
         ):
-            self.assertTrue(callable(getattr(main, name)), name)
-            self.assertTrue(callable(getattr(state_engine, name)), name)
+            self.assertIs(runtime[name], getattr(state_engine, name))
+
+    def test_inventory_logic_lives_in_items_module(self) -> None:
+        item = {"name": "Rostiger Dolch", "tags": ["weapon"], "weight": 2}
+        self.assertEqual(inventory.infer_item_slot_from_definition(item), "weapon")
+        self.assertTrue(inventory.item_matches_equipment_slot(item, "weapon"))
+        self.assertIs(state_engine.ensure_item_shape, inventory.ensure_item_shape)
+
+    def test_derived_stats_logic_lives_in_character_module(self) -> None:
+        character = {"attributes": {"str": 4, "dex": 3}, "inventory": {"items": []}, "equipment": {}}
+        self.assertEqual(derived_stats.calculate_carry_limit(character), 18)
+        self.assertEqual(derived_stats.calculate_defense(character, {}), 13)
+        self.assertIs(state_engine.calculate_defense, derived_stats.calculate_defense)
+
+    def test_setup_answer_and_flow_logic_lives_in_setup_modules(self) -> None:
+        self.assertEqual(answers.extract_text_answer(["A", "B"]), "A, B")
+        node = {"question_queue": ["class_start_mode", "class_seed"], "answers": {"class_start_mode": "Selbst"}}
+        self.assertFalse(flow.setup_question_is_applicable(node, "class_seed"))
+        self.assertIs(state_engine.current_question_id, flow.current_question_id)
+
+    def test_scene_text_logic_lives_in_world_module(self) -> None:
+        scene_id = scene.canonical_scene_id("Alter Turm")
+        self.assertEqual(scene_id, "scene_alter-turm")
+        self.assertFalse(scene.is_plausible_scene_name("Ort"))
+        self.assertIs(state_engine.clean_scene_name, scene.clean_scene_name)
+
+    def test_json_repair_logic_lives_in_llm_module(self) -> None:
+        self.assertEqual(json_repair.first_balanced_json_object("vorher {\"ok\": true} nachher"), "{\"ok\": true}")
 
 
 if __name__ == "__main__":

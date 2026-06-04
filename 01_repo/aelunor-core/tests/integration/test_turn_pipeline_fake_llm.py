@@ -60,7 +60,7 @@ class TurnPipelineFakeLlmTests(unittest.TestCase):
                         "trace_id": (trace_ctx or {}).get("trace_id"),
                     }
                 )
-                patch_payload = main.blank_patch()
+                patch_payload = state_engine.blank_patch()
                 patch_payload["events_add"] = [f"{FAKE_LLM_PIPELINE_MARKER}: Aria markiert die gelesenen Runen."]
                 return {
                     "story": _long_fake_story(),
@@ -69,7 +69,7 @@ class TurnPipelineFakeLlmTests(unittest.TestCase):
                 }
 
             def fake_call_canon_extractor(*_args: Any, **_kwargs: Any) -> Dict[str, Any]:
-                return main.blank_patch()
+                return state_engine.blank_patch()
 
             def fake_call_npc_extractor(*_args: Any, **_kwargs: Any) -> list[Dict[str, Any]]:
                 return []
@@ -85,14 +85,14 @@ class TurnPipelineFakeLlmTests(unittest.TestCase):
                 patch.object(main, "CAMPAIGNS_DIR", campaigns_dir),
                 patch.object(state_engine, "DATA_DIR", temp_dir),
                 patch.object(state_engine, "CAMPAIGNS_DIR", campaigns_dir),
-                patch.object(main, "ensure_question_ai_copy", fake_ensure_question_ai_copy),
+                patch.object(state_engine, "ensure_question_ai_copy", fake_ensure_question_ai_copy),
                 patch.object(main.requests, "post", fail_real_network_post),
                 patch.object(turn_engine, "requests", main.requests),
                 patch.object(turn_engine, "call_ollama_json", fake_call_ollama_json),
                 patch.object(turn_engine, "call_ollama_schema", fail_unexpected_schema_llm),
                 patch.object(turn_engine, "call_canon_extractor", fake_call_canon_extractor),
                 patch.object(turn_engine, "call_npc_extractor", fake_call_npc_extractor),
-                patch.object(turn_engine, "call_progression_canon_extractor", fail_progression_extractor),
+                patch.object(state_engine, "call_progression_canon_extractor", fail_progression_extractor),
                 patch.object(turn_engine, "emit_turn_phase_event", capture_turn_phase_event),
             ]
 
@@ -111,8 +111,8 @@ class TurnPipelineFakeLlmTests(unittest.TestCase):
                 patches[11],
                 patches[12],
             ):
-                main.ensure_campaign_storage()
-                created = main.create_campaign_record("Pipeline Campaign", "Host")
+                state_engine.ensure_campaign_storage()
+                created = state_engine.create_campaign_record("Pipeline Campaign", "Host")
                 campaign = created["campaign"]
                 campaign_id = campaign["campaign_meta"]["campaign_id"]
                 player_id = created["player_id"]
@@ -127,9 +127,9 @@ class TurnPipelineFakeLlmTests(unittest.TestCase):
                     "raw_transcript": [],
                     "question_runtime": {},
                 }
-                character = main.blank_character_state(SLOT_ID)
+                character = state_engine.blank_character_state(SLOT_ID)
                 character["bio"]["name"] = "Aria"
-                character["class_current"] = main.default_class_current()
+                character["class_current"] = state_engine.default_class_current()
                 campaign["state"].setdefault("characters", {})[SLOT_ID] = character
                 campaign["state"]["meta"]["phase"] = "active"
                 campaign["state"]["meta"]["turn"] = 0
@@ -161,7 +161,7 @@ class TurnPipelineFakeLlmTests(unittest.TestCase):
                 self.assertEqual(campaign["state"]["meta"]["turn"], 1)
                 self.assertEqual(campaign["turns"][-1]["turn_id"], turn["turn_id"])
                 self.assertEqual(turn["narrator_patch"]["events_add"], [f"{FAKE_LLM_PIPELINE_MARKER}: Aria markiert die gelesenen Runen."])
-                self.assertEqual(turn["extractor_patch"], main.blank_patch())
+                self.assertEqual(turn["extractor_patch"], state_engine.blank_patch())
                 self.assertFalse([event for event in trace_events if event.get("success") is False])
                 self.assertIn("patch_apply", {str(event.get("phase")) for event in trace_events})
                 json.dumps(turn, ensure_ascii=False)

@@ -4,11 +4,35 @@ import sys
 import tempfile
 from copy import deepcopy
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Dict, Tuple
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
+
+_SCRIPT_STATE_ENGINE_SYMBOLS = (
+    "apply_codex_triggers",
+    "blank_character_state",
+    "blank_patch",
+    "build_campaign_view",
+    "build_entity_alias_variants",
+    "collect_codex_triggers",
+    "normalize_campaign",
+    "normalize_codex_alias_text",
+    "normalize_race_profile",
+    "normalize_world_codex_structures",
+    "save_json",
+)
+
+
+def runtime_module(module: Any) -> Any:
+    from app.services import state_engine
+
+    runtime = dict(module.__dict__)
+    runtime.update(module.state_engine_runtime())
+    runtime.update({name: getattr(state_engine, name) for name in _SCRIPT_STATE_ENGINE_SYMBOLS})
+    return SimpleNamespace(**runtime)
 
 
 def prepare_campaign(module: Any) -> Tuple[Dict[str, Any], str]:
@@ -37,8 +61,11 @@ def main() -> None:
     os.environ["DATA_DIR"] = temp_dir
 
     import app.main as main_module
+    from app.services import state_engine
 
-    main_module = importlib.reload(main_module)
+    main_module = runtime_module(importlib.reload(main_module))
+    state_engine.ensure_question_ai_copy = lambda *_args, **_kwargs: None
+    state_engine.generate_world_elements_with_llm = lambda _summary: []
 
     # 1) Weltgenerierung erzeugt mehrere Rassen/Bestien
     campaign, slot_id = prepare_campaign(main_module)

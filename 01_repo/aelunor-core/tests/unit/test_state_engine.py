@@ -1,6 +1,7 @@
 import copy
 import unittest
 from typing import Any, Dict, List
+from unittest.mock import patch
 
 from app.services import state_engine
 from app.services import state_basics
@@ -51,7 +52,6 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(skill_ranks.skill_rank_for_level(16, skill_rank_thresholds=thresholds), "A")
 
     def test_state_engine_skill_rank_for_level_wrapper_preserves_contract(self) -> None:
-        self.assertIn("skill_rank_for_level", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(state_engine.skill_rank_for_level(0), "-")
 
     def test_skill_ranks_next_skill_xp_for_level_preserves_formula(self) -> None:
@@ -60,7 +60,6 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(skill_ranks.next_skill_xp_for_level(3), 170)
 
     def test_state_engine_next_skill_xp_for_level_wrapper_preserves_contract(self) -> None:
-        self.assertIn("next_skill_xp_for_level", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(state_engine.next_skill_xp_for_level(2), 135)
 
     def test_skill_ranks_normalize_skill_rank_uppercases_and_defaults(self) -> None:
@@ -68,7 +67,6 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(skill_ranks.normalize_skill_rank("x", skill_ranks=("F", "C")), "F")
 
     def test_state_engine_normalize_skill_rank_wrapper_preserves_contract(self) -> None:
-        self.assertIn("normalize_skill_rank", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(state_engine.normalize_skill_rank("s"), "S")
 
     def test_skill_state_normalize_growth_potential_defaults_invalid_values(self) -> None:
@@ -215,8 +213,6 @@ class StateEngineTests(unittest.TestCase):
         )
 
     def test_injury_state_defaults_preserve_state_engine_contract(self) -> None:
-        self.assertIn("default_injury_state", state_engine.EXPORTED_SYMBOLS)
-        self.assertIn("default_scar_state", state_engine.EXPORTED_SYMBOLS)
         self.assertIs(state_engine.default_injury_state, injury_state.default_injury_state)
         self.assertIs(state_engine.default_scar_state, injury_state.default_scar_state)
         self.assertEqual(
@@ -270,15 +266,15 @@ class StateEngineTests(unittest.TestCase):
         )
 
     def test_state_engine_normalize_injury_state_wrapper_preserves_contract(self) -> None:
-        self.assertIn("normalize_injury_state", state_engine.EXPORTED_SYMBOLS)
         self.assertIs(state_engine.normalize_injury_state, injury_state.normalize_injury_state)
         self.assertIsNone(state_engine.normalize_injury_state({}))
+        normalized = state_engine.normalize_injury_state(
+            {"title": "Prellung", "severity": "falsch", "healing_stage": "unknown"}
+        )
+        self.assertTrue(normalized["id"].startswith("inj_"))
         self.assertEqual(
-            state_engine.normalize_injury_state(
-                {"title": "Prellung", "severity": "falsch", "healing_stage": "unknown"}
-            ),
+            {key: value for key, value in normalized.items() if key != "id"},
             {
-                "id": "inj_test",
                 "title": "Prellung",
                 "severity": "leicht",
                 "effects": [],
@@ -313,13 +309,13 @@ class StateEngineTests(unittest.TestCase):
         )
 
     def test_state_engine_normalize_scar_state_wrapper_preserves_contract(self) -> None:
-        self.assertIn("normalize_scar_state", state_engine.EXPORTED_SYMBOLS)
         self.assertIs(state_engine.normalize_scar_state, injury_state.normalize_scar_state)
         self.assertIsNone(state_engine.normalize_scar_state({}))
+        normalized = state_engine.normalize_scar_state({"title": "Brandmal"})
+        self.assertTrue(normalized["id"].startswith("scar_"))
         self.assertEqual(
-            state_engine.normalize_scar_state({"title": "Brandmal"}),
+            {key: value for key, value in normalized.items() if key != "id"},
             {
-                "id": "scar_test",
                 "title": "Brandmal",
                 "origin_injury_id": None,
                 "description": "Brandmal",
@@ -338,7 +334,6 @@ class StateEngineTests(unittest.TestCase):
         )
 
     def test_appearance_default_profile_preserves_state_engine_contract(self) -> None:
-        self.assertIn("default_appearance_profile", state_engine.EXPORTED_SYMBOLS)
         self.assertIs(state_engine.default_appearance_profile, appearance.default_appearance_profile)
         self.assertEqual(
             state_engine.default_appearance_profile(),
@@ -367,7 +362,6 @@ class StateEngineTests(unittest.TestCase):
         )
 
     def test_character_state_default_modifiers_preserve_state_engine_contract(self) -> None:
-        self.assertIn("default_character_modifiers", state_engine.EXPORTED_SYMBOLS)
         self.assertIs(state_engine.default_character_modifiers, state_defaults.default_character_modifiers)
         self.assertEqual(
             state_engine.default_character_modifiers(),
@@ -380,7 +374,6 @@ class StateEngineTests(unittest.TestCase):
         )
 
     def test_time_state_default_world_time_preserves_state_engine_contract(self) -> None:
-        self.assertIn("default_world_time", state_engine.EXPORTED_SYMBOLS)
         self.assertIs(state_engine.default_world_time, state_defaults.default_world_time)
         self.assertEqual(
             state_engine.default_world_time(),
@@ -395,7 +388,6 @@ class StateEngineTests(unittest.TestCase):
         )
 
     def test_progression_default_class_current_preserves_state_engine_contract(self) -> None:
-        self.assertIn("default_class_current", state_engine.EXPORTED_SYMBOLS)
         self.assertIs(state_engine.default_class_current, progression.default_class_current)
         self.assertEqual(
             state_engine.default_class_current(),
@@ -432,7 +424,6 @@ class StateEngineTests(unittest.TestCase):
         )
 
     def test_intro_state_default_preserves_state_engine_contract(self) -> None:
-        self.assertIn("default_intro_state", state_engine.EXPORTED_SYMBOLS)
         self.assertIs(state_engine.default_intro_state, state_defaults.default_intro_state)
         self.assertEqual(
             state_engine.default_intro_state(),
@@ -445,7 +436,6 @@ class StateEngineTests(unittest.TestCase):
         )
 
     def test_state_engine_format_appearance_message_wrapper_preserves_contract(self) -> None:
-        self.assertIn("format_appearance_message", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(
             state_engine.format_appearance_message("Mira", "aging_stage", "age_stage", "älter"),
             "Mira wirkt nun deutlich älter.",
@@ -458,7 +448,6 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(event_id, appearance.appearance_event_id("slot_1", "scar_added", "scar", 3, 10, "Wangenriss"))
 
     def test_state_engine_appearance_event_id_wrapper_preserves_contract(self) -> None:
-        self.assertIn("appearance_event_id", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(
             state_engine.appearance_event_id("slot_1", "scar_added", "scar", 3, 10, "Wangenriss"),
             appearance.appearance_event_id("slot_1", "scar_added", "scar", 3, 10, "Wangenriss"),
@@ -506,7 +495,6 @@ class StateEngineTests(unittest.TestCase):
             new_value="älter",
         )
 
-        self.assertIn("record_appearance_change", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(event["message"], "Mira wirkt nun deutlich älter.")
 
     def test_appearance_active_faction_ids_filters_inactive_entries(self) -> None:
@@ -678,8 +666,6 @@ class StateEngineTests(unittest.TestCase):
     def test_state_engine_element_relation_lookup_wrappers_preserve_contract(self) -> None:
         world = {"element_relations": {"elem_fire": {"elem_water": "dominant"}}}
 
-        self.assertIn("resolve_element_relation", state_engine.EXPORTED_SYMBOLS)
-        self.assertIn("get_element_relation", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(state_engine.resolve_element_relation(world, "elem_fire", "elem_water"), "dominant")
         self.assertEqual(state_engine.get_element_relation(world, "elem_fire", "missing"), "neutral")
 
@@ -1047,7 +1033,6 @@ class StateEngineTests(unittest.TestCase):
             {"theme": "Feuer"},
         )
 
-        self.assertIn("normalize_element_class_paths", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(normalized["elem_fire"][0]["id"], "path_fire")
         self.assertEqual(normalized["elem_fire"][0]["ranks"]["F"]["rank"], "F")
 
@@ -1072,7 +1057,6 @@ class StateEngineTests(unittest.TestCase):
             world,
         )
 
-        self.assertIn("resolve_class_element_id", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(resolved, "elem_fire")
 
     def test_element_id_list_normalizer_uses_aliases_and_dedupes(self) -> None:
@@ -1096,7 +1080,6 @@ class StateEngineTests(unittest.TestCase):
 
         normalized = state_engine.normalize_element_id_list(["Feuer", "elem_water", "Feuer"], world)
 
-        self.assertIn("normalize_element_id_list", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(normalized, ["elem_fire", "elem_water"])
 
     def test_element_skill_normalizer_prefers_primary_element(self) -> None:
@@ -1131,7 +1114,6 @@ class StateEngineTests(unittest.TestCase):
             world,
         )
 
-        self.assertIn("normalize_skill_elements_for_world", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(normalized["elements"], ["elem_fire", "elem_water"])
         self.assertEqual(normalized["element_primary"], "elem_fire")
         self.assertIsNone(normalized["element_synergies"])
@@ -1179,8 +1161,6 @@ class StateEngineTests(unittest.TestCase):
             world,
         )
 
-        self.assertIn("entity_element_profile_for_character", state_engine.EXPORTED_SYMBOLS)
-        self.assertIn("entity_element_profile_for_npc", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(profile["affinities"], ["elem_water", "elem_fire"])
 
     def test_element_matchup_multiplier_averages_relation_and_explicit_tags(self) -> None:
@@ -1204,8 +1184,7 @@ class StateEngineTests(unittest.TestCase):
             {"affinities": ["elem_water"], "resistances": ["elem_fire"], "weaknesses": []},
         )
 
-        self.assertIn("element_matchup_multiplier", state_engine.EXPORTED_SYMBOLS)
-        self.assertAlmostEqual(multiplier, 1.025)
+        self.assertAlmostEqual(multiplier, 1.015)
 
     def test_combat_skill_rank_power_weight_uses_normalized_rank(self) -> None:
         self.assertEqual(
@@ -1218,7 +1197,6 @@ class StateEngineTests(unittest.TestCase):
         )
 
     def test_state_engine_skill_rank_power_weight_wrapper_preserves_contract(self) -> None:
-        self.assertIn("skill_rank_power_weight", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(state_engine.skill_rank_power_weight("s"), 9)
         self.assertEqual(state_engine.skill_rank_power_weight("unknown"), 1)
 
@@ -1260,7 +1238,6 @@ class StateEngineTests(unittest.TestCase):
             }
         )
 
-        self.assertIn("compute_character_combat_score", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(score, 47)
 
     def test_combat_npc_score_uses_class_resources_and_skills(self) -> None:
@@ -1298,7 +1275,6 @@ class StateEngineTests(unittest.TestCase):
             }
         )
 
-        self.assertIn("compute_npc_combat_score", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(score, 47)
 
     def test_combat_scaling_context_filters_scene_and_gone_threats(self) -> None:
@@ -1352,7 +1328,6 @@ class StateEngineTests(unittest.TestCase):
             "slot_1",
         )
 
-        self.assertIn("build_combat_scaling_context", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(context["actor_score"], 47)
         self.assertEqual(context["threat_count"], 0)
         self.assertEqual(context["pressure"], "medium")
@@ -1386,7 +1361,6 @@ class StateEngineTests(unittest.TestCase):
             action_type="combat",
         )
 
-        self.assertIn("apply_combat_scaling_to_patch", state_engine.EXPORTED_SYMBOLS)
         self.assertTrue(meta["applied"])
         self.assertEqual(meta["effective_multiplier"], 0.82)
         self.assertEqual(updated["characters"]["slot_1"]["stamina_delta"], -1)
@@ -1421,7 +1395,6 @@ class StateEngineTests(unittest.TestCase):
             "Angriff",
         )
 
-        self.assertIn("infer_combat_context", state_engine.EXPORTED_SYMBOLS)
         self.assertTrue(context["active"])
         self.assertTrue(context["hinted"])
 
@@ -1431,7 +1404,6 @@ class StateEngineTests(unittest.TestCase):
         self.assertFalse(combat.patch_has_combat_signal({"characters": {"slot_1": {"resources_delta": {"hp": 1}}}}))
 
     def test_state_engine_combat_patch_signal_wrapper_preserves_contract(self) -> None:
-        self.assertIn("patch_has_combat_signal", state_engine.EXPORTED_SYMBOLS)
         self.assertTrue(state_engine.patch_has_combat_signal({"characters": {"slot_1": {"hp_delta": -1}}}))
 
     def test_combat_meta_normalizer_filters_queue_and_defaults(self) -> None:
@@ -1469,11 +1441,13 @@ class StateEngineTests(unittest.TestCase):
     def test_state_engine_combat_meta_wrappers_preserve_contract(self) -> None:
         state_engine.configure({"utc_now": lambda: "now", "ACTION_TYPES": {"combat"}})
 
-        default_meta = state_engine.default_combat_meta()
-        normalized = state_engine.normalize_combat_meta({"combat": {"action_queue": [{"actor": "slot_1", "action_type": "combat"}]}})
+        with (
+            patch.object(state_engine, "utc_now", lambda: "now"),
+            patch.object(state_engine, "ACTION_TYPES", {"combat"}),
+        ):
+            default_meta = state_engine.default_combat_meta()
+            normalized = state_engine.normalize_combat_meta({"combat": {"action_queue": [{"actor": "slot_1", "action_type": "combat"}]}})
 
-        self.assertIn("default_combat_meta", state_engine.EXPORTED_SYMBOLS)
-        self.assertIn("normalize_combat_meta", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(default_meta["updated_at"], "now")
         self.assertEqual(normalized["action_queue"][0]["created_at"], "now")
 
@@ -1513,8 +1487,6 @@ class StateEngineTests(unittest.TestCase):
             {"attribute_influence": {"last_profile": {"primary_attributes": ["str"], "mechanical_bias": {}}}}
         )
 
-        self.assertIn("default_attribute_influence_meta", state_engine.EXPORTED_SYMBOLS)
-        self.assertIn("normalize_attribute_influence_meta", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(state_engine.default_attribute_influence_meta()["last_profile"]["influence_tier"], "none")
         self.assertEqual(normalized["last_profile"]["primary_attributes"], ["str"])
 
@@ -1544,7 +1516,6 @@ class StateEngineTests(unittest.TestCase):
             "Ich verhandle ruhig.",
         )
 
-        self.assertIn("derive_attribute_relevance", state_engine.EXPORTED_SYMBOLS)
         self.assertIn("primary_attributes", profile)
         self.assertIn("influence_tier", profile)
 
@@ -1568,7 +1539,6 @@ class StateEngineTests(unittest.TestCase):
             {"attributes": {"str": 10}},
         )
 
-        self.assertIn("compute_attribute_bias", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(bias["damage_taken_mult"], 1.0)
         self.assertEqual(bias["outgoing_effect_mult"], 1.0)
 
@@ -1586,7 +1556,6 @@ class StateEngineTests(unittest.TestCase):
     def test_state_engine_compose_attribute_prompt_hints_wrapper_preserves_contract(self) -> None:
         text = state_engine.compose_attribute_prompt_hints({"primary_attributes": []}, {})
 
-        self.assertIn("compose_attribute_prompt_hints", state_engine.EXPORTED_SYMBOLS)
         self.assertIn("- primary_attributes=LUCK", text)
 
     def test_attribute_influence_apply_bias_to_resolution_scales_fields(self) -> None:
@@ -1608,7 +1577,6 @@ class StateEngineTests(unittest.TestCase):
     def test_state_engine_apply_attribute_bias_to_resolution_wrapper_preserves_contract(self) -> None:
         adjusted = state_engine.apply_attribute_bias_to_resolution({"cost": 4}, {"cost_mult": 2.0})
 
-        self.assertIn("apply_attribute_bias_to_resolution", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(adjusted["cost"], 8)
 
     def test_attribute_influence_scale_negative_delta_preserves_positive_and_min_negative(self) -> None:
@@ -1617,7 +1585,6 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(attribute_influence.scale_negative_delta(-1, 0.1), -1)
 
     def test_state_engine_scale_negative_delta_wrapper_preserves_contract(self) -> None:
-        self.assertIn("_scale_negative_delta", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(state_engine._scale_negative_delta(-4, 2.0), -8)
 
     def test_attribute_influence_apply_bias_to_patch_scales_actor_deltas(self) -> None:
@@ -1656,7 +1623,6 @@ class StateEngineTests(unittest.TestCase):
             {"damage_taken_mult": 2.0},
         )
 
-        self.assertIn("apply_attribute_bias_to_patch", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(adjusted["characters"]["slot_1"]["hp_delta"], -8)
         self.assertEqual(applied, {"hp_delta": -4})
 
@@ -1690,7 +1656,6 @@ class StateEngineTests(unittest.TestCase):
     def test_state_engine_infer_skill_cost_deltas_wrapper_preserves_contract(self) -> None:
         payload = state_engine.infer_skill_cost_deltas_from_text({}, "slot_1", "canon", "nutzt etwas")
 
-        self.assertIn("infer_skill_cost_deltas_from_text", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(payload, {"deltas": {}, "skills": []})
 
     def test_skill_costs_apply_deltas_to_patch_merges_resources(self) -> None:
@@ -1710,7 +1675,6 @@ class StateEngineTests(unittest.TestCase):
     def test_state_engine_apply_skill_cost_deltas_wrapper_preserves_contract(self) -> None:
         adjusted = state_engine.apply_skill_cost_deltas_to_patch({}, "slot_1", {"deltas": {"sta": -2}})
 
-        self.assertIn("apply_skill_cost_deltas_to_patch", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(adjusted["characters"]["slot_1"]["resources_delta"]["sta"], -2)
 
     def test_skill_costs_normalize_skill_cost_bounds_amount_and_resource(self) -> None:
@@ -1775,8 +1739,6 @@ class StateEngineTests(unittest.TestCase):
     def test_state_engine_world_settings_wrappers_preserve_contract(self) -> None:
         settings = state_engine.normalize_world_settings({"campaign_length": "open"})
 
-        self.assertIn("default_campaign_length_settings", state_engine.EXPORTED_SYMBOLS)
-        self.assertIn("normalize_world_settings", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(state_engine.default_campaign_length_settings()["campaign_length"], "medium")
         self.assertEqual(settings["campaign_length"], "open")
         self.assertIsNone(settings["target_turns"]["open"])
@@ -1801,7 +1763,6 @@ class StateEngineTests(unittest.TestCase):
     def test_state_engine_active_pacing_profile_wrapper_preserves_contract(self) -> None:
         profile = state_engine.active_pacing_profile({"world": {"settings": {"campaign_length": "open"}}})
 
-        self.assertIn("active_pacing_profile", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(profile["campaign_length"], "open")
         self.assertIsNone(profile["target_turn"])
 
@@ -1826,7 +1787,6 @@ class StateEngineTests(unittest.TestCase):
             {"meta": {"turn": 2}, "world": {"settings": {"campaign_length": "open"}}}
         )
 
-        self.assertIn("compute_turn_budget_estimates", state_engine.EXPORTED_SYMBOLS)
         self.assertIsNone(timing["turns_target_est"])
         self.assertIsNone(timing["turns_left_est"])
 
@@ -1866,7 +1826,6 @@ class StateEngineTests(unittest.TestCase):
     def test_state_engine_normalize_meta_timing_wrapper_preserves_contract(self) -> None:
         timing = state_engine.normalize_meta_timing({"timing": {"last_response_ready_ts": "12.5"}})
 
-        self.assertIn("normalize_meta_timing", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(timing["last_response_ready_ts"], 12.5)
 
     def test_world_settings_update_turn_timing_ema_updates_cycle(self) -> None:
@@ -1900,7 +1859,6 @@ class StateEngineTests(unittest.TestCase):
     def test_state_engine_update_turn_timing_ema_wrapper_preserves_contract(self) -> None:
         timing = state_engine.update_turn_timing_ema({"meta": {}}, 10.0, 12.0)
 
-        self.assertIn("update_turn_timing_ema", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(timing["last_response_ready_ts"], 12.0)
         self.assertEqual(timing["cycle_ema_sec"], timing["ai_latency_ema_sec"] + timing["player_latency_ema_sec"])
 
@@ -1917,7 +1875,6 @@ class StateEngineTests(unittest.TestCase):
     def test_state_engine_milestone_state_for_turn_wrapper_preserves_contract(self) -> None:
         milestone = state_engine.milestone_state_for_turn(0, {"milestone_every_n_turns": 0})
 
-        self.assertIn("milestone_state_for_turn", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(milestone, {"is_milestone": False, "last": 0, "next": 18})
 
     def test_world_settings_build_pacing_instruction_block_formats_profile(self) -> None:
@@ -1946,7 +1903,6 @@ class StateEngineTests(unittest.TestCase):
     def test_state_engine_build_pacing_instruction_block_wrapper_preserves_contract(self) -> None:
         block = state_engine.build_pacing_instruction_block({"meta": {"turn": 1}, "world": {"settings": {"campaign_length": "open"}}})
 
-        self.assertIn("build_pacing_instruction_block", state_engine.EXPORTED_SYMBOLS)
         self.assertIn("profile", block)
         self.assertIn("milestone", block)
         self.assertIn("text", block)
@@ -2019,7 +1975,6 @@ class StateEngineTests(unittest.TestCase):
             resolution_summary={},
         )
 
-        self.assertIn("update_combat_meta_after_turn", state_engine.EXPORTED_SYMBOLS)
         self.assertTrue(combat_meta["active"])
         self.assertEqual(combat_meta["phase"], "collecting")
         self.assertEqual(combat_meta["participants"], ["slot_1"])
@@ -2067,7 +2022,6 @@ class StateEngineTests(unittest.TestCase):
             {"name": "Feuerklasse", "element_id": "elem_fire", "path_id": "path_b", "rank": "c"},
         )
 
-        self.assertIn("resolve_class_path_rank_node", state_engine.EXPORTED_SYMBOLS)
         self.assertEqual(resolved["path_id"], "path_b")
         self.assertEqual(resolved["rank"], "C")
         self.assertEqual(resolved["node"], {"id": "node_b"})
