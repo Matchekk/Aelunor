@@ -287,6 +287,10 @@ from app.services.extraction import heuristics as _extraction_heuristics
 from app.services.extraction import injuries as _extraction_injuries
 from app.services.extraction import items as _extraction_items
 from app.services.extraction import quarantine as _extraction_quarantine
+from app.services.progression import application as _progression_application_service
+from app.services.progression import classes as _progression_classes_service
+from app.services.progression import manifestation as _progression_manifestation_service
+from app.services.progression import skills as _progression_skills_service
 from app.services.turn_engine import emit_turn_phase_event, turn_flow_error
 from app.services.llm.json_repair import (
     extract_json_payload,
@@ -572,21 +576,33 @@ def _legacy_config_snapshot(extra: Optional[Mapping[str, Any]] = None) -> Dict[s
 
 def _configure_extractor_service_ports() -> None:
     _extraction_abilities.configure(
-        skill_id_from_name=skill_id_from_name,
-        normalize_dynamic_skill_state=normalize_dynamic_skill_state,
+        skill_id_from_name=_progression_skills_service.skill_id_from_name,
+        normalize_dynamic_skill_state=_progression_skills_service.normalize_dynamic_skill_state,
     )
     _extraction_heuristics.configure(
-        skill_id_from_name=skill_id_from_name,
-        skill_rank_sort_value=skill_rank_sort_value,
-        normalize_dynamic_skill_state=normalize_dynamic_skill_state,
+        skill_id_from_name=_progression_skills_service.skill_id_from_name,
+        skill_rank_sort_value=_progression_skills_service.skill_rank_sort_value,
+        normalize_dynamic_skill_state=_progression_skills_service.normalize_dynamic_skill_state,
     )
     _canon_extractor_service.configure(call_ollama_schema=call_ollama_schema)
     _npc_extractor_service.configure(
         call_ollama_schema=call_ollama_schema,
-        class_rank_sort_value=class_rank_sort_value,
-        normalize_skill_store=normalize_skill_store,
-        normalize_dynamic_skill_state=normalize_dynamic_skill_state,
-        merge_dynamic_skill=merge_dynamic_skill,
+        class_rank_sort_value=_progression_classes_service.class_rank_sort_value,
+        normalize_skill_store=_progression_skills_service.normalize_skill_store,
+        normalize_dynamic_skill_state=_progression_skills_service.normalize_dynamic_skill_state,
+        merge_dynamic_skill=_progression_skills_service.merge_dynamic_skill,
+    )
+
+
+def _configure_progression_service_ports() -> None:
+    _progression_manifestation_service.configure(
+        call_ollama_schema=call_ollama_schema,
+        ollama_temperature=OLLAMA_TEMPERATURE,
+    )
+    _progression_application_service.configure(
+        blank_character_state=blank_character_state,
+        normalize_world_time=normalize_world_time,
+        sync_appearance_changes=sync_appearance_changes,
     )
 
 
@@ -598,7 +614,7 @@ def _configure_canon_gate_service_ports() -> None:
         build_extractor_context_packet=build_extractor_context_packet,
         call_ollama_schema=call_ollama_schema,
         milestone_state_for_turn=milestone_state_for_turn,
-        normalize_dynamic_skill_state=normalize_dynamic_skill_state,
+        normalize_dynamic_skill_state=_progression_skills_service.normalize_dynamic_skill_state,
     )
     _canon_patch_gate_service.configure(
         apply_patch=_turn_engine.apply_patch,
@@ -627,6 +643,7 @@ def configure_dependencies(deps: StateEngineDependencies) -> None:
     _npc_module.configure(configured_globals)
     _progression_module.configure(configured_globals)
     _codex_module.configure(configured_globals)
+    _configure_progression_service_ports()
     _configure_extractor_service_ports()
     _configure_canon_gate_service_ports()
     for _name in (
@@ -1174,593 +1191,83 @@ from app.services.world.injury_state import (
     normalize_scar_state,
 )
 
-def skill_rank_for_level(level: int) -> str:
-    return _skill_rank_for_level(level, skill_rank_thresholds=SKILL_RANK_THRESHOLDS)
+def skill_rank_for_level(*args: Any, **kwargs: Any):
+    return _progression_skills_service.skill_rank_for_level(*args, **kwargs)
 
-def next_skill_xp_for_level(level: int) -> int:
-    return _next_skill_xp_for_level(level)
 
-def next_class_xp_for_level(level: int) -> int:
-    normalized = max(1, int(level or 1))
-    return int(100 + ((normalized - 1) * 50) + (max(0, normalized - 1) ** 1.35) * 10)
+def next_skill_xp_for_level(*args: Any, **kwargs: Any):
+    return _progression_skills_service.next_skill_xp_for_level(*args, **kwargs)
 
-def default_skill_state(skill_name: str) -> Dict[str, Any]:
-    return {
-        "id": skill_name,
-        "level": 0,
-        "xp": 0,
-        "next_xp": next_skill_xp_for_level(0),
-        "rank": "-",
-        "mastery": 0,
-        "path": "",
-        "evolutions": [],
-        "fusion_candidates": [],
-        "unlocks": [],
-        "awakened": False,
-    }
 
-def normalize_skill_state(skill_name: str, value: Any) -> Dict[str, Any]:
-    skill = default_skill_state(skill_name)
-    if isinstance(value, int):
-        skill["level"] = clamp(value if value >= 0 else 0, 0, 20)
-    elif isinstance(value, dict):
-        skill.update({key: deep_copy(val) for key, val in value.items()})
-    skill["id"] = skill_name
-    skill["level"] = clamp(int(skill.get("level", 0) or 0), 0, 20)
-    skill["next_xp"] = max(1, int(skill.get("next_xp", next_skill_xp_for_level(skill["level"])) or next_skill_xp_for_level(skill["level"])))
-    skill["xp"] = clamp(int(skill.get("xp", 0) or 0), 0, skill["next_xp"])
-    skill["rank"] = skill_rank_for_level(skill["level"])
-    if skill["level"] <= 0:
-        skill["mastery"] = 0
-    elif skill["level"] >= 20:
-        skill["mastery"] = 100
-    else:
-        skill["mastery"] = clamp(int((skill["xp"] / skill["next_xp"]) * 100), 0, 100)
-    skill["path"] = str(skill.get("path", "") or "")
-    skill["evolutions"] = list(skill.get("evolutions", []) or [])
-    skill["fusion_candidates"] = list(skill.get("fusion_candidates", []) or [])
-    skill["unlocks"] = list(skill.get("unlocks", []) or [])
-    skill["awakened"] = bool(skill.get("awakened", False))
-    skill["path_choice_available"] = bool(skill.get("path_choice_available", False))
-    skill["path_options"] = list(skill.get("path_options", []) or [])
-    return skill
+def next_class_xp_for_level(*args: Any, **kwargs: Any):
+    return _progression_classes_service.next_class_xp_for_level(*args, **kwargs)
 
-def ability_id_from_name(name: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", normalized_eval_text(name)).strip("-")
-    slug = slug[:36] or make_id("ability")
-    return f"ability_{slug}"
 
-def next_ability_xp_for_level(level: int) -> int:
-    return next_skill_xp_for_level(level)
+def normalize_ability_state(*args: Any, **kwargs: Any):
+    return _progression_skills_service.normalize_ability_state(*args, **kwargs)
 
-def default_ability_state(ability_id: str = "", ability_name: str = "") -> Dict[str, Any]:
-    return {
-        "id": ability_id or ability_id_from_name(ability_name or "faehigkeit"),
-        "name": ability_name or "Unbenannte Fähigkeit",
-        "owner": "",
-        "description": "",
-        "type": "active",
-        "level": 1,
-        "xp": 0,
-        "next_xp": next_ability_xp_for_level(1),
-        "rank": skill_rank_for_level(1),
-        "mastery": 0,
-        "charges": 0,
-        "max_charges": 0,
-        "cooldown_turns": 0,
-        "cost": {},
-        "tags": [],
-        "scaling": {},
-        "requirements": [],
-        "source": "",
-        "active": True,
-        "awakened": False,
-        "unlocks": [],
-        "notes": "",
-    }
 
-def normalize_ability_state(value: Any, owner_slot: str = "") -> Dict[str, Any]:
-    ability_name = ""
-    if isinstance(value, dict):
-        ability_name = str(value.get("name", "") or "")
-    elif isinstance(value, str):
-        ability_name = value
-    ability = default_ability_state(ability_name=ability_name)
-    if isinstance(value, str):
-        ability["name"] = value.strip() or ability["name"]
-    elif isinstance(value, dict):
-        ability.update({key: deep_copy(val) for key, val in value.items()})
+def skill_id_from_name(*args: Any, **kwargs: Any):
+    return _progression_skills_service.skill_id_from_name(*args, **kwargs)
 
-    ability["id"] = str(ability.get("id") or ability_id_from_name(str(ability.get("name", "") or ""))).strip() or ability_id_from_name(str(ability.get("name", "") or "faehigkeit"))
-    ability["name"] = str(ability.get("name", "") or "Unbenannte Fähigkeit").strip() or "Unbenannte Fähigkeit"
-    ability["owner"] = str(ability.get("owner") or owner_slot or "").strip()
-    ability["description"] = str(ability.get("description", "") or "").strip()
-    ability["type"] = str(ability.get("type", "active") or "active").strip() or "active"
-    ability["level"] = clamp(int(ability.get("level", 1) or 1), 1, 20)
-    ability["next_xp"] = max(1, int(ability.get("next_xp", next_ability_xp_for_level(ability["level"])) or next_ability_xp_for_level(ability["level"])))
-    ability["xp"] = clamp(int(ability.get("xp", 0) or 0), 0, ability["next_xp"])
-    ability["rank"] = skill_rank_for_level(ability["level"])
-    if ability["level"] >= 20:
-        ability["mastery"] = 100
-    else:
-        ability["mastery"] = clamp(int((ability["xp"] / ability["next_xp"]) * 100), 0, 100)
-    ability["charges"] = max(0, int(ability.get("charges", 0) or 0))
-    ability["max_charges"] = max(ability["charges"], int(ability.get("max_charges", 0) or 0))
-    ability["cooldown_turns"] = max(0, int(ability.get("cooldown_turns", 0) or 0))
-    raw_cost = ability.get("cost") or {}
-    ability["cost"] = {
-        str(key): int(val or 0)
-        for key, val in raw_cost.items()
-        if str(key).strip()
-    } if isinstance(raw_cost, dict) else {}
-    ability["tags"] = [str(entry).strip() for entry in (ability.get("tags") or []) if str(entry).strip()]
-    raw_scaling = ability.get("scaling") or {}
-    ability["scaling"] = {
-        str(key): str(val).strip()
-        for key, val in raw_scaling.items()
-        if str(key).strip() and str(val).strip()
-    } if isinstance(raw_scaling, dict) else {}
-    ability["requirements"] = [deep_copy(entry) for entry in (ability.get("requirements") or []) if entry]
-    ability["source"] = str(ability.get("source", "") or "").strip()
-    ability["active"] = bool(ability.get("active", True))
-    ability["awakened"] = bool(ability.get("awakened", False))
-    ability["unlocks"] = [str(entry).strip() for entry in (ability.get("unlocks") or []) if str(entry).strip()]
-    ability["notes"] = str(ability.get("notes", "") or "").strip()
-    return ability
 
-def skill_id_from_name(name: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "_", normalized_eval_text(name)).strip("_")
-    slug = slug[:48] or make_id("skill")
-    if not slug.startswith("skill_"):
-        slug = f"skill_{slug}"
-    return slug
+def display_skill_name_from_id(*args: Any, **kwargs: Any):
+    return _progression_skills_service.display_skill_name_from_id(*args, **kwargs)
 
-def display_skill_name_from_id(skill_id: str) -> str:
-    base = str(skill_id or "").strip()
-    if base.startswith("skill_"):
-        base = base[6:]
-    base = base.replace("_", " ").strip()
-    if not base:
-        return "Unbenannte Technik"
-    return " ".join(part.capitalize() for part in base.split())
 
 clean_extracted_skill_name = _extraction_abilities.clean_extracted_skill_name
 
 split_extracted_skill_names = _extraction_abilities.split_extracted_skill_names
 
-def infer_skill_name_from_description(raw_name: str, description: str) -> str:
-    base_name = clean_extracted_skill_name(raw_name) or str(raw_name or "").strip()
-    base_norm = normalized_eval_text(base_name)
-    if not description.strip():
-        return base_name
-    candidates: List[str] = []
-    direct_magic_match = re.search(r"\b([A-ZÄÖÜa-zäöüß][A-Za-zÄÖÜäöüß\-]{2,40}magie)\b", description, flags=re.IGNORECASE)
-    if direct_magic_match:
-        candidates.extend(split_extracted_skill_names(direct_magic_match.group(1)))
-    for explicit_match in re.findall(
-        r"(?:technik|zauber|ritual|kunst|fähigkeit|faehigkeit)\s+([A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9\- ]{2,60})",
-        description,
-        flags=re.IGNORECASE,
-    ):
-        candidates.extend(split_extracted_skill_names(explicit_match))
-    for pattern in ABILITY_UNLOCK_TRIGGER_PATTERNS:
-        for match in pattern.findall(description):
-            candidates.extend(split_extracted_skill_names(match))
-    deduped: List[str] = []
-    seen = set()
-    for candidate in candidates:
-        normalized = normalized_eval_text(candidate)
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        deduped.append(candidate)
-    if not deduped:
-        return base_name
-    if base_norm:
-        related = [
-            candidate
-            for candidate in deduped
-            if normalized_eval_text(candidate).startswith(base_norm) or base_norm.startswith(normalized_eval_text(candidate))
-        ]
-        if related:
-            return max(related, key=len)
-    if len(deduped) == 1 and (not base_norm or len(base_norm) <= 9 or base_name.startswith("skill_")):
-        return deduped[0]
-    return base_name
+def infer_skill_name_from_description(*args: Any, **kwargs: Any):
+    return _progression_skills_service.infer_skill_name_from_description(*args, **kwargs)
 
-def normalize_skill_store(skills: Any, *, resource_name: str) -> Dict[str, Dict[str, Any]]:
-    merged: Dict[str, Dict[str, Any]] = {}
-    for raw_key, raw_value in (skills or {}).items():
-        guessed_name = ""
-        description = ""
-        if isinstance(raw_value, dict):
-            guessed_name = str(raw_value.get("name") or "").strip()
-            description = str(raw_value.get("description") or "").strip()
-        raw_key_text = str(raw_key or "").strip()
-        if not guessed_name:
-            guessed_name = display_skill_name_from_id(raw_key_text)
-        if guessed_name.startswith("skill_"):
-            guessed_name = display_skill_name_from_id(guessed_name)
-        guessed_name = infer_skill_name_from_description(guessed_name, description)
-        guessed_name = clean_extracted_skill_name(guessed_name) or guessed_name
-        normalized_skill = normalize_dynamic_skill_state(
-            raw_value,
-            skill_id=skill_id_from_name(guessed_name or raw_key_text),
-            skill_name=guessed_name or raw_key_text,
-            resource_name=resource_name,
-            unlocked_from=(raw_value or {}).get("unlocked_from", "Story") if isinstance(raw_value, dict) else "Story",
-        )
-        normalized_skill["name"] = infer_skill_name_from_description(
-            normalized_skill.get("name", ""),
-            str(normalized_skill.get("description", "") or ""),
-        )
-        normalized_skill["name"] = clean_extracted_skill_name(normalized_skill.get("name", "")) or display_skill_name_from_id(normalized_skill["id"])
-        normalized_skill["id"] = skill_id_from_name(normalized_skill["name"])
-        existing = merged.get(normalized_skill["id"])
-        merged[normalized_skill["id"]] = merge_dynamic_skill(existing, normalized_skill, resource_name=resource_name) if existing else normalized_skill
-    consolidated: Dict[str, Dict[str, Any]] = {}
-    for skill in sorted(merged.values(), key=lambda entry: len(str(entry.get("name", "") or "")), reverse=True):
-        skill_name_norm = normalized_eval_text(skill.get("name", ""))
-        matched_id = None
-        for existing_id, existing_skill in consolidated.items():
-            existing_name_norm = normalized_eval_text(existing_skill.get("name", ""))
-            if not skill_name_norm or not existing_name_norm:
-                continue
-            if (
-                skill_name_norm == existing_name_norm
-                or skill_name_norm.startswith(existing_name_norm)
-                or existing_name_norm.startswith(skill_name_norm)
-            ):
-                matched_id = existing_id
-                break
-        if matched_id:
-            consolidated[matched_id] = merge_dynamic_skill(consolidated[matched_id], skill, resource_name=resource_name)
-            consolidated[matched_id]["id"] = skill_id_from_name(consolidated[matched_id]["name"])
-        else:
-            consolidated[skill["id"]] = skill
-    return consolidated
 
-def dynamic_skill_default(skill_id: str = "", skill_name: str = "", resource_name: str = "Aether") -> Dict[str, Any]:
-    clean_id = str(skill_id or skill_id_from_name(skill_name or "technik")).strip()
-    clean_name = str(skill_name or display_skill_name_from_id(clean_id)).strip()
-    return {
-        "id": clean_id,
-        "name": clean_name or "Unbenannte Technik",
-        "rank": "F",
-        "level": 1,
-        "level_max": DEFAULT_DYNAMIC_SKILL_LEVEL_MAX,
-        "tags": [],
-        "description": "",
-        "effect_summary": "",
-        "power_rating": 5,
-        "growth_potential": "mittel",
-        "manifestation_source": None,
-        "category": None,
-        "class_affinity": None,
-        "elements": [],
-        "element_primary": None,
-        "element_synergies": None,
-        "cost": None,
-        "price": None,
-        "cooldown_turns": None,
-        "unlocked_from": None,
-        "synergy_notes": None,
-        "xp": 0,
-        "next_xp": next_skill_xp_for_level(1),
-        "mastery": 0,
-    }
+def normalize_skill_store(*args: Any, **kwargs: Any):
+    return _progression_skills_service.normalize_skill_store(*args, **kwargs)
 
-def normalize_skill_rank(value: Any) -> str:
-    return _normalize_skill_rank(value, skill_ranks=SKILL_RANKS)
 
-def normalize_dynamic_skill_state(
-    value: Any,
-    *,
-    skill_id: str = "",
-    skill_name: str = "",
-    resource_name: str = "Aether",
-    unlocked_from: Optional[str] = None,
-) -> Dict[str, Any]:
-    if isinstance(value, int):
-        payload: Dict[str, Any] = {"level": value}
-    elif isinstance(value, str):
-        payload = {"name": value}
-    elif isinstance(value, dict):
-        payload = deep_copy(value)
-    else:
-        payload = {}
-    payload_name = str(payload.get("name") or "").strip()
-    provided_name = str(skill_name or "").strip()
-    fallback_name = str(payload_name or provided_name or display_skill_name_from_id(skill_id) or "Unbenannte Technik").strip()
-    if provided_name:
-        payload_name_norm = normalized_eval_text(payload_name)
-        provided_name_norm = normalized_eval_text(provided_name)
-        if (
-            not payload_name
-            or payload_name.startswith("skill_")
-            or (
-                payload_name_norm
-                and provided_name_norm
-                and (
-                    provided_name_norm.startswith(payload_name_norm)
-                    or payload_name_norm.startswith(provided_name_norm)
-                )
-                and len(provided_name) > len(payload_name)
-            )
-        ):
-            fallback_name = provided_name
-    if fallback_name.startswith("skill_"):
-        fallback_name = display_skill_name_from_id(fallback_name)
-    fallback_name = clean_extracted_skill_name(fallback_name) or fallback_name
-    fallback_id = str(payload.get("id") or skill_id or skill_id_from_name(fallback_name)).strip()
-    skill = dynamic_skill_default(fallback_id, fallback_name, resource_name)
-    skill.update(payload)
-    skill_name_value = str(skill.get("name") or fallback_name).strip() or fallback_name
-    fallback_name_norm = normalized_eval_text(fallback_name)
-    skill_name_norm = normalized_eval_text(skill_name_value)
-    if (
-        fallback_name
-        and skill_name_value
-        and (
-            fallback_name_norm.startswith(skill_name_norm)
-            or skill_name_norm.startswith(fallback_name_norm)
-        )
-        and len(fallback_name) > len(skill_name_value)
-    ):
-        skill_name_value = fallback_name
-    if skill_name_value.startswith("skill_") or normalized_eval_text(skill_name_value) == normalized_eval_text(str(skill.get("id") or fallback_id)):
-        skill_name_value = display_skill_name_from_id(str(skill.get("id") or fallback_id))
-    skill_name_value = clean_extracted_skill_name(skill_name_value) or skill_name_value
-    skill["name"] = skill_name_value
-    skill["id"] = skill_id_from_name(skill_name_value or fallback_name)
-    skill["rank"] = normalize_skill_rank(skill.get("rank"))
-    skill["level_max"] = clamp(
-        int(skill.get("level_max", DEFAULT_DYNAMIC_SKILL_LEVEL_MAX) or DEFAULT_DYNAMIC_SKILL_LEVEL_MAX),
-        1,
-        DEFAULT_DYNAMIC_SKILL_LEVEL_MAX,
-    )
-    skill["level"] = clamp(int(skill.get("level", 1) or 1), 1, skill["level_max"])
-    skill["tags"] = [str(tag).strip() for tag in (skill.get("tags") or []) if str(tag).strip()]
-    skill["description"] = str(skill.get("description", "") or "").strip() or f"{skill['name']} ist Teil der aktuellen Entwicklung."
-    skill["effect_summary"] = str(skill.get("effect_summary", "") or "").strip() or skill["description"][:180]
-    skill["growth_potential"] = _normalize_growth_potential(skill.get("growth_potential"))
-    skill["power_rating"] = _normalize_power_rating(
-        skill.get("power_rating"),
-        rank=skill["rank"],
-        level=int(skill.get("level", 1) or 1),
-        skill_rank_sort_value=skill_rank_sort_value,
-        clamp=clamp,
-    )
-    skill["manifestation_source"] = _normalize_optional_text(skill.get("manifestation_source"))
-    skill["category"] = _normalize_optional_lower_text(skill.get("category"))
-    skill["class_affinity"] = _normalize_optional_strings(skill.get("class_affinity"))
-    skill["elements"], skill["element_primary"] = _normalize_skill_element_fields(skill.get("elements"), skill.get("element_primary"))
-    skill["element_synergies"] = _normalize_optional_unique_strings(skill.get("element_synergies"))
-    skill["cost"] = _normalize_skill_cost(skill.get("cost"), resource_name=resource_name)
-    skill["price"] = str(skill.get("price", "") or "").strip() or None
-    skill["cooldown_turns"] = _normalize_cooldown_turns(skill.get("cooldown_turns"))
-    skill["unlocked_from"] = str(skill.get("unlocked_from") or unlocked_from or "Story").strip() or "Story"
-    skill["synergy_notes"] = _normalize_optional_text(skill.get("synergy_notes"))
-    skill["xp"], skill["next_xp"], skill["mastery"] = _normalize_skill_progression_fields(
-        skill,
-        next_skill_xp_for_level=next_skill_xp_for_level,
-        clamp=clamp,
-    )
-    return skill
+def dynamic_skill_default(*args: Any, **kwargs: Any):
+    return _progression_skills_service.dynamic_skill_default(*args, **kwargs)
 
-def merge_dynamic_skill(existing: Dict[str, Any], incoming: Dict[str, Any], *, resource_name: str) -> Dict[str, Any]:
-    base = normalize_dynamic_skill_state(existing, resource_name=resource_name)
-    new_data = normalize_dynamic_skill_state(
-        incoming,
-        skill_id=str(incoming.get("id") or base.get("id") or ""),
-        skill_name=str(incoming.get("name") or base.get("name") or ""),
-        resource_name=resource_name,
-        unlocked_from=str(incoming.get("unlocked_from") or base.get("unlocked_from") or "Story"),
-    )
-    base_name_norm = normalized_eval_text(base.get("name", ""))
-    new_name_norm = normalized_eval_text(new_data.get("name", ""))
-    if new_data.get("name"):
-        if not base.get("name"):
-            base["name"] = new_data["name"]
-        elif base_name_norm == new_name_norm:
-            base["name"] = new_data["name"] if len(new_data["name"]) >= len(base["name"]) else base["name"]
-        elif base_name_norm.startswith(new_name_norm) or new_name_norm.startswith(base_name_norm):
-            base["name"] = new_data["name"] if len(new_data["name"]) >= len(base["name"]) else base["name"]
-        else:
-            base["name"] = new_data["name"]
-    base["rank"] = new_data["rank"] if new_data["rank"] != "F" or base.get("rank") == "F" else base["rank"]
-    base["level"] = max(int(base.get("level", 1) or 1), int(new_data.get("level", 1) or 1))
-    base["level_max"] = max(int(base.get("level_max", 10) or 10), int(new_data.get("level_max", 10) or 10))
-    base["tags"] = list(dict.fromkeys([*(base.get("tags") or []), *(new_data.get("tags") or [])]))
-    if new_data.get("description"):
-        base["description"] = new_data["description"]
-    if new_data.get("effect_summary"):
-        base["effect_summary"] = new_data["effect_summary"]
-    if new_data.get("growth_potential"):
-        base["growth_potential"] = new_data["growth_potential"]
-    if int(new_data.get("power_rating", 0) or 0) > 0:
-        base["power_rating"] = max(int(base.get("power_rating", 1) or 1), int(new_data.get("power_rating", 1) or 1))
-    if new_data.get("manifestation_source"):
-        base["manifestation_source"] = new_data["manifestation_source"]
-    if new_data.get("category"):
-        base["category"] = new_data["category"]
-    if new_data.get("class_affinity"):
-        base["class_affinity"] = list(dict.fromkeys([*(base.get("class_affinity") or []), *(new_data.get("class_affinity") or [])]))
-    if new_data.get("elements"):
-        base["elements"] = list(dict.fromkeys([*(base.get("elements") or []), *(new_data.get("elements") or [])]))
-    if new_data.get("element_primary"):
-        base["element_primary"] = new_data.get("element_primary")
-        if base["element_primary"] and base["element_primary"] not in (base.get("elements") or []):
-            base["elements"] = [base["element_primary"], *(base.get("elements") or [])]
-    if new_data.get("element_synergies"):
-        base["element_synergies"] = list(dict.fromkeys([*(base.get("element_synergies") or []), *(new_data.get("element_synergies") or [])]))
-    if new_data.get("cost"):
-        base["cost"] = new_data["cost"]
-    if new_data.get("price"):
-        base["price"] = new_data["price"]
-    if new_data.get("cooldown_turns") is not None:
-        base["cooldown_turns"] = new_data["cooldown_turns"]
-    if new_data.get("synergy_notes"):
-        base["synergy_notes"] = new_data["synergy_notes"]
-    if new_data.get("unlocked_from"):
-        base["unlocked_from"] = new_data["unlocked_from"]
-    base["xp"] = max(int(base.get("xp", 0) or 0), int(new_data.get("xp", 0) or 0))
-    base["next_xp"] = max(int(base.get("next_xp", 1) or 1), int(new_data.get("next_xp", 1) or 1))
-    base["mastery"] = clamp(int(base.get("mastery", 0) or 0), 0, 100)
-    return normalize_dynamic_skill_state(base, resource_name=resource_name)
 
-def skill_rank_sort_value(rank: str) -> int:
-    return SKILL_RANK_ORDER.get(str(rank or "F").upper(), -1)
+def normalize_skill_rank(*args: Any, **kwargs: Any):
+    return _progression_skills_service.normalize_skill_rank(*args, **kwargs)
 
-def extract_skill_entries_for_character(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    resource_name = resource_name_for_character(character, world_settings)
-    normalized: Dict[str, Any] = {}
-    raw_skills = character.get("skills", {}) or {}
-    for raw_key, raw_value in raw_skills.items():
-        if raw_key in SKILL_KEYS:
-            legacy = normalize_skill_state(raw_key, raw_value)
-            if int(legacy.get("level", 0) or 0) <= 0:
-                continue
-            normalized[skill_id_from_name(LEGACY_SKILL_NAME_MAP.get(raw_key, skill_display_name(raw_key)))] = normalize_dynamic_skill_state(
-                {
-                    "id": skill_id_from_name(LEGACY_SKILL_NAME_MAP.get(raw_key, skill_display_name(raw_key))),
-                    "name": LEGACY_SKILL_NAME_MAP.get(raw_key, skill_display_name(raw_key)),
-                    "rank": normalize_skill_rank(legacy.get("rank")),
-                    "level": max(1, int(legacy.get("level", 1) or 1)),
-                    "level_max": 10,
-                    "tags": LEGACY_SKILL_TAGS.get(raw_key, []),
-                    "description": f"{LEGACY_SKILL_NAME_MAP.get(raw_key, skill_display_name(raw_key))} stammt aus einem älteren Spielstand.",
-                    "cost": None,
-                    "price": None,
-                    "cooldown_turns": None,
-                    "unlocked_from": "Legacy",
-                    "synergy_notes": None,
-                    "xp": int(legacy.get("xp", 0) or 0),
-                    "next_xp": int(legacy.get("next_xp", next_skill_xp_for_level(max(1, int(legacy.get('level', 1) or 1)))) or next_skill_xp_for_level(max(1, int(legacy.get('level', 1) or 1)))),
-                    "mastery": int(legacy.get("mastery", 0) or 0),
-                },
-                resource_name=resource_name,
-            )
-            continue
-        skill = normalize_dynamic_skill_state(raw_value, skill_id=str(raw_key), skill_name=str((raw_value or {}).get("name") or raw_key), resource_name=resource_name)
-        normalized[skill["id"]] = skill
 
-    for ability in (character.get("abilities") or []):
-        legacy_ability = normalize_ability_state(ability, str(character.get("slot_id", "") or ""))
-        skill = normalize_dynamic_skill_state(
-            {
-                "id": skill_id_from_name(legacy_ability.get("name", legacy_ability.get("id", ""))),
-                "name": legacy_ability.get("name"),
-                "rank": normalize_skill_rank(legacy_ability.get("rank")),
-                "level": max(1, int(legacy_ability.get("level", 1) or 1)),
-                "level_max": 10,
-                "tags": list(dict.fromkeys([*(legacy_ability.get("tags") or []), legacy_ability.get("type", "")])),
-                "description": legacy_ability.get("description") or legacy_ability.get("notes") or f"{legacy_ability.get('name', 'Technik')} wurde aus einer älteren Fähigkeit migriert.",
-                "cost": None if not legacy_ability.get("cost") else {"resource": resource_name, "amount": sum(int(v or 0) for v in (legacy_ability.get("cost") or {}).values())},
-                "price": None,
-                "cooldown_turns": legacy_ability.get("cooldown_turns"),
-                "unlocked_from": legacy_ability.get("source") or "Legacy",
-                "synergy_notes": None,
-                "xp": int(legacy_ability.get("xp", 0) or 0),
-                "next_xp": int(legacy_ability.get("next_xp", next_skill_xp_for_level(max(1, int(legacy_ability.get('level', 1) or 1)))) or next_skill_xp_for_level(max(1, int(legacy_ability.get('level', 1) or 1)))),
-                "mastery": int(legacy_ability.get("mastery", 0) or 0),
-            },
-            resource_name=resource_name,
-        )
-        current = normalized.get(skill["id"])
-        normalized[skill["id"]] = merge_dynamic_skill(current, skill, resource_name=resource_name) if current else skill
-    return normalized
+def normalize_dynamic_skill_state(*args: Any, **kwargs: Any):
+    return _progression_skills_service.normalize_dynamic_skill_state(*args, **kwargs)
 
-def build_skill_fusion_hints(skills: Dict[str, Any], *, resource_name: str) -> List[Dict[str, Any]]:
-    entries = [
-        normalize_dynamic_skill_state(
-            value,
-            skill_id=skill_id,
-            skill_name=(value or {}).get("name", skill_id),
-            resource_name=resource_name,
-        )
-        for skill_id, value in (skills or {}).items()
-    ]
-    maxed = [entry for entry in entries if int(entry.get("level", 1) or 1) >= int(entry.get("level_max", 10) or 10)]
-    hints: List[Dict[str, Any]] = []
-    for index, left in enumerate(maxed):
-        left_tags = {normalized_eval_text(tag) for tag in (left.get("tags") or []) if normalized_eval_text(tag)}
-        for right in maxed[index + 1 :]:
-            right_tags = {normalized_eval_text(tag) for tag in (right.get("tags") or []) if normalized_eval_text(tag)}
-            overlap = sorted(left_tags & right_tags)
-            if not overlap:
-                continue
-            result_rank = left["rank"] if skill_rank_sort_value(left["rank"]) >= skill_rank_sort_value(right["rank"]) else right["rank"]
-            hints.append(
-                {
-                    "with_id": right["id"],
-                    "with_name": right["name"],
-                    "tags_overlap": overlap,
-                    "result_rank": result_rank,
-                    "label": f"Fusion möglich: {left['name']} + {right['name']}",
-                }
-            )
-    return hints
 
-def skill_display_name(skill_name: str) -> str:
-    return skill_name.replace("_", " ").title()
+def merge_dynamic_skill(*args: Any, **kwargs: Any):
+    return _progression_skills_service.merge_dynamic_skill(*args, **kwargs)
 
-def skill_level_value(character: Dict[str, Any], skill_name: str) -> int:
-    skills = character.get("skills", {}) or {}
-    if skill_name in skills:
-        raw_value = skills.get(skill_name)
-        if isinstance(raw_value, dict) and "level" in raw_value:
-            return int(raw_value.get("level", 0) or 0)
-    for entry in skills.values():
-        if not isinstance(entry, dict):
-            continue
-        if normalized_eval_text(entry.get("name", "")) == normalized_eval_text(skill_name):
-            return int(entry.get("level", 0) or 0)
-    legacy = normalize_skill_state(skill_name, skills.get(skill_name, default_skill_state(skill_name)))
-    return int(legacy.get("level", 0) or 0)
 
-def role_key(role_text: str) -> str:
-    normalized = normalized_eval_text(role_text)
-    if "frontline" in normalized:
-        return "frontline"
-    if "scout" in normalized or "späher" in normalized or "spaeher" in normalized:
-        return "scout"
-    if "face" in normalized:
-        return "face"
-    if "support" in normalized:
-        return "support"
-    if "occult" in normalized or "flüche" in normalized or "flueche" in normalized:
-        return "occult"
-    if "tüftler" in normalized or "tueftler" in normalized:
-        return "tueftler"
-    return ""
+def skill_rank_sort_value(*args: Any, **kwargs: Any):
+    return _progression_skills_service.skill_rank_sort_value(*args, **kwargs)
 
-def class_rank_sort_value(rank: str) -> int:
-    return SKILL_RANK_ORDER.get(str(rank or "F").upper(), -1)
 
-def migrate_legacy_role_to_class(role_text: str) -> Optional[Dict[str, Any]]:
-    template = LEGACY_ROLE_CLASS_MAP.get(role_key(role_text))
-    if not template:
-        return None
-    payload = default_class_current()
-    payload.update(deep_copy(template))
-    return normalize_class_current(payload)
+def extract_skill_entries_for_character(*args: Any, **kwargs: Any):
+    return _progression_skills_service.extract_skill_entries_for_character(*args, **kwargs)
 
-def class_affinity_match(skill_tags: List[str], class_affinity_tags: List[str]) -> bool:
-    skill_set = {normalized_eval_text(tag) for tag in (skill_tags or []) if normalized_eval_text(tag)}
-    class_set = {normalized_eval_text(tag) for tag in (class_affinity_tags or []) if normalized_eval_text(tag)}
-    return bool(skill_set & class_set)
+
+def build_skill_fusion_hints(*args: Any, **kwargs: Any):
+    return _progression_skills_service.build_skill_fusion_hints(*args, **kwargs)
+
+
+def class_rank_sort_value(*args: Any, **kwargs: Any):
+    return _progression_classes_service.class_rank_sort_value(*args, **kwargs)
+
+
+def class_affinity_match(*args: Any, **kwargs: Any):
+    return _progression_skills_service.class_affinity_match(*args, **kwargs)
+
 
 sentence_mentions_actor_name = _extraction_items.sentence_mentions_actor_name
 
-def effective_skill_progress_multiplier(character: Dict[str, Any], skill: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> float:
-    world_settings = world_settings or {}
-    current_class = normalize_class_current(character.get("class_current"))
-    if not current_class:
-        return float(world_settings.get("onclass_xp_multiplier", 1.0) or 1.0)
-    if class_affinity_match(skill.get("tags") or [], current_class.get("affinity_tags") or []):
-        return float(world_settings.get("onclass_xp_multiplier", 1.0) or 1.0)
-    return float(world_settings.get("offclass_xp_multiplier", 0.7) or 0.7)
+def effective_skill_progress_multiplier(*args: Any, **kwargs: Any):
+    return _progression_skills_service.effective_skill_progress_multiplier(*args, **kwargs)
+
 
 def sync_scars_into_appearance(character: Dict[str, Any]) -> None:
     appearance = character.setdefault("appearance", {})
@@ -1811,7 +1318,7 @@ def looks_like_legacy_seeded_skills(skills: Dict[str, Any]) -> bool:
     if not skills or set(skills.keys()) != set(SKILL_KEYS):
         return False
     for skill_name in SKILL_KEYS:
-        skill = normalize_skill_state(skill_name, skills.get(skill_name))
+        skill = _progression_skills_service.normalize_skill_state(skill_name, skills.get(skill_name))
         if int(skill.get("level", 0) or 0) != 1:
             return False
         if int(skill.get("xp", 0) or 0) != 0:
@@ -2053,36 +1560,16 @@ def sync_appearance_changes(
             generated.append(event)
     return generated
 
-def append_character_change_events(
-    state_before: Dict[str, Any],
-    state_after: Dict[str, Any],
-    *,
-    turn_number: int,
-) -> List[str]:
-    world_time = normalize_world_time(state_after.get("meta", {}))
-    absolute_day = int(world_time["absolute_day"])
-    messages = []
-    for slot_name, after_character in (state_after.get("characters") or {}).items():
-        before_character = (state_before.get("characters") or {}).get(slot_name) or blank_character_state(slot_name)
-        events = sync_appearance_changes(
-            before_character,
-            after_character,
-            slot_name=slot_name,
-            turn_number=turn_number,
-            absolute_day=absolute_day,
-        )
-        messages.extend(event["message"] for event in events if event.get("message"))
-    if messages:
-        state_after.setdefault("events", [])
-        state_after["events"].extend(messages)
-    return messages
+def append_character_change_events(*args: Any, **kwargs: Any):
+    return _progression_application_service.append_character_change_events(*args, **kwargs)
+
 
 def calculate_attack_rating(character: Dict[str, Any], hand: str, items_db: Dict[str, Any]) -> int:
     return _derived_stats.calculate_attack_rating(
         character,
         hand,
         items_db,
-        skill_level_value=skill_level_value,
+        skill_level_value=_progression_skills_service.skill_level_value,
     )
 
 
@@ -2117,76 +1604,17 @@ def skill_effective_bonus(character: Dict[str, Any], skill_name: str, items_db: 
         character,
         skill_name,
         items_db,
-        normalize_skill_state=normalize_skill_state,
-        default_skill_state=default_skill_state,
+        normalize_skill_state=_progression_skills_service.normalize_skill_state,
+        default_skill_state=_progression_skills_service.default_skill_state,
     )
 
-def ensure_progression_shape(character: Dict[str, Any]) -> None:
-    progression = character.setdefault("progression", {})
-    progression.setdefault("rank", 1)
-    progression.setdefault("xp", 0)
-    progression.setdefault("next_xp", 100)
-    progression.setdefault("system_level", 1)
-    progression.setdefault("system_xp", 0)
-    progression.setdefault("next_system_xp", 100)
-    progression.setdefault("resource_name", "Aether")
-    progression.setdefault("resource_current", 5)
-    progression.setdefault("resource_max", 5)
-    progression.setdefault("system_fragments", 0)
-    progression.setdefault("system_cores", 0)
-    progression.setdefault("attribute_points", 0)
-    progression.setdefault("skill_points", 0)
-    progression.setdefault("talent_points", 0)
-    progression.setdefault("paths", [])
-    progression.setdefault("potential_cards", [])
+def ensure_progression_shape(*args: Any, **kwargs: Any):
+    return _progression_skills_service.ensure_progression_shape(*args, **kwargs)
 
-def ensure_character_progression_core(character: Dict[str, Any]) -> None:
-    level = max(1, int(character.get("level", 1) or 1))
-    xp_to_next = max(1, int(character.get("xp_to_next", next_character_xp_for_level(level)) or next_character_xp_for_level(level)))
-    xp_current = clamp(int(character.get("xp_current", 0) or 0), 0, xp_to_next)
-    xp_total = max(xp_current, int(character.get("xp_total", xp_current) or xp_current))
-    character["level"] = level
-    character["xp_to_next"] = xp_to_next
-    character["xp_current"] = xp_current
-    character["xp_total"] = xp_total
-    recent = character.get("recent_progression_events")
-    if not isinstance(recent, list):
-        character["recent_progression_events"] = []
-    else:
-        character["recent_progression_events"] = [deep_copy(entry) for entry in recent if isinstance(entry, dict)][-40:]
-    seeds = character.get("class_path_seeds")
-    if not isinstance(seeds, list):
-        character["class_path_seeds"] = []
-    else:
-        normalized_seeds: List[Dict[str, Any]] = []
-        seen_ids = set()
-        for seed in seeds:
-            if not isinstance(seed, dict):
-                continue
-            seed_id = str(seed.get("id") or "").strip()
-            if not seed_id or seed_id in seen_ids:
-                continue
-            seen_ids.add(seed_id)
-            normalized_seeds.append(
-                {
-                    "id": seed_id,
-                    "name": str(seed.get("name") or "").strip() or seed_id,
-                    "theme_tags": [str(tag).strip() for tag in (seed.get("theme_tags") or []) if str(tag).strip()][:8],
-                    "source_turn": max(0, int(seed.get("source_turn", 0) or 0)),
-                    "confidence": clamp_float(float(seed.get("confidence", 0.0) or 0.0), 0.0, 1.0),
-                    "status": str(seed.get("status") or "latent").strip().lower() if str(seed.get("status") or "").strip().lower() in {"latent", "confirmed", "unlocked"} else "latent",
-                    "related_skill_ids": [str(value).strip() for value in (seed.get("related_skill_ids") or []) if str(value).strip()][:6],
-                }
-            )
-        character["class_path_seeds"] = normalized_seeds[-20:]
 
-def progression_speed_multiplier(world_settings: Optional[Dict[str, Any]] = None) -> float:
-    speed = str(((world_settings or {}).get("progression_speed") or "normal")).strip().lower()
-    if speed == "langsam":
-        return 0.82
-    if speed == "schnell":
-        return 1.22
-    return 1.0
+def ensure_character_progression_core(*args: Any, **kwargs: Any):
+    return _progression_skills_service.ensure_character_progression_core(*args, **kwargs)
+
 
 def normalize_progression_event_severity(*args: Any, **kwargs: Any):
     return _progression_gate_service.normalize_progression_event_severity(*args, **kwargs)
@@ -2200,342 +1628,17 @@ def is_skill_manifestation_name_plausible(*args: Any, **kwargs: Any):
     return _progression_gate_service.is_skill_manifestation_name_plausible(*args, **kwargs)
 
 
-def canonicalize_manifested_skill_payload(
-    *,
-    raw_skill: Dict[str, Any],
-    character: Dict[str, Any],
-    world: Optional[Dict[str, Any]] = None,
-    world_settings: Optional[Dict[str, Any]] = None,
-    default_source: str = "Manifestation",
-) -> Optional[Dict[str, Any]]:
-    resource_name = resource_name_for_character(character, world_settings)
-    proposed_name = str(raw_skill.get("name") or raw_skill.get("id") or "").strip()
-    raw_power_rating = int(raw_skill.get("power_rating", 0) or 0)
-    actor_name = str(((character.get("bio") or {}).get("name") or character.get("slot_id") or "").strip())
-    if not is_skill_manifestation_name_plausible(proposed_name, actor_name):
-        return None
-    skill = normalize_dynamic_skill_state(
-        {
-            "id": raw_skill.get("id") or skill_id_from_name(proposed_name),
-            "name": proposed_name,
-            "rank": normalize_skill_rank(raw_skill.get("rank")),
-            "level": max(1, int(raw_skill.get("level", 1) or 1)),
-            "level_max": max(1, int(raw_skill.get("level_max", DEFAULT_DYNAMIC_SKILL_LEVEL_MAX) or DEFAULT_DYNAMIC_SKILL_LEVEL_MAX)),
-            "xp": max(0, int(raw_skill.get("xp", 0) or 0)),
-            "next_xp": max(1, int(raw_skill.get("next_xp", next_skill_xp_for_level(1)) or next_skill_xp_for_level(1))),
-            "mastery": clamp(int(raw_skill.get("mastery", 0) or 0), 0, 100),
-            "tags": [str(tag).strip() for tag in (raw_skill.get("tags") or []) if str(tag).strip()],
-            "description": str(raw_skill.get("description") or "").strip(),
-            "effect_summary": str(raw_skill.get("effect_summary") or "").strip(),
-            "power_rating": int(raw_skill.get("power_rating", 0) or 0),
-            "growth_potential": str(raw_skill.get("growth_potential") or "").strip(),
-            "cost": raw_skill.get("cost"),
-            "price": raw_skill.get("price"),
-            "cooldown_turns": raw_skill.get("cooldown_turns"),
-            "unlocked_from": str(raw_skill.get("unlocked_from") or default_source),
-            "manifestation_source": str(raw_skill.get("manifestation_source") or default_source),
-            "category": raw_skill.get("category"),
-            "class_affinity": raw_skill.get("class_affinity"),
-            "elements": raw_skill.get("elements"),
-            "element_primary": raw_skill.get("element_primary"),
-            "element_synergies": raw_skill.get("element_synergies"),
-        },
-        resource_name=resource_name,
-        unlocked_from=default_source,
-    )
-    if not skill.get("description"):
-        skill["description"] = f"{skill['name']} wurde unter Druck manifestiert."
-    if not skill.get("effect_summary"):
-        skill["effect_summary"] = skill["description"][:180]
-    if raw_power_rating <= 0:
-        skill["power_rating"] = max(1, (skill_rank_sort_value(skill.get("rank")) + 1) * 6 + int(skill.get("level", 1) or 1))
-    else:
-        skill["power_rating"] = max(1, raw_power_rating)
-    if not skill.get("growth_potential"):
-        skill["growth_potential"] = "mittel"
-    resolved_elements = normalize_element_id_list(skill.get("elements") or [], world or {})
-    if not resolved_elements:
-        class_element = resolve_class_element_id(character.get("class_current"), world or {})
-        if class_element:
-            resolved_elements = [class_element]
-    skill["elements"] = resolved_elements
-    primary_candidates = normalize_element_id_list([skill.get("element_primary")], world or {})
-    skill["element_primary"] = primary_candidates[0] if primary_candidates else (resolved_elements[0] if resolved_elements else None)
-    if skill.get("element_primary") and skill["element_primary"] not in skill["elements"]:
-        skill["elements"].insert(0, skill["element_primary"])
-    return skill
+def canonicalize_manifested_skill_payload(*args: Any, **kwargs: Any):
+    return _progression_manifestation_service.canonicalize_manifested_skill_payload(*args, **kwargs)
 
-def append_recent_progression_event(character: Dict[str, Any], event: Dict[str, Any]) -> None:
-    recent = character.setdefault("recent_progression_events", [])
-    if not isinstance(recent, list):
-        recent = []
-        character["recent_progression_events"] = recent
-    recent.append(
-        {
-            "type": str(event.get("type") or ""),
-            "severity": str(event.get("severity") or "medium"),
-            "source_turn": int(event.get("source_turn", 0) or 0),
-            "reason": str(event.get("reason") or "").strip(),
-            "target_skill_id": str(event.get("target_skill_id") or "").strip(),
-            "target_class_id": str(event.get("target_class_id") or "").strip(),
-            "target_element_id": str(event.get("target_element_id") or "").strip(),
-        }
-    )
-    if len(recent) > 40:
-        del recent[:-40]
 
-def resolve_skill_id_for_event(character: Dict[str, Any], raw_skill_id: str) -> str:
-    skill_store = character.get("skills") or {}
-    if raw_skill_id in skill_store:
-        return raw_skill_id
-    normalized = normalized_eval_text(raw_skill_id)
-    if not normalized:
-        return ""
-    normalized_compact = re.sub(r"[^a-z0-9]+", "", normalized)
-    for skill_id, skill_value in skill_store.items():
-        skill_name = str((skill_value or {}).get("name") or skill_id)
-        candidate_ids = {
-            normalized_eval_text(skill_id),
-            normalized_eval_text(skill_name),
-            normalized_eval_text(skill_id_from_name(skill_name)),
-        }
-        if normalized in candidate_ids:
-            return skill_id
-        candidate_compact = {re.sub(r"[^a-z0-9]+", "", entry) for entry in candidate_ids if entry}
-        if normalized_compact and normalized_compact in candidate_compact:
-            return skill_id
-        for candidate in candidate_ids:
-            if candidate and normalized and (
-                candidate.startswith(normalized)
-                or normalized.startswith(candidate)
-                or SequenceMatcher(None, candidate, normalized).ratio() >= 0.92
-            ):
-                return skill_id
-        if normalized_eval_text(skill_name) == normalized:
-            return skill_id
-    return ""
+def ensure_class_rank_core_skills(*args: Any, **kwargs: Any):
+    return _progression_classes_service.ensure_class_rank_core_skills(*args, **kwargs)
 
-def apply_system_xp(character: Dict[str, Any], amount: int) -> None:
-    if amount <= 0:
-        return
-    ensure_progression_shape(character)
-    ensure_character_progression_core(character)
-    progression = character["progression"]
-    xp_gain = max(0, int(amount or 0))
-    character["xp_total"] = int(character.get("xp_total", 0) or 0) + xp_gain
-    character["xp_current"] = int(character.get("xp_current", 0) or 0) + xp_gain
-    progression["system_xp"] = int(progression.get("system_xp", 0) or 0) + max(1, xp_gain // 3)
-    while character["xp_current"] >= int(character.get("xp_to_next", next_character_xp_for_level(character["level"])) or next_character_xp_for_level(character["level"])):
-        required = int(character.get("xp_to_next", next_character_xp_for_level(character["level"])) or next_character_xp_for_level(character["level"]))
-        character["xp_current"] = max(0, int(character.get("xp_current", 0) or 0) - required)
-        character["level"] = int(character.get("level", 1) or 1) + 1
-        character["xp_to_next"] = next_character_xp_for_level(character["level"])
-        progression["attribute_points"] = int(progression.get("attribute_points", 0) or 0) + 1
-        progression["skill_points"] = int(progression.get("skill_points", 0) or 0) + 1
-    while progression["system_xp"] >= int(progression.get("next_system_xp", 100) or 100):
-        progression["system_xp"] -= int(progression.get("next_system_xp", 100) or 100)
-        progression["system_level"] = int(progression.get("system_level", 1) or 1) + 1
-        progression["talent_points"] = int(progression.get("talent_points", 0) or 0) + 1
-        progression["next_system_xp"] = 100 + ((int(progression["system_level"]) - 1) * 50)
-    character["xp_current"] = clamp(int(character.get("xp_current", 0) or 0), 0, int(character.get("xp_to_next", 1) or 1))
 
-def apply_class_xp(character: Dict[str, Any], amount: int, *, event_reason: str = "") -> List[str]:
-    out: List[str] = []
-    if amount <= 0:
-        return out
-    current_class = normalize_class_current(character.get("class_current"))
-    if not current_class:
-        return out
-    current_class["xp"] = int(current_class.get("xp", 0) or 0) + int(amount or 0)
-    leveled = False
-    while (
-        current_class["level"] < current_class["level_max"]
-        and current_class["xp"] >= int(current_class.get("xp_next", next_class_xp_for_level(current_class["level"])) or next_class_xp_for_level(current_class["level"]))
-    ):
-        required = int(current_class.get("xp_next", next_class_xp_for_level(current_class["level"])) or next_class_xp_for_level(current_class["level"]))
-        current_class["xp"] = max(0, int(current_class.get("xp", 0) or 0) - required)
-        current_class["level"] += 1
-        current_class["xp_next"] = next_class_xp_for_level(current_class["level"])
-        leveled = True
-    current_class["xp_next"] = max(1, int(current_class.get("xp_next", next_class_xp_for_level(current_class["level"])) or next_class_xp_for_level(current_class["level"])))
-    current_class["xp"] = clamp(int(current_class.get("xp", 0) or 0), 0, current_class["xp_next"])
-    current_class["class_mastery"] = clamp(int((current_class["xp"] / max(current_class["xp_next"], 1)) * 100), 0, 100)
-    if current_class["level"] >= current_class["level_max"] and current_class.get("ascension", {}).get("status") == "none":
-        current_class.setdefault("ascension", {}).update({"status": "available"})
-        out.append(f"Klassenaufstieg bereit: {current_class.get('name', 'Klasse')}.")
-    if leveled:
-        out.append(
-            f"Klassenfortschritt: {current_class.get('name', 'Klasse')} erreicht Lv {current_class.get('level')}/{current_class.get('level_max')}."
-            + (f" ({event_reason})" if event_reason else "")
-        )
-    character["class_current"] = normalize_class_current(current_class)
-    return out
+def refresh_skill_progression(*args: Any, **kwargs: Any):
+    return _progression_skills_service.refresh_skill_progression(*args, **kwargs)
 
-def build_elemental_core_skill_payload(
-    *,
-    skill_name: str,
-    element_id: str,
-    class_name: str,
-    resource_name: str,
-    unlocked_from: str,
-) -> Dict[str, Any]:
-    pretty_name = clean_extracted_skill_name(skill_name) or str(skill_name or "").strip() or "Elementtechnik"
-    return normalize_dynamic_skill_state(
-        {
-            "id": skill_id_from_name(pretty_name),
-            "name": pretty_name,
-            "rank": "F",
-            "level": 1,
-            "level_max": DEFAULT_DYNAMIC_SKILL_LEVEL_MAX,
-            "tags": ["technik", "elementar", normalize_codex_alias_text(class_name)],
-            "description": f"{pretty_name} ist Teil des Klassenkerns von {class_name}.",
-            "effect_summary": f"{pretty_name} kanalisiert elementare Energie.",
-            "power_rating": 8,
-            "growth_potential": "mittel",
-            "elements": [element_id] if element_id else [],
-            "element_primary": element_id or None,
-            "cost": {"resource": resource_name, "amount": 1},
-            "unlocked_from": unlocked_from,
-            "manifestation_source": "class_core",
-            "category": "elemental_core",
-            "class_affinity": [normalize_codex_alias_text(class_name)] if class_name else None,
-            "xp": 0,
-            "next_xp": next_skill_xp_for_level(1),
-            "mastery": 0,
-        },
-        resource_name=resource_name,
-    )
-
-def ensure_class_rank_core_skills(
-    character: Dict[str, Any],
-    world: Dict[str, Any],
-    world_settings: Optional[Dict[str, Any]] = None,
-    *,
-    unlock_extra: bool = False,
-) -> List[str]:
-    messages: List[str] = []
-    current_class = normalize_class_current(character.get("class_current"))
-    if not current_class:
-        return messages
-    node_info = resolve_class_path_rank_node(world, current_class)
-    if not node_info:
-        return messages
-    node = node_info["node"]
-    current_class["path_id"] = str(node_info.get("path_id") or current_class.get("path_id") or "")
-    current_class["path_rank"] = normalize_skill_rank(node_info.get("rank") or current_class.get("rank") or "F")
-    current_class["element_id"] = str(node_info.get("element_id") or current_class.get("element_id") or "")
-    current_class["element_tags"] = list(
-        dict.fromkeys(
-            [
-                *(current_class.get("element_tags") or []),
-                str(current_class.get("element_id") or "").strip(),
-            ]
-        )
-    )
-    character["class_current"] = normalize_class_current(current_class)
-    skill_store = character.setdefault("skills", {})
-    resource_name = resource_name_for_character(character, world_settings or {})
-    class_name = str(current_class.get("name") or "")
-    required = [str(name).strip() for name in (node.get("core_skills_required") or []) if str(name).strip()]
-    unlockable = [str(name).strip() for name in (node.get("core_skills_unlockable") or []) if str(name).strip()]
-    signature = [str(name).strip() for name in (node.get("signature_skills") or []) if str(name).strip()]
-    guaranteed: List[str] = required[:1] if required else []
-    if unlock_extra:
-        guaranteed.extend(unlockable[:1])
-        if current_class.get("rank") in {"A", "S"}:
-            guaranteed.extend(signature[:1])
-    for skill_name in guaranteed:
-        skill_id = skill_id_from_name(skill_name)
-        if skill_id in skill_store:
-            existing = normalize_dynamic_skill_state(skill_store[skill_id], resource_name=resource_name)
-            if current_class.get("element_id") and current_class["element_id"] not in (existing.get("elements") or []):
-                existing["elements"] = [current_class["element_id"], *(existing.get("elements") or [])]
-                existing["element_primary"] = existing.get("element_primary") or current_class["element_id"]
-                skill_store[skill_id] = normalize_dynamic_skill_state(existing, resource_name=resource_name)
-            continue
-        new_skill = build_elemental_core_skill_payload(
-            skill_name=skill_name,
-            element_id=str(current_class.get("element_id") or ""),
-            class_name=class_name,
-            resource_name=resource_name,
-            unlocked_from=f"ClassCore:{current_class.get('rank','F')}",
-        )
-        skill_store[new_skill["id"]] = new_skill
-        char_name = str(((character.get("bio") or {}).get("name") or character.get("slot_id") or "").strip() or "Die Figur")
-        messages.append(f"{char_name} schaltet den Klassenkern-Skill {new_skill['name']} frei.")
-    return messages
-
-def refresh_skill_progression(character: Dict[str, Any]) -> None:
-    ensure_progression_shape(character)
-    ensure_character_progression_core(character)
-    resource_name = resource_name_for_character(character)
-    character["skills"] = {
-        skill_id: normalize_dynamic_skill_state(
-            skill_value,
-            skill_id=skill_id,
-            skill_name=(skill_value or {}).get("name", skill_id) if isinstance(skill_value, dict) else skill_id,
-            resource_name=resource_name,
-            unlocked_from=(skill_value or {}).get("unlocked_from", "Story") if isinstance(skill_value, dict) else "Story",
-        )
-        for skill_id, skill_value in (character.get("skills") or {}).items()
-    }
-    if ENABLE_LEGACY_SHADOW_WRITEBACK:
-        character["abilities"] = []
-    else:
-        character.pop("abilities", None)
-
-def grant_skill_xp(
-    character: Dict[str, Any],
-    skill_name: str,
-    outcome: str,
-    *,
-    world_settings: Optional[Dict[str, Any]] = None,
-) -> List[str]:
-    skill_store = character.setdefault("skills", {})
-    if not skill_store:
-        return []
-    resolved_skill_id = resolve_skill_id_for_event(character, skill_name) or skill_id_from_name(skill_name)
-    if resolved_skill_id not in skill_store:
-        return []
-    outcome_key = str(outcome or "normal").strip().lower()
-    base_xp = {
-        "minor": 8,
-        "small": 10,
-        "normal": 16,
-        "major": 28,
-        "critical": 40,
-    }.get(outcome_key, 16)
-    resource_name = resource_name_for_character(character)
-    skill = normalize_dynamic_skill_state(skill_store[resolved_skill_id], skill_id=resolved_skill_id, resource_name=resource_name)
-    multiplier = effective_skill_progress_multiplier(character, skill, world_settings or {})
-    gained = max(1, int(round(base_xp * multiplier)))
-    skill["xp"] = int(skill.get("xp", 0) or 0) + gained
-    leveled = False
-    while skill["level"] < skill["level_max"] and skill["xp"] >= int(skill.get("next_xp", next_skill_xp_for_level(skill["level"])) or next_skill_xp_for_level(skill["level"])):
-        required = int(skill.get("next_xp", next_skill_xp_for_level(skill["level"])) or next_skill_xp_for_level(skill["level"]))
-        skill["xp"] = max(0, int(skill.get("xp", 0) or 0) - required)
-        skill["level"] += 1
-        skill["next_xp"] = next_skill_xp_for_level(skill["level"])
-        leveled = True
-    skill["mastery"] = clamp(int((int(skill.get("xp", 0) or 0) / max(1, int(skill.get("next_xp", 1) or 1))) * 100), 0, 100)
-    skill_store[resolved_skill_id] = normalize_dynamic_skill_state(skill, resource_name=resource_name)
-    messages: List[str] = []
-    if leveled:
-        messages.append(f"Skill-Fortschritt: {skill['name']} erreicht Lv {skill['level']}/{skill['level_max']}.")
-    return messages
-
-def parse_skill_event(campaign: Dict[str, Any], event_text: str) -> Optional[Dict[str, str]]:
-    text = str(event_text or "").strip()
-    if not text:
-        return None
-    marker = re.match(r"SKILL_XP\[(slot_[0-9]+):([^:\]]+):([^:\]]+)\]", text, flags=re.IGNORECASE)
-    if marker:
-        return {
-            "actor": marker.group(1).strip(),
-            "skill": marker.group(2).strip(),
-            "outcome": marker.group(3).strip().lower(),
-        }
-    return None
 
 def normalize_progression_event_list(*args: Any, **kwargs: Any):
     return _progression_gate_service.normalize_progression_event_list(*args, **kwargs)
@@ -2605,669 +1708,17 @@ def run_canon_gate(*args: Any, **kwargs: Any):
     return _canon_gate_service.run_canon_gate(*args, **kwargs)
 
 
-def manifestation_seed_from_skill(skill_payload: Dict[str, Any], *, source_turn: int, confidence: float) -> Optional[Dict[str, Any]]:
-    if not isinstance(skill_payload, dict):
-        return None
-    skill_name = str(skill_payload.get("name") or "").strip()
-    if not skill_name:
-        return None
-    normalized = normalized_eval_text(skill_name)
-    if not normalized:
-        return None
-    if any(tag in normalized for tag in ("pilz", "spore", "myzel", "wurzel", "ranke", "garten")):
-        seed_name = "Myzelpfad"
-        seed_tags = ["spore", "nature", "myzel"]
-    elif any(tag in normalized for tag in ("licht", "sonne", "glanz")):
-        seed_name = "Lichtpfad"
-        seed_tags = ["light"]
-    elif any(tag in normalized for tag in ("schatten", "nacht", "finster")):
-        seed_name = "Schattenpfad"
-        seed_tags = ["shadow"]
-    else:
-        seed_name = f"{skill_name} Pfad"
-        seed_tags = [token for token in normalized.split(" ") if token][:2]
-    seed_id = f"seed_{re.sub(r'[^a-z0-9]+', '_', normalized_eval_text(seed_name)).strip('_') or 'latent'}"
-    return {
-        "id": seed_id,
-        "name": seed_name,
-        "theme_tags": seed_tags[:4],
-        "source_turn": max(0, int(source_turn or 0)),
-        "confidence": clamp_float(float(confidence or 0.0), 0.0, 1.0),
-        "status": "latent",
-        "related_skill_ids": [skill_id_from_name(skill_name)],
-    }
+def apply_progression_events(*args: Any, **kwargs: Any):
+    return _progression_application_service.apply_progression_events(*args, **kwargs)
 
-def upsert_class_path_seed(character: Dict[str, Any], seed: Dict[str, Any]) -> Optional[str]:
-    if not isinstance(seed, dict):
-        return None
-    ensure_character_progression_core(character)
-    seed_id = str(seed.get("id") or "").strip()
-    if not seed_id:
-        return None
-    seeds = character.setdefault("class_path_seeds", [])
-    existing = next((entry for entry in seeds if isinstance(entry, dict) and str(entry.get("id") or "").strip() == seed_id), None)
-    if existing:
-        existing["confidence"] = max(
-            clamp_float(float(existing.get("confidence", 0.0) or 0.0), 0.0, 1.0),
-            clamp_float(float(seed.get("confidence", 0.0) or 0.0), 0.0, 1.0),
-        )
-        existing["source_turn"] = max(int(existing.get("source_turn", 0) or 0), int(seed.get("source_turn", 0) or 0))
-        existing["theme_tags"] = stable_sorted_unique_strings(list(existing.get("theme_tags") or []) + list(seed.get("theme_tags") or []), limit=8)
-        existing["related_skill_ids"] = stable_sorted_unique_strings(list(existing.get("related_skill_ids") or []) + list(seed.get("related_skill_ids") or []), limit=8)
-        return None
-    seeds.append(deep_copy(seed))
-    ensure_character_progression_core(character)
-    return f"Pfad-Saat entdeckt: {seed.get('name', seed_id)}."
 
-def infer_manifested_skill_name_with_llm(
-    *,
-    motif: str,
-    actor_name: str,
-    player_text: str,
-    story_text: str,
-    existing_names: Set[str],
-) -> str:
-    motif_key = str(motif or "").strip().lower()
-    motif_token_gate: Dict[str, Tuple[str, ...]] = {
-        "spore": ("myzel", "spore", "wurzel", "ranke", "pilz", "garten", "moos"),
-        "light": ("licht", "strahl", "glanz", "sonnen", "heilig"),
-        "shadow": ("schatten", "nacht", "finster", "dunkel"),
-        "flame": ("feuer", "flamme", "glut", "asche", "brand"),
-        "frost": ("frost", "eis", "reif", "kälte"),
-        "storm": ("sturm", "wind", "donner", "blitz"),
-        "martial": ("klinge", "stoß", "hieb", "parade", "kampf"),
-    }
-    required_tokens = motif_token_gate.get(motif_key, ())
+def build_skill_system_requests(*args: Any, **kwargs: Any):
+    return _progression_application_service.build_skill_system_requests(*args, **kwargs)
 
-    def motif_token_match(name: str) -> bool:
-        if not required_tokens:
-            return True
-        normalized_name = normalized_eval_text(name)
-        return any(token in normalized_name for token in required_tokens)
 
-    motif_seed_names: Dict[str, List[str]] = {
-        "spore": ["Myzelgriff", "Sporenfessel", "Wurzelstoß", "Gartenklaue"],
-        "light": ["Lichtlanze", "Strahlenschnitt", "Sonnenimpuls", "Heiligglanz"],
-        "shadow": ["Schattenriss", "Nachtfessel", "Finsterhieb", "Dunkelgriff"],
-        "flame": ["Glutstoß", "Flammenriss", "Aschenklinge", "Feuerschwinge"],
-        "frost": ["Frostriss", "Eisfessel", "Reifstoß", "Kältehieb"],
-        "storm": ["Donnerschnitt", "Sturmimpuls", "Windriss", "Blitzgriff"],
-        "martial": ["Klingenfokus", "Stoßtechnik", "Parierhieb", "Kampftakt"],
-    }
-    motif_label = {
-        "spore": "Sporen/Natur",
-        "light": "Licht",
-        "shadow": "Schatten",
-        "flame": "Feuer/Glut",
-        "frost": "Frost/Eis",
-        "storm": "Sturm/Wind/Donner",
-        "martial": "Klingenkampf/Körpertechnik",
-    }.get(motif_key, "Mystik")
-    user_prompt = (
-        f"Akteur: {actor_name}\n"
-        f"Motiv: {motif_label}\n"
-        f"Spieleraktion: {player_text[:360]}\n"
-        f"Story-Kontext: {story_text[:520]}\n"
-        f"Vergebene Skillnamen (verboten): {', '.join(sorted([name for name in existing_names if name])) or '-'}\n"
-        "Gib einen neuartigen, glaubwürdigen Skillnamen zurück."
-    )
-    for _ in range(2):
-        candidate = ""
-        try:
-            payload = call_ollama_schema(
-                MANIFESTATION_SKILL_NAME_SYSTEM_PROMPT,
-                user_prompt,
-                MANIFESTATION_SKILL_NAME_SCHEMA,
-                timeout=60,
-                temperature=max(0.55, OLLAMA_TEMPERATURE),
-            )
-            candidate = str((payload or {}).get("name") or "").strip()
-        except Exception:
-            candidate = ""
-        candidate = re.sub(r"\s+", " ", candidate).strip(" .,:;!?\"'`")
-        normalized_candidate = normalized_eval_text(candidate)
-        if (
-            candidate
-            and normalized_candidate
-            and normalized_candidate not in existing_names
-            and is_skill_manifestation_name_plausible(candidate, actor_name)
-            and motif_token_match(candidate)
-        ):
-            return candidate
-    for fallback_candidate in motif_seed_names.get(motif_key, []):
-        normalized_fallback = normalized_eval_text(fallback_candidate)
-        if normalized_fallback and normalized_fallback not in existing_names and is_skill_manifestation_name_plausible(fallback_candidate, actor_name):
-            return fallback_candidate
-    fallback = f"{motif_label} Manifestation".replace("/", " ")
-    fallback = re.sub(r"\s+", " ", fallback).strip()
-    if normalized_eval_text(fallback) in existing_names or not is_skill_manifestation_name_plausible(fallback, actor_name):
-        fallback = f"{motif_label} Impuls".replace("/", " ")
-    fallback = re.sub(r"\s+", " ", fallback).strip()
-    if not is_skill_manifestation_name_plausible(fallback, actor_name) or normalized_eval_text(fallback) in existing_names:
-        return ""
-    return fallback
+def apply_skill_events(*args: Any, **kwargs: Any):
+    return _progression_skills_service.apply_skill_events(*args, **kwargs)
 
-def infer_manifestation_progression_events_from_story(
-    *,
-    state_before: Dict[str, Any],
-    state_after: Dict[str, Any],
-    patch: Dict[str, Any],
-    actor: str,
-    action_type: str,
-    player_text: str,
-    story_text: str,
-) -> List[Dict[str, Any]]:
-    if action_type == "canon" or actor not in (state_after.get("characters") or {}):
-        return []
-    if patch_has_explicit_skill_progression_for_actor(patch, actor):
-        return []
-    character_before = ((state_before.get("characters") or {}).get(actor) or {})
-    character_after = ((state_after.get("characters") or {}).get(actor) or {})
-
-    actor_name = str(((character_after.get("bio") or {}).get("name") or actor).strip() or actor)
-    story_norm = normalized_eval_text(story_text)
-    player_norm = normalized_eval_text(player_text)
-    combined_norm = f"{story_norm} {player_norm}".strip()
-    if not combined_norm:
-        return []
-    first_skill_missing = not bool(character_after.get("skills") or {})
-    actor_bound = sentence_mentions_actor_name(story_text, actor_name) or any(player_norm.startswith(prefix) for prefix in ("ich ", "ich,", "ich."))
-    first_manifest = any(cue in combined_norm for cue in MANIFESTATION_STRONG_CUES)
-    concrete_effect_story = any(cue in story_norm for cue in MANIFESTATION_EFFECT_CUES)
-    concrete_effect_player = any(cue in player_norm for cue in MANIFESTATION_EFFECT_CUES)
-    concrete_effect = concrete_effect_story or concrete_effect_player
-    combat_present = any(cue in combined_norm for cue in COMBAT_NARRATIVE_HINTS)
-    force_roll = _hash_unit_interval(
-        f"first_skill_force|{int((state_after.get('meta') or {}).get('turn', 0) or 0)}|{actor}|{combined_norm[:160]}"
-    )
-    force_first_skill = bool(
-        first_skill_missing
-        and action_type in {"do", "say", "story"}
-        and combat_present
-        and force_roll <= FIRST_SKILL_FORCE_PROBABILITY
-    )
-    tactical = any(cue in combined_norm for cue in MANIFESTATION_TACTICAL_CUES)
-    world_reaction = any(cue in combined_norm for cue in MANIFESTATION_WORLD_REACTION_CUES)
-    cost_signal = any(cue in combined_norm for cue in MANIFESTATION_COST_CUES)
-    motif_matches = []
-    for motif, tokens in MANIFESTATION_MOTIF_GROUPS.items():
-        if any(token in combined_norm for token in tokens):
-            motif_matches.append(motif)
-    identity = bool(motif_matches)
-    story_support = (
-        concrete_effect_story
-        or any(token in story_norm for token in MANIFESTATION_TACTICAL_CUES)
-        or any(token in story_norm for token in MANIFESTATION_WORLD_REACTION_CUES)
-        or any(token in story_norm for token in MANIFESTATION_COST_CUES)
-        or any(any(token in story_norm for token in tokens) for tokens in MANIFESTATION_MOTIF_GROUPS.values())
-    )
-    score = sum([1 if actor_bound else 0, 1 if first_manifest else 0, 1 if concrete_effect else 0, 1 if identity else 0, 1 if tactical else 0, 1 if world_reaction else 0, 1 if cost_signal else 0])
-    if force_first_skill:
-        if not actor_bound or not (concrete_effect or combat_present):
-            return []
-        if not motif_matches:
-            motif_matches = ["martial"]
-            identity = True
-    else:
-        if not (actor_bound and first_manifest and concrete_effect and identity):
-            return []
-        if not story_support:
-            return []
-        if score < 5:
-            return []
-
-    existing_names = {
-        normalized_eval_text((entry or {}).get("name", ""))
-        for entry in ((character_after.get("skills") or {}).values())
-        if isinstance(entry, dict)
-    }
-    motif_tags = {
-        "spore": ["manifestation", "nature", "spore", "control"],
-        "light": ["manifestation", "light", "offense"],
-        "shadow": ["manifestation", "shadow", "control"],
-        "flame": ["manifestation", "flame", "offense"],
-        "frost": ["manifestation", "frost", "control"],
-        "storm": ["manifestation", "storm", "offense"],
-        "martial": ["manifestation", "martial", "offense"],
-    }
-    selected_motif = motif_matches[0]
-    base_name = infer_manifested_skill_name_with_llm(
-        motif=selected_motif,
-        actor_name=actor_name,
-        player_text=player_text,
-        story_text=story_text,
-        existing_names=existing_names,
-    )
-    if not base_name:
-        return []
-    motif = selected_motif
-    tags = motif_tags.get(motif, ["manifestation", "storm", "offense"])
-    candidate_skill_id = skill_id_from_name(base_name)
-    existing_event_skill_ids = set()
-    actor_patch = ((patch.get("characters") or {}).get(actor) or {}) if isinstance((patch.get("characters") or {}), dict) else {}
-    for event in normalize_progression_event_list(actor_patch.get("progression_events"), actor=actor, source_turn=0):
-        target_skill_id = str(event.get("target_skill_id") or "").strip()
-        if target_skill_id:
-            existing_event_skill_ids.add(target_skill_id)
-    if candidate_skill_id in existing_event_skill_ids:
-        return []
-
-    confidence = clamp_float(0.45 + (score * 0.08), 0.0, 0.98)
-    return [
-        {
-            "type": "skill_manifestation",
-            "actor": actor,
-            "target_skill_id": candidate_skill_id,
-            "target_class_id": None,
-            "target_element_id": None,
-            "severity": "high" if score >= 6 else "medium",
-            "tags": tags,
-            "source_turn": int((state_after.get("meta") or {}).get("turn", 0) or 0),
-            "reason": "Starke narrative Erstmanifestation",
-            "metadata": {
-                "origin": "inferred_story_manifestation_force" if force_first_skill else "inferred_story_manifestation",
-                "manifestation_score": score,
-                "manifestation_confidence": confidence,
-                "motif": motif,
-                "seed_eligible": bool(score >= 6),
-                "first_skill_force": bool(force_first_skill),
-            },
-            "skill": {
-                "id": candidate_skill_id,
-                "name": base_name,
-                "rank": "F",
-                "level": 1,
-                "xp": 0,
-                "next_xp": next_skill_xp_for_level(1),
-                "tags": tags,
-                "description": first_sentences(story_text or player_text, 2)[:220] or f"{base_name} manifestiert sich erstmals unter starkem Druck.",
-                "effect_summary": "Eine neue Kraftmanifestation mit klarer taktischer Wirkung.",
-                "power_rating": 10,
-                "growth_potential": "hoch" if score >= 6 else "mittel",
-                "cost": {"resource": resource_name_for_character(character_after, ((state_after.get("world") or {}).get("settings") or {})), "amount": 2},
-                "manifestation_source": "NarrativeInfer",
-            },
-        }
-    ]
-
-def infer_progression_events_from_patch(
-    *,
-    state_before: Dict[str, Any],
-    state_after: Dict[str, Any],
-    patch: Dict[str, Any],
-    actor: str,
-    action_type: str,
-    player_text: str = "",
-    story_text: str = "",
-) -> List[Dict[str, Any]]:
-    turn_number = int((state_after.get("meta") or {}).get("turn", 0) or 0)
-    inferred: List[Dict[str, Any]] = []
-    patch_characters = patch.get("characters") or {}
-
-    for slot_name, upd in patch_characters.items():
-        if not isinstance(upd, dict) or slot_name not in (state_after.get("characters") or {}):
-            continue
-        if upd.get("progression_events"):
-            explicit_events = normalize_progression_event_list(
-                upd.get("progression_events"),
-                actor=slot_name,
-                source_turn=turn_number,
-            )
-            for event in explicit_events:
-                metadata = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
-                metadata["origin"] = "explicit_patch"
-                event["metadata"] = metadata
-            inferred.extend(explicit_events)
-        hp_delta = int(upd.get("hp_delta", 0) or 0)
-        stamina_delta = int(upd.get("stamina_delta", 0) or 0)
-        res_delta_raw = 0
-        if isinstance(upd.get("resources_delta"), dict):
-            res_delta_raw = int(
-                (upd.get("resources_delta") or {}).get("res", 0)
-                or (upd.get("resources_delta") or {}).get("aether", 0)
-                or 0
-            )
-        if hp_delta < 0 and action_type in {"do", "story", "say"}:
-            inferred.append(
-                {
-                    "type": "combat_survival",
-                    "actor": slot_name,
-                    "severity": "medium" if hp_delta <= -3 else "low",
-                    "reason": "Überstandene Kampffolge",
-                    "source_turn": turn_number,
-                    "target_skill_id": None,
-                    "target_class_id": None,
-                    "tags": ["combat"],
-                    "metadata": {"hp_delta": hp_delta, "origin": "inferred_patch"},
-                    "skill": {},
-                }
-            )
-        if (stamina_delta < 0 or res_delta_raw < 0) and upd.get("skills_delta"):
-            for skill_id in (upd.get("skills_delta") or {}).keys():
-                    inferred.append(
-                        {
-                            "type": "skill_mastery_use",
-                        "actor": slot_name,
-                        "target_skill_id": str(skill_id),
-                        "severity": "low",
-                        "reason": "Skillnutzung unter Belastung",
-                        "source_turn": turn_number,
-                        "target_class_id": None,
-                        "tags": ["skill_use"],
-                            "metadata": {"stamina_delta": stamina_delta, "res_delta": res_delta_raw, "origin": "inferred_patch"},
-                            "skill": {},
-                        }
-                    )
-        if upd.get("class_set") or upd.get("class_update"):
-            target_class_id = str(
-                ((normalize_class_current(upd.get("class_set")) or (upd.get("class_update") or {})).get("id") or "")
-            ).strip() or None
-            inferred.append(
-                {
-                    "type": "class_breakthrough",
-                    "actor": slot_name,
-                    "target_skill_id": None,
-                    "target_class_id": target_class_id,
-                    "severity": "medium",
-                    "reason": "Klassenfortschritt",
-                    "source_turn": turn_number,
-                    "tags": ["class"],
-                    "metadata": {"origin": "inferred_patch"},
-                    "skill": {},
-                }
-            )
-
-    for plot_update in (patch.get("plotpoints_update") or []):
-        if not isinstance(plot_update, dict):
-            continue
-        if str(plot_update.get("status") or "").strip().lower() != "done":
-            continue
-        inferred.append(
-            {
-                "type": "milestone_progress",
-                "actor": actor,
-                "target_skill_id": None,
-                "target_class_id": None,
-                "severity": "medium",
-                "reason": f"Plotpoint abgeschlossen: {plot_update.get('id', '')}",
-                "source_turn": turn_number,
-                "tags": ["milestone"],
-                "metadata": {"plotpoint_id": str(plot_update.get("id") or ""), "origin": "inferred_patch"},
-                "skill": {},
-            }
-        )
-
-    story_events = " ".join(str(entry or "") for entry in (patch.get("events_add") or []))
-    story_norm = normalized_eval_text(story_events)
-    if any(word in story_norm for word in ("boss", "erzgegner", "endgegner")) and any(
-        word in story_norm for word in ("besiegt", "gefallen", "zerstoert", "zerstört")
-    ):
-        inferred.append(
-            {
-                "type": "boss_defeated",
-                "actor": actor,
-                "target_skill_id": None,
-                "target_class_id": None,
-                "severity": "high",
-                "reason": "Boss wurde besiegt",
-                "source_turn": turn_number,
-                "tags": ["combat", "boss"],
-                "metadata": {"origin": "inferred_patch"},
-                "skill": {},
-            }
-        )
-    elif any(word in story_norm for word in ("gegner", "kreatur", "feind", "monster")) and any(
-        word in story_norm for word in ("besiegt", "fällt", "zerstoert", "zerstört", "ausgeschaltet")
-    ):
-        inferred.append(
-            {
-                "type": "combat_victory",
-                "actor": actor,
-                "target_skill_id": None,
-                "target_class_id": None,
-                "severity": "medium",
-                "reason": "Kampfsieg",
-                "source_turn": turn_number,
-                "tags": ["combat"],
-                "metadata": {"origin": "inferred_patch"},
-                "skill": {},
-            }
-        )
-    inferred.extend(
-        infer_manifestation_progression_events_from_story(
-            state_before=state_before,
-            state_after=state_after,
-            patch=patch,
-            actor=actor,
-            action_type=action_type,
-            player_text=player_text,
-            story_text=story_text,
-        )
-    )
-    return inferred
-
-def apply_progression_event_xp(
-    *,
-    character: Dict[str, Any],
-    event: Dict[str, Any],
-    world_settings: Optional[Dict[str, Any]],
-    actor_slot: str,
-) -> List[str]:
-    messages: List[str] = []
-    event_type = str(event.get("type") or "").strip().lower()
-    if event_type not in PROGRESSION_EVENT_TYPES:
-        return messages
-    severity = normalize_progression_event_severity(event.get("severity"))
-    severity_mult = PROGRESSION_EVENT_SEVERITY_MULTIPLIER.get(severity, 1.0)
-    speed_mult = progression_speed_multiplier(world_settings)
-    base = PROGRESSION_EVENT_BASE_XP.get(event_type, PROGRESSION_EVENT_BASE_XP["milestone_progress"])
-
-    character_gain = max(1, int(round(base["character"] * severity_mult * speed_mult)))
-    class_gain = max(0, int(round(base["class"] * severity_mult * speed_mult)))
-    skill_gain = max(0, int(round(base["skill"] * severity_mult * speed_mult)))
-
-    before_level = int(character.get("level", 1) or 1)
-    apply_system_xp(character, character_gain)
-    after_level = int(character.get("level", 1) or 1)
-    if after_level > before_level:
-        char_name = str(((character.get("bio") or {}).get("name") or actor_slot).strip())
-        messages.append(f"{char_name} steigt auf Lv {after_level} auf.")
-
-    if class_gain > 0:
-        messages.extend(apply_class_xp(character, class_gain, event_reason=str(event.get("reason") or "")))
-
-    target_skill_id = str(event.get("target_skill_id") or "").strip()
-    if event_type == "skill_manifestation" and not target_skill_id:
-        skill_payload = deep_copy(event.get("skill") or {})
-        if isinstance(skill_payload, dict) and skill_payload.get("name"):
-            target_skill_id = skill_id_from_name(str(skill_payload.get("name") or ""))
-            event["target_skill_id"] = target_skill_id
-    if skill_gain > 0 and target_skill_id:
-        outcomes = {1: "small", 2: "normal", 3: "major"}
-        bucket = 1 if severity == "low" else 2 if severity == "medium" else 3
-        for _ in range(max(1, int(round(skill_gain / 12.0)))):
-            messages.extend(grant_skill_xp(character, target_skill_id, outcomes[bucket], world_settings=world_settings))
-    append_recent_progression_event(character, event)
-    return messages
-
-def manifest_skill_from_progression_event(
-    *,
-    character: Dict[str, Any],
-    actor_slot: str,
-    event: Dict[str, Any],
-    world: Optional[Dict[str, Any]],
-    world_settings: Optional[Dict[str, Any]],
-) -> Optional[str]:
-    if str(event.get("type") or "").strip().lower() != "skill_manifestation":
-        return None
-    skill_store = character.setdefault("skills", {})
-    target_skill_id = str(event.get("target_skill_id") or "").strip()
-    if target_skill_id and target_skill_id in skill_store:
-        return None
-    payload = deep_copy(event.get("skill") or {})
-    if not isinstance(payload, dict) or not payload.get("name"):
-        return None
-    skill = canonicalize_manifested_skill_payload(
-        raw_skill=payload,
-        character=character,
-        world=world,
-        world_settings=world_settings,
-        default_source=f"Progression:{event.get('type', 'skill_manifestation')}",
-    )
-    if not skill:
-        return None
-    existing = skill_store.get(skill["id"])
-    skill_store[skill["id"]] = (
-        merge_dynamic_skill(existing, skill, resource_name=resource_name_for_character(character, world_settings))
-        if existing
-        else skill
-    )
-    event["target_skill_id"] = skill["id"]
-    char_name = str(((character.get("bio") or {}).get("name") or actor_slot).strip())
-    return f"{char_name} manifestiert den neuen Skill {skill['name']} ({skill['rank']})."
-
-def apply_progression_events(
-    campaign: Dict[str, Any],
-    state_before: Dict[str, Any],
-    state_after: Dict[str, Any],
-    patch: Dict[str, Any],
-    *,
-    actor: str,
-    action_type: str,
-    player_text: str = "",
-    story_text: str = "",
-) -> Dict[str, Any]:
-    world_settings = ((state_after.get("world") or {}).get("settings") or {})
-    world_model = state_after.get("world") if isinstance(state_after.get("world"), dict) else {}
-    turn_number = int((state_after.get("meta") or {}).get("turn", 0) or 0)
-    normalized_events = infer_progression_events_from_patch(
-        state_before=state_before,
-        state_after=state_after,
-        patch=patch,
-        actor=actor,
-        action_type=action_type,
-        player_text=player_text,
-        story_text=story_text,
-    )
-    normalized_events = reduce_progression_event_density(
-        normalized_events,
-        state_after=state_after,
-        action_type=action_type,
-    )
-    event_messages: List[str] = []
-    applied_events: List[Dict[str, Any]] = []
-    for raw_event in normalized_events:
-        event = normalize_progression_event(raw_event, actor=actor, source_turn=turn_number)
-        if not event:
-            continue
-        slot_name = str(event.get("actor") or "").strip()
-        if slot_name not in (state_after.get("characters") or {}):
-            continue
-        character = (state_after.get("characters") or {}).get(slot_name) or {}
-        ensure_progression_shape(character)
-        ensure_character_progression_core(character)
-        manifestation_msg = manifest_skill_from_progression_event(
-            character=character,
-            actor_slot=slot_name,
-            event=event,
-            world=state_after.get("world") if isinstance(state_after.get("world"), dict) else {},
-            world_settings=world_settings,
-        )
-        if manifestation_msg:
-            event_messages.append(manifestation_msg)
-            metadata = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
-            if metadata.get("seed_eligible"):
-                seed = manifestation_seed_from_skill(
-                    event.get("skill") if isinstance(event.get("skill"), dict) else {},
-                    source_turn=int(event.get("source_turn", 0) or 0),
-                    confidence=float(metadata.get("manifestation_confidence", 0.0) or 0.0),
-                )
-                seed_message = upsert_class_path_seed(character, seed) if seed else None
-                if seed_message:
-                    event_messages.append(seed_message)
-        event_messages.extend(
-            apply_progression_event_xp(
-                character=character,
-                event=event,
-                world_settings=world_settings,
-                actor_slot=slot_name,
-            )
-        )
-        event_type = str(event.get("type") or "").strip().lower()
-        event_messages.extend(
-            ensure_class_rank_core_skills(
-                character,
-                world_model,
-                world_settings,
-                unlock_extra=event_type in {"milestone_progress", "class_breakthrough", "boss_defeated", "skill_manifestation"},
-            )
-        )
-        applied_events.append(event)
-        state_after["characters"][slot_name] = character
-    if event_messages:
-        state_after.setdefault("events", [])
-        state_after["events"].extend(event_messages)
-    return {"events": applied_events, "messages": event_messages}
-
-def build_skill_system_requests(
-    campaign: Dict[str, Any],
-    state_before: Dict[str, Any],
-    state_after: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    requests: List[Dict[str, Any]] = []
-    world_settings = (((state_after.get("world") or {}).get("settings") or {}))
-    for slot_name, after_character in (state_after.get("characters") or {}).items():
-        before_character = ((state_before.get("characters") or {}).get(slot_name) or {})
-        before_level = int(before_character.get("level", 1) or 1)
-        after_level = int(after_character.get("level", 1) or 1)
-        if after_level > before_level:
-            requests.append(
-                {
-                    "type": "clarify",
-                    "actor": slot_name,
-                    "question": f"Neues Level erreicht ({after_level}). Soll der Fokus als nächstes eher auf Klasse oder Skill-Meisterung liegen?",
-                }
-            )
-        before_class = normalize_class_current(before_character.get("class_current"))
-        after_class = normalize_class_current(after_character.get("class_current"))
-        if after_class and (not before_class or int(after_class.get("level", 1) or 1) > int((before_class or {}).get("level", 1) or 1)):
-            requests.append(
-                {
-                    "type": "choice",
-                    "actor": slot_name,
-                    "question": f"Klassenfortschritt für {after_class.get('name', 'Klasse')}: Welche Richtung soll gestärkt werden?",
-                    "options": ["Offensive Schärfung", "Defensive Stabilität", "Ressourcenkontrolle", "Eigener Plan"],
-                }
-            )
-        skill_hints = build_skill_fusion_hints(after_character.get("skills") or {}, resource_name=resource_name_for_character(after_character, world_settings))
-        if skill_hints:
-            top_hint = skill_hints[0]
-            requests.append(
-                {
-                    "type": "choice",
-                    "actor": slot_name,
-                    "question": f"{top_hint.get('label')} Soll der Erzähler eine Evolution erzählerisch vorbereiten?",
-                    "options": ["Ja, vorbereiten", "Nein, vorerst nicht", "Eigener Plan"],
-                }
-            )
-            break
-    return requests[:2]
-
-def apply_skill_events(campaign: Dict[str, Any], state: Dict[str, Any], events: List[str]) -> List[str]:
-    messages: List[str] = []
-    for event_text in (events or []):
-        parsed = parse_skill_event(campaign, str(event_text or ""))
-        if not parsed:
-            continue
-        actor = parsed.get("actor", "")
-        skill_name = parsed.get("skill", "")
-        outcome = parsed.get("outcome", "normal")
-        if actor not in (state.get("characters") or {}):
-            continue
-        character = (state.get("characters") or {}).get(actor) or {}
-        messages.extend(grant_skill_xp(character, skill_name, outcome, world_settings=((state.get("world") or {}).get("settings") or {})))
-        (state.get("characters") or {})[actor] = character
-    return messages
 
 def rebuild_character_derived(character: Dict[str, Any], items_db: Dict[str, Any], world_time: Optional[Dict[str, Any]] = None) -> None:
     ensure_progression_shape(character)
@@ -3391,7 +1842,7 @@ def normalize_character_state(
                 }
             )
     if not merged["class_current"]:
-        merged["class_current"] = migrate_legacy_role_to_class(legacy_role_text)
+        merged["class_current"] = _progression_classes_service.migrate_legacy_role_to_class(legacy_role_text)
     merged["faction_memberships"] = [deep_copy(entry) for entry in (character.get("faction_memberships") or []) if isinstance(entry, dict)]
     merged["aging"].update(character.get("aging", {}) or {})
     merged["modifiers"].update(character.get("modifiers", {}) or {})

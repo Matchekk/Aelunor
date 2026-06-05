@@ -14,11 +14,27 @@ class TurnProgressionCodexPortTests(unittest.TestCase):
 
     def test_configure_builds_targeted_progression_and_codex_dependencies(self) -> None:
         self.assertIn("_build_runtime_turn_progression_dependencies(main_globals)", self.source)
+        self.assertIn("_build_target_turn_progression_dependencies()", self.source)
         self.assertIn('_build_source_turn_progression_dependencies(main_globals.get("state_engine"))', self.source)
+        self.assertIn("runtime_progression_deps or target_progression_deps or source_progression_deps", self.source)
         self.assertIn("configure_turn_progression_dependencies(progression_deps)", self.source)
         self.assertIn("_build_runtime_turn_codex_dependencies(main_globals)", self.source)
         self.assertIn('_build_source_turn_codex_dependencies(main_globals.get("state_engine"))', self.source)
         self.assertIn("configure_turn_codex_dependencies(codex_deps)", self.source)
+
+    def test_target_progression_dependencies_use_progression_modules(self) -> None:
+        self.assertIn(
+            "append_character_change_events=progression_application_service.append_character_change_events",
+            self.source,
+        )
+        self.assertIn(
+            "apply_progression_events=progression_application_service.apply_progression_events",
+            self.source,
+        )
+        self.assertIn(
+            "apply_skill_events=progression_skills_service.apply_skill_events",
+            self.source,
+        )
 
     def test_configure_does_not_overwrite_local_progression_or_codex_wrappers(self) -> None:
         self.assertIn("_TURN_PROGRESSION_PORT_NAMES", self.source)

@@ -64,6 +64,8 @@ from app.services.turn.dependencies import (
 from app.services.canon import extractor as canon_extractor_service
 from app.services.canon import gate as canon_gate_service
 from app.services.canon import npc_extractor as npc_extractor_service
+from app.services.progression import application as progression_application_service
+from app.services.progression import skills as progression_skills_service
 from app.services.world import codex as world_codex_service
 
 _CONFIGURED = False
@@ -379,6 +381,14 @@ def _build_source_turn_progression_dependencies(source: Any) -> Optional[TurnPro
     )
 
 
+def _build_target_turn_progression_dependencies() -> TurnProgressionDependencies:
+    return TurnProgressionDependencies(
+        append_character_change_events=progression_application_service.append_character_change_events,
+        apply_progression_events=progression_application_service.apply_progression_events,
+        apply_skill_events=progression_skills_service.apply_skill_events,
+    )
+
+
 def _build_source_turn_codex_dependencies(source: Any) -> Optional[TurnCodexDependencies]:
     required_names = (
         "collect_codex_triggers",
@@ -570,8 +580,9 @@ def configure(main_globals: Dict[str, Any]) -> None:
         configure_turn_progression_dependencies(explicit_progression_deps)
     else:
         runtime_progression_deps = _build_runtime_turn_progression_dependencies(main_globals)
+        target_progression_deps = _build_target_turn_progression_dependencies()
         source_progression_deps = _build_source_turn_progression_dependencies(main_globals.get("state_engine"))
-        progression_deps = runtime_progression_deps or source_progression_deps
+        progression_deps = runtime_progression_deps or target_progression_deps or source_progression_deps
         if progression_deps is not None:
             configure_turn_progression_dependencies(progression_deps)
     explicit_codex_deps = main_globals.get("turn_codex_dependencies")
