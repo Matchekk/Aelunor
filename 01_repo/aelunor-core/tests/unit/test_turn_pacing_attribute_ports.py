@@ -14,9 +14,11 @@ class TurnPacingAttributePortTests(unittest.TestCase):
 
     def test_configure_builds_targeted_pacing_and_attribute_dependencies(self) -> None:
         self.assertIn("_build_runtime_turn_pacing_dependencies(main_globals)", self.source)
-        self.assertIn("configure_turn_pacing_dependencies(runtime_pacing_deps)", self.source)
+        self.assertIn('_build_source_turn_pacing_dependencies(main_globals.get("state_engine"))', self.source)
+        self.assertIn("configure_turn_pacing_dependencies(pacing_deps)", self.source)
         self.assertIn("_build_runtime_turn_attribute_dependencies(main_globals)", self.source)
-        self.assertIn("configure_turn_attribute_dependencies(runtime_attribute_deps)", self.source)
+        self.assertIn('_build_source_turn_attribute_dependencies(main_globals.get("state_engine"))', self.source)
+        self.assertIn("configure_turn_attribute_dependencies(attribute_deps)", self.source)
 
     def test_configure_does_not_overwrite_local_pacing_or_attribute_wrappers(self) -> None:
         self.assertIn("_TURN_PACING_PORT_NAMES", self.source)

@@ -14,9 +14,11 @@ class TurnProgressionCodexPortTests(unittest.TestCase):
 
     def test_configure_builds_targeted_progression_and_codex_dependencies(self) -> None:
         self.assertIn("_build_runtime_turn_progression_dependencies(main_globals)", self.source)
-        self.assertIn("configure_turn_progression_dependencies(runtime_progression_deps)", self.source)
+        self.assertIn('_build_source_turn_progression_dependencies(main_globals.get("state_engine"))', self.source)
+        self.assertIn("configure_turn_progression_dependencies(progression_deps)", self.source)
         self.assertIn("_build_runtime_turn_codex_dependencies(main_globals)", self.source)
-        self.assertIn("configure_turn_codex_dependencies(runtime_codex_deps)", self.source)
+        self.assertIn('_build_source_turn_codex_dependencies(main_globals.get("state_engine"))', self.source)
+        self.assertIn("configure_turn_codex_dependencies(codex_deps)", self.source)
 
     def test_configure_does_not_overwrite_local_progression_or_codex_wrappers(self) -> None:
         self.assertIn("_TURN_PROGRESSION_PORT_NAMES", self.source)

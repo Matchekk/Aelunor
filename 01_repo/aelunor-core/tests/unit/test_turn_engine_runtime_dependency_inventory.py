@@ -30,6 +30,22 @@ class TurnEngineRuntimeDependencyInventoryTests(unittest.TestCase):
         self.assertIn("call_ollama_schema", names)
         self.assertIn("build_extractor_context_packet", names)
 
+    def test_explicit_ports_are_not_runtime_required_dependencies(self) -> None:
+        runtime_required = set(dependency_names_for_group("runtime_dependencies"))
+        explicit_ports = set()
+        for group in (
+            "llm_explicit_ports",
+            "extraction_explicit_ports",
+            "progression_explicit_ports",
+            "codex_explicit_ports",
+            "pacing_timing_explicit_ports",
+            "attribute_meta_explicit_ports",
+        ):
+            explicit_ports.update(dependency_names_for_group(group))
+
+        self.assertTrue(explicit_ports)
+        self.assertTrue(explicit_ports.isdisjoint(runtime_required))
+
     def test_lorus_campaign_dependencies_are_marked_as_deferred(self) -> None:
         deferred = set(dependency_names_for_group("campaign_lorus_defer"))
 
