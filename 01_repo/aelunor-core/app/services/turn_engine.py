@@ -61,6 +61,9 @@ from app.services.turn.dependencies import (
     TurnProgressionDependencies,
     build_turn_llm_dependencies,
 )
+from app.services.canon import extractor as canon_extractor_service
+from app.services.canon import npc_extractor as npc_extractor_service
+from app.services.world import codex as world_codex_service
 
 _CONFIGURED = False
 _TURN_ATTRIBUTE_DEPS: Optional[TurnAttributeDependencies] = None
@@ -344,6 +347,21 @@ def _build_source_turn_extraction_dependencies(source: Any) -> Optional[TurnExtr
     )
 
 
+def _build_target_turn_extraction_dependencies(source: Any) -> Optional[TurnExtractionDependencies]:
+    run_canon_gate = _source_callable(source, "run_canon_gate")
+    normalize_npc_codex_state = getattr(world_codex_service, "normalize_npc_codex_state", None)
+    if run_canon_gate is None or not callable(normalize_npc_codex_state):
+        return None
+    return TurnExtractionDependencies(
+        build_extractor_context_packet=canon_extractor_service.build_extractor_context_packet,
+        call_canon_extractor=canon_extractor_service.call_canon_extractor,
+        call_npc_extractor=npc_extractor_service.call_npc_extractor,
+        apply_npc_upserts=npc_extractor_service.apply_npc_upserts,
+        run_canon_gate=run_canon_gate,
+        normalize_npc_codex_state=normalize_npc_codex_state,
+    )
+
+
 def _build_source_turn_progression_dependencies(source: Any) -> Optional[TurnProgressionDependencies]:
     required_names = (
         "append_character_change_events",
@@ -541,8 +559,9 @@ def configure(main_globals: Dict[str, Any]) -> None:
         configure_turn_extraction_dependencies(explicit_extraction_deps)
     else:
         runtime_extraction_deps = _build_runtime_turn_extraction_dependencies(main_globals)
+        target_extraction_deps = _build_target_turn_extraction_dependencies(main_globals.get("state_engine"))
         source_extraction_deps = _build_source_turn_extraction_dependencies(main_globals.get("state_engine"))
-        extraction_deps = runtime_extraction_deps or source_extraction_deps
+        extraction_deps = runtime_extraction_deps or target_extraction_deps or source_extraction_deps
         if extraction_deps is not None:
             configure_turn_extraction_dependencies(extraction_deps)
     explicit_progression_deps = main_globals.get("turn_progression_dependencies")

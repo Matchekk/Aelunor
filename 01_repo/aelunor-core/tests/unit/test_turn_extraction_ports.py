@@ -14,8 +14,18 @@ class TurnExtractionPortTests(unittest.TestCase):
 
     def test_configure_builds_targeted_extraction_dependencies_from_runtime_mapping(self) -> None:
         self.assertIn("_build_runtime_turn_extraction_dependencies(main_globals)", self.source)
+        self.assertIn('_build_target_turn_extraction_dependencies(main_globals.get("state_engine"))', self.source)
         self.assertIn('_build_source_turn_extraction_dependencies(main_globals.get("state_engine"))', self.source)
+        self.assertIn("runtime_extraction_deps or target_extraction_deps or source_extraction_deps", self.source)
         self.assertIn("configure_turn_extraction_dependencies(extraction_deps)", self.source)
+
+    def test_target_extraction_dependencies_use_canon_modules(self) -> None:
+        self.assertIn("canon_extractor_service.build_extractor_context_packet", self.source)
+        self.assertIn("canon_extractor_service.call_canon_extractor", self.source)
+        self.assertIn("npc_extractor_service.call_npc_extractor", self.source)
+        self.assertIn("npc_extractor_service.apply_npc_upserts", self.source)
+        self.assertIn('run_canon_gate = _source_callable(source, "run_canon_gate")', self.source)
+        self.assertIn('getattr(world_codex_service, "normalize_npc_codex_state", None)', self.source)
 
     def test_configure_does_not_overwrite_local_extraction_wrappers(self) -> None:
         self.assertIn("_TURN_EXTRACTION_PORT_NAMES", self.source)

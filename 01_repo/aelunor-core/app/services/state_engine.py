@@ -276,6 +276,8 @@ from app.services.campaigns import state_shape as campaign_state_shape
 from app.services.campaigns import views as campaign_views
 from app.services.migrations import campaign_slots as campaign_slot_migration
 from app.services import live_state_service as _default_live_state_service
+from app.services.canon import extractor as _canon_extractor_service
+from app.services.canon import npc_extractor as _npc_extractor_service
 from app.services.turn_engine import emit_turn_phase_event, turn_flow_error
 from app.services.llm.json_repair import (
     extract_json_payload,
@@ -559,6 +561,28 @@ def _legacy_config_snapshot(extra: Optional[Mapping[str, Any]] = None) -> Dict[s
     return snapshot
 
 
+def _configure_extractor_service_ports() -> None:
+    _canon_extractor_service.configure(
+        call_ollama_schema=call_ollama_schema,
+        skill_id_from_name=skill_id_from_name,
+        skill_rank_sort_value=skill_rank_sort_value,
+        normalize_dynamic_skill_state=normalize_dynamic_skill_state,
+        clean_auto_ability_name=clean_auto_ability_name,
+        clean_auto_item_name=clean_auto_item_name,
+        actor_relevant_story_sentences=actor_relevant_story_sentences,
+        extract_auto_class_change=extract_auto_class_change,
+        extract_auto_learned_abilities=extract_auto_learned_abilities,
+        extract_auto_story_item_events=extract_auto_story_item_events,
+    )
+    _npc_extractor_service.configure(
+        call_ollama_schema=call_ollama_schema,
+        class_rank_sort_value=class_rank_sort_value,
+        normalize_skill_store=normalize_skill_store,
+        normalize_dynamic_skill_state=normalize_dynamic_skill_state,
+        merge_dynamic_skill=merge_dynamic_skill,
+    )
+
+
 def configure_dependencies(deps: StateEngineDependencies) -> None:
     """Configure explicit runtime ports for the state engine."""
     global _CONFIGURED, _STATE_ENGINE_DEPS
@@ -576,6 +600,7 @@ def configure_dependencies(deps: StateEngineDependencies) -> None:
     _npc_module.configure(configured_globals)
     _progression_module.configure(configured_globals)
     _codex_module.configure(configured_globals)
+    _configure_extractor_service_ports()
     for _name in (
         "deep_copy",
         "make_id",
@@ -4192,42 +4217,11 @@ def default_combat_meta() -> Dict[str, Any]:
 def default_attribute_influence_meta() -> Dict[str, Any]:
     return _default_attribute_influence_meta()
 
-def default_extraction_quarantine() -> Dict[str, Any]:
-    return {
-        "entries": [],
-        "max_entries": EXTRACTION_QUARANTINE_DEFAULT_MAX,
-    }
+def default_extraction_quarantine(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.default_extraction_quarantine(*args, **kwargs)
 
-def normalize_extraction_quarantine_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
-    raw = meta.get("extraction_quarantine")
-    quarantine = deep_copy(raw) if isinstance(raw, dict) else default_extraction_quarantine()
-    max_entries = int(quarantine.get("max_entries", EXTRACTION_QUARANTINE_DEFAULT_MAX) or EXTRACTION_QUARANTINE_DEFAULT_MAX)
-    max_entries = clamp(max_entries, 1, 1000)
-    entries: List[Dict[str, Any]] = []
-    for raw_entry in (quarantine.get("entries") or []):
-        if not isinstance(raw_entry, dict):
-            continue
-        status = str(raw_entry.get("status") or "").strip().lower()
-        if status not in {"review", "reject"}:
-            continue
-        normalized_entry = {
-            "id": str(raw_entry.get("id") or make_id("xq")).strip(),
-            "turn": max(0, int(raw_entry.get("turn", 0) or 0)),
-            "actor": str(raw_entry.get("actor") or "").strip(),
-            "source": str(raw_entry.get("source") or "unknown").strip(),
-            "entity_type": str(raw_entry.get("entity_type") or "unknown").strip(),
-            "status": status,
-            "reason_code": str(raw_entry.get("reason_code") or EXTRACTION_REASON_LOW_CONFIDENCE).strip(),
-            "label": str(raw_entry.get("label") or "").strip(),
-            "payload": deep_copy(raw_entry.get("payload") or {}),
-            "created_at": str(raw_entry.get("created_at") or utc_now()),
-        }
-        entries.append(normalized_entry)
-    if len(entries) > max_entries:
-        entries = entries[-max_entries:]
-    normalized = {"entries": entries, "max_entries": max_entries}
-    meta["extraction_quarantine"] = normalized
-    return normalized
+def normalize_extraction_quarantine_meta(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.normalize_extraction_quarantine_meta(*args, **kwargs)
 
 def normalize_meta_migrations(meta: Dict[str, Any]) -> Dict[str, Any]:
     raw = meta.get("migrations")
@@ -5437,1296 +5431,89 @@ def extract_auto_story_injuries(story_text: str, actor_display: str) -> List[Dic
                     return candidates
     return candidates
 
-def sorted_npc_codex_entries(state: Dict[str, Any]) -> List[Dict[str, Any]]:
-    codex = (state.get("npc_codex") or {})
-    entries = [entry for entry in codex.values() if isinstance(entry, dict) and entry.get("name")]
-    entries.sort(
-        key=lambda entry: (
-            int(entry.get("relevance_score", 0) or 0),
-            int(entry.get("last_seen_turn", 0) or 0),
-            int(entry.get("mention_count", 0) or 0),
-            str(entry.get("name", "")),
-        ),
-        reverse=True,
-    )
-    return entries
+def sorted_npc_codex_entries(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.sorted_npc_codex_entries(*args, **kwargs)
 
-def build_npc_codex_summary(state: Dict[str, Any], *, limit: int = 16) -> List[Dict[str, Any]]:
-    summary: List[Dict[str, Any]] = []
-    for entry in sorted_npc_codex_entries(state)[: max(1, int(limit or 1))]:
-        summary.append(
-            {
-                "npc_id": entry.get("npc_id"),
-                "name": entry.get("name"),
-                "race": entry.get("race"),
-                "goal": entry.get("goal"),
-                "level": entry.get("level"),
-                "class_name": ((normalize_class_current(entry.get("class_current")) or {}).get("name") or ""),
-                "class_rank": ((normalize_class_current(entry.get("class_current")) or {}).get("rank") or ""),
-                "faction": entry.get("faction"),
-                "role_hint": entry.get("role_hint"),
-                "status": entry.get("status"),
-                "scene_id": entry.get("last_seen_scene_id"),
-                "last_seen_turn": entry.get("last_seen_turn"),
-                "mention_count": entry.get("mention_count"),
-                "relevance_score": entry.get("relevance_score"),
-            }
-        )
-    return summary
+def build_npc_codex_summary(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.build_npc_codex_summary(*args, **kwargs)
 
-def sorted_world_profiles(state: Dict[str, Any], *, kind: str) -> List[Tuple[str, Dict[str, Any]]]:
-    world = state.get("world") or {}
-    source = world.get("races") if kind == CODEX_KIND_RACE else world.get("beast_types")
-    if not isinstance(source, dict):
-        return []
-    rows = [(str(entity_id), profile) for entity_id, profile in source.items() if isinstance(profile, dict)]
-    rows.sort(key=lambda row: (normalize_codex_alias_text((row[1] or {}).get("name", "")), row[0]))
-    return rows
+def sorted_world_profiles(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.sorted_world_profiles(*args, **kwargs)
 
-def build_race_codex_summary(state: Dict[str, Any], *, limit: int = 32) -> List[Dict[str, Any]]:
-    codex_races = (((state.get("codex") or {}).get("races") or {})
-                   if isinstance(((state.get("codex") or {}).get("races") or {}), dict) else {})
-    summary: List[Dict[str, Any]] = []
-    for race_id, profile in sorted_world_profiles(state, kind=CODEX_KIND_RACE)[: max(1, int(limit or 1))]:
-        entry = normalize_codex_entry_stable(codex_races.get(race_id), kind=CODEX_KIND_RACE)
-        summary.append(
-            {
-                "race_id": race_id,
-                "name": str((profile or {}).get("name") or race_id),
-                "knowledge_level": int(entry.get("knowledge_level", 0) or 0),
-                "discovered": bool(entry.get("discovered")),
-                "known_blocks": deep_copy(entry.get("known_blocks") or []),
-                "known_facts": deep_copy(entry.get("known_facts") or []),
-                "encounter_count": int(entry.get("encounter_count", 0) or 0),
-            }
-        )
-    return summary
+def build_race_codex_summary(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.build_race_codex_summary(*args, **kwargs)
 
-def build_beast_codex_summary(state: Dict[str, Any], *, limit: int = 40) -> List[Dict[str, Any]]:
-    codex_beasts = (((state.get("codex") or {}).get("beasts") or {})
-                    if isinstance(((state.get("codex") or {}).get("beasts") or {}), dict) else {})
-    summary: List[Dict[str, Any]] = []
-    for beast_id, profile in sorted_world_profiles(state, kind=CODEX_KIND_BEAST)[: max(1, int(limit or 1))]:
-        entry = normalize_codex_entry_stable(codex_beasts.get(beast_id), kind=CODEX_KIND_BEAST)
-        summary.append(
-            {
-                "beast_id": beast_id,
-                "name": str((profile or {}).get("name") or beast_id),
-                "knowledge_level": int(entry.get("knowledge_level", 0) or 0),
-                "discovered": bool(entry.get("discovered")),
-                "known_blocks": deep_copy(entry.get("known_blocks") or []),
-                "known_facts": deep_copy(entry.get("known_facts") or []),
-                "encounter_count": int(entry.get("encounter_count", 0) or 0),
-                "defeated_count": int(entry.get("defeated_count", 0) or 0),
-            }
-        )
-    return summary
+def build_beast_codex_summary(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.build_beast_codex_summary(*args, **kwargs)
 
-def build_world_element_summary(state: Dict[str, Any], *, limit: int = 16) -> List[Dict[str, Any]]:
-    world = state.get("world") if isinstance(state.get("world"), dict) else {}
-    rows = []
-    for element_id, profile in ((world.get("elements") or {}).items()):
-        if not isinstance(profile, dict):
-            continue
-        rows.append(
-            {
-                "id": element_id,
-                "name": str(profile.get("name") or element_id),
-                "origin": str(profile.get("origin") or "generated"),
-                "theme": str(profile.get("theme") or ""),
-                "status_effect_tags": deep_copy(profile.get("status_effect_tags") or []),
-                "class_affinities": deep_copy(profile.get("class_affinities") or []),
-                "skill_affinities": deep_copy(profile.get("skill_affinities") or []),
-            }
-        )
-    rows.sort(key=lambda entry: (normalize_codex_alias_text(entry.get("name", "")), entry.get("id", "")))
-    return rows[: max(1, int(limit or 1))]
+def build_world_element_summary(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.build_world_element_summary(*args, **kwargs)
 
-def build_extractor_context_packet(
-    campaign: Dict[str, Any],
-    state: Dict[str, Any],
-    actor: str,
-    action_type: str,
-    source_text: str,
-    *,
-    source: str,
-) -> str:
-    world_settings = ((state.get("world") or {}).get("settings") or {})
-    payload = {
-        "source": source,
-        "action_type": action_type,
-        "actor": actor,
-        "actor_display": display_name_for_slot(campaign, actor) if is_slot_id(actor) else actor,
-        "active_party": active_party(campaign),
-        "display_party": [
-            {"slot_id": slot_name, "display_name": display_name_for_slot(campaign, slot_name)}
-            for slot_name in active_party(campaign)
-        ],
-        "characters": {
-            slot_name: {
-                "display_name": display_name_for_slot(campaign, slot_name),
-                "scene_id": (state.get("characters", {}).get(slot_name) or {}).get("scene_id", ""),
-                "element_affinities": (state.get("characters", {}).get(slot_name) or {}).get("element_affinities", []),
-                "element_resistances": (state.get("characters", {}).get(slot_name) or {}).get("element_resistances", []),
-                "element_weaknesses": (state.get("characters", {}).get(slot_name) or {}).get("element_weaknesses", []),
-                "class_current": normalize_class_current((state.get("characters", {}).get(slot_name) or {}).get("class_current")),
-                "skills": [
-                    {
-                        "id": skill.get("id"),
-                        "name": skill.get("name"),
-                        "rank": skill.get("rank"),
-                        "level": skill.get("level"),
-                        "tags": skill.get("tags", []),
-                        "elements": skill.get("elements", []),
-                        "element_primary": skill.get("element_primary"),
-                    }
-                    for skill in sorted(
-                        [
-                            normalize_dynamic_skill_state(
-                                skill_value,
-                                skill_id=skill_id,
-                                skill_name=(skill_value or {}).get("name", skill_id) if isinstance(skill_value, dict) else skill_id,
-                                resource_name=resource_name_for_character((state.get("characters", {}).get(slot_name) or {}), world_settings),
-                            )
-                            for skill_id, skill_value in (((state.get("characters", {}).get(slot_name) or {}).get("skills") or {}).items())
-                        ],
-                        key=lambda entry: (skill_rank_sort_value(entry.get("rank")), entry.get("level", 1), entry.get("name", "")),
-                        reverse=True,
-                    )
-                ],
-                "inventory_names": [
-                    ((state.get("items", {}) or {}).get(entry.get("item_id"), {}) or {}).get("name", "")
-                    for entry in list_inventory_items((state.get("characters", {}).get(slot_name) or {}))
-                ],
-            }
-            for slot_name in campaign_slots(campaign)
-        },
-        "known_scenes": {
-            scene_id: scene.get("name", scene_id)
-            for scene_id, scene in (state.get("scenes") or {}).items()
-        },
-        "known_items": {
-            item_id: item.get("name", "")
-            for item_id, item in (state.get("items") or {}).items()
-        },
-        "world_races": {
-            race_id: {
-                "name": race.get("name", race_id),
-                "aliases": race.get("aliases", []),
-            }
-            for race_id, race in ((state.get("world") or {}).get("races") or {}).items()
-        },
-        "world_beast_types": {
-            beast_id: {
-                "name": beast.get("name", beast_id),
-                "aliases": beast.get("aliases", []),
-            }
-            for beast_id, beast in ((state.get("world") or {}).get("beast_types") or {}).items()
-        },
-        "world_elements": {
-            element_id: {
-                "name": element.get("name", element_id),
-                "origin": element.get("origin", "generated"),
-                "aliases": element.get("aliases", []),
-            }
-            for element_id, element in ((state.get("world") or {}).get("elements") or {}).items()
-        },
-        "world_element_relations": (state.get("world") or {}).get("element_relations", {}),
-        "world_element_paths": (state.get("world") or {}).get("element_class_paths", {}),
-        "world_element_summary": build_world_element_summary(state, limit=18),
-        "race_codex_summary": build_race_codex_summary(state, limit=20),
-        "beast_codex_summary": build_beast_codex_summary(state, limit=20),
-        "npc_codex_summary": build_npc_codex_summary(state, limit=18),
-        "npc_codex": (state.get("npc_codex") or {}) if len((state.get("npc_codex") or {})) <= 24 else {},
-        "source_text": source_text,
-    }
-    return json.dumps(payload, ensure_ascii=False)
+def build_extractor_context_packet(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.build_extractor_context_packet(*args, **kwargs)
 
-def normalize_extractor_output_patch(payload: Any) -> Dict[str, Any]:
-    candidate = payload.get("patch") if isinstance(payload, dict) and "patch" in payload else payload
-    return normalize_patch_semantics(candidate)
+def normalize_extractor_output_patch(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.normalize_extractor_output_patch(*args, **kwargs)
 
-def resolve_extractor_conflicts(
-    campaign: Dict[str, Any],
-    state: Dict[str, Any],
-    actor: str,
-    action_type: str,
-    source_text: str,
-    patch: Dict[str, Any],
-    *,
-    source: str,
-) -> Dict[str, Any]:
-    resolved = normalize_patch_semantics(patch)
-    allow_retcon = action_type == "canon" or str(source_text or "").strip().lower().startswith("retcon:")
-    if source == "player" and not allow_retcon:
-        actor_patch = (resolved.get("characters") or {}).get(actor) or {}
-        next_scene = str(actor_patch.get("scene_id") or "").strip()
-        current_scene = str(((state.get("characters", {}) or {}).get(actor) or {}).get("scene_id") or "").strip()
-        if next_scene and current_scene and next_scene != current_scene:
-            resolved["characters"][actor].pop("scene_id", None)
-            if not resolved["characters"][actor]:
-                resolved["characters"].pop(actor, None)
-            resolved.setdefault("events_add", []).append(
-                f"Widerspruch erkannt: {display_name_for_slot(campaign, actor)} kann den Ort nicht still über STORY/DO/SAY überschreiben."
-            )
-            resolved["map_add_nodes"] = [node for node in (resolved.get("map_add_nodes") or []) if node.get("id") != next_scene]
-    for slot_name, upd in list((resolved.get("characters") or {}).items()):
-        cleaned_abilities = []
-        converted_skills = upd.setdefault("skills_set", {})
-        character_resource = resource_name_for_character(((state.get("characters", {}) or {}).get(slot_name) or {}), ((state.get("world") or {}).get("settings") or {}))
-        for ability in upd.get("abilities_add", []) or []:
-            ability_name = clean_auto_ability_name(ability.get("name", ""))
-            normalized_name = normalized_eval_text(ability_name)
-            if normalized_name in UNIVERSAL_SKILL_LIKE_NAMES:
-                skill_id = skill_id_from_name(ability_name)
-                converted_skills[skill_id] = normalize_dynamic_skill_state(
-                    {
-                        "id": skill_id,
-                        "name": ability_name,
-                        "rank": "F",
-                        "level": 1,
-                        "level_max": 10,
-                        "tags": list(dict.fromkeys([*(ability.get("tags") or []), "allgemein"])),
-                        "description": str(ability.get("description", "") or f"{ability_name} wurde kanonisch gelernt."),
-                        "cost": None,
-                        "price": None,
-                        "cooldown_turns": None,
-                        "unlocked_from": "Canon Extractor",
-                        "synergy_notes": None,
-                    },
-                    resource_name=character_resource,
-                )
-                continue
-            cleaned_abilities.append(ability)
-        if "abilities_add" in upd:
-            upd["abilities_add"] = cleaned_abilities
-    return resolved
+def resolve_extractor_conflicts(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.resolve_extractor_conflicts(*args, **kwargs)
 
-def make_extraction_candidate(
-    *,
-    state: Dict[str, Any],
-    actor: str,
-    source: str,
-    entity_type: str,
-    operation: str,
-    label: str,
-    normalized_key: str,
-    evidence_text: str,
-    payload: Dict[str, Any],
-    confidence: float,
-) -> Dict[str, Any]:
-    return {
-        "candidate_id": make_id("xc"),
-        "source": str(source or "unknown"),
-        "actor": str(actor or ""),
-        "turn": max(0, int(((state.get("meta") or {}).get("turn", 0) or 0))),
-        "entity_type": str(entity_type or "unknown"),
-        "operation": str(operation or ""),
-        "label": str(label or "").strip(),
-        "normalized_key": str(normalized_key or "").strip(),
-        "evidence_text": str(evidence_text or "").strip(),
-        "payload": deep_copy(payload or {}),
-        "confidence": float(clamp_float(float(confidence or 0.0), 0.0, 1.0)),
-        "status": "review",
-        "reason_code": EXTRACTION_REASON_LOW_CONFIDENCE,
-        "created_at": utc_now(),
-    }
+def make_extraction_candidate(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.make_extraction_candidate(*args, **kwargs)
 
-def candidate_status_rank(status: str) -> int:
-    lowered = str(status or "").strip().lower()
-    if lowered == "safe":
-        return 3
-    if lowered == "review":
-        return 2
-    return 1
+def candidate_status_rank(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.candidate_status_rank(*args, **kwargs)
 
-def item_name_in_character_inventory(state: Dict[str, Any], slot_name: str, item_name: str) -> bool:
-    normalized_name = normalized_eval_text(item_name)
-    if not normalized_name:
-        return False
-    character = ((state.get("characters") or {}).get(slot_name) or {})
-    items_db = state.get("items") or {}
-    for entry in list_inventory_items(character):
-        item_id = str(entry.get("item_id") or "").strip()
-        if not item_id:
-            continue
-        item = items_db.get(item_id) or {}
-        if normalized_eval_text(str(item.get("name") or "")) == normalized_name:
-            return True
-    return False
+def item_name_in_character_inventory(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.item_name_in_character_inventory(*args, **kwargs)
 
-def extract_environment_item_mentions(story_text: str, actor_display: str) -> List[Dict[str, str]]:
-    mentions: List[Dict[str, str]] = []
-    seen = set()
-    pattern = re.compile(
-        r"\b(?:liegt|liegen|stand|steht|stehen|haengt|hängt|hingen)\s+(?:ein|eine|einen|der|die|das)\s+([^,.!?;\n]{3,80})",
-        flags=re.IGNORECASE,
-    )
-    actor_relevant = actor_relevant_story_sentences(story_text, actor_display)
-    actor_relevant_set = set(actor_relevant)
-    sentence_pool = list(actor_relevant)
-    if not sentence_pool:
-        sentence_pool = [
-            sentence.strip()
-            for sentence in re.split(r"(?<=[.!?])\s+|\n+", str(story_text or ""))
-            if sentence.strip()
-        ]
-    for sentence in sentence_pool:
-        lowered = normalized_eval_text(sentence)
-        if sentence not in actor_relevant_set and not re.search(r"\b(ihm|ihr|ihnen)\b", lowered):
-            continue
-        if any(pattern_acq.search(sentence) for pattern_acq in AUTO_ITEM_ACQUIRE_PATTERNS):
-            continue
-        if any(pattern_eq.search(sentence) for pattern_eq in AUTO_ITEM_EQUIP_PATTERNS):
-            continue
-        for match in pattern.findall(sentence):
-            item_name = clean_auto_item_name(match)
-            normalized_name = normalized_eval_text(item_name)
-            if not item_name or not normalized_name or normalized_name in seen:
-                continue
-            seen.add(normalized_name)
-            mentions.append({"name": item_name, "sentence": sentence})
-    return mentions
+def extract_environment_item_mentions(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.extract_environment_item_mentions(*args, **kwargs)
 
-def build_heuristic_candidates(
-    campaign: Dict[str, Any],
-    state: Dict[str, Any],
-    actor: str,
-    action_type: str,
-    source_text: str,
-    *,
-    source: str,
-) -> List[Dict[str, Any]]:
-    if not str(source_text or "").strip():
-        return []
-    candidates: List[Dict[str, Any]] = []
-    seen_keys: set = set()
-    actor_display = display_name_for_slot(campaign, actor) if is_slot_id(actor) else actor
-    normalized_content = normalized_eval_text(source_text)
+def build_heuristic_candidates(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.build_heuristic_candidates(*args, **kwargs)
 
-    def push(candidate: Dict[str, Any]) -> None:
-        key = str(candidate.get("normalized_key") or "").strip()
-        if not key or key in seen_keys:
-            return
-        seen_keys.add(key)
-        candidates.append(candidate)
+def classify_heuristic_candidate(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.classify_heuristic_candidate(*args, **kwargs)
 
-    if actor in (state.get("characters") or {}):
-        class_payload = extract_auto_class_change(source_text, actor_display)
-        if class_payload:
-            normalized_class = normalize_class_current(class_payload)
-            if normalized_class:
-                class_label = str(normalized_class.get("name") or normalized_class.get("id") or "").strip()
-                push(
-                    make_extraction_candidate(
-                        state=state,
-                        actor=actor,
-                        source=source,
-                        entity_type="class",
-                        operation="set_class",
-                        label=class_label,
-                        normalized_key=f"class:{normalized_eval_text(str(normalized_class.get('id') or class_label))}",
-                        evidence_text=source_text,
-                        payload={"class_set": normalized_class},
-                        confidence=0.86,
-                    )
-                )
-        elif "klasse" in normalized_content and actor_display and normalized_eval_text(actor_display) in normalized_content:
-            push(
-                make_extraction_candidate(
-                    state=state,
-                    actor=actor,
-                    source=source,
-                    entity_type="class",
-                    operation="set_class",
-                    label="Klassenhinweis",
-                    normalized_key=f"class:ambiguous:{actor}",
-                    evidence_text=source_text,
-                    payload={"ambiguous": True},
-                    confidence=0.25,
-                )
-            )
+def split_candidates(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.split_candidates(*args, **kwargs)
 
-        for learned in extract_auto_learned_abilities(source_text, actor_display):
-            skill_name = str(learned.get("name") or "").strip()
-            if not skill_name:
-                continue
-            push(
-                make_extraction_candidate(
-                    state=state,
-                    actor=actor,
-                    source=source,
-                    entity_type="skill",
-                    operation="add_skill",
-                    label=skill_name,
-                    normalized_key=f"skill:{normalized_eval_text(skill_name)}",
-                    evidence_text=str(learned.get("description") or source_text),
-                    payload={
-                        "name": skill_name,
-                        "description": str(learned.get("description") or "").strip(),
-                        "tags": deep_copy(learned.get("tags") or []),
-                        "type": str(learned.get("type") or "active"),
-                        "explicit_learn": True,
-                    },
-                    confidence=0.78,
-                )
-            )
+def append_extraction_quarantine(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.append_extraction_quarantine(*args, **kwargs)
 
-        verb_style_match = re.search(
-            r"\b(?:ich|er|sie)\s+(?:kaempft|kämpft|rennt|springt|weicht|bewegt\s+sich)\b",
-            normalized_content,
-        )
-        if verb_style_match and not any(cue in normalized_content for cue in STORY_LEARN_CUES):
-            label = str(verb_style_match.group(0) or "stilaktion").strip()
-            push(
-                make_extraction_candidate(
-                    state=state,
-                    actor=actor,
-                    source=source,
-                    entity_type="skill",
-                    operation="add_skill",
-                    label=label,
-                    normalized_key=f"skill:verbstyle:{normalized_eval_text(label)}",
-                    evidence_text=source_text,
-                    payload={"mode": "style_verb"},
-                    confidence=0.2,
-                )
-            )
+def safe_candidates_to_patch(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.safe_candidates_to_patch(*args, **kwargs)
 
-        for event in extract_auto_story_item_events(source_text, actor_display):
-            item_name = str(event.get("name") or "").strip()
-            if not item_name:
-                continue
-            push(
-                make_extraction_candidate(
-                    state=state,
-                    actor=actor,
-                    source=source,
-                    entity_type="item",
-                    operation="add_item",
-                    label=item_name,
-                    normalized_key=f"item:{normalized_eval_text(item_name)}",
-                    evidence_text=str(event.get("sentence") or source_text),
-                    payload={
-                        "name": item_name,
-                        "mode": str(event.get("mode") or "acquire"),
-                        "sentence": str(event.get("sentence") or source_text),
-                    },
-                    confidence=0.8 if str(event.get("mode") or "") in {"acquire", "equip"} else 0.55,
-                )
-            )
+def merge_safe_patch_additive(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.merge_safe_patch_additive(*args, **kwargs)
 
-        for mention in extract_environment_item_mentions(source_text, actor_display):
-            item_name = str(mention.get("name") or "").strip()
-            if not item_name:
-                continue
-            push(
-                make_extraction_candidate(
-                    state=state,
-                    actor=actor,
-                    source=source,
-                    entity_type="item",
-                    operation="add_item",
-                    label=item_name,
-                    normalized_key=f"item:env:{normalized_eval_text(item_name)}",
-                    evidence_text=str(mention.get("sentence") or source_text),
-                    payload={"name": item_name, "mode": "environment_only"},
-                    confidence=0.2,
-                )
-            )
+def call_canon_extractor(*args: Any, **kwargs: Any):
+    return _canon_extractor_service.call_canon_extractor(*args, **kwargs)
 
-    for scene in extract_scene_candidates(source_text, actor_display):
-        scene_name = str(scene.get("name") or "").strip()
-        if not scene_name:
-            continue
-        scope = str(scene.get("scope") or "").strip().lower()
-        scene_id = canonical_scene_id(scene_name)
-        targets = active_party(campaign) if scope == "group" and active_party(campaign) else [actor]
-        push(
-            make_extraction_candidate(
-                state=state,
-                actor=actor,
-                source=source,
-                entity_type="map",
-                operation="add_scene",
-                label=scene_name,
-                normalized_key=f"scene:{scene_id}",
-                evidence_text=source_text,
-                payload={
-                    "scene_id": scene_id,
-                    "scene_name": scene_name,
-                    "scope": scope,
-                    "targets": targets,
-                },
-                confidence=0.82 if scope in {"actor", "group"} else 0.4,
-            )
-        )
-    return candidates
+def scene_name_from_state(*args: Any, **kwargs: Any):
+    return _npc_extractor_service.scene_name_from_state(*args, **kwargs)
 
-def classify_heuristic_candidate(
-    candidate: Dict[str, Any],
-    campaign: Dict[str, Any],
-    state: Dict[str, Any],
-    actor: str,
-    source_text: str,
-) -> Dict[str, Any]:
-    classified = deep_copy(candidate)
-    entity_type = str(classified.get("entity_type") or "").strip().lower()
-    label = str(classified.get("label") or "").strip()
-    payload = classified.get("payload") if isinstance(classified.get("payload"), dict) else {}
-    status = "review"
-    reason_code = EXTRACTION_REASON_LOW_CONFIDENCE
-    confidence = float(classified.get("confidence", 0.0) or 0.0)
+def existing_pc_aliases(*args: Any, **kwargs: Any):
+    return _npc_extractor_service.existing_pc_aliases(*args, **kwargs)
 
-    if entity_type == "map":
-        scene_id = str(payload.get("scene_id") or canonical_scene_id(label)).strip()
-        generic_names = {
-            "dorf",
-            "wald",
-            "strasse",
-            "straße",
-            "raum",
-            "gebaude",
-            "gebäude",
-            "tuer",
-            "tür",
-            "haus",
-            "gegend",
-        }
-        normalized_label = normalized_eval_text(label)
-        scope = str(payload.get("scope") or "").strip().lower()
-        if normalized_label in generic_names or is_generic_scene_identifier(scene_id, label):
-            status = "reject"
-            reason_code = EXTRACTION_REASON_GENERIC_LOCATION
-            confidence = min(confidence, 0.25)
-        elif scope in {"actor", "group"}:
-            status = "safe"
-            reason_code = "SAFE_CONFIRMED"
-            confidence = max(confidence, 0.75)
-        else:
-            status = "review"
-            reason_code = EXTRACTION_REASON_LOW_CONFIDENCE
-    elif entity_type == "item":
-        mode = str(payload.get("mode") or "").strip().lower()
-        normalized_label = normalized_eval_text(label)
-        if mode == "environment_only":
-            status = "reject"
-            reason_code = EXTRACTION_REASON_ENV_OBJECT
-            confidence = min(confidence, 0.25)
-        elif normalized_label in {normalized_eval_text(entry) for entry in AUTO_ITEM_GENERIC_NAMES}:
-            status = "reject"
-            reason_code = EXTRACTION_REASON_ENV_OBJECT
-            confidence = min(confidence, 0.2)
-        elif mode in {"acquire", "equip"}:
-            status = "safe"
-            reason_code = "SAFE_CONFIRMED"
-            confidence = max(confidence, 0.72)
-        else:
-            status = "review"
-            reason_code = EXTRACTION_REASON_MISSING_ACQUIRE
-            confidence = min(confidence, 0.45)
-        if status == "safe" and item_name_in_character_inventory(state, actor, label):
-            status = "review"
-            reason_code = EXTRACTION_REASON_DUPLICATE
-            confidence = min(confidence, 0.5)
-    elif entity_type == "skill":
-        if str(payload.get("mode") or "").strip().lower() == "style_verb":
-            status = "reject"
-            reason_code = EXTRACTION_REASON_VERB_STYLE_SKILL
-            confidence = min(confidence, 0.25)
-        elif payload.get("explicit_learn"):
-            status = "safe"
-            reason_code = "SAFE_CONFIRMED"
-            confidence = max(confidence, 0.72)
-        else:
-            status = "review"
-            reason_code = EXTRACTION_REASON_LOW_CONFIDENCE
-        if status == "safe":
-            existing_skill_names = {
-                normalized_eval_text((entry or {}).get("name", ""))
-                for entry in (((state.get("characters") or {}).get(actor) or {}).get("skills") or {}).values()
-                if isinstance(entry, dict)
-            }
-            if normalized_eval_text(label) in existing_skill_names:
-                status = "review"
-                reason_code = EXTRACTION_REASON_DUPLICATE
-                confidence = min(confidence, 0.5)
-    elif entity_type == "class":
-        class_set = normalize_class_current(payload.get("class_set"))
-        if payload.get("ambiguous") or not class_set:
-            status = "review"
-            reason_code = EXTRACTION_REASON_AMBIGUOUS_CLASS
-            confidence = min(confidence, 0.35)
-        else:
-            existing_class = normalize_class_current((((state.get("characters") or {}).get(actor) or {}).get("class_current")))
-            if existing_class and (
-                normalized_eval_text(existing_class.get("id", "")) == normalized_eval_text(class_set.get("id", ""))
-                or normalized_eval_text(existing_class.get("name", "")) == normalized_eval_text(class_set.get("name", ""))
-            ):
-                status = "review"
-                reason_code = EXTRACTION_REASON_DUPLICATE
-                confidence = min(confidence, 0.45)
-            else:
-                status = "safe"
-                reason_code = "SAFE_CONFIRMED"
-                confidence = max(confidence, 0.78)
-            payload["class_set"] = class_set
-    else:
-        status = "reject"
-        reason_code = EXTRACTION_REASON_LOW_CONFIDENCE
-        confidence = min(confidence, 0.2)
+def is_generic_npc_name(*args: Any, **kwargs: Any):
+    return _npc_extractor_service.is_generic_npc_name(*args, **kwargs)
 
-    classified["payload"] = payload
-    classified["status"] = status
-    classified["reason_code"] = reason_code
-    classified["confidence"] = clamp_float(confidence, 0.0, 1.0)
-    return classified
+def resolve_npc_scene_hint(*args: Any, **kwargs: Any):
+    return _npc_extractor_service.resolve_npc_scene_hint(*args, **kwargs)
 
-def split_candidates(candidates: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
-    deduped: Dict[str, Dict[str, Any]] = {}
-    for candidate in candidates:
-        key = str(candidate.get("normalized_key") or "").strip() or str(candidate.get("candidate_id") or make_id("xc"))
-        current = deduped.get(key)
-        if current is None:
-            deduped[key] = candidate
-            continue
-        current_rank = candidate_status_rank(current.get("status", "reject"))
-        incoming_rank = candidate_status_rank(candidate.get("status", "reject"))
-        if incoming_rank > current_rank:
-            deduped[key] = candidate
-            continue
-        if incoming_rank == current_rank and float(candidate.get("confidence", 0.0) or 0.0) > float(current.get("confidence", 0.0) or 0.0):
-            deduped[key] = candidate
-    safe: List[Dict[str, Any]] = []
-    review: List[Dict[str, Any]] = []
-    reject: List[Dict[str, Any]] = []
-    for candidate in deduped.values():
-        status = str(candidate.get("status") or "").strip().lower()
-        if status == "safe":
-            safe.append(candidate)
-        elif status == "review":
-            review.append(candidate)
-        else:
-            reject.append(candidate)
-    return safe, review, reject
+def best_matching_npc_id(*args: Any, **kwargs: Any):
+    return _npc_extractor_service.best_matching_npc_id(*args, **kwargs)
 
-def append_extraction_quarantine(state: Dict[str, Any], candidates_review_reject: List[Dict[str, Any]]) -> None:
-    if not candidates_review_reject:
-        return
-    meta = state.setdefault("meta", {})
-    quarantine = normalize_extraction_quarantine_meta(meta)
-    entries = quarantine.setdefault("entries", [])
-    seen = {
-        (
-            int(entry.get("turn", 0) or 0),
-            str(entry.get("actor") or ""),
-            str(entry.get("source") or ""),
-            str(entry.get("entity_type") or ""),
-            normalized_eval_text(entry.get("label", "")),
-            str(entry.get("reason_code") or ""),
-        )
-        for entry in entries
-        if isinstance(entry, dict)
-    }
-    for candidate in candidates_review_reject:
-        status = str(candidate.get("status") or "").strip().lower()
-        if status not in {"review", "reject"}:
-            continue
-        key = (
-            int(candidate.get("turn", 0) or 0),
-            str(candidate.get("actor") or ""),
-            str(candidate.get("source") or ""),
-            str(candidate.get("entity_type") or ""),
-            normalized_eval_text(candidate.get("label", "")),
-            str(candidate.get("reason_code") or ""),
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        entries.append(
-            {
-                "id": make_id("xq"),
-                "turn": max(0, int(candidate.get("turn", 0) or 0)),
-                "actor": str(candidate.get("actor") or "").strip(),
-                "source": str(candidate.get("source") or "unknown").strip(),
-                "entity_type": str(candidate.get("entity_type") or "unknown").strip(),
-                "status": status,
-                "reason_code": str(candidate.get("reason_code") or EXTRACTION_REASON_LOW_CONFIDENCE).strip(),
-                "label": str(candidate.get("label") or "").strip(),
-                "payload": deep_copy(candidate.get("payload") or {}),
-                "created_at": str(candidate.get("created_at") or utc_now()),
-            }
-        )
-    max_entries = int(quarantine.get("max_entries", EXTRACTION_QUARANTINE_DEFAULT_MAX) or EXTRACTION_QUARANTINE_DEFAULT_MAX)
-    if len(entries) > max_entries:
-        quarantine["entries"] = entries[-max_entries:]
+def npc_relevance_score(*args: Any, **kwargs: Any):
+    return _npc_extractor_service.npc_relevance_score(*args, **kwargs)
 
-def safe_candidates_to_patch(
-    candidates_safe: List[Dict[str, Any]],
-    campaign: Dict[str, Any],
-    state: Dict[str, Any],
-    actor: str,
-) -> Dict[str, Any]:
-    patch = blank_patch()
-    state_items = state.get("items") or {}
-    for candidate in candidates_safe:
-        entity_type = str(candidate.get("entity_type") or "").strip().lower()
-        payload = candidate.get("payload") if isinstance(candidate.get("payload"), dict) else {}
-        if entity_type == "map":
-            scene_id = str(payload.get("scene_id") or "").strip()
-            scene_name = str(payload.get("scene_name") or candidate.get("label") or "").strip()
-            targets = [slot for slot in (payload.get("targets") or [actor]) if slot in (state.get("characters") or {})]
-            if not scene_id or not scene_name or not targets:
-                continue
-            known_scene_ids = set((state.get("scenes") or {}).keys()) | set(((state.get("map") or {}).get("nodes") or {}).keys())
-            if scene_id not in known_scene_ids and not any(str(node.get("id") or "").strip() == scene_id for node in (patch.get("map_add_nodes") or [])):
-                patch["map_add_nodes"].append(
-                    {
-                        "id": scene_id,
-                        "name": scene_name,
-                        "type": "location",
-                        "danger": 1,
-                        "discovered": True,
-                    }
-                )
-            for slot_name in targets:
-                patch["characters"].setdefault(slot_name, {})["scene_id"] = scene_id
-        elif entity_type == "item":
-            item_name = str(payload.get("name") or candidate.get("label") or "").strip()
-            mode = str(payload.get("mode") or "acquire").strip().lower()
-            sentence = str(payload.get("sentence") or candidate.get("evidence_text") or "")
-            if not item_name or actor not in (state.get("characters") or {}):
-                continue
-            target_patch = patch.setdefault("characters", {}).setdefault(actor, {})
-            target_patch.setdefault("inventory_add", [])
-            target_patch.setdefault("equipment_set", {})
-            candidate_item_id = item_id_from_name(item_name)
-            item_id = candidate_item_id
-            suffix = 2
-            while item_id in state_items or item_id in (patch.get("items_new") or {}):
-                known = state_items.get(item_id) or (patch.get("items_new") or {}).get(item_id) or {}
-                if normalized_eval_text(str((known or {}).get("name") or "")) == normalized_eval_text(item_name):
-                    break
-                item_id = f"{candidate_item_id}-{suffix}"
-                suffix += 1
-            item_stub = build_auto_item_stub(item_name, sentence)
-            patch.setdefault("items_new", {})[item_id] = ensure_item_shape(
-                item_id,
-                {
-                    "name": item_name[0].upper() + item_name[1:] if item_name else item_name,
-                    "rarity": "common",
-                    "slot": item_stub.get("slot", ""),
-                    "weight": 1,
-                    "stackable": False,
-                    "max_stack": 1,
-                    "weapon_profile": item_stub.get("weapon_profile", {}),
-                    "modifiers": [],
-                    "effects": [],
-                    "durability": {"current": 100, "max": 100},
-                    "cursed": False,
-                    "curse_text": "",
-                    "tags": item_stub.get("tags", ["story_auto", "auto_item"]),
-                },
-            )
-            if item_id not in (target_patch.get("inventory_add") or []):
-                target_patch["inventory_add"].append(item_id)
-            if mode == "equip":
-                equip_slot = item_stub.get("slot") or "weapon"
-                target_patch["equipment_set"].setdefault(equip_slot, item_id)
-            if not target_patch.get("equipment_set"):
-                target_patch.pop("equipment_set", None)
-        elif entity_type == "skill":
-            if actor not in (state.get("characters") or {}):
-                continue
-            skill_name = str(payload.get("name") or candidate.get("label") or "").strip()
-            if not skill_name:
-                continue
-            resource_name = resource_name_for_character(
-                ((state.get("characters") or {}).get(actor) or {}),
-                ((state.get("world") or {}).get("settings") or {}),
-            )
-            skill_id = skill_id_from_name(skill_name)
-            target_patch = patch.setdefault("characters", {}).setdefault(actor, {})
-            target_patch.setdefault("skills_set", {})
-            target_patch["skills_set"][skill_id] = normalize_dynamic_skill_state(
-                {
-                    "id": skill_id,
-                    "name": skill_name,
-                    "rank": "F",
-                    "level": 1,
-                    "level_max": 10,
-                    "tags": deep_copy(payload.get("tags") or ["allgemein"]),
-                    "description": str(payload.get("description") or f"{skill_name} wurde im Abenteuer gelernt."),
-                    "cost": {"resource": resource_name, "amount": 1} if "magie" in (payload.get("tags") or []) else None,
-                    "price": None,
-                    "cooldown_turns": None,
-                    "unlocked_from": "Story",
-                    "synergy_notes": None,
-                },
-                resource_name=resource_name,
-            )
-        elif entity_type == "class":
-            class_set = normalize_class_current(payload.get("class_set"))
-            if not class_set or actor not in (state.get("characters") or {}):
-                continue
-            patch.setdefault("characters", {}).setdefault(actor, {})["class_set"] = class_set
-    return patch
+def pick_more_specific_text(*args: Any, **kwargs: Any):
+    return _npc_extractor_service.pick_more_specific_text(*args, **kwargs)
 
-def merge_safe_patch_additive(
-    llm_patch: Dict[str, Any],
-    safe_patch: Dict[str, Any],
-    state: Dict[str, Any],
-) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
-    merged = normalize_patch_semantics(llm_patch)
-    safe = normalize_patch_semantics(safe_patch)
-    conflicts: List[Dict[str, Any]] = []
-
-    merged_items = merged.setdefault("items_new", {})
-    for item_id, item_payload in (safe.get("items_new") or {}).items():
-        if item_id in merged_items:
-            conflicts.append({"entity_type": "item", "label": str((item_payload or {}).get("name") or item_id), "payload": {"item_id": item_id}})
-            continue
-        merged_items[item_id] = deep_copy(item_payload)
-
-    existing_node_ids = {str(node.get("id") or "").strip() for node in (merged.get("map_add_nodes") or []) if isinstance(node, dict)}
-    for node in (safe.get("map_add_nodes") or []):
-        node_id = str((node or {}).get("id") or "").strip()
-        if not node_id or node_id in existing_node_ids:
-            continue
-        existing_node_ids.add(node_id)
-        merged.setdefault("map_add_nodes", []).append(deep_copy(node))
-
-    existing_edges = {
-        (str(edge.get("from") or "").strip(), str(edge.get("to") or "").strip(), str(edge.get("kind") or "path").strip())
-        for edge in (merged.get("map_add_edges") or [])
-        if isinstance(edge, dict)
-    }
-    for edge in (safe.get("map_add_edges") or []):
-        if not isinstance(edge, dict):
-            continue
-        key = (str(edge.get("from") or "").strip(), str(edge.get("to") or "").strip(), str(edge.get("kind") or "path").strip())
-        if not key[0] or not key[1] or key in existing_edges:
-            continue
-        existing_edges.add(key)
-        merged.setdefault("map_add_edges", []).append(deep_copy(edge))
-
-    existing_events = {str(event) for event in (merged.get("events_add") or [])}
-    for event in (safe.get("events_add") or []):
-        text = str(event or "").strip()
-        if not text or text in existing_events:
-            continue
-        existing_events.add(text)
-        merged.setdefault("events_add", []).append(text)
-
-    merged_characters = merged.setdefault("characters", {})
-    for slot_name, safe_update in (safe.get("characters") or {}).items():
-        if slot_name not in (state.get("characters") or {}):
-            continue
-        target = merged_characters.setdefault(slot_name, {})
-        if safe_update.get("scene_id"):
-            if target.get("scene_id"):
-                conflicts.append(
-                    {
-                        "entity_type": "map",
-                        "label": str(safe_update.get("scene_id") or ""),
-                        "payload": {"slot": slot_name, "scene_id": safe_update.get("scene_id")},
-                    }
-                )
-            else:
-                target["scene_id"] = str(safe_update.get("scene_id") or "").strip()
-
-        if safe_update.get("class_set"):
-            if target.get("class_set") or target.get("class_update"):
-                conflicts.append(
-                    {
-                        "entity_type": "class",
-                        "label": str((safe_update.get("class_set") or {}).get("name") or ""),
-                        "payload": {"slot": slot_name},
-                    }
-                )
-            else:
-                target["class_set"] = deep_copy(safe_update.get("class_set"))
-
-        safe_skills = safe_update.get("skills_set") or {}
-        if safe_skills:
-            target_skills = target.setdefault("skills_set", {})
-            existing_state_skill_names = {
-                normalized_eval_text((entry or {}).get("name", ""))
-                for entry in (((state.get("characters") or {}).get(slot_name) or {}).get("skills") or {}).values()
-                if isinstance(entry, dict)
-            }
-            existing_target_skill_names = {
-                normalized_eval_text((entry or {}).get("name", ""))
-                for entry in (target_skills or {}).values()
-                if isinstance(entry, dict)
-            }
-            for skill_id, skill_payload in safe_skills.items():
-                skill_name_norm = normalized_eval_text((skill_payload or {}).get("name", ""))
-                if skill_id in target_skills or (skill_name_norm and (skill_name_norm in existing_state_skill_names or skill_name_norm in existing_target_skill_names)):
-                    conflicts.append(
-                        {
-                            "entity_type": "skill",
-                            "label": str((skill_payload or {}).get("name") or skill_id),
-                            "payload": {"slot": slot_name, "skill_id": skill_id},
-                        }
-                    )
-                    continue
-                target_skills[skill_id] = deep_copy(skill_payload)
-                if skill_name_norm:
-                    existing_target_skill_names.add(skill_name_norm)
-
-        safe_inventory_add = safe_update.get("inventory_add") or []
-        if safe_inventory_add:
-            target_inventory_add = target.setdefault("inventory_add", [])
-            existing_inventory_ids = {
-                str(entry.get("item_id") or "").strip()
-                for entry in list_inventory_items(((state.get("characters") or {}).get(slot_name) or {}))
-                if str(entry.get("item_id") or "").strip()
-            }
-            for item_id in safe_inventory_add:
-                item_key = str(item_id or "").strip()
-                if not item_key:
-                    continue
-                if item_key in existing_inventory_ids or item_key in target_inventory_add:
-                    conflicts.append({"entity_type": "item", "label": item_key, "payload": {"slot": slot_name, "item_id": item_key}})
-                    continue
-                target_inventory_add.append(item_key)
-
-        safe_equipment = normalize_equipment_update_payload(safe_update.get("equipment_set") or safe_update.get("equip_set") or {})
-        if safe_equipment:
-            target_equipment = normalize_equipment_update_payload(target.get("equipment_set") or target.get("equip_set") or {})
-            for equip_slot, equip_item_id in safe_equipment.items():
-                if not equip_item_id:
-                    continue
-                if target_equipment.get(equip_slot):
-                    conflicts.append(
-                        {
-                            "entity_type": "item",
-                            "label": equip_item_id,
-                            "payload": {"slot": slot_name, "equip_slot": equip_slot, "item_id": equip_item_id},
-                        }
-                    )
-                    continue
-                target_equipment[equip_slot] = equip_item_id
-            if target_equipment:
-                target["equipment_set"] = target_equipment
-                target.pop("equip_set", None)
-    return merged, conflicts
-
-def call_canon_extractor(
-    campaign: Dict[str, Any],
-    state: Dict[str, Any],
-    actor: str,
-    action_type: str,
-    source_text: str,
-    *,
-    source: str,
-) -> Dict[str, Any]:
-    if not str(source_text or "").strip():
-        return blank_patch()
-    heuristic_candidates = build_heuristic_candidates(campaign, state, actor, action_type, source_text, source=source)
-    classified_candidates = [
-        classify_heuristic_candidate(candidate, campaign, state, actor, source_text)
-        for candidate in heuristic_candidates
-    ]
-    safe_candidates, review_candidates, reject_candidates = split_candidates(classified_candidates)
-    append_extraction_quarantine(state, review_candidates + reject_candidates)
-    context_packet = build_extractor_context_packet(campaign, state, actor, action_type, source_text, source=source)
-    user_prompt = (
-        "STATE_PACKET(JSON):\n"
-        + context_packet
-        + "\n\nOUTPUT-KONTRAKT:\n"
-        + CANON_EXTRACTOR_JSON_CONTRACT
-        + "\n\nExtrahiere nur kanonische Fakten aus source_text als Patch. Keine Prosa. Keine Erklärungen."
-    )
-    llm_patch = blank_patch()
-    try:
-        payload = call_ollama_schema(
-            CANON_EXTRACTOR_SYSTEM_PROMPT,
-            user_prompt,
-            CANON_EXTRACTOR_SCHEMA,
-            timeout=120,
-            temperature=0.1,
-        )
-        llm_patch = normalize_extractor_output_patch(payload)
-    except Exception:
-        llm_patch = blank_patch()
-    safe_patch = safe_candidates_to_patch(safe_candidates, campaign, state, actor)
-    merged_patch, merge_conflicts = merge_safe_patch_additive(llm_patch, safe_patch, state)
-    if merge_conflicts:
-        conflict_candidates: List[Dict[str, Any]] = []
-        for conflict in merge_conflicts:
-            conflict_candidates.append(
-                {
-                    "candidate_id": make_id("xc"),
-                    "source": source,
-                    "actor": actor,
-                    "turn": max(0, int(((state.get("meta") or {}).get("turn", 0) or 0))),
-                    "entity_type": str(conflict.get("entity_type") or "unknown"),
-                    "operation": "merge_conflict",
-                    "label": str(conflict.get("label") or "").strip(),
-                    "normalized_key": f"conflict:{normalized_eval_text(str(conflict.get('label') or ''))}",
-                    "evidence_text": str(source_text or ""),
-                    "payload": deep_copy(conflict.get("payload") or {}),
-                    "confidence": 0.35,
-                    "status": "review",
-                    "reason_code": EXTRACTION_REASON_CONFLICT_WITH_LLM,
-                    "created_at": utc_now(),
-                }
-            )
-        append_extraction_quarantine(state, conflict_candidates)
-    return resolve_extractor_conflicts(campaign, state, actor, action_type, source_text, merged_patch, source=source)
-
-def scene_name_from_state(state: Dict[str, Any], scene_id: str) -> str:
-    sid = str(scene_id or "").strip()
-    if not sid:
-        return ""
-    scenes = state.get("scenes") or {}
-    if sid in scenes:
-        return str((scenes.get(sid) or {}).get("name") or sid).strip()
-    map_nodes = ((state.get("map") or {}).get("nodes") or {})
-    if sid in map_nodes:
-        return str((map_nodes.get(sid) or {}).get("name") or sid).strip()
-    return sid
-
-def existing_pc_aliases(campaign: Dict[str, Any], state: Dict[str, Any]) -> set:
-    aliases = set()
-    for slot_name in campaign_slots(campaign):
-        aliases.add(normalize_npc_alias(slot_name))
-        aliases.add(normalize_npc_alias(display_name_for_slot(campaign, slot_name)))
-        character = ((state.get("characters") or {}).get(slot_name) or {})
-        aliases.add(normalize_npc_alias(str((character.get("bio") or {}).get("name") or "")))
-    for player in (campaign.get("players") or {}).values():
-        aliases.add(normalize_npc_alias(str((player or {}).get("display_name") or "")))
-    aliases.discard("")
-    return aliases
-
-def is_generic_npc_name(name: str) -> bool:
-    normalized = normalize_npc_alias(name)
-    if not normalized:
-        return True
-    tokens = [token for token in normalized.split(" ") if token]
-    if not tokens:
-        return True
-    if len(tokens) == 1 and tokens[0] in NPC_GENERIC_NAME_TOKENS:
-        return True
-    if len(tokens) <= 2 and all(token in NPC_GENERIC_NAME_TOKENS for token in tokens):
-        return True
-    return False
-
-def resolve_npc_scene_hint(state: Dict[str, Any], scene_hint: str) -> str:
-    hint = str(scene_hint or "").strip()
-    if not hint:
-        return ""
-    scenes = state.get("scenes") or {}
-    map_nodes = ((state.get("map") or {}).get("nodes") or {})
-    if hint in scenes or hint in map_nodes:
-        return hint
-    normalized_hint = normalized_eval_text(hint)
-    for scene_id, entry in scenes.items():
-        if normalized_eval_text(str((entry or {}).get("name") or scene_id)) == normalized_hint:
-            return scene_id
-    for scene_id, entry in map_nodes.items():
-        if normalized_eval_text(str((entry or {}).get("name") or scene_id)) == normalized_hint:
-            return scene_id
-    return ""
-
-def best_matching_npc_id(state: Dict[str, Any], name: str) -> str:
-    alias_index = state.get("npc_alias_index") or {}
-    codex = state.get("npc_codex") or {}
-    alias = normalize_npc_alias(name)
-    if alias and alias in alias_index and alias_index[alias] in codex:
-        return alias_index[alias]
-    best_ratio = 0.0
-    best_id = ""
-    for npc_id, entry in codex.items():
-        existing_alias = normalize_npc_alias(str((entry or {}).get("name") or ""))
-        if not existing_alias:
-            continue
-        ratio = SequenceMatcher(None, alias, existing_alias).ratio()
-        if ratio > best_ratio:
-            best_ratio = ratio
-            best_id = npc_id
-    if best_ratio >= 0.9:
-        return best_id
-    return ""
-
-def npc_relevance_score(upsert: Dict[str, Any], source_text: str) -> int:
-    explicit = upsert.get("relevance_score")
-    if explicit is not None:
-        return max(0, int(explicit or 0))
-    score = 0
-    if str(upsert.get("goal") or "").strip():
-        score += 2
-    if str(upsert.get("faction") or "").strip() or str(upsert.get("role_hint") or "").strip():
-        score += 2
-    if str(upsert.get("backstory_short") or "").strip():
-        score += 1
-    if int(upsert.get("level", 0) or 0) > 0:
-        score += 1
-    name = str(upsert.get("name") or "").strip()
-    normalized_source = normalized_eval_text(source_text)
-    if name and normalized_eval_text(name) in normalized_source:
-        score += 1
-    if name and normalized_source.count(normalized_eval_text(name)) > 1:
-        score += 1
-    return score
-
-def pick_more_specific_text(current: str, incoming: str) -> str:
-    cur = str(current or "").strip()
-    inc = str(incoming or "").strip()
-    if not inc:
-        return cur
-    if not cur:
-        return inc
-    if normalized_eval_text(cur) in {"unbekannt", "unknown", "?"}:
-        return inc
-    if len(inc) > len(cur) + 6:
-        return inc
-    return cur
-
-def apply_npc_upserts(
-    campaign: Dict[str, Any],
-    state: Dict[str, Any],
-    npc_upserts: List[Dict[str, Any]],
-    *,
-    source_text: str,
-    turn_number: int,
-) -> List[str]:
-    if not npc_upserts:
-        return []
-    state.setdefault("npc_codex", {})
-    state.setdefault("npc_alias_index", {})
-    codex = state["npc_codex"]
-    alias_index = state["npc_alias_index"]
-    pc_aliases = existing_pc_aliases(campaign, state)
-    npc_resource_name = normalize_resource_name(str((((state.get("world") or {}).get("settings") or {}).get("resource_name") or "Aether")), "Aether")
-    touched: List[str] = []
-    for raw in npc_upserts:
-        if not isinstance(raw, dict):
-            continue
-        name = str(raw.get("name") or "").strip()
-        if not name:
-            continue
-        alias = normalize_npc_alias(name)
-        if not alias or alias in pc_aliases or is_generic_npc_name(name):
-            continue
-        relevance = npc_relevance_score(raw, source_text)
-        if relevance < 2:
-            continue
-        existing_id = best_matching_npc_id(state, name)
-        npc_id = existing_id or npc_id_from_name(name)
-        existing = normalize_npc_entry(codex.get(npc_id), fallback_npc_id=npc_id) if npc_id in codex else None
-        entry = existing or default_npc_entry(npc_id, name)
-        entry["name"] = pick_more_specific_text(entry.get("name", ""), name)
-        entry["race"] = pick_more_specific_text(entry.get("race", "Unbekannt"), raw.get("race") or "")
-        entry["age"] = pick_more_specific_text(entry.get("age", "Unbekannt"), raw.get("age") or "")
-        entry["goal"] = pick_more_specific_text(entry.get("goal", ""), raw.get("goal") or "")
-        entry["backstory_short"] = pick_more_specific_text(entry.get("backstory_short", ""), raw.get("backstory_short") or "")
-        entry["role_hint"] = pick_more_specific_text(entry.get("role_hint", ""), raw.get("role_hint") or "")
-        entry["faction"] = pick_more_specific_text(entry.get("faction", ""), raw.get("faction") or "")
-        entry["level"] = clamp(
-            max(int(entry.get("level", 1) or 1), int(raw.get("level", 0) or 0)),
-            1,
-            999,
-        )
-        entry["status"] = str(raw.get("status") or entry.get("status") or "active").strip().lower()
-        if entry["status"] not in NPC_STATUS_ALLOWED:
-            entry["status"] = "active"
-        incoming_class = normalize_class_current(raw.get("class_current"))
-        if incoming_class:
-            existing_class = normalize_class_current(entry.get("class_current"))
-            if not existing_class:
-                entry["class_current"] = incoming_class
-            else:
-                merged_class = deep_copy(existing_class)
-                merged_class["rank"] = (
-                    incoming_class.get("rank")
-                    if class_rank_sort_value(incoming_class.get("rank")) >= class_rank_sort_value(existing_class.get("rank"))
-                    else existing_class.get("rank")
-                )
-                merged_class["level"] = max(
-                    int(existing_class.get("level", 1) or 1),
-                    int(incoming_class.get("level", 1) or 1),
-                )
-                merged_class["level_max"] = max(
-                    int(existing_class.get("level_max", 10) or 10),
-                    int(incoming_class.get("level_max", 10) or 10),
-                )
-                merged_class["xp"] = max(
-                    int(existing_class.get("xp", 0) or 0),
-                    int(incoming_class.get("xp", 0) or 0),
-                )
-                merged_class["xp_next"] = max(
-                    1,
-                    int(existing_class.get("xp_next", 1) or 1),
-                    int(incoming_class.get("xp_next", 1) or 1),
-                )
-                merged_class["name"] = pick_more_specific_text(existing_class.get("name", ""), incoming_class.get("name", ""))
-                merged_class["description"] = pick_more_specific_text(
-                    existing_class.get("description", ""),
-                    incoming_class.get("description", ""),
-                )
-                merged_class["affinity_tags"] = list(
-                    dict.fromkeys(
-                        [str(tag).strip() for tag in (existing_class.get("affinity_tags") or []) if str(tag).strip()]
-                        + [str(tag).strip() for tag in (incoming_class.get("affinity_tags") or []) if str(tag).strip()]
-                    )
-                )
-                incoming_asc = incoming_class.get("ascension") if isinstance(incoming_class.get("ascension"), dict) else {}
-                existing_asc = merged_class.get("ascension") if isinstance(merged_class.get("ascension"), dict) else {}
-                if incoming_asc and str(incoming_asc.get("status") or "none").strip().lower() != "none":
-                    merged_class["ascension"] = deep_copy(incoming_asc)
-                elif existing_asc:
-                    merged_class["ascension"] = existing_asc
-                entry["class_current"] = normalize_class_current(merged_class)
-
-        incoming_skills = raw.get("skills") if isinstance(raw.get("skills"), dict) else {}
-        if incoming_skills:
-            existing_skill_store = normalize_skill_store(entry.get("skills") or {}, resource_name=npc_resource_name)
-            for raw_skill_id, raw_skill_value in incoming_skills.items():
-                incoming_skill = normalize_dynamic_skill_state(
-                    raw_skill_value,
-                    skill_id=str(raw_skill_id),
-                    skill_name=(raw_skill_value or {}).get("name", raw_skill_id) if isinstance(raw_skill_value, dict) else str(raw_skill_id),
-                    resource_name=npc_resource_name,
-                    unlocked_from="NPCCodex",
-                )
-                existing_skill = existing_skill_store.get(incoming_skill["id"])
-                existing_skill_store[incoming_skill["id"]] = (
-                    merge_dynamic_skill(existing_skill, incoming_skill, resource_name=npc_resource_name)
-                    if existing_skill
-                    else incoming_skill
-                )
-            entry["skills"] = existing_skill_store
-        entry["mention_count"] = int(entry.get("mention_count", 0) or 0) + 1
-        entry["relevance_score"] = max(int(entry.get("relevance_score", 0) or 0), relevance)
-        entry["last_seen_turn"] = max(int(entry.get("last_seen_turn", 0) or 0), int(turn_number or 0))
-        if not entry.get("first_seen_turn"):
-            entry["first_seen_turn"] = int(turn_number or 0)
-        scene_id = resolve_npc_scene_hint(state, str(raw.get("scene_hint") or ""))
-        if scene_id:
-            entry["last_seen_scene_id"] = scene_id
-        history_note = str(raw.get("history_note") or "").strip()
-        if history_note:
-            note = f"Turn {int(turn_number or 0)}: {history_note[:220]}"
-            history = [str(item).strip() for item in (entry.get("history_notes") or []) if str(item).strip()]
-            if not history or history[-1] != note:
-                history.append(note)
-            entry["history_notes"] = history[-24:]
-        tags = [str(tag).strip() for tag in (entry.get("tags") or []) if str(tag).strip()]
-        entry["tags"] = list(dict.fromkeys(tags + ["npc", "story_relevant"]))
-        normalized_entry = normalize_npc_entry(entry, fallback_npc_id=npc_id)
-        if not normalized_entry:
-            continue
-        codex[npc_id] = normalized_entry
-        alias_index[normalize_npc_alias(normalized_entry["name"])] = npc_id
-        touched.append(npc_id)
-        if not existing:
-            state.setdefault("events", []).append(
-                f"NPC-Codex: {normalized_entry['name']} ({normalized_entry.get('race') or 'Unbekannt'}) wurde erfasst."
-            )
-    return list(dict.fromkeys(touched))
+def apply_npc_upserts(*args: Any, **kwargs: Any):
+    return _npc_extractor_service.apply_npc_upserts(*args, **kwargs)
 
 def contains_any_normalized_token(text: str, tokens: set) -> bool:
     normalized_text = normalize_codex_alias_text(text)
@@ -6989,63 +5776,11 @@ def apply_codex_triggers(state: Dict[str, Any], trigger_bundle: Dict[str, Any], 
     normalize_world_codex_structures(state)
     return updates
 
-def build_npc_extractor_context_packet(
-    campaign: Dict[str, Any],
-    state: Dict[str, Any],
-    actor: str,
-    action_type: str,
-    player_text: str,
-    gm_text: str,
-) -> str:
-    payload = {
-        "actor": actor,
-        "actor_display": display_name_for_slot(campaign, actor) if is_slot_id(actor) else actor,
-        "action_type": action_type,
-        "active_party": [
-            {"slot_id": slot_name, "display_name": display_name_for_slot(campaign, slot_name)}
-            for slot_name in active_party(campaign)
-        ],
-        "known_npcs": build_npc_codex_summary(state, limit=28),
-        "known_scenes": {
-            scene_id: scene.get("name", scene_id)
-            for scene_id, scene in (state.get("scenes") or {}).items()
-        },
-        "player_text": str(player_text or ""),
-        "gm_text": str(gm_text or ""),
-    }
-    return json.dumps(payload, ensure_ascii=False)
+def build_npc_extractor_context_packet(*args: Any, **kwargs: Any):
+    return _npc_extractor_service.build_npc_extractor_context_packet(*args, **kwargs)
 
-def call_npc_extractor(
-    campaign: Dict[str, Any],
-    state: Dict[str, Any],
-    actor: str,
-    action_type: str,
-    player_text: str,
-    gm_text: str,
-) -> List[Dict[str, Any]]:
-    if not str(player_text or "").strip() and not str(gm_text or "").strip():
-        return []
-    context_packet = build_npc_extractor_context_packet(campaign, state, actor, action_type, player_text, gm_text)
-    user_prompt = (
-        "STATE_PACKET(JSON):\n"
-        + context_packet
-        + "\n\nOUTPUT-KONTRAKT:\n"
-        + NPC_EXTRACTOR_JSON_CONTRACT
-    )
-    try:
-        payload = call_ollama_schema(
-            NPC_EXTRACTOR_SYSTEM_PROMPT,
-            user_prompt,
-            NPC_EXTRACTOR_SCHEMA,
-            timeout=120,
-            temperature=0.15,
-        )
-        raw_entries = payload.get("npc_upserts") if isinstance(payload, dict) else []
-        if not isinstance(raw_entries, list):
-            return []
-        return [entry for entry in raw_entries if isinstance(entry, dict)]
-    except Exception:
-        return []
+def call_npc_extractor(*args: Any, **kwargs: Any):
+    return _npc_extractor_service.call_npc_extractor(*args, **kwargs)
 
 def normalize_request_option_text(option: Any) -> str:
     if isinstance(option, dict):
@@ -9789,3 +8524,6 @@ def require_host(campaign: Dict[str, Any], player_id: Optional[str]) -> None:
 
 def require_claim(campaign: Dict[str, Any], player_id: str, actor: str) -> None:
     campaign_lifecycle.require_claim(campaign, player_id, actor)
+
+
+_configure_extractor_service_ports()

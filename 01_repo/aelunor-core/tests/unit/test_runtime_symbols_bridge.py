@@ -58,6 +58,7 @@ class RuntimeSymbolsBridgeTests(unittest.TestCase):
     def test_turn_configure_has_targeted_state_engine_port_fallback(self) -> None:
         source = TURN_ENGINE_PATH.read_text(encoding="utf-8")
 
+        self.assertIn('_build_target_turn_extraction_dependencies(main_globals.get("state_engine"))', source)
         self.assertIn('_build_source_turn_extraction_dependencies(main_globals.get("state_engine"))', source)
         self.assertIn('_build_source_turn_progression_dependencies(main_globals.get("state_engine"))', source)
         self.assertIn('_build_source_turn_codex_dependencies(main_globals.get("state_engine"))', source)
