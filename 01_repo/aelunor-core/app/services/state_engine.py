@@ -278,6 +278,12 @@ from app.services.migrations import campaign_slots as campaign_slot_migration
 from app.services import live_state_service as _default_live_state_service
 from app.services.canon import extractor as _canon_extractor_service
 from app.services.canon import npc_extractor as _npc_extractor_service
+from app.services.extraction import abilities as _extraction_abilities
+from app.services.extraction import classes as _extraction_classes
+from app.services.extraction import heuristics as _extraction_heuristics
+from app.services.extraction import injuries as _extraction_injuries
+from app.services.extraction import items as _extraction_items
+from app.services.extraction import quarantine as _extraction_quarantine
 from app.services.turn_engine import emit_turn_phase_event, turn_flow_error
 from app.services.llm.json_repair import (
     extract_json_payload,
@@ -562,18 +568,16 @@ def _legacy_config_snapshot(extra: Optional[Mapping[str, Any]] = None) -> Dict[s
 
 
 def _configure_extractor_service_ports() -> None:
-    _canon_extractor_service.configure(
-        call_ollama_schema=call_ollama_schema,
+    _extraction_abilities.configure(
+        skill_id_from_name=skill_id_from_name,
+        normalize_dynamic_skill_state=normalize_dynamic_skill_state,
+    )
+    _extraction_heuristics.configure(
         skill_id_from_name=skill_id_from_name,
         skill_rank_sort_value=skill_rank_sort_value,
         normalize_dynamic_skill_state=normalize_dynamic_skill_state,
-        clean_auto_ability_name=clean_auto_ability_name,
-        clean_auto_item_name=clean_auto_item_name,
-        actor_relevant_story_sentences=actor_relevant_story_sentences,
-        extract_auto_class_change=extract_auto_class_change,
-        extract_auto_learned_abilities=extract_auto_learned_abilities,
-        extract_auto_story_item_events=extract_auto_story_item_events,
     )
+    _canon_extractor_service.configure(call_ollama_schema=call_ollama_schema)
     _npc_extractor_service.configure(
         call_ollama_schema=call_ollama_schema,
         class_rank_sort_value=class_rank_sort_value,
@@ -1296,39 +1300,9 @@ def display_skill_name_from_id(skill_id: str) -> str:
         return "Unbenannte Technik"
     return " ".join(part.capitalize() for part in base.split())
 
-def clean_extracted_skill_name(raw_name: str) -> str:
-    name = clean_auto_ability_name(raw_name)
-    if not name:
-        return ""
-    name = re.sub(
-        r"\s+(?:sowie|und)\s+(?:die\s+technik|den\s+zauber|das\s+ritual|die\s+kunst|die\s+faehigkeit|die\s+fähigkeit)\b.*$",
-        "",
-        name,
-        flags=re.IGNORECASE,
-    )
-    name = re.sub(r"\s+(?:sowie|und)\b.*$", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"\s+", " ", name).strip(" -")
-    return clean_auto_ability_name(name)
+clean_extracted_skill_name = _extraction_abilities.clean_extracted_skill_name
 
-def split_extracted_skill_names(raw_name: str) -> List[str]:
-    text = str(raw_name or "").strip()
-    if not text:
-        return []
-    parts = re.split(
-        r"\s+(?:sowie|und)\s+(?:die\s+technik\s+|den\s+zauber\s+|das\s+ritual\s+|die\s+kunst\s+|die\s+faehigkeit\s+|die\s+fähigkeit\s+)?",
-        text,
-        flags=re.IGNORECASE,
-    )
-    names: List[str] = []
-    seen = set()
-    for part in parts:
-        cleaned = clean_extracted_skill_name(part)
-        normalized = normalized_eval_text(cleaned)
-        if not cleaned or normalized in seen:
-            continue
-        seen.add(normalized)
-        names.append(cleaned)
-    return names
+split_extracted_skill_names = _extraction_abilities.split_extracted_skill_names
 
 def infer_skill_name_from_description(raw_name: str, description: str) -> str:
     base_name = clean_extracted_skill_name(raw_name) or str(raw_name or "").strip()
@@ -1753,22 +1727,7 @@ def class_affinity_match(skill_tags: List[str], class_affinity_tags: List[str]) 
     class_set = {normalized_eval_text(tag) for tag in (class_affinity_tags or []) if normalized_eval_text(tag)}
     return bool(skill_set & class_set)
 
-def sentence_mentions_actor_name(sentence: str, actor_display: str) -> bool:
-    normalized_sentence = normalized_eval_text(sentence)
-    actor_name = normalized_eval_text(actor_display)
-    if not normalized_sentence or not actor_name:
-        return False
-    if actor_name in normalized_sentence:
-        return True
-    actor_tokens = [token for token in actor_name.split() if len(token) >= 4]
-    sentence_tokens = [token.strip(".,:;!?()[]{}\"'") for token in normalized_sentence.split() if len(token.strip(".,:;!?()[]{}\"'")) >= 4]
-    for actor_token in actor_tokens[:2]:
-        for sentence_token in sentence_tokens[:4]:
-            if sentence_token.startswith(actor_token) or actor_token.startswith(sentence_token):
-                return True
-            if SequenceMatcher(None, actor_token, sentence_token).ratio() >= 0.72:
-                return True
-    return False
+sentence_mentions_actor_name = _extraction_items.sentence_mentions_actor_name
 
 def effective_skill_progress_multiplier(character: Dict[str, Any], skill: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> float:
     world_settings = world_settings or {}
@@ -4217,11 +4176,9 @@ def default_combat_meta() -> Dict[str, Any]:
 def default_attribute_influence_meta() -> Dict[str, Any]:
     return _default_attribute_influence_meta()
 
-def default_extraction_quarantine(*args: Any, **kwargs: Any):
-    return _canon_extractor_service.default_extraction_quarantine(*args, **kwargs)
+default_extraction_quarantine = _extraction_quarantine.default_extraction_quarantine
 
-def normalize_extraction_quarantine_meta(*args: Any, **kwargs: Any):
-    return _canon_extractor_service.normalize_extraction_quarantine_meta(*args, **kwargs)
+normalize_extraction_quarantine_meta = _extraction_quarantine.normalize_extraction_quarantine_meta
 
 def normalize_meta_migrations(meta: Dict[str, Any]) -> Dict[str, Any]:
     raw = meta.get("migrations")
@@ -5361,75 +5318,13 @@ def reconcile_scene_ids_with_story(campaign: Dict[str, Any]) -> None:
             {"id": inferred_scene_id, "name": inferred_name, "type": "location", "danger": 1, "discovered": True},
         )
 
-def infer_injury_severity(sentence: str, title: str) -> str:
-    lowered = normalized_eval_text(f"{sentence} {title}")
-    if any(marker in lowered for marker in ("gebrochen", "klaffend", "offen", "tiefer", "schwere", "schwerer", "schweren")):
-        return "schwer"
-    if any(marker in lowered for marker in ("blut", "brand", "biss", "schnitt", "stich", "prell", "verstauch")):
-        return "mittel"
-    return "leicht"
+infer_injury_severity = _extraction_injuries.infer_injury_severity
 
-def infer_injury_effects(title: str, severity: str) -> List[str]:
-    normalized_title = normalized_eval_text(title)
-    effects: List[str] = []
-    if any(marker in normalized_title for marker in ("arm", "hand", "schulter")):
-        effects.append("Schmerz bei Kraft")
-    if any(marker in normalized_title for marker in ("bein", "knie", "fuss", "fuß", "huefte", "hüfte")):
-        effects.append("Schmerz bei Bewegung")
-    if any(marker in normalized_title for marker in ("brust", "rippe", "bauch")):
-        effects.append("Atemnot unter Belastung")
-    if severity == "schwer":
-        effects.append("Erschwert konzentrierte Aktionen")
-    elif severity == "mittel":
-        effects.append("Belastung verschlimmert den Schmerz")
-    return list(dict.fromkeys([entry for entry in effects if entry])) or ["Schmerz bei Belastung"]
+infer_injury_effects = _extraction_injuries.infer_injury_effects
 
-def clean_auto_injury_title(raw_title: str) -> str:
-    title = clean_scene_name(raw_title)
-    title = re.sub(
-        r"\s+(zwingt|laesst|lässt|macht|verursacht|hindert|bringt|treibt|wirft)\b.*$",
-        "",
-        title,
-        flags=re.IGNORECASE,
-    ).strip()
-    return title
+clean_auto_injury_title = _extraction_injuries.clean_auto_injury_title
 
-def extract_auto_story_injuries(story_text: str, actor_display: str) -> List[Dict[str, Any]]:
-    actor_name = normalized_eval_text(actor_display)
-    story_mentions_actor = actor_name in normalized_eval_text(story_text)
-    candidates: List[Dict[str, Any]] = []
-    seen = set()
-    for sentence in re.split(r"(?<=[.!?])\s+|\n+", str(story_text or "")):
-        sentence = sentence.strip()
-        if not sentence:
-            continue
-        normalized_sentence = normalized_eval_text(sentence)
-        if actor_name and not sentence_mentions_actor_name(sentence, actor_display) and not normalized_sentence.startswith(("er ", "sie ", "es ")) and not story_mentions_actor:
-            continue
-        for pattern in AUTO_INJURY_PATTERNS:
-            for match in pattern.findall(sentence):
-                raw_match = " ".join(part for part in match) if isinstance(match, tuple) else str(match or "")
-                title = clean_auto_injury_title(raw_match)
-                normalized_title = normalized_eval_text(title)
-                if not title or normalized_title in seen:
-                    continue
-                seen.add(normalized_title)
-                severity = infer_injury_severity(sentence, title)
-                candidates.append(
-                    {
-                        "id": make_id("inj"),
-                        "title": title[:80],
-                        "severity": severity,
-                        "effects": infer_injury_effects(title, severity),
-                        "healing_stage": "frisch",
-                        "will_scar": severity != "leicht" or any(marker in normalized_title for marker in ("schnitt", "stich", "biss", "brand", "gebrochen")),
-                        "created_turn": 0,
-                        "notes": sentence[:220].strip(),
-                    }
-                )
-                if len(candidates) >= 2:
-                    return candidates
-    return candidates
+extract_auto_story_injuries = _extraction_injuries.extract_auto_story_injuries
 
 def sorted_npc_codex_entries(*args: Any, **kwargs: Any):
     return _canon_extractor_service.sorted_npc_codex_entries(*args, **kwargs)
@@ -5455,38 +5350,27 @@ def build_extractor_context_packet(*args: Any, **kwargs: Any):
 def normalize_extractor_output_patch(*args: Any, **kwargs: Any):
     return _canon_extractor_service.normalize_extractor_output_patch(*args, **kwargs)
 
-def resolve_extractor_conflicts(*args: Any, **kwargs: Any):
-    return _canon_extractor_service.resolve_extractor_conflicts(*args, **kwargs)
+resolve_extractor_conflicts = _extraction_heuristics.resolve_extractor_conflicts
 
-def make_extraction_candidate(*args: Any, **kwargs: Any):
-    return _canon_extractor_service.make_extraction_candidate(*args, **kwargs)
+make_extraction_candidate = _extraction_heuristics.make_extraction_candidate
 
-def candidate_status_rank(*args: Any, **kwargs: Any):
-    return _canon_extractor_service.candidate_status_rank(*args, **kwargs)
+candidate_status_rank = _extraction_heuristics.candidate_status_rank
 
-def item_name_in_character_inventory(*args: Any, **kwargs: Any):
-    return _canon_extractor_service.item_name_in_character_inventory(*args, **kwargs)
+item_name_in_character_inventory = _extraction_heuristics.item_name_in_character_inventory
 
-def extract_environment_item_mentions(*args: Any, **kwargs: Any):
-    return _canon_extractor_service.extract_environment_item_mentions(*args, **kwargs)
+extract_environment_item_mentions = _extraction_heuristics.extract_environment_item_mentions
 
-def build_heuristic_candidates(*args: Any, **kwargs: Any):
-    return _canon_extractor_service.build_heuristic_candidates(*args, **kwargs)
+build_heuristic_candidates = _extraction_heuristics.build_heuristic_candidates
 
-def classify_heuristic_candidate(*args: Any, **kwargs: Any):
-    return _canon_extractor_service.classify_heuristic_candidate(*args, **kwargs)
+classify_heuristic_candidate = _extraction_heuristics.classify_heuristic_candidate
 
-def split_candidates(*args: Any, **kwargs: Any):
-    return _canon_extractor_service.split_candidates(*args, **kwargs)
+split_candidates = _extraction_heuristics.split_candidates
 
-def append_extraction_quarantine(*args: Any, **kwargs: Any):
-    return _canon_extractor_service.append_extraction_quarantine(*args, **kwargs)
+append_extraction_quarantine = _extraction_quarantine.append_extraction_quarantine
 
-def safe_candidates_to_patch(*args: Any, **kwargs: Any):
-    return _canon_extractor_service.safe_candidates_to_patch(*args, **kwargs)
+safe_candidates_to_patch = _extraction_heuristics.safe_candidates_to_patch
 
-def merge_safe_patch_additive(*args: Any, **kwargs: Any):
-    return _canon_extractor_service.merge_safe_patch_additive(*args, **kwargs)
+merge_safe_patch_additive = _extraction_heuristics.merge_safe_patch_additive
 
 def call_canon_extractor(*args: Any, **kwargs: Any):
     return _canon_extractor_service.call_canon_extractor(*args, **kwargs)
@@ -6916,21 +6800,7 @@ def build_context_packet(
     }
     return json.dumps(packet, ensure_ascii=False)
 
-def is_suspicious_story_text(text: str) -> bool:
-    if not text:
-        return True
-    stripped = text.strip()
-    if len(stripped) < 40:
-        return True
-    if stripped.endswith("\\"):
-        return True
-    if stripped.endswith(("„", '"', "'", "(", "[", "{", ":", ",", ";")):
-        return True
-    if stripped.count('"') % 2 == 1:
-        return True
-    if stripped.count("„") != stripped.count("“"):
-        return True
-    return False
+is_suspicious_story_text = _extraction_heuristics.is_suspicious_story_text
 
 def context_state_signature(state: Dict[str, Any]) -> str:
     serialized = json.dumps(state or {}, ensure_ascii=False, sort_keys=True, default=str)
@@ -7384,48 +7254,7 @@ def build_context_result_via_llm(question: str, intent: str, target: str, snippe
         return None
     return normalized_result
 
-def extract_story_target_evidence(campaign: Dict[str, Any], target: str, *, max_hits: int = 6) -> Dict[str, Any]:
-    normalized_target = normalize_npc_alias(target)
-    if not normalized_target:
-        return {"facts": [], "sources": []}
-    token_set = {token for token in normalized_target.split() if len(token) >= 3}
-    facts: List[str] = []
-    sources: List[Dict[str, str]] = []
-    seen_sentences: set[str] = set()
-    turns = list(active_turns(campaign))[-24:]
-    for turn in reversed(turns):
-        turn_id = str(turn.get("turn_id") or "")
-        turn_number = int(turn.get("turn_number") or 0)
-        for field_name, label in (("gm_text_display", "GM"), ("input_text_display", "Spieler")):
-            text_block = str(turn.get(field_name) or "")
-            if not text_block:
-                continue
-            for sentence in re.split(r"(?<=[.!?])\s+|\n+", text_block):
-                clean_sentence = str(sentence or "").strip()
-                if len(clean_sentence) < 12:
-                    continue
-                normalized_sentence = normalize_npc_alias(clean_sentence)
-                if not normalized_sentence:
-                    continue
-                direct_hit = normalized_target in normalized_sentence
-                token_hit = bool(token_set) and sum(1 for token in token_set if token in normalized_sentence) >= max(1, min(2, len(token_set)))
-                if not direct_hit and not token_hit:
-                    continue
-                signature = normalized_sentence[:220]
-                if signature in seen_sentences:
-                    continue
-                seen_sentences.add(signature)
-                facts.append(clean_sentence)
-                sources.append(
-                    {
-                        "type": "turn",
-                        "id": turn_id or f"turn_{turn_number}",
-                        "label": f"Turn {turn_number} ({label})",
-                    }
-                )
-                if len(facts) >= max_hits:
-                    return {"facts": facts, "sources": sources}
-    return {"facts": facts, "sources": sources}
+extract_story_target_evidence = _extraction_heuristics.extract_story_target_evidence
 
 def context_result_to_answer_text(result: Dict[str, Any]) -> str:
     status = str(result.get("status") or "not_in_canon")
@@ -7455,889 +7284,59 @@ def context_result_to_answer_text(result: Dict[str, Any]) -> str:
         lines.append("Ähnliche Begriffe: " + ", ".join(suggestions[:6]))
     return "\n\n".join(lines).strip()
 
-def clean_auto_ability_name(raw_name: str) -> str:
-    name = str(raw_name or "").strip().strip(".,:;!?\"“”„' ")
-    name = re.sub(r"^(?:die|der|das|ein|eine|einen)\s+", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"^(?:sein(?:e|en|em|er)?|ihr(?:e|en|em|er)?|mein(?:e|en|em|er)?|dein(?:e|en|em|er)?)\s+", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"^(?:alte|alter|altes|alten|neue|neuer|neues|neuen|frühere|fruehere|früheren|frueheren)\s+", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"\s+(?:und|aber|doch|wobei|wodurch|als|während)\b.*$", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"\s+(?:wieder|erneut|zurück|zurueck)$", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"\s+", " ", name).strip(" -")
-    normalized = normalized_eval_text(name)
-    if not name or normalized in ABILITY_UNLOCK_GENERIC_NAMES:
-        return ""
-    if normalized in UNIVERSAL_SKILL_LIKE_NAMES:
-        return ""
-    word_count = len(name.split())
-    if word_count > 6 or len(name) < 3:
-        return ""
-    if not re.search(r"[A-Za-zÄÖÜäöüß]", name):
-        return ""
-    return name
+clean_auto_ability_name = _extraction_abilities.clean_auto_ability_name
 
-def clean_auto_item_name(raw_name: str) -> str:
-    name = str(raw_name or "").replace("\n", " ").strip().strip(".,:;!?\"“”„' ")
-    name = re.sub(r"^\s*\d+[\.\)]\s*", "", name)
-    name = re.sub(r"^(?:die|der|das|ein|eine|einen|einem)\s+", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"^(?:mein(?:e|en|em|er)?|dein(?:e|en|em|er)?|sein(?:e|en|em|er)?|ihr(?:e|en|em|er)?)\s+", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"\s+aus\s+der\s+scheide\b.*$", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"\s+vor\s+(?:mich|ihn|sie|ihm|ihr|sich|uns|euch)\b.*$", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"\s+(?:und|aber|doch|wobei|wodurch|als|während)\b.*$", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"\([^)]{0,120}\)", "", name)
-    lowered = f" {normalized_eval_text(name)} "
-    for marker in ITEM_DETAIL_CLAUSE_MARKERS:
-        idx = lowered.find(marker)
-        if idx > 6:
-            name = name[: idx - 1].strip()
-            break
-    name = re.sub(r"\s+", " ", name).strip(" -")
-    normalized = normalized_eval_text(name)
-    if not name or normalized in AUTO_ITEM_GENERIC_NAMES:
-        return ""
-    if len(name) < 3:
-        return ""
-    words = name.split()
-    if len(words) > 7:
-        name = " ".join(words[:7]).strip()
-        normalized = normalized_eval_text(name)
-    if not re.search(r"[A-Za-zÄÖÜäöüß]", name):
-        return ""
-    if normalized in AUTO_ITEM_GENERIC_NAMES:
-        return ""
-    return name[:80].strip(" ,-.")
+clean_auto_item_name = _extraction_items.clean_auto_item_name
 
-def actor_relevant_story_sentences(story_text: str, actor_display: str) -> List[str]:
-    actor_name = normalized_eval_text(actor_display)
-    relevant: List[str] = []
-    actor_subject_active = False
-    for sentence in re.split(r"(?<=[.!?])\s+|\n+", str(story_text or "")):
-        sentence = sentence.strip()
-        if not sentence:
-            continue
-        normalized_sentence = normalized_eval_text(sentence)
-        starts_pronoun = normalized_sentence.startswith(("er ", "sie ", "es ", "ihn ", "ihm ", "ihr "))
-        starts_first_person = normalized_sentence.startswith(
-            ("ich ", "mich ", "mir ", "mein ", "meine ", "meinen ", "meinem ", "meiner ")
-        )
-        if starts_first_person:
-            actor_subject_active = True
-            relevant.append(sentence)
-            continue
-        if actor_name and sentence_mentions_actor_name(sentence, actor_display):
-            actor_subject_active = True
-            relevant.append(sentence)
-            continue
-        if starts_pronoun and actor_subject_active:
-            relevant.append(sentence)
-            continue
-        if actor_subject_active and normalized_sentence.startswith(
-            ("dann ", "danach ", "darauf ", "anschließend ", "anschliessend ", "nun ", "jetzt ")
-        ):
-            relevant.append(sentence)
-            continue
-        actor_subject_active = False
-    return relevant
+actor_relevant_story_sentences = _extraction_items.actor_relevant_story_sentences
 
-def infer_item_slot_from_text(item_name: str, sentence: str) -> str:
-    lowered_name = normalized_eval_text(item_name)
-    lowered_sentence = normalized_eval_text(sentence)
-    if any(keyword in lowered_name for keyword in ITEM_OFFHAND_KEYWORDS):
-        return "offhand"
-    if any(keyword in lowered_name for keyword in ITEM_CHEST_KEYWORDS):
-        return "chest"
-    if any(keyword in lowered_name for keyword in ITEM_TRINKET_KEYWORDS):
-        return "trinket"
-    if any(keyword in lowered_name for keyword in ITEM_WEAPON_KEYWORDS):
-        return "weapon"
-    if any(keyword in lowered_sentence for keyword in ITEM_OFFHAND_KEYWORDS):
-        return "offhand"
-    if any(keyword in lowered_sentence for keyword in ITEM_CHEST_KEYWORDS):
-        return "chest"
-    if any(keyword in lowered_sentence for keyword in ITEM_TRINKET_KEYWORDS):
-        return "trinket"
-    if any(keyword in lowered_sentence for keyword in ITEM_WEAPON_KEYWORDS):
-        return "weapon"
-    if any(marker in lowered_sentence for marker in (" in der hand", " schwingt ", " zieht ", " fuehrt ", " führt ")):
-        return "weapon"
-    return ""
+infer_item_slot_from_text = _extraction_items.infer_item_slot_from_text
 
-def build_auto_item_stub(item_name: str, sentence: str) -> Dict[str, Any]:
-    lowered = normalized_eval_text(f"{item_name} {sentence}")
-    slot = infer_item_slot_from_text(item_name, sentence)
-    tags = ["story_auto", "auto_item"]
-    weapon_profile: Dict[str, Any] = {}
-    if slot == "weapon":
-        tags.append("weapon")
-        category = "ranged" if any(marker in lowered for marker in ("bogen", "armbrust")) else "melee"
-        scaling_stat = "dex" if category == "ranged" else "str"
-        if any(marker in lowered for marker in ("stab", "rune", "fokus", "orb")):
-            scaling_stat = "int"
-        weapon_profile = {"category": category, "scaling_stat": scaling_stat, "damage_min": 1, "damage_max": 3, "attack_bonus": 0}
-    elif slot == "offhand":
-        tags.append("offhand")
-    elif slot == "chest":
-        tags.append("armor")
-    elif slot == "trinket":
-        tags.append("trinket")
-    return {"slot": slot, "tags": list(dict.fromkeys(tags)), "weapon_profile": weapon_profile}
+build_auto_item_stub = _extraction_items.build_auto_item_stub
 
-def clean_creator_item_name(raw_name: str) -> str:
-    name = summarize_creator_item_name(raw_name)
-    name = str(name or "").strip().strip(".,:;!?\"“”„' ")
-    name = re.sub(r"^(?:die|der|das|ein|eine|einen|einem)\s+", "", name, flags=re.IGNORECASE)
-    name = re.sub(r"\s+", " ", name).strip(" -")
-    if len(name) < 3:
-        return ""
-    return name[:140]
+clean_creator_item_name = _extraction_items.clean_creator_item_name
 
-def item_id_from_name(name: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", normalized_eval_text(name)).strip("-")
-    slug = slug[:36] or make_id("item")
-    return f"item_{slug}"
+item_id_from_name = _extraction_items.item_id_from_name
 
-def materialize_inventory_item(
-    state: Dict[str, Any],
-    character: Dict[str, Any],
-    item_name: str,
-    *,
-    source_tag: str,
-    item_id: Optional[str] = None,
-) -> Optional[str]:
-    clean_name = (
-        clean_creator_item_name(item_name)
-        if source_tag in {"signature_item", "earth_origin"}
-        else clean_auto_item_name(item_name)
-    )
-    if not clean_name:
-        return None
-    items_db = state.setdefault("items", {})
-    inventory = character.setdefault("inventory", {})
-    inventory_items = inventory.setdefault("items", [])
-    existing_ids = {entry.get("item_id") for entry in list_inventory_items(character)}
-    known_names = {
-        normalized_eval_text((items_db.get(existing_id, {}) or {}).get("name", ""))
-        for existing_id in existing_ids
-        if existing_id
-    }
-    normalized_name = normalized_eval_text(clean_name)
-    if normalized_name in known_names:
-        return None
+materialize_inventory_item = _extraction_items.materialize_inventory_item
 
-    target_item_id = item_id or item_id_from_name(clean_name)
-    suffix = 2
-    while target_item_id in items_db and normalized_eval_text((items_db.get(target_item_id, {}) or {}).get("name", "")) != normalized_name:
-        target_item_id = f"{item_id_from_name(clean_name)}-{suffix}"
-        suffix += 1
+normalize_creator_item_list = _extraction_items.normalize_creator_item_list
 
-    items_db[target_item_id] = ensure_item_shape(
-        target_item_id,
-        {
-            "name": clean_name[0].upper() + clean_name[1:] if clean_name else clean_name,
-            "rarity": "common",
-            "slot": "",
-            "weight": 1,
-            "stackable": False,
-            "max_stack": 1,
-            "weapon_profile": {},
-            "modifiers": [],
-            "effects": [],
-            "durability": {"current": 100, "max": 100},
-            "cursed": False,
-            "curse_text": "",
-            "tags": [source_tag],
-        },
-    )
-    if target_item_id not in existing_ids:
-        inventory_items.append({"item_id": target_item_id, "stack": 1})
-    return target_item_id
+reconcile_creator_inventory_items = _extraction_items.reconcile_creator_inventory_items
 
-def normalize_creator_item_list(value: Any) -> List[str]:
-    if isinstance(value, list):
-        joined = "\n".join(str(entry or "") for entry in value if str(entry or "").strip())
-        return parse_earth_items(joined)
-    return parse_earth_items(str(value or ""))
+infer_auto_skill_tags = _extraction_abilities.infer_auto_skill_tags
 
-def reconcile_creator_inventory_items(state: Dict[str, Any], character: Dict[str, Any]) -> None:
-    items_db = state.setdefault("items", {})
-    inventory = character.setdefault("inventory", {})
-    inventory_items = inventory.setdefault("items", [])
-    creator_item_ids = {
-        entry.get("item_id")
-        for entry in inventory_items
-        if entry.get("item_id") and any(
-            tag in {"earth_origin", "signature_item"}
-            for tag in ((items_db.get(entry.get("item_id"), {}) or {}).get("tags") or [])
-        )
-    }
-    if creator_item_ids:
-        inventory["items"] = [entry for entry in inventory_items if entry.get("item_id") not in creator_item_ids]
+infer_auto_class_tags = _extraction_classes.infer_auto_class_tags
 
-    bio = character.setdefault("bio", {})
-    bio["earth_items"] = normalize_creator_item_list(bio.get("earth_items", []))
-    bio["signature_item"] = clean_creator_item_name(bio.get("signature_item", ""))
+normalize_class_rank_text = _extraction_classes.normalize_class_rank_text
 
-    materialize_inventory_item(state, character, bio.get("signature_item", ""), source_tag="signature_item")
-    for earth_item in bio.get("earth_items", []) or []:
-        materialize_inventory_item(state, character, earth_item, source_tag="earth_origin")
+clean_auto_class_name = _extraction_classes.clean_auto_class_name
 
-def infer_auto_skill_tags(text: str) -> List[str]:
-    lowered = normalized_eval_text(text)
-    tags: List[str] = []
-    if any(marker in lowered for marker in ("magie", "zauber", "rune", "fluch", "aether", "mana")):
-        tags.append("magie")
-    if any(marker in lowered for marker in ("schatten", "dunkel")):
-        tags.append("schatten")
-    if any(marker in lowered for marker in ("feuer", "brand")):
-        tags.append("feuer")
-    if any(marker in lowered for marker in ("körper", "hauter", "ausdauer", "regeneration")):
-        tags.append("körper")
-    if any(marker in lowered for marker in ("sinn", "instinkt", "blick", "wahrnehm")):
-        tags.append("sinn")
-    if any(marker in lowered for marker in ("waffe", "klinge", "schwert", "kampf")):
-        tags.append("kampf")
-    return tags or ["allgemein"]
+extract_auto_class_change = _extraction_classes.extract_auto_class_change
 
-def infer_auto_class_tags(text: str) -> List[str]:
-    lowered = normalized_eval_text(text)
-    tags: List[str] = []
-    if any(marker in lowered for marker in ("schatten", "nacht", "dunkel")):
-        tags.append("schatten")
-    if any(marker in lowered for marker in ("rune", "sigille", "glyph")):
-        tags.append("rune")
-    if any(marker in lowered for marker in ("heilig", "licht", "paladin")):
-        tags.append("heilig")
-    if any(marker in lowered for marker in ("klinge", "schwert", "krieger", "kämpfer", "kampf")):
-        tags.append("kampf")
-    if any(marker in lowered for marker in ("arkan", "magie", "zauber", "mana", "aether", "qi")):
-        tags.append("magie")
-    if any(marker in lowered for marker in ("blut", "opfer")):
-        tags.append("blut")
-    return list(dict.fromkeys(tags or ["allgemein"]))
+extract_auto_learned_abilities = _extraction_abilities.extract_auto_learned_abilities
 
-def normalize_class_rank_text(value: str) -> str:
-    text = normalized_eval_text(value).replace("-", " ")
-    match = re.search(r"\b([fedcbas])\s*rang\b", text) or re.search(r"\b([fedcbas])\b", text)
-    if not match:
-        return "F"
-    return str(match.group(1) or "F").upper()
+extract_auto_story_item_events = _extraction_items.extract_auto_story_item_events
 
-def clean_auto_class_name(name: str) -> str:
-    text = str(name or "").strip(" .,:;!?\"“”„'()[]{}")
-    text = re.sub(r"\s+", " ", text).strip()
-    text = re.sub(r"\s*\(([A-FS])\s*-?\s*Rang\)\s*$", "", text, flags=re.IGNORECASE).strip()
-    if text.startswith("des "):
-        text = text[4:].strip()
-    if text.startswith("der "):
-        text = text[4:].strip()
-    if text.startswith("des "):
-        text = text[4:].strip()
-    if len(text) > 4 and text.endswith("s") and not text.endswith(("ss", "us", "is")):
-        text = text[:-1]
-    return text.strip()
+extract_auto_story_items = _extraction_items.extract_auto_story_items
 
-def extract_auto_class_change(text: str, actor_display: str) -> Optional[Dict[str, Any]]:
-    content = str(text or "").strip()
-    if not content:
-        return None
-    actor_name = re.escape(actor_display)
-    subject_pattern = rf"(?:\b{actor_name}\b|\b(?:er|sie)\b)"
-    class_name_pattern = r"([A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9'’\-]+(?:\s+[A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9'’\-]+){0,3})"
-    rank_pattern = r"(?:\s*\(([A-FS])\s*-?\s*Rang\))?"
-    patterns = [
-        rf"{subject_pattern}[^.!?\n]*?\bwird(?:\s+wie\s+einst)?(?:\s+wieder)?\s+zur Klasse des\s+{class_name_pattern}{rank_pattern}",
-        rf"{subject_pattern}[^.!?\n]*?\bwird(?:\s+wie\s+einst)?(?:\s+wieder)?\s+zum\s+{class_name_pattern}{rank_pattern}",
-        rf"{subject_pattern}[^.!?\n]*?\bist jetzt(?:\s+wieder)?\s+(?:ein|eine)\s+{class_name_pattern}{rank_pattern}",
-        rf"{subject_pattern}[^.!?\n]*?\berlangt die Klasse\s+{class_name_pattern}{rank_pattern}",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, content, flags=re.IGNORECASE | re.DOTALL)
-        if not match:
-            continue
-        class_name = clean_auto_class_name(match.group(1) or "")
-        if not class_name:
-            continue
-        rank = normalize_class_rank_text(match.group(2) or "")
-        class_id = f"class_{re.sub(r'[^a-z0-9]+', '_', normalized_eval_text(class_name)).strip('_') or 'unknown'}"
-        return {
-            "id": class_id,
-            "name": class_name,
-            "rank": rank,
-            "level": 1,
-            "level_max": 10,
-            "xp": 0,
-            "xp_next": 100,
-            "affinity_tags": infer_auto_class_tags(class_name + " " + content),
-            "description": first_sentences(content, 2)[:220],
-            "ascension": {
-                "status": "none",
-                "quest_id": None,
-                "requirements": [],
-                "result_hint": None,
-            },
-        }
-    return None
+story_sentences_for_actor = _extraction_abilities.story_sentences_for_actor
 
-def extract_auto_learned_abilities(story_text: str, actor_display: str) -> List[Dict[str, Any]]:
-    actor_name = normalized_eval_text(actor_display)
-    candidates: List[Dict[str, Any]] = []
-    seen = set()
+build_turn_journal_notes = _extraction_abilities.build_turn_journal_notes
 
-    def add_candidate(name: str, sentence: str) -> bool:
-        normalized_name = normalized_eval_text(name)
-        if not name or normalized_name in seen:
-            return False
-        seen.add(normalized_name)
-        candidates.append(
-            {
-                "name": name,
-                "description": sentence[:220].strip(),
-                "type": "passive" if normalized_name in UNIVERSAL_SKILL_LIKE_NAMES else "active",
-                "tags": list(dict.fromkeys(["story_auto", "auto_unlock", *infer_auto_skill_tags(sentence)])),
-            }
-        )
-        return len(candidates) >= 2
+inject_turn_story_journal = _extraction_abilities.inject_turn_story_journal
 
-    sentence_parts = re.split(r"(?<=[.!?])\s+|\n+", str(story_text or ""))
-    for sentence in sentence_parts:
-        sentence = sentence.strip()
-        if not sentence:
-            continue
-        normalized_sentence = normalized_eval_text(sentence)
-        if actor_name and not sentence_mentions_actor_name(sentence, actor_display) and not normalized_sentence.startswith(("er ", "sie ", "es ")):
-            continue
-        if not any(
-            cue in normalized_sentence
-            for cue in (
-                "erlernt",
-                "erlent",
-                "wiedererlernt",
-                "lernt",
-                "meistert",
-                "beherrscht",
-                "schaltet",
-                "erhält",
-                "entwickelt",
-                "entfesselt",
-                "erweckt",
-                "erwacht",
-                "reaktiviert",
-                "kann wieder",
-                "wieder in sich",
-                "manifestiert",
-                "entsteht",
-                "hervorgeht",
-                "formt sich",
-            )
-        ):
-            continue
-        direct_magic_match = re.search(r"\b([A-ZÄÖÜa-zäöüß][A-Za-zÄÖÜäöüß\-]{2,40}magie)\b", sentence, flags=re.IGNORECASE)
-        if direct_magic_match:
-            for magic_name in split_extracted_skill_names(direct_magic_match.group(1)):
-                if add_candidate(magic_name, sentence):
-                    return candidates
-        for explicit_match in re.findall(
-            r"(?:technik|zauber|ritual|kunst|fähigkeit|faehigkeit)\s+([A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9\- ]{2,60})",
-            sentence,
-            flags=re.IGNORECASE,
-        ):
-            for name in split_extracted_skill_names(explicit_match):
-                if add_candidate(name, sentence):
-                    return candidates
-        for emergent_match in re.findall(
-            r"(?:technik|rittertechnik|kerntechnik|kunst|haltung|form)\s*(?:[–—:-]\s*|entsteht\s*(?:als|zu|wie)?\s*|wird\s*(?:zu|als)\s*)[„\"']?([A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9\- ]{2,60})[\"”']?",
-            sentence,
-            flags=re.IGNORECASE,
-        ):
-            for name in split_extracted_skill_names(emergent_match):
-                if add_candidate(name, sentence):
-                    return candidates
-        for quoted_match in re.findall(r"[„\"']([^\"“”']{3,60})[\"”']", sentence):
-            if not any(keyword in normalized_sentence for keyword in ("technik", "rittertechnik", "kerntechnik", "kunst", "haltung")):
-                continue
-            for name in split_extracted_skill_names(quoted_match):
-                if add_candidate(name, sentence):
-                    return candidates
-        for pattern in ABILITY_UNLOCK_TRIGGER_PATTERNS:
-            for match in pattern.findall(sentence):
-                for name in split_extracted_skill_names(match):
-                    if add_candidate(name, sentence):
-                        return candidates
-    filtered: List[Dict[str, Any]] = []
-    for candidate in candidates:
-        candidate_norm = normalized_eval_text(candidate.get("name", ""))
-        if any(
-            candidate_norm
-            and candidate_norm != normalized_eval_text(other.get("name", ""))
-            and normalized_eval_text(other.get("name", "")).startswith(candidate_norm)
-            for other in candidates
-        ):
-            continue
-        filtered.append(candidate)
-    return filtered
+inject_story_unlock_abilities = _extraction_abilities.inject_story_unlock_abilities
 
-def extract_auto_story_item_events(story_text: str, actor_display: str) -> List[Dict[str, Any]]:
-    events: List[Dict[str, Any]] = []
-    by_name: Dict[str, Dict[str, Any]] = {}
-    for sentence in actor_relevant_story_sentences(story_text, actor_display):
-        for pattern in AUTO_ITEM_ACQUIRE_PATTERNS:
-            for match in pattern.findall(sentence):
-                item_name = clean_auto_item_name(match)
-                normalized_name = normalized_eval_text(item_name)
-                if not item_name or not normalized_name:
-                    continue
-                if normalized_name not in by_name:
-                    event = {"name": item_name, "mode": "acquire", "sentence": sentence}
-                    by_name[normalized_name] = event
-                    events.append(event)
-                if len(events) >= 3:
-                    return events
-        for pattern in AUTO_ITEM_EQUIP_PATTERNS:
-            for match in pattern.findall(sentence):
-                item_name = clean_auto_item_name(match)
-                normalized_name = normalized_eval_text(item_name)
-                if not item_name or not normalized_name:
-                    continue
-                if normalized_name in by_name:
-                    by_name[normalized_name]["mode"] = "equip"
-                    by_name[normalized_name]["sentence"] = sentence
-                    continue
-                event = {"name": item_name, "mode": "equip", "sentence": sentence}
-                by_name[normalized_name] = event
-                events.append(event)
-                if len(events) >= 3:
-                    return events
-    return events
+materialize_character_ability = _extraction_abilities.materialize_character_ability
 
-def extract_auto_story_items(story_text: str, actor_display: str) -> List[str]:
-    return [event.get("name", "") for event in extract_auto_story_item_events(story_text, actor_display) if event.get("name")]
+inject_story_items = _extraction_items.inject_story_items
 
-def story_sentences_for_actor(story_text: str, actor_display: str) -> List[str]:
-    actor_name = normalized_eval_text(actor_display)
-    relevant: List[str] = []
-    for sentence in re.split(r"(?<=[.!?])\s+|\n+", str(story_text or "")):
-        sentence = sentence.strip()
-        if not sentence:
-            continue
-        normalized_sentence = normalized_eval_text(sentence)
-        if sentence_mentions_actor_name(sentence, actor_display):
-            relevant.append(sentence)
-            continue
-        if normalized_sentence.startswith(("er ", "sie ", "es ")):
-            relevant.append(sentence)
-    return relevant
+inject_story_injuries = _extraction_injuries.inject_story_injuries
 
-def build_turn_journal_notes(
-    campaign: Dict[str, Any],
-    actor: str,
-    story_text: str,
-    *,
-    seed_text: str = "",
-) -> List[Dict[str, Any]]:
-    actor_display = display_name_for_slot(campaign, actor)
-    notes: List[Dict[str, Any]] = []
-    seen = set()
-    turn_number = int((campaign.get("state", {}).get("meta", {}) or {}).get("turn", 0) or 0) + 1
-    source_texts = [str(story_text or "").strip()]
-    if seed_text:
-        source_texts.append(str(seed_text or "").strip())
+materialize_story_items_from_turn_history = _extraction_items.materialize_story_items_from_turn_history
 
-    for source_text in source_texts:
-        if not source_text:
-            continue
-        relevant_sentences = story_sentences_for_actor(source_text, actor_display)[:5]
-        for sentence in relevant_sentences:
-            normalized_sentence = normalized_eval_text(sentence)
-            if not normalized_sentence:
-                continue
-            if any(cue in normalized_sentence for cue in STORY_ACTION_CUES):
-                text = sentence[:240].strip()
-                key = ("action", normalized_eval_text(text))
-                if key not in seen:
-                    seen.add(key)
-                    notes.append(
-                        {
-                            "id": make_id("journal"),
-                            "kind": "action",
-                            "turn_number": turn_number,
-                            "text": f"Handlung: {text}",
-                        }
-                    )
-                    break
-
-        learned_names = [entry.get("name", "") for entry in extract_auto_learned_abilities(source_text, actor_display)]
-        if learned_names:
-            text = "Lernen: " + ", ".join(dict.fromkeys([name for name in learned_names if name]))
-            key = ("learn", normalized_eval_text(text))
-            if key not in seen:
-                seen.add(key)
-                notes.append(
-                    {
-                        "id": make_id("journal"),
-                        "kind": "learning",
-                        "turn_number": turn_number,
-                        "text": text,
-                    }
-                )
-        else:
-            for sentence in story_sentences_for_actor(source_text, actor_display):
-                normalized_sentence = normalized_eval_text(sentence)
-                if any(cue in normalized_sentence for cue in STORY_LEARN_CUES):
-                    text = sentence[:240].strip()
-                    key = ("learn", normalized_eval_text(text))
-                    if key not in seen:
-                        seen.add(key)
-                        notes.append(
-                            {
-                                "id": make_id("journal"),
-                                "kind": "learning",
-                                "turn_number": turn_number,
-                                "text": f"Lernen: {text}",
-                            }
-                        )
-                    break
-
-        for sentence in story_sentences_for_actor(source_text, actor_display):
-            normalized_sentence = normalized_eval_text(sentence)
-            if any(cue in normalized_sentence for cue in STORY_EXPLORE_CUES):
-                text = sentence[:240].strip()
-                key = ("explore", normalized_eval_text(text))
-                if key not in seen:
-                    seen.add(key)
-                    notes.append(
-                        {
-                            "id": make_id("journal"),
-                            "kind": "exploration",
-                            "turn_number": turn_number,
-                            "text": f"Erkundung: {text}",
-                        }
-                    )
-                break
-    return notes[:4]
-
-def inject_turn_story_journal(
-    campaign: Dict[str, Any],
-    working_state: Dict[str, Any],
-    actor: str,
-    story_text: str,
-    patch: Dict[str, Any],
-    *,
-    seed_text: str = "",
-) -> Dict[str, Any]:
-    if actor not in (working_state.get("characters") or {}):
-        return patch
-    notes = build_turn_journal_notes(campaign, actor, story_text, seed_text=seed_text)
-    if not notes:
-        return patch
-    target_patch = patch.setdefault("characters", {}).setdefault(actor, {})
-    journal_add = target_patch.setdefault("journal_add", {})
-    journal_add.setdefault("notes", [])
-    existing = {
-        normalized_eval_text((entry or {}).get("text", ""))
-        for entry in (journal_add.get("notes") or [])
-        if isinstance(entry, dict)
-    }
-    for entry in notes:
-        normalized_text = normalized_eval_text(entry.get("text", ""))
-        if not normalized_text or normalized_text in existing:
-            continue
-        existing.add(normalized_text)
-        journal_add["notes"].append(entry)
-    return patch
-
-def inject_story_unlock_abilities(
-    campaign: Dict[str, Any],
-    working_state: Dict[str, Any],
-    actor: str,
-    story_text: str,
-    patch: Dict[str, Any],
-    *,
-    seed_text: str = "",
-) -> Dict[str, Any]:
-    if actor not in (working_state.get("characters") or {}):
-        return patch
-    actor_display = display_name_for_slot(campaign, actor)
-    candidates = extract_auto_learned_abilities(story_text, actor_display)
-    if seed_text:
-        known = {normalized_eval_text(entry.get("name", "")) for entry in candidates}
-        for candidate in extract_auto_learned_abilities(seed_text, actor_display):
-            if normalized_eval_text(candidate.get("name", "")) not in known:
-                candidates.append(candidate)
-                known.add(normalized_eval_text(candidate.get("name", "")))
-    if not candidates:
-        return patch
-
-    character = (working_state.get("characters", {}).get(actor, {}) or {})
-    resource_name = resource_name_for_character(character, ((working_state.get("world") or {}).get("settings") or {}))
-    existing_names = {
-        normalized_eval_text((entry or {}).get("name", ""))
-        for entry in ((character.get("skills") or {}).values())
-        if isinstance(entry, dict) and entry.get("name")
-    }
-    target_patch = patch.setdefault("characters", {}).setdefault(actor, {})
-    existing_names.update(
-        normalized_eval_text((skill or {}).get("name", ""))
-        for skill in ((target_patch.get("skills_set") or {}).values())
-        if isinstance(skill, dict) and skill.get("name")
-    )
-    target_patch.setdefault("skills_set", {})
-
-    for candidate in candidates:
-        normalized_name = normalized_eval_text(candidate["name"])
-        if not normalized_name or normalized_name in existing_names:
-            continue
-        existing_names.add(normalized_name)
-        skill_id = skill_id_from_name(candidate["name"])
-        target_patch["skills_set"][skill_id] = normalize_dynamic_skill_state(
-            {
-                "id": skill_id,
-                "name": candidate["name"],
-                "rank": "F",
-                "level": 1,
-                "level_max": 10,
-                "tags": candidate["tags"],
-                "description": candidate["description"] or f"{actor_display} hat {candidate['name']} im Abenteuer erlernt.",
-                "cost": {"resource": resource_name, "amount": 1} if "magie" in candidate["tags"] else None,
-                "price": None,
-                "cooldown_turns": None,
-                "unlocked_from": "Story",
-                "synergy_notes": None,
-            },
-            resource_name=resource_name,
-        )
-    return patch
-
-def materialize_character_ability(
-    character: Dict[str, Any],
-    slot_name: str,
-    ability_name: str,
-    *,
-    description: str,
-    ability_type: str = "active",
-    source: str = "story_auto",
-) -> bool:
-    clean_name = clean_auto_ability_name(ability_name)
-    if not clean_name:
-        return False
-    resource_name = resource_name_for_character(character)
-    existing_names = {
-        normalized_eval_text((skill or {}).get("name", ""))
-        for skill in ((character.get("skills") or {}).values())
-        if isinstance(skill, dict)
-    }
-    if normalized_eval_text(clean_name) in existing_names:
-        return False
-    skill_id = skill_id_from_name(clean_name)
-    character.setdefault("skills", {})[skill_id] = normalize_dynamic_skill_state(
-        {
-            "id": skill_id,
-            "name": clean_name,
-            "rank": "F",
-            "level": 1,
-            "level_max": 10,
-            "tags": list(dict.fromkeys(["story_auto", "auto_unlock", *(["magie"] if ability_type == "active" else [])])),
-            "description": (description or f"{clean_name} wurde in der Geschichte freigeschaltet.")[:220],
-            "cost": {"resource": resource_name, "amount": 1} if ability_type == "active" else None,
-            "price": None,
-            "cooldown_turns": None,
-            "unlocked_from": source or "Story",
-            "synergy_notes": None,
-        },
-        resource_name=resource_name,
-        unlocked_from=source or "Story",
-    )
-    return True
-
-def inject_story_items(
-    campaign: Dict[str, Any],
-    working_state: Dict[str, Any],
-    actor: str,
-    story_text: str,
-    patch: Dict[str, Any],
-) -> Dict[str, Any]:
-    if actor not in (working_state.get("characters") or {}):
-        return patch
-    actor_display = display_name_for_slot(campaign, actor)
-    events = extract_auto_story_item_events(story_text, actor_display)
-    if not events:
-        return patch
-
-    items_new = patch.setdefault("items_new", {})
-    target_patch = patch.setdefault("characters", {}).setdefault(actor, {})
-    target_patch.setdefault("inventory_add", [])
-    target_patch.setdefault("equipment_set", {})
-    state_items = working_state.get("items", {}) or {}
-    character = (working_state.get("characters", {}) or {}).get(actor, {})
-    existing_ids = {entry.get("item_id") for entry in list_inventory_items(character)} | set(iter_equipped_item_ids(character))
-    existing_names = {
-        normalized_eval_text((state_items.get(item_id, {}) or {}).get("name", ""))
-        for item_id in existing_ids
-        if item_id
-    }
-    existing_names.update(
-        normalized_eval_text((item or {}).get("name", ""))
-        for item in items_new.values()
-        if isinstance(item, dict) and item.get("name")
-    )
-
-    for event in events:
-        item_name = str(event.get("name") or "").strip()
-        if not item_name:
-            continue
-        normalized_name = normalized_eval_text(item_name)
-        if not normalized_name or normalized_name in existing_names:
-            existing_item_id = next(
-                (
-                    item_id
-                    for item_id, item in {**state_items, **items_new}.items()
-                    if normalized_eval_text((item or {}).get("name", "")) == normalized_name
-                ),
-                "",
-            )
-            if existing_item_id and str(event.get("mode") or "") == "equip":
-                item_stub = build_auto_item_stub(item_name, str(event.get("sentence") or ""))
-                equip_slot = item_stub.get("slot") or "weapon"
-                target_patch["equipment_set"].setdefault(equip_slot, existing_item_id)
-            continue
-        existing_names.add(normalized_name)
-        item_id = item_id_from_name(item_name)
-        suffix = 2
-        while item_id in state_items or item_id in items_new:
-            known = state_items.get(item_id) or items_new.get(item_id) or {}
-            if normalized_eval_text(known.get("name", "")) == normalized_name:
-                break
-            item_id = f"{item_id_from_name(item_name)}-{suffix}"
-            suffix += 1
-        item_stub = build_auto_item_stub(item_name, str(event.get("sentence") or ""))
-        items_new[item_id] = ensure_item_shape(
-            item_id,
-            {
-                "name": item_name[0].upper() + item_name[1:] if item_name else item_name,
-                "rarity": "common",
-                "slot": item_stub.get("slot", ""),
-                "weight": 1,
-                "stackable": False,
-                "max_stack": 1,
-                "weapon_profile": item_stub.get("weapon_profile", {}),
-                "modifiers": [],
-                "effects": [],
-                "durability": {"current": 100, "max": 100},
-                "cursed": False,
-                "curse_text": "",
-                "tags": item_stub.get("tags", ["story_auto", "auto_item"]),
-            },
-        )
-        if item_id not in target_patch["inventory_add"]:
-            target_patch["inventory_add"].append(item_id)
-        if str(event.get("mode") or "") == "equip":
-            equip_slot = item_stub.get("slot") or "weapon"
-            target_patch["equipment_set"].setdefault(equip_slot, item_id)
-    if not target_patch.get("equipment_set"):
-        target_patch.pop("equipment_set", None)
-    return patch
-
-def inject_story_injuries(
-    campaign: Dict[str, Any],
-    working_state: Dict[str, Any],
-    actor: str,
-    story_text: str,
-    patch: Dict[str, Any],
-    *,
-    seed_text: str = "",
-) -> Dict[str, Any]:
-    if actor not in (working_state.get("characters") or {}):
-        return patch
-    actor_display = display_name_for_slot(campaign, actor)
-    candidates = extract_auto_story_injuries(story_text, actor_display)
-    if seed_text:
-        known = {normalized_eval_text(entry.get("title", "")) for entry in candidates}
-        for candidate in extract_auto_story_injuries(seed_text, actor_display):
-            normalized_title = normalized_eval_text(candidate.get("title", ""))
-            if normalized_title and normalized_title not in known:
-                known.add(normalized_title)
-                candidates.append(candidate)
-    if not candidates:
-        return patch
-    character = (working_state.get("characters", {}).get(actor) or {})
-    existing_titles = {
-        normalized_eval_text((entry or {}).get("title", ""))
-        for entry in (character.get("injuries") or [])
-        if isinstance(entry, dict)
-    }
-    target_patch = patch.setdefault("characters", {}).setdefault(actor, {})
-    target_patch.setdefault("injuries_add", [])
-    existing_titles.update(
-        normalized_eval_text((entry or {}).get("title", ""))
-        for entry in (target_patch.get("injuries_add") or [])
-        if isinstance(entry, dict)
-    )
-    next_turn = int((working_state.get("meta", {}) or {}).get("turn", 0) or 0)
-    for candidate in candidates:
-        normalized_title = normalized_eval_text(candidate.get("title", ""))
-        if not normalized_title or normalized_title in existing_titles:
-            continue
-        existing_titles.add(normalized_title)
-        injury_payload = deep_copy(candidate)
-        injury_payload["created_turn"] = next_turn
-        target_patch["injuries_add"].append(injury_payload)
-    return patch
-
-def materialize_story_items_from_turn_history(campaign: Dict[str, Any]) -> None:
-    state = campaign.get("state", {}) or {}
-    characters = state.get("characters", {}) or {}
-    if not characters:
-        return
-    recent_turns = active_turns(campaign)[-12:]
-    for turn in recent_turns:
-        slot_name = turn.get("actor")
-        if slot_name not in characters:
-            continue
-        character = characters.get(slot_name) or {}
-        actor_display = display_name_for_slot(campaign, slot_name)
-        for source_text in (
-            turn.get("gm_text_display", ""),
-            turn.get("input_text_display", "") if turn.get("action_type") in {"story", "canon"} else "",
-        ):
-            for event in extract_auto_story_item_events(source_text, actor_display):
-                item_id = materialize_inventory_item(state, character, event.get("name", ""), source_tag="story_auto")
-                if not item_id:
-                    continue
-                if str(event.get("mode") or "") != "equip":
-                    continue
-                item_stub = build_auto_item_stub(str(event.get("name") or ""), str(event.get("sentence") or ""))
-                equip_slot = item_stub.get("slot") or "weapon"
-                character.setdefault("equipment", {})[equip_slot] = item_id
-
-def materialize_story_abilities_from_turn_history(campaign: Dict[str, Any]) -> None:
-    state = campaign.get("state", {}) or {}
-    characters = state.get("characters", {}) or {}
-    if not characters:
-        return
-    recent_turns = active_turns(campaign)[-12:]
-    for turn in recent_turns:
-        slot_name = turn.get("actor")
-        if slot_name not in characters:
-            continue
-        character = characters[slot_name]
-        actor_display = display_name_for_slot(campaign, slot_name)
-        seen = set()
-        for source_text in (
-            turn.get("gm_text_display", ""),
-            turn.get("input_text_display", "") if turn.get("action_type") == "story" else "",
-            turn.get("input_text_raw", "") if turn.get("action_type") == "story" else "",
-        ):
-            for candidate in extract_auto_learned_abilities(source_text, actor_display):
-                normalized_name = normalized_eval_text(candidate.get("name", ""))
-                if not normalized_name or normalized_name in seen:
-                    continue
-                seen.add(normalized_name)
-                materialize_character_ability(
-                    character,
-                    slot_name,
-                    candidate.get("name", ""),
-                    description=candidate.get("description", ""),
-                    ability_type=candidate.get("type", "active"),
-                    source="story_auto_history",
-                )
+materialize_story_abilities_from_turn_history = _extraction_abilities.materialize_story_abilities_from_turn_history
 
 def run_legacy_normalize_backfill(campaign: Dict[str, Any]) -> None:
     """Optional legacy heuristic backfill path. Disabled by default."""

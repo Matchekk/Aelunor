@@ -12,6 +12,9 @@ CANON_FUNCTIONS = {
     "build_extractor_context_packet",
     "call_canon_extractor",
     "normalize_extractor_output_patch",
+}
+
+EXTRACTION_IMPORTS = {
     "resolve_extractor_conflicts",
     "normalize_extraction_quarantine_meta",
     "append_extraction_quarantine",
@@ -35,6 +38,8 @@ class CanonExtractorServiceTests(unittest.TestCase):
         source = CANON_PATH.read_text(encoding="utf-8")
 
         self.assertNotIn("state_engine", source)
+        self.assertIn("app.services.extraction.heuristics", source)
+        self.assertIn("app.services.extraction.quarantine", source)
         self.assertIn("CANON_EXTRACTOR_SYSTEM_PROMPT", source)
         self.assertIn("CANON_EXTRACTOR_SCHEMA", source)
 
@@ -44,6 +49,15 @@ class CanonExtractorServiceTests(unittest.TestCase):
         for name in CANON_FUNCTIONS:
             self.assertIn(f"def {name}(*args: Any, **kwargs: Any):", source)
             self.assertIn(f"return _canon_extractor_service.{name}(*args, **kwargs)", source)
+
+    def test_canon_uses_extraction_modules_for_heuristics(self) -> None:
+        source = CANON_PATH.read_text(encoding="utf-8")
+
+        for name in EXTRACTION_IMPORTS:
+            self.assertIn(name, source)
+
+        names = function_names(CANON_PATH)
+        self.assertTrue(EXTRACTION_IMPORTS.isdisjoint(names))
 
 
 if __name__ == "__main__":
