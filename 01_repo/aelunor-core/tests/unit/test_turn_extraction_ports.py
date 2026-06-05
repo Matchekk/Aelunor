@@ -24,7 +24,7 @@ class TurnExtractionPortTests(unittest.TestCase):
         self.assertIn("canon_extractor_service.call_canon_extractor", self.source)
         self.assertIn("npc_extractor_service.call_npc_extractor", self.source)
         self.assertIn("npc_extractor_service.apply_npc_upserts", self.source)
-        self.assertIn('run_canon_gate = _source_callable(source, "run_canon_gate")', self.source)
+        self.assertIn('run_canon_gate = getattr(canon_gate_service, "run_canon_gate", None)', self.source)
         self.assertIn('getattr(world_codex_service, "normalize_npc_codex_state", None)', self.source)
 
     def test_configure_does_not_overwrite_local_extraction_wrappers(self) -> None:

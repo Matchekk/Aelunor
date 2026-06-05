@@ -62,6 +62,7 @@ from app.services.turn.dependencies import (
     build_turn_llm_dependencies,
 )
 from app.services.canon import extractor as canon_extractor_service
+from app.services.canon import gate as canon_gate_service
 from app.services.canon import npc_extractor as npc_extractor_service
 from app.services.world import codex as world_codex_service
 
@@ -348,7 +349,7 @@ def _build_source_turn_extraction_dependencies(source: Any) -> Optional[TurnExtr
 
 
 def _build_target_turn_extraction_dependencies(source: Any) -> Optional[TurnExtractionDependencies]:
-    run_canon_gate = _source_callable(source, "run_canon_gate")
+    run_canon_gate = getattr(canon_gate_service, "run_canon_gate", None)
     normalize_npc_codex_state = getattr(world_codex_service, "normalize_npc_codex_state", None)
     if run_canon_gate is None or not callable(normalize_npc_codex_state):
         return None

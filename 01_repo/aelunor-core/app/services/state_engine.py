@@ -277,7 +277,10 @@ from app.services.campaigns import views as campaign_views
 from app.services.migrations import campaign_slots as campaign_slot_migration
 from app.services import live_state_service as _default_live_state_service
 from app.services.canon import extractor as _canon_extractor_service
+from app.services.canon import gate as _canon_gate_service
 from app.services.canon import npc_extractor as _npc_extractor_service
+from app.services.canon import patch_gate as _canon_patch_gate_service
+from app.services.canon import progression_gate as _progression_gate_service
 from app.services.extraction import abilities as _extraction_abilities
 from app.services.extraction import classes as _extraction_classes
 from app.services.extraction import heuristics as _extraction_heuristics
@@ -587,6 +590,26 @@ def _configure_extractor_service_ports() -> None:
     )
 
 
+def _configure_canon_gate_service_ports() -> None:
+    from app.services import turn_engine as _turn_engine
+
+    _progression_gate_service.configure(
+        active_pacing_profile=active_pacing_profile,
+        build_extractor_context_packet=build_extractor_context_packet,
+        call_ollama_schema=call_ollama_schema,
+        milestone_state_for_turn=milestone_state_for_turn,
+        normalize_dynamic_skill_state=normalize_dynamic_skill_state,
+    )
+    _canon_patch_gate_service.configure(
+        apply_patch=_turn_engine.apply_patch,
+        attribute_cap_for_campaign=attribute_cap_for_campaign,
+        emit_turn_phase_event=emit_turn_phase_event,
+        sanitize_patch=_turn_engine.sanitize_patch,
+        validate_patch=_turn_engine.validate_patch,
+    )
+    _canon_gate_service.configure(emit_turn_phase_event=emit_turn_phase_event)
+
+
 def configure_dependencies(deps: StateEngineDependencies) -> None:
     """Configure explicit runtime ports for the state engine."""
     global _CONFIGURED, _STATE_ENGINE_DEPS
@@ -605,6 +628,7 @@ def configure_dependencies(deps: StateEngineDependencies) -> None:
     _progression_module.configure(configured_globals)
     _codex_module.configure(configured_globals)
     _configure_extractor_service_ports()
+    _configure_canon_gate_service_ports()
     for _name in (
         "deep_copy",
         "make_id",
@@ -2164,77 +2188,17 @@ def progression_speed_multiplier(world_settings: Optional[Dict[str, Any]] = None
         return 1.22
     return 1.0
 
-def normalize_progression_event_severity(value: Any) -> str:
-    severity = str(value or "medium").strip().lower()
-    return severity if severity in PROGRESSION_EVENT_SEVERITIES else "medium"
+def normalize_progression_event_severity(*args: Any, **kwargs: Any):
+    return _progression_gate_service.normalize_progression_event_severity(*args, **kwargs)
 
-def normalize_progression_event(
-    raw_event: Any,
-    *,
-    actor: str,
-    source_turn: int,
-    default_type: str = "milestone_progress",
-) -> Optional[Dict[str, Any]]:
-    if not isinstance(raw_event, dict):
-        return None
-    event_type = str(raw_event.get("type") or default_type).strip().lower()
-    if event_type not in PROGRESSION_EVENT_TYPES:
-        return None
-    normalized_actor = str(raw_event.get("actor") or actor or "").strip()
-    if not normalized_actor:
-        return None
-    target_skill_id = str(raw_event.get("target_skill_id") or "").strip() or None
-    target_class_id = str(raw_event.get("target_class_id") or "").strip() or None
-    target_element_id = str(raw_event.get("target_element_id") or "").strip() or None
-    reason = str(raw_event.get("reason") or "").strip()
-    metadata = deep_copy(raw_event.get("metadata") or {})
-    skill_payload = deep_copy(raw_event.get("skill") or {})
-    tags = [str(tag).strip() for tag in (raw_event.get("tags") or []) if str(tag).strip()]
-    if event_type == "skill_manifestation":
-        tags = list(dict.fromkeys(tags + ["manifestation"]))
-    return {
-        "type": event_type,
-        "actor": normalized_actor,
-        "target_skill_id": target_skill_id,
-        "target_class_id": target_class_id,
-        "target_element_id": target_element_id,
-        "severity": normalize_progression_event_severity(raw_event.get("severity")),
-        "tags": list(dict.fromkeys(tags)),
-        "source_turn": max(0, int(raw_event.get("source_turn", source_turn) or source_turn)),
-        "reason": reason,
-        "metadata": metadata if isinstance(metadata, dict) else {},
-        "skill": skill_payload if isinstance(skill_payload, dict) else {},
-    }
 
-def is_skill_manifestation_name_plausible(skill_name: str, actor_name: str) -> bool:
-    clean = clean_extracted_skill_name(skill_name)
-    normalized = normalized_eval_text(clean)
-    actor_norm = normalized_eval_text(actor_name)
-    if not clean or len(normalized) < 3:
-        return False
-    if len(clean) > 42:
-        return False
-    words = [word for word in re.split(r"\s+", clean.strip()) if word]
-    if len(words) > 4:
-        return False
-    if normalized in UNIVERSAL_SKILL_LIKE_NAMES:
-        return False
-    if normalized in ABILITY_UNLOCK_GENERIC_NAMES:
-        return False
-    if normalized in SKILL_MANIFESTATION_VERB_BLACKLIST:
-        return False
-    normalized_words = [normalized_eval_text(word) for word in words]
-    if any(word in SKILL_MANIFESTATION_VERB_BLACKLIST for word in normalized_words):
-        return False
-    if len(words) >= 3 and any(word in SKILL_MANIFESTATION_NAME_STOPWORDS for word in normalized_words):
-        return False
-    if any(fragment in normalized for fragment in SKILL_MANIFESTATION_NAME_TOKEN_BLACKLIST):
-        return False
-    if any(char.isdigit() for char in clean):
-        return False
-    if actor_norm and normalized == actor_norm:
-        return False
-    return True
+def normalize_progression_event(*args: Any, **kwargs: Any):
+    return _progression_gate_service.normalize_progression_event(*args, **kwargs)
+
+
+def is_skill_manifestation_name_plausible(*args: Any, **kwargs: Any):
+    return _progression_gate_service.is_skill_manifestation_name_plausible(*args, **kwargs)
+
 
 def canonicalize_manifested_skill_payload(
     *,
@@ -2573,650 +2537,73 @@ def parse_skill_event(campaign: Dict[str, Any], event_text: str) -> Optional[Dic
         }
     return None
 
-def normalize_progression_event_list(
-    events: Any,
-    *,
-    actor: str,
-    source_turn: int,
-) -> List[Dict[str, Any]]:
-    if not isinstance(events, list):
-        return []
-    normalized_events: List[Dict[str, Any]] = []
-    for raw_event in events:
-        normalized_event = normalize_progression_event(raw_event, actor=actor, source_turn=source_turn)
-        if normalized_event:
-            normalized_events.append(normalized_event)
-    return normalized_events
+def normalize_progression_event_list(*args: Any, **kwargs: Any):
+    return _progression_gate_service.normalize_progression_event_list(*args, **kwargs)
 
-def progression_event_priority(event_type: str) -> int:
-    return int(PROGRESSION_EVENT_PRIORITY.get(str(event_type or "").strip().lower(), 10))
 
-def _event_origin(raw_event: Dict[str, Any]) -> str:
-    metadata = raw_event.get("metadata") if isinstance(raw_event.get("metadata"), dict) else {}
-    origin = str(metadata.get("origin") or "").strip().lower()
-    return origin if origin in {"explicit_patch", "inferred_patch"} else "inferred_patch"
+def progression_event_priority(*args: Any, **kwargs: Any):
+    return _progression_gate_service.progression_event_priority(*args, **kwargs)
 
-def reduce_progression_event_density(
-    events: List[Dict[str, Any]],
-    *,
-    state_after: Dict[str, Any],
-    action_type: str,
-) -> List[Dict[str, Any]]:
-    if action_type == "canon":
-        return [deep_copy(entry) for entry in events if isinstance(entry, dict)]
-    milestone = milestone_state_for_turn(
-        int((state_after.get("meta") or {}).get("turn", 0) or 0),
-        active_pacing_profile(state_after),
-    )
-    caps = PROGRESSION_DENSITY_CAP_MILESTONE if bool(milestone.get("is_milestone")) else PROGRESSION_DENSITY_CAP_NON_MILESTONE
-    grouped: Dict[str, List[Dict[str, Any]]] = {}
-    actor_order: List[str] = []
-    for idx, raw_event in enumerate(events):
-        if not isinstance(raw_event, dict):
-            continue
-        actor = str(raw_event.get("actor") or "").strip()
-        if not actor:
-            continue
-        if actor not in grouped:
-            grouped[actor] = []
-            actor_order.append(actor)
-        entry = deep_copy(raw_event)
-        entry["_index"] = idx
-        grouped[actor].append(entry)
 
-    reduced: List[Dict[str, Any]] = []
-    for actor in actor_order:
-        actor_events = grouped.get(actor, [])
-        explicit_events: List[Dict[str, Any]] = []
-        inferred_events: List[Dict[str, Any]] = []
-        seen_keys: set[Tuple[str, str, str, str, str, str]] = set()
-        for event in actor_events:
-            dedupe_key = progression_event_dedupe_key(event) + (_event_origin(event),)
-            if dedupe_key in seen_keys:
-                continue
-            seen_keys.add(dedupe_key)
-            if _event_origin(event) == "explicit_patch":
-                explicit_events.append(event)
-            else:
-                inferred_events.append(event)
+def _event_origin(*args: Any, **kwargs: Any):
+    return _progression_gate_service._event_origin(*args, **kwargs)
 
-        inferred_events = sorted(
-            inferred_events,
-            key=lambda item: (
-                -progression_event_priority(str(item.get("type") or "")),
-                -{"low": 1, "medium": 2, "high": 3}.get(str(item.get("severity") or "medium").strip().lower(), 2),
-                int(item.get("_index", 0) or 0),
-            ),
-        )
-        selected = explicit_events + inferred_events[: max(0, int(caps["inferred"]))]
-        selected = sorted(selected, key=lambda item: int(item.get("_index", 0) or 0))
-        if not explicit_events:
-            selected = selected[: max(1, int(caps["total"]))]
-        for event in selected:
-            event.pop("_index", None)
-            reduced.append(event)
-    return reduced
 
-def patch_has_explicit_skill_progression_for_actor(patch: Dict[str, Any], actor: str) -> bool:
-    actor_patch = ((patch.get("characters") or {}).get(actor) or {}) if isinstance((patch.get("characters") or {}), dict) else {}
-    if not isinstance(actor_patch, dict):
-        return False
-    if (
-        actor_patch.get("skills_set")
-        or actor_patch.get("skills_delta")
-        or actor_patch.get("abilities_add")
-        or actor_patch.get("class_set")
-        or actor_patch.get("class_update")
-        or actor_patch.get("progression_set")
-    ):
-        return True
-    explicit_events = normalize_progression_event_list(
-        actor_patch.get("progression_events"),
-        actor=actor,
-        source_turn=0,
-    )
-    return bool(explicit_events)
+def reduce_progression_event_density(*args: Any, **kwargs: Any):
+    return _progression_gate_service.reduce_progression_event_density(*args, **kwargs)
 
-def normalize_progression_claim_type(value: Any) -> str:
-    normalized = str(value or "").strip().lower()
-    if normalized in PROGRESSION_CLAIM_TYPES:
-        return normalized
-    return ""
 
-def progression_claim_text_for_actor(story_text: str, actor_display: str) -> str:
-    relevant = story_sentences_for_actor(story_text, actor_display)
-    if relevant:
-        return "\n".join(relevant)
-    return str(story_text or "")
+def patch_has_explicit_skill_progression_for_actor(*args: Any, **kwargs: Any):
+    return _progression_gate_service.patch_has_explicit_skill_progression_for_actor(*args, **kwargs)
 
-def detect_progression_claim_types(story_text: str, actor_display: str) -> List[str]:
-    normalized_story = normalized_eval_text(progression_claim_text_for_actor(story_text, actor_display))
-    if not normalized_story:
-        return []
-    detected: List[str] = []
-    for claim_type, cues in PROGRESSION_CLAIM_CUES.items():
-        if any(cue in normalized_story for cue in cues):
-            detected.append(claim_type)
-    return list(dict.fromkeys(detected))
 
-def progression_claim_coverage_for_actor_patch(patch: Dict[str, Any], actor: str) -> Set[str]:
-    coverage: Set[str] = set()
-    actor_patch = ((patch.get("characters") or {}).get(actor) or {}) if isinstance((patch.get("characters") or {}), dict) else {}
-    if not isinstance(actor_patch, dict):
-        return coverage
+def normalize_progression_claim_type(*args: Any, **kwargs: Any):
+    return _progression_gate_service.normalize_progression_claim_type(*args, **kwargs)
 
-    skills_set = actor_patch.get("skills_set") if isinstance(actor_patch.get("skills_set"), dict) else {}
-    if skills_set:
-        coverage.add("skill_claim")
-        for raw_skill in skills_set.values():
-            if isinstance(raw_skill, dict):
-                if int(raw_skill.get("level", 1) or 1) > 1 or int(raw_skill.get("xp", 0) or 0) > 0:
-                    coverage.add("skill_level_claim")
-                break
 
-    skills_delta = actor_patch.get("skills_delta") if isinstance(actor_patch.get("skills_delta"), dict) else {}
-    if skills_delta:
-        coverage.add("skill_level_claim")
+def progression_claim_text_for_actor(*args: Any, **kwargs: Any):
+    return _progression_gate_service.progression_claim_text_for_actor(*args, **kwargs)
 
-    class_set = normalize_class_current(actor_patch.get("class_set"))
-    if class_set:
-        coverage.add("class_claim")
-        if int(class_set.get("level", 1) or 1) > 1:
-            coverage.add("class_level_claim")
 
-    class_update = actor_patch.get("class_update") if isinstance(actor_patch.get("class_update"), dict) else {}
-    if class_update:
-        coverage.add("class_claim")
-        if any(key in class_update for key in ("level", "xp", "xp_next", "rank")):
-            coverage.add("class_level_claim")
+def detect_progression_claim_types(*args: Any, **kwargs: Any):
+    return _progression_gate_service.detect_progression_claim_types(*args, **kwargs)
 
-    progression_set = actor_patch.get("progression_set") if isinstance(actor_patch.get("progression_set"), dict) else {}
-    if progression_set:
-        if any(key in progression_set for key in ("class_level", "class_xp", "class_xp_to_next")):
-            coverage.add("class_level_claim")
-        if any(key in progression_set for key in ("level", "xp_total", "xp_current", "xp_to_next")):
-            coverage.add("skill_level_claim")
 
-    explicit_events = normalize_progression_event_list(
-        actor_patch.get("progression_events"),
-        actor=actor,
-        source_turn=0,
-    )
-    for event in explicit_events:
-        event_type = str(event.get("type") or "").strip().lower()
-        if event_type == "skill_manifestation":
-            coverage.add("manifestation_claim")
-            coverage.add("skill_claim")
-        elif event_type in {"skill_mastery_use", "training_success"}:
-            coverage.add("skill_level_claim")
-        elif event_type == "class_breakthrough":
-            coverage.add("class_claim")
-            coverage.add("class_level_claim")
-    return coverage
+def progression_claim_coverage_for_actor_patch(*args: Any, **kwargs: Any):
+    return _progression_gate_service.progression_claim_coverage_for_actor_patch(*args, **kwargs)
 
-def normalized_progression_claims(claim_types: List[str]) -> List[str]:
-    normalized = [normalize_progression_claim_type(entry) for entry in (claim_types or [])]
-    return [entry for entry in list(dict.fromkeys(normalized)) if entry]
 
-def progression_missing_claim_types(claim_types: List[str], coverage: Set[str]) -> List[str]:
-    claims = normalized_progression_claims(claim_types)
-    missing = [claim_type for claim_type in claims if claim_type not in (coverage or set())]
-    return list(dict.fromkeys(missing))
+def normalized_progression_claims(*args: Any, **kwargs: Any):
+    return _progression_gate_service.normalized_progression_claims(*args, **kwargs)
 
-def normalize_progression_extractor_character_patch(raw_patch: Any) -> Dict[str, Any]:
-    patch = raw_patch if isinstance(raw_patch, dict) else {}
-    normalized: Dict[str, Any] = {}
-    if isinstance(patch.get("skills_set"), dict):
-        normalized["skills_set"] = deep_copy(patch.get("skills_set") or {})
-    if isinstance(patch.get("skills_delta"), dict):
-        normalized["skills_delta"] = deep_copy(patch.get("skills_delta") or {})
-    if isinstance(patch.get("progression_events"), list):
-        normalized["progression_events"] = deep_copy(patch.get("progression_events") or [])
-    class_set = normalize_class_current(patch.get("class_set"))
-    if class_set:
-        normalized["class_set"] = class_set
-    if isinstance(patch.get("class_update"), dict) and patch.get("class_update"):
-        normalized["class_update"] = deep_copy(patch.get("class_update") or {})
-    if isinstance(patch.get("progression_set"), dict) and patch.get("progression_set"):
-        normalized["progression_set"] = deep_copy(patch.get("progression_set") or {})
-    return normalized
 
-def progression_event_dedupe_key(event: Dict[str, Any]) -> Tuple[str, str, str, str, str]:
-    event_type = str(event.get("type") or "").strip().lower()
-    target_skill = str(event.get("target_skill_id") or "").strip().lower()
-    target_class = str(event.get("target_class_id") or "").strip().lower()
-    reason = normalized_eval_text(str(event.get("reason") or ""))
-    skill_name = normalized_eval_text(str(((event.get("skill") or {}) if isinstance(event.get("skill"), dict) else {}).get("name") or ""))
-    return (event_type, target_skill, target_class, reason, skill_name)
+def progression_missing_claim_types(*args: Any, **kwargs: Any):
+    return _progression_gate_service.progression_missing_claim_types(*args, **kwargs)
 
-def merge_progression_patch_additive(
-    *,
-    base_patch: Dict[str, Any],
-    actor: str,
-    supplement_character_patch: Dict[str, Any],
-    state_after: Dict[str, Any],
-) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    merged = normalize_patch_semantics(base_patch)
-    actor_update = merged.setdefault("characters", {}).setdefault(actor, {})
-    incoming = normalize_progression_extractor_character_patch(supplement_character_patch)
-    merge_meta = {
-        "applied_keys": [],
-        "conflicts": [],
-        "added_events": 0,
-    }
 
-    state_character = ((state_after.get("characters") or {}).get(actor) or {})
-    state_skill_names = {
-        normalized_eval_text((entry or {}).get("name", ""))
-        for entry in ((state_character.get("skills") or {}).values())
-        if isinstance(entry, dict)
-    }
+def normalize_progression_extractor_character_patch(*args: Any, **kwargs: Any):
+    return _progression_gate_service.normalize_progression_extractor_character_patch(*args, **kwargs)
 
-    incoming_skills_set = incoming.get("skills_set") if isinstance(incoming.get("skills_set"), dict) else {}
-    if incoming_skills_set:
-        target_skills = actor_update.setdefault("skills_set", {})
-        target_skill_names = {
-            normalized_eval_text((entry or {}).get("name", ""))
-            for entry in (target_skills.values())
-            if isinstance(entry, dict)
-        }
-        for skill_id, raw_skill in incoming_skills_set.items():
-            normalized_skill = normalize_dynamic_skill_state(
-                raw_skill,
-                skill_id=str(skill_id),
-                skill_name=(raw_skill or {}).get("name", skill_id) if isinstance(raw_skill, dict) else str(skill_id),
-                resource_name=resource_name_for_character(state_character, ((state_after.get("world") or {}).get("settings") or {})),
-            )
-            skill_name_norm = normalized_eval_text(normalized_skill.get("name", ""))
-            if str(skill_id) in target_skills or (skill_name_norm and (skill_name_norm in target_skill_names or skill_name_norm in state_skill_names)):
-                merge_meta["conflicts"].append({"key": "skills_set", "id": str(skill_id), "name": normalized_skill.get("name", "")})
-                continue
-            target_skills[str(skill_id)] = normalized_skill
-            if skill_name_norm:
-                target_skill_names.add(skill_name_norm)
-            if "skills_set" not in merge_meta["applied_keys"]:
-                merge_meta["applied_keys"].append("skills_set")
 
-    incoming_skills_delta = incoming.get("skills_delta") if isinstance(incoming.get("skills_delta"), dict) else {}
-    if incoming_skills_delta:
-        target_delta = actor_update.setdefault("skills_delta", {})
-        for skill_id, delta_payload in incoming_skills_delta.items():
-            sid = str(skill_id or "").strip()
-            if not sid:
-                continue
-            if sid in target_delta:
-                merge_meta["conflicts"].append({"key": "skills_delta", "id": sid})
-                continue
-            target_delta[sid] = deep_copy(delta_payload)
-            if "skills_delta" not in merge_meta["applied_keys"]:
-                merge_meta["applied_keys"].append("skills_delta")
+def progression_event_dedupe_key(*args: Any, **kwargs: Any):
+    return _progression_gate_service.progression_event_dedupe_key(*args, **kwargs)
 
-    incoming_events = normalize_progression_event_list(incoming.get("progression_events"), actor=actor, source_turn=0)
-    if incoming_events:
-        target_events = actor_update.setdefault("progression_events", [])
-        existing_keys = {
-            progression_event_dedupe_key(event)
-            for event in normalize_progression_event_list(target_events, actor=actor, source_turn=0)
-        }
-        for event in incoming_events:
-            key = progression_event_dedupe_key(event)
-            if key in existing_keys:
-                merge_meta["conflicts"].append({"key": "progression_events", "type": event.get("type", "")})
-                continue
-            existing_keys.add(key)
-            target_events.append(deep_copy(event))
-            merge_meta["added_events"] = int(merge_meta.get("added_events", 0) or 0) + 1
-            if "progression_events" not in merge_meta["applied_keys"]:
-                merge_meta["applied_keys"].append("progression_events")
 
-    for scalar_key in ("class_set", "class_update", "progression_set"):
-        value = incoming.get(scalar_key)
-        if not value:
-            continue
-        if actor_update.get(scalar_key):
-            merge_meta["conflicts"].append({"key": scalar_key})
-            continue
-        actor_update[scalar_key] = deep_copy(value)
-        if scalar_key not in merge_meta["applied_keys"]:
-            merge_meta["applied_keys"].append(scalar_key)
+def merge_progression_patch_additive(*args: Any, **kwargs: Any):
+    return _progression_gate_service.merge_progression_patch_additive(*args, **kwargs)
 
-    return merged, merge_meta
 
-def evaluate_progression_extractor_confidence(
-    *,
-    actor: str,
-    actor_display: str,
-    claim_types: List[str],
-    model_confidence: str,
-    character_patch: Dict[str, Any],
-) -> Dict[str, Any]:
-    normalized_model_confidence = str(model_confidence or "").strip().lower()
-    if normalized_model_confidence not in PROGRESSION_EXTRACTOR_CONFIDENCE_ORDER:
-        normalized_model_confidence = "medium"
-    model_score = PROGRESSION_EXTRACTOR_CONFIDENCE_SCORE.get(normalized_model_confidence, 0.6)
+def evaluate_progression_extractor_confidence(*args: Any, **kwargs: Any):
+    return _progression_gate_service.evaluate_progression_extractor_confidence(*args, **kwargs)
 
-    heuristic_score = 0.0
-    if character_patch.get("skills_set"):
-        heuristic_score += 0.35
-    if character_patch.get("skills_delta"):
-        heuristic_score += 0.2
-    if character_patch.get("progression_events"):
-        heuristic_score += 0.3
-    if character_patch.get("class_set") or character_patch.get("class_update") or character_patch.get("progression_set"):
-        heuristic_score += 0.25
 
-    coverage = progression_claim_coverage_for_actor_patch({"characters": {actor: character_patch}}, actor)
-    normalized_claims = normalized_progression_claims(claim_types)
-    if normalized_claims:
-        covered_count = len([claim for claim in normalized_claims if claim in coverage])
-        heuristic_score += 0.25 * (covered_count / max(1, len(normalized_claims)))
+def call_progression_canon_extractor(*args: Any, **kwargs: Any):
+    return _progression_gate_service.call_progression_canon_extractor(*args, **kwargs)
 
-    for raw_skill in (character_patch.get("skills_set") or {}).values():
-        if not isinstance(raw_skill, dict):
-            continue
-        skill_name = str(raw_skill.get("name") or "").strip()
-        if skill_name and not is_skill_manifestation_name_plausible(skill_name, actor_display):
-            heuristic_score -= 0.3
-            break
 
-    heuristic_score = clamp_float(heuristic_score, 0.0, 1.0)
-    combined_score = clamp_float((heuristic_score * 0.65) + (model_score * 0.35), 0.0, 1.0)
-    if combined_score >= PROGRESSION_EXTRACTOR_CONFIDENCE_THRESHOLDS["high"]:
-        final_confidence = "high"
-    elif combined_score >= PROGRESSION_EXTRACTOR_CONFIDENCE_THRESHOLDS["medium"]:
-        final_confidence = "medium"
-    else:
-        final_confidence = "low"
-    return {
-        "confidence": final_confidence,
-        "score": combined_score,
-        "model_confidence": normalized_model_confidence,
-        "heuristic_score": heuristic_score,
-        "coverage": sorted(coverage),
-    }
+def run_canon_gate(*args: Any, **kwargs: Any):
+    return _canon_gate_service.run_canon_gate(*args, **kwargs)
 
-def call_progression_canon_extractor(
-    campaign: Dict[str, Any],
-    state: Dict[str, Any],
-    *,
-    actor: str,
-    action_type: str,
-    claim_types: List[str],
-    claim_text: str,
-    player_text: str,
-    story_text: str,
-) -> Dict[str, Any]:
-    context_packet = build_extractor_context_packet(
-        campaign,
-        state,
-        actor,
-        action_type,
-        story_text,
-        source="progression_gate",
-    )
-    user_prompt = (
-        "STATE_PACKET(JSON):\n"
-        + context_packet
-        + "\n\nCLAIM_TYPES(JSON):\n"
-        + json.dumps(normalized_progression_claims(claim_types), ensure_ascii=False)
-        + "\n\nCLAIM_TEXT:\n"
-        + str(claim_text or "")[:2200]
-        + "\n\nPLAYER_TEXT:\n"
-        + str(player_text or "")[:1200]
-        + "\n\nOUTPUT-KONTRAKT:\n"
-        + PROGRESSION_EXTRACTOR_JSON_CONTRACT
-    )
-    payload = call_ollama_schema(
-        PROGRESSION_EXTRACTOR_SYSTEM_PROMPT,
-        user_prompt,
-        PROGRESSION_EXTRACTOR_SCHEMA,
-        timeout=90,
-        temperature=0.15,
-    )
-    character_patch = normalize_progression_extractor_character_patch((payload or {}).get("character_patch"))
-    confidence_meta = evaluate_progression_extractor_confidence(
-        actor=actor,
-        actor_display=display_name_for_slot(campaign, actor),
-        claim_types=claim_types,
-        model_confidence=str((payload or {}).get("confidence") or "medium"),
-        character_patch=character_patch,
-    )
-    return {
-        "character_patch": character_patch,
-        "confidence": confidence_meta["confidence"],
-        "confidence_score": confidence_meta["score"],
-        "model_confidence": confidence_meta["model_confidence"],
-        "heuristic_score": confidence_meta["heuristic_score"],
-        "coverage": confidence_meta["coverage"],
-        "reason": str((payload or {}).get("reason") or "").strip(),
-    }
-
-def run_canon_gate(
-    campaign: Dict[str, Any],
-    *,
-    state_before: Dict[str, Any],
-    state_after: Dict[str, Any],
-    patch: Dict[str, Any],
-    actor: str,
-    action_type: str,
-    player_text: str,
-    story_text: str,
-    trace_ctx: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    merged_patch = normalize_patch_semantics(patch)
-    gate_meta: Dict[str, Any] = {
-        "domains_supported": list(CANON_GATE_DOMAINS_SUPPORTED),
-        "domains_active": sorted(CANON_GATE_ACTIVE_DOMAINS),
-        "domains_run": [],
-        "claim_types": [],
-        "missing_claim_types": [],
-        "decision": "skipped",
-        "reason_code": "NO_ACTION",
-        "extractor_confidence": "low",
-        "extractor_confidence_score": 0.0,
-        "needs_review": False,
-        "warnings": [],
-    }
-    emit_turn_phase_event(
-        trace_ctx,
-        phase="canon_gate_started",
-        success=True,
-        extra={"domains_active": sorted(CANON_GATE_ACTIVE_DOMAINS)},
-    )
-    if action_type == "canon" or actor not in (state_after.get("characters") or {}):
-        gate_meta["reason_code"] = "SKIPPED_MODE_OR_ACTOR"
-        emit_turn_phase_event(
-            trace_ctx,
-            phase="canon_gate_finished",
-            success=True,
-            extra={"decision": gate_meta["decision"], "reason_code": gate_meta["reason_code"]},
-        )
-        return {"patch": merged_patch, "state": state_after, "meta": gate_meta}
-
-    if "progression" not in CANON_GATE_ACTIVE_DOMAINS:
-        gate_meta["reason_code"] = "DOMAIN_DISABLED"
-        emit_turn_phase_event(
-            trace_ctx,
-            phase="canon_gate_finished",
-            success=True,
-            extra={"decision": gate_meta["decision"], "reason_code": gate_meta["reason_code"]},
-        )
-        return {"patch": merged_patch, "state": state_after, "meta": gate_meta}
-
-    actor_display = display_name_for_slot(campaign, actor)
-    claim_text = progression_claim_text_for_actor(story_text, actor_display)
-    claim_types = detect_progression_claim_types(claim_text, actor_display)
-    gate_meta["domains_run"] = ["progression"]
-    gate_meta["claim_types"] = claim_types
-    if not claim_types:
-        gate_meta["reason_code"] = "NO_CLAIMS"
-        emit_turn_phase_event(
-            trace_ctx,
-            phase="canon_gate_finished",
-            success=True,
-            extra={"decision": gate_meta["decision"], "reason_code": gate_meta["reason_code"]},
-        )
-        return {"patch": merged_patch, "state": state_after, "meta": gate_meta}
-
-    coverage = progression_claim_coverage_for_actor_patch(merged_patch, actor)
-    missing_claims = progression_missing_claim_types(claim_types, coverage)
-    gate_meta["missing_claim_types"] = missing_claims
-    if not missing_claims:
-        gate_meta["reason_code"] = "STRUCTURED_ALREADY_PRESENT"
-        emit_turn_phase_event(
-            trace_ctx,
-            phase="canon_gate_finished",
-            success=True,
-            extra={"decision": gate_meta["decision"], "reason_code": gate_meta["reason_code"], "claims": claim_types},
-        )
-        return {"patch": merged_patch, "state": state_after, "meta": gate_meta}
-
-    emit_turn_phase_event(
-        trace_ctx,
-        phase="progression_extractor_started",
-        success=True,
-        extra={"claims": missing_claims},
-    )
-    try:
-        extractor_result = call_progression_canon_extractor(
-            campaign,
-            state_after,
-            actor=actor,
-            action_type=action_type,
-            claim_types=missing_claims,
-            claim_text=claim_text,
-            player_text=player_text,
-            story_text=story_text,
-        )
-        emit_turn_phase_event(
-            trace_ctx,
-            phase="progression_extractor_finished",
-            success=True,
-            extra={
-                "claims": missing_claims,
-                "confidence": extractor_result.get("confidence"),
-                "score": float(extractor_result.get("confidence_score", 0.0) or 0.0),
-            },
-        )
-    except Exception as exc:
-        warning = f"progression_extractor_error:{exc.__class__.__name__}"
-        gate_meta["warnings"].append(warning)
-        gate_meta["reason_code"] = "PROGRESSION_EXTRACTOR_ERROR"
-        emit_turn_phase_event(
-            trace_ctx,
-            phase="progression_extractor_finished",
-            success=False,
-            error_code=ERROR_CODE_EXTRACTOR,
-            error_class=exc.__class__.__name__,
-            message=str(exc)[:240],
-            extra={"claims": missing_claims},
-        )
-        emit_turn_phase_event(
-            trace_ctx,
-            phase="canon_gate_finished",
-            success=True,
-            extra={"decision": gate_meta["decision"], "reason_code": gate_meta["reason_code"], "warnings": gate_meta["warnings"]},
-        )
-        return {"patch": merged_patch, "state": state_after, "meta": gate_meta}
-
-    confidence = str(extractor_result.get("confidence") or "low").strip().lower()
-    confidence_score = float(extractor_result.get("confidence_score", 0.0) or 0.0)
-    gate_meta["extractor_confidence"] = confidence
-    gate_meta["extractor_confidence_score"] = confidence_score
-    gate_meta["extractor_model_confidence"] = str(extractor_result.get("model_confidence") or "")
-    gate_meta["extractor_coverage"] = deep_copy(extractor_result.get("coverage") or [])
-    character_patch = normalize_progression_extractor_character_patch(extractor_result.get("character_patch"))
-
-    if confidence == "low" or not character_patch:
-        gate_meta["reason_code"] = "LOW_CONFIDENCE_NO_COMMIT" if confidence == "low" else "EMPTY_EXTRACTOR_PATCH"
-        gate_meta["decision"] = "skipped"
-        emit_turn_phase_event(
-            trace_ctx,
-            phase="canon_gate_finished",
-            success=True,
-            extra={
-                "decision": gate_meta["decision"],
-                "reason_code": gate_meta["reason_code"],
-                "confidence": confidence,
-                "score": confidence_score,
-            },
-        )
-        return {"patch": merged_patch, "state": state_after, "meta": gate_meta}
-
-    merged_with_gate, merge_meta = merge_progression_patch_additive(
-        base_patch=merged_patch,
-        actor=actor,
-        supplement_character_patch=character_patch,
-        state_after=state_after,
-    )
-    gate_meta["merge"] = merge_meta
-    if not (merge_meta.get("applied_keys") or []):
-        gate_meta["decision"] = "skipped"
-        gate_meta["reason_code"] = "NO_ADDITIVE_CHANGES"
-        emit_turn_phase_event(
-            trace_ctx,
-            phase="canon_gate_finished",
-            success=True,
-            extra={"decision": gate_meta["decision"], "reason_code": gate_meta["reason_code"]},
-        )
-        return {"patch": merged_patch, "state": state_after, "meta": gate_meta}
-
-    gate_patch = blank_patch()
-    gate_patch["characters"][actor] = deep_copy((merged_with_gate.get("characters") or {}).get(actor) or {})
-    try:
-        from app.services import turn_engine as _turn_engine
-
-        emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": "canon_gate"})
-        gate_patch = _turn_engine.sanitize_patch(state_after, gate_patch)
-        emit_turn_phase_event(trace_ctx, phase="patch_sanitize", success=True, extra={"stage": "canon_gate", "result": "ok"})
-        emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": "canon_gate"})
-        _turn_engine.validate_patch(state_after, gate_patch)
-        emit_turn_phase_event(trace_ctx, phase="schema_validation", success=True, extra={"stage": "canon_gate", "result": "ok"})
-        emit_turn_phase_event(trace_ctx, phase="patch_apply", success=True, extra={"stage": "canon_gate"})
-        state_after = _turn_engine.apply_patch(state_after, gate_patch, attribute_cap=attribute_cap_for_campaign(campaign))
-        emit_turn_phase_event(trace_ctx, phase="patch_apply", success=True, extra={"stage": "canon_gate", "result": "ok"})
-        merged_patch = merge_patch_payloads(merged_patch, gate_patch)
-    except Exception as exc:
-        gate_meta["decision"] = "skipped"
-        gate_meta["reason_code"] = "GATE_PATCH_APPLY_FAILED"
-        gate_meta["warnings"].append(f"gate_patch_apply_failed:{exc.__class__.__name__}")
-        emit_turn_phase_event(
-            trace_ctx,
-            phase="patch_apply",
-            success=False,
-            error_code=ERROR_CODE_PATCH_APPLY,
-            error_class=exc.__class__.__name__,
-            message=str(exc)[:240],
-            extra={"stage": "canon_gate"},
-        )
-        emit_turn_phase_event(
-            trace_ctx,
-            phase="canon_gate_finished",
-            success=True,
-            extra={
-                "decision": gate_meta["decision"],
-                "reason_code": gate_meta["reason_code"],
-                "warnings": gate_meta["warnings"],
-            },
-        )
-        return {"patch": merged_patch, "state": state_after, "meta": gate_meta}
-
-    gate_meta["decision"] = "flagged" if confidence == "medium" else "committed"
-    gate_meta["needs_review"] = bool(confidence == "medium")
-    gate_meta["reason_code"] = "COMMIT_MEDIUM_CONFIDENCE" if confidence == "medium" else "COMMIT_HIGH_CONFIDENCE"
-    emit_turn_phase_event(
-        trace_ctx,
-        phase="canon_gate_finished",
-        success=True,
-        extra={
-            "decision": gate_meta["decision"],
-            "reason_code": gate_meta["reason_code"],
-            "confidence": confidence,
-            "score": confidence_score,
-            "applied_keys": merge_meta.get("applied_keys") or [],
-        },
-    )
-    return {"patch": merged_patch, "state": state_after, "meta": gate_meta}
 
 def manifestation_seed_from_skill(skill_payload: Dict[str, Any], *, source_turn: int, confidence: float) -> Optional[Dict[str, Any]]:
     if not isinstance(skill_payload, dict):
