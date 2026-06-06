@@ -23,6 +23,7 @@ from app.adapters.ollama_config import (
     OLLAMA_TIMEOUT_SEC,
     OLLAMA_URL,
 )
+from app.adapters.llm_config import LLM_ADAPTER, LLM_PROVIDER
 from app.catalogs.runtime_catalogs import (
     CANON_EXTRACTOR_SCHEMA,
     CATALOG_VERSION,
@@ -345,7 +346,7 @@ reset_turn_branch = turn_engine.reset_turn_branch
 state_engine.configure_dependencies(
     state_engine.StateEngineDependencies(
         campaign_repository=CAMPAIGN_REPOSITORY,
-        ollama_adapter=OLLAMA_ADAPTER,
+        ollama_adapter=LLM_ADAPTER,
         live_state_service=live_state_service,
         logger=LOGGER,
     )
@@ -387,7 +388,9 @@ def get_state() -> Dict[str, Any]:
 
 @app.get("/api/llm/status")
 def get_llm_status() -> Dict[str, Any]:
-    return OLLAMA_ADAPTER.status_payload()
+    payload = dict(LLM_ADAPTER.status_payload())
+    payload["llm_provider"] = LLM_PROVIDER
+    return payload
 
 def state_engine_runtime() -> Dict[str, Any]:
     runtime = dict(globals())
@@ -424,7 +427,7 @@ def boards_service_dependencies() -> boards_service.BoardsServiceDependencies:
 state_engine.configure_dependencies(
     state_engine.StateEngineDependencies(
         campaign_repository=CAMPAIGN_REPOSITORY,
-        ollama_adapter=OLLAMA_ADAPTER,
+        ollama_adapter=LLM_ADAPTER,
         live_state_service=live_state_service,
         logger=LOGGER,
     )

@@ -1578,9 +1578,13 @@ compact_conditions = campaign_views.compact_conditions
 def ollama_request_seed() -> Optional[int]:
     return ollama_adapter().request_seed()
 
-def ollama_adapter() -> OllamaAdapter:
+def ollama_adapter() -> Any:
+    # Returns the configured LLM adapter (local Ollama, the Anthropic cloud
+    # fallback, or the auto fallback wrapper). Any object exposing the chat()
+    # interface is accepted; only an unconfigured (None) port rebuilds a default
+    # local Ollama adapter.
     configured = _STATE_ENGINE_DEPS.ollama_adapter
-    if isinstance(configured, OllamaAdapter):
+    if configured is not None and hasattr(configured, "chat"):
         return configured
     return OllamaAdapter(
         OllamaSettings(
