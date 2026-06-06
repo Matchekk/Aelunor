@@ -4,9 +4,13 @@ import unittest
 from app.config.runtime import LEGACY_CHARACTERS
 from app.services import state_engine
 from app.services.campaigns import normalization
+from app.services.state.dependencies import StateEngineDependencies
 
 
 class CampaignNormalizationServiceTests(unittest.TestCase):
+    def setUp(self) -> None:
+        state_engine.configure_dependencies(StateEngineDependencies())
+
     def test_state_engine_normalize_campaign_is_thin_wrapper(self) -> None:
         source = inspect.getsource(state_engine.normalize_campaign)
 

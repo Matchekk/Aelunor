@@ -35,6 +35,11 @@ from app.services.setup.flow import (
     setup_question_chapter_key,
     setup_question_is_applicable,
 )
+from app.services.setup import ai_copy as setup_ai_copy
+from app.services.setup import finalization as setup_finalization
+from app.services.setup import payloads as setup_payloads
+from app.services.setup import randomizer as setup_randomizer
+from app.services.setup import summaries as setup_summaries
 from app.adapters.llm import OllamaAdapter, OllamaSettings
 from app.adapters.ollama_config import (
     OLLAMA_ADAPTER,
@@ -3730,360 +3735,87 @@ def call_ollama_schema(system: str, user: str, schema: Dict[str, Any], *, timeou
             raise
         return repair_json_payload_with_model(system, content, schema=schema, timeout=min(schema_timeout, 120))
 
+def setup_ai_copy_dependencies() -> setup_ai_copy.SetupAiCopyDependencies:
+    from app.services import turn_engine as _turn_engine
+
+    return setup_ai_copy.SetupAiCopyDependencies(
+        call_ollama_text=call_ollama_text,
+        display_name_for_slot=display_name_for_slot,
+        looks_non_german_text=_turn_engine.looks_non_german_text,
+        utc_now=utc_now,
+    )
+
+def setup_payload_dependencies() -> setup_payloads.SetupPayloadDependencies:
+    return setup_payloads.SetupPayloadDependencies(
+        deep_copy=deep_copy,
+        display_name_for_slot=display_name_for_slot,
+        extract_text_answer=extract_text_answer,
+        is_host=is_host,
+        current_question_id=current_question_id,
+        progress_payload=progress_payload,
+        normalize_campaign_length_choice=normalize_campaign_length_choice,
+        normalize_ruleset_choice=normalize_ruleset_choice,
+    )
+
+def setup_summary_state_dependencies() -> setup_summaries.CharacterSummaryStateDependencies:
+    return setup_summaries.CharacterSummaryStateDependencies(
+        clean_creator_item_name=clean_creator_item_name,
+        derive_age_stage=derive_age_stage,
+        enable_legacy_shadow_writeback=ENABLE_LEGACY_SHADOW_WRITEBACK,
+        generate_character_attribute_weights=generate_character_attribute_weights,
+        infer_age_years=infer_age_years,
+        level_one_attribute_budget=level_one_attribute_budget,
+        level_one_attribute_cap=level_one_attribute_cap,
+        level_one_attributes_from_weights=level_one_attributes_from_weights,
+        normalize_attribute_weight_pool=normalize_attribute_weight_pool,
+        normalize_class_current=normalize_class_current,
+        normalize_creator_item_list=normalize_creator_item_list,
+        normalize_world_time=normalize_world_time,
+        normalized_eval_text=normalized_eval_text,
+        reconcile_canonical_resources=reconcile_canonical_resources,
+        reconcile_creator_inventory_items=reconcile_creator_inventory_items,
+        rebuild_character_derived=rebuild_character_derived,
+        refresh_skill_progression=refresh_skill_progression,
+        strip_legacy_shadow_fields=strip_legacy_shadow_fields,
+        sync_scars_into_appearance=sync_scars_into_appearance,
+        write_legacy_shadow_fields=write_legacy_shadow_fields,
+    )
+
 def clean_setup_ai_copy(text: str) -> str:
-    return str(text or "").strip().strip('"').strip("'").strip()
+    return setup_ai_copy.clean_setup_ai_copy(text)
 
 def is_bad_setup_ai_copy(text: str) -> bool:
-    lowered = clean_setup_ai_copy(text).lower()
-    if not lowered:
-        return True
-    meta_markers = (
-        "frage-id:",
-        "typ:",
-        "setup-stufe:",
-        "aktuelles weltprofil:",
-        "es geht um den slot",
-        '"premise":',
-        '"tone":',
-        '"difficulty":',
-        '"player_count":',
-        "{",
-        "}",
-    )
-    if any(marker in lowered for marker in meta_markers):
-        return True
-    if len(lowered) > 260:
-        return True
-    return False
+    return setup_ai_copy.is_bad_setup_ai_copy(text)
 
-def generate_setup_ai_copy(
-    campaign: Dict[str, Any],
-    question: Dict[str, Any],
-    *,
-    setup_type: str,
-    slot_name: Optional[str] = None,
-) -> str:
-    prompt = question.get("prompt_template") or question["label"]
-    summary = campaign.get("setup", {}).get("world", {}).get("summary", {})
-    role_text = (
-        f"Es geht um den Slot {slot_name} ({display_name_for_slot(campaign, slot_name)})"
-        if slot_name
-        else "Es geht um das Welt-Setup"
-    )
-    user = (
-        f"Frage-ID: {question['id']}\n"
-        f"Typ: {question['type']}\n"
-        f"Setup-Stufe: {setup_type}\n"
-        f"{role_text}\n"
-        f"Aktuelles Weltprofil: {json.dumps(summary, ensure_ascii=False)}\n"
-        f"Basistext: {prompt}"
-    )
-    try:
-        text = call_ollama_text(SETUP_QUESTION_SYSTEM_PROMPT, user)
-        text = clean_setup_ai_copy(text)
-        return prompt if is_bad_setup_ai_copy(text) or looks_non_german_text(text, allow_short=True) else text
-    except Exception:
-        return prompt
+def generate_setup_ai_copy(campaign: Dict[str, Any], question: Dict[str, Any], *, setup_type: str, slot_name: Optional[str] = None) -> str:
+    return setup_ai_copy.generate_setup_ai_copy(campaign, question, setup_type=setup_type, slot_name=slot_name, deps=setup_ai_copy_dependencies())
 
 def get_persisted_question_ai_copy(setup_node: Dict[str, Any], question_id: str) -> str:
-    runtime = (setup_node.get("question_runtime") or {}).get(question_id) or {}
-    return clean_setup_ai_copy(runtime.get("ai_copy", ""))
+    return setup_ai_copy.get_persisted_question_ai_copy(setup_node, question_id)
 
 def store_question_ai_copy(setup_node: Dict[str, Any], question_id: str, ai_copy: str, source: str) -> str:
-    runtime = setup_node.setdefault("question_runtime", {})
-    cleaned = clean_setup_ai_copy(ai_copy)
-    runtime[question_id] = {
-        "ai_copy": cleaned,
-        "generated_at": utc_now(),
-        "source": source,
-    }
-    return cleaned
+    return setup_ai_copy.store_question_ai_copy(setup_node, question_id, ai_copy, source, deps=setup_ai_copy_dependencies())
 
-def ensure_question_ai_copy(
-    campaign: Dict[str, Any],
-    *,
-    setup_type: str,
-    question_id: str,
-    slot_name: Optional[str] = None,
-) -> str:
-    question_map = WORLD_QUESTION_MAP if setup_type == "world" else CHARACTER_QUESTION_MAP
-    question = question_map.get(question_id)
-    if not question:
-        raise HTTPException(status_code=404, detail="Unbekannte Setup-Frage.")
-    if setup_type == "world":
-        setup_node = campaign["setup"]["world"]
-    else:
-        setup_node = campaign["setup"]["characters"].get(slot_name or "")
-        if not setup_node:
-            raise HTTPException(status_code=404, detail="Unbekannter Setup-Slot.")
-    existing = get_persisted_question_ai_copy(setup_node, question_id)
-    if existing:
-        return existing
-    generated = generate_setup_ai_copy(campaign, question, setup_type=setup_type, slot_name=slot_name)
-    source = "fallback" if clean_setup_ai_copy(generated) == clean_setup_ai_copy(question.get("prompt_template") or question["label"]) else "ai"
-    return store_question_ai_copy(setup_node, question_id, generated or question["label"], source)
+def ensure_question_ai_copy(campaign: Dict[str, Any], *, setup_type: str, question_id: str, slot_name: Optional[str] = None) -> str:
+    return setup_ai_copy.ensure_question_ai_copy(campaign, setup_type=setup_type, question_id=question_id, slot_name=slot_name, deps=setup_ai_copy_dependencies())
 
-def build_setup_option_context(
-    campaign: Dict[str, Any],
-    *,
-    setup_type: str,
-    slot_name: Optional[str] = None,
-    setup_node: Optional[Dict[str, Any]] = None,
-) -> Dict[str, str]:
-    world_answers = (((campaign.get("setup") or {}).get("world") or {}).get("answers") or {})
-    world_summary = (((campaign.get("setup") or {}).get("world") or {}).get("summary") or {})
-    character_node = (((campaign.get("setup") or {}).get("characters") or {}).get(slot_name or "")) or {}
-    character_answers = (setup_node or character_node).get("answers", {}) or {}
-    character_summary = (character_node.get("summary") or {})
-    return {
-        "setup_type": setup_type,
-        "slot_name": slot_name or "",
-        "slot_display_name": display_name_for_slot(campaign, slot_name) if slot_name else "",
-        "theme": extract_text_answer(world_answers.get("theme")) or str(world_summary.get("theme", "") or ""),
-        "campaign_length": normalize_campaign_length_choice(
-            extract_text_answer(world_answers.get("campaign_length")) or str(world_summary.get("campaign_length", "") or "")
-        ),
-        "tone": extract_text_answer(world_answers.get("tone")) or str(world_summary.get("tone", "") or ""),
-        "difficulty": extract_text_answer(world_answers.get("difficulty")) or str(world_summary.get("difficulty", "") or ""),
-        "world_structure": extract_text_answer(world_answers.get("world_structure")) or str(world_summary.get("world_structure", "") or ""),
-        "resource_scarcity": extract_text_answer(world_answers.get("resource_scarcity")) or str(world_summary.get("resource_scarcity", "") or ""),
-        "resource_name": extract_text_answer(world_answers.get("resource_name")) or str(world_summary.get("resource_name", "") or ""),
-        "monsters_density": extract_text_answer(world_answers.get("monsters_density")) or str(world_summary.get("monsters_density", "") or ""),
-        "healing_frequency": extract_text_answer(world_answers.get("healing_frequency")) or str(world_summary.get("healing_frequency", "") or ""),
-        "ruleset": normalize_ruleset_choice(extract_text_answer(world_answers.get("ruleset")) or str(world_summary.get("ruleset", "") or "")),
-        "attribute_range": str(world_summary.get("attribute_range_label", "") or extract_text_answer(world_answers.get("attribute_range"))),
-        "char_gender": extract_text_answer(character_answers.get("char_gender")) or str(character_summary.get("gender", "") or ""),
-        "char_age": extract_text_answer(character_answers.get("char_age")) or str(character_summary.get("age_stage", "") or ""),
-        "strength": extract_text_answer(character_answers.get("strength")) or str(character_summary.get("strength", "") or ""),
-        "weakness": extract_text_answer(character_answers.get("weakness")) or str(character_summary.get("weakness", "") or ""),
-        "class_start_mode": extract_text_answer(character_answers.get("class_start_mode")) or str(character_summary.get("class_start_mode", "") or ""),
-        "current_focus": extract_text_answer(character_answers.get("current_focus")) or str(character_summary.get("current_focus", "") or character_summary.get("focus", "") or ""),
-        "personality_tags": extract_text_answer(character_answers.get("personality_tags")) or ", ".join(character_summary.get("personality_tags", []) or character_summary.get("personality", []) or []),
-    }
+def build_setup_option_context(campaign: Dict[str, Any], *, setup_type: str, slot_name: Optional[str] = None, setup_node: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
+    return setup_payloads.build_setup_option_context(campaign, setup_type=setup_type, slot_name=slot_name, setup_node=setup_node, deps=setup_payload_dependencies())
 
 def append_context_hint(base: str, hint: str) -> str:
-    base = str(base or "").strip()
-    hint = str(hint or "").strip()
-    if not hint:
-        return base
-    if not base:
-        return hint
-    return f"{base} {hint}"
+    return setup_payloads.append_context_hint(base, hint)
 
 def dynamic_option_description(question_id: str, option: str, context: Dict[str, str]) -> str:
-    theme = context.get("theme", "")
-    tone = context.get("tone", "")
-    world_structure = context.get("world_structure", "")
-    difficulty = context.get("difficulty", "")
-    monsters_density = context.get("monsters_density", "")
-    resource_scarcity = context.get("resource_scarcity", "")
-    resource_name = context.get("resource_name", "")
-    ruleset = context.get("ruleset", "")
-    strength = context.get("strength", "")
-    weakness = context.get("weakness", "")
-    focus = context.get("current_focus", "")
-
-    if question_id == "theme":
-        descriptions = {
-            "Dark Isekai (Survival/Horror)": "Zieht den Run in Richtung knapper Flucht, unklarer Gefahr und existenzieller Unsicherheit.",
-            "Grimdark Fantasy (Krieg/Fraktionen)": "Stellt Machtblöcke, Verrat und ein zermürbendes großes Konfliktfeld in den Vordergrund.",
-            "Monster-Hunt (Jagd/Beute/Upgrade)": "Fokussiert Beutezüge, gefährliche Fährten und spürbaren Fortschritt über besiegte Bedrohungen.",
-            "Mystery/Occult (Geheimnisse/Kulte)": "Legt den Schwerpunkt auf verborgene Wahrheiten, Rituale, Kulte und langsames Entschlüsseln.",
-            "Dungeon-Crawl (Fallen/Loot/Progress)": "Bringt enge Räume, riskante Vorstöße, Fallen und klaren Vorwärtsdruck in die Szenen.",
-            "Sandbox (freie Erkundung)": "Öffnet die Welt stärker, damit Entdeckung, Umwege und selbstgewählte Prioritäten tragen.",
-        }
-        return append_context_hint(descriptions.get(option, ""), f"Der aktuelle Ton {tone} färbt diese Richtung zusätzlich ein." if tone else "")
-    if question_id == "player_count":
-        try:
-            count = int(option)
-        except ValueError:
-            count = 1
-        if count == 1:
-            return "Hält alles eng, persönlich und stark auf eine einzelne Hauptfigur konzentriert."
-        if count <= 3:
-            return "Gibt jeder Figur klaren Raum und hält die Gruppe trotzdem beweglich."
-        return "Erzeugt mehr Gruppendynamik, Reibung und mehrere gleichzeitige Blickwinkel."
-    if question_id == "campaign_length":
-        descriptions = {
-            "Kurz": "Zielt auf einen kompakten Run mit schnellerem Plot-Fortschritt und klaren Meilensteinen (~120 Turns).",
-            "Mittel": "Balanciert Fortschritt und Details für längere Kampagnenphasen (~720 Turns).",
-            "Unbestimmt": "Kein fixes Endziel; die Kampagne kann offen weiterlaufen, solange der Tisch es will.",
-        }
-        return descriptions.get(option, "")
-    if question_id == "tone":
-        descriptions = {
-            "Düster-realistisch": "Erdet jede Szene und lässt Gewalt, Hunger und Verlust schwer und glaubwürdig wirken.",
-            "Anime-dark (stilisiert, brutal wenn nötig)": "Erlaubt größere Bilder, klare Archetypen und dennoch harte Spitzen im richtigen Moment.",
-            "Brutal/gnadenlos": "Macht die Welt härter, direkter und weniger verzeihend in ihren Konsequenzen.",
-            "Melancholisch/hoffnungslos": "Schiebt Trauer, Verfall und ein langsames Gefühl des Untergehens in den Vordergrund.",
-            "Zynisch/dreckig": "Betont Niedertracht, schmutzige Deals und Figuren, die eher überleben als glänzen wollen.",
-            "Mystisch/bedrohlich": "Lässt vieles größer, älter und unheilvoller wirken, auch wenn die Gefahr noch unsichtbar ist.",
-        }
-        return append_context_hint(descriptions.get(option, ""), f"Passt stark zu {theme}." if theme else "")
-    if question_id == "difficulty":
-        descriptions = {
-            "Gritty": "Fehler tun weh, aber die Welt lässt noch Luft für knappe Erholung und kluge Auswege.",
-            "Brutal": "Konsequenzen sitzen tiefer, Ressourcen kippen schneller und falsche Risiken rächen sich spürbar.",
-            "Hardcore": "Die Welt gönnt kaum Puffer; selbst gute Pläne müssen mit maximalem Druck gerechnet werden.",
-        }
-        return append_context_hint(descriptions.get(option, ""), f"Mit Ton {tone} wirkt das noch kompromissloser." if tone else "")
-    if question_id == "monsters_density":
-        descriptions = {
-            "Selten": "Monstern begegnet man weniger oft, dafür wirken einzelne Auftritte größer und markanter.",
-            "Regelmäßig": "Hält stetigen Druck in der Welt, ohne jede Szene automatisch in Kampf zu kippen.",
-            "Überall": "Macht Bewegung selbst zum Risiko und drückt den Run stark in Richtung permanenter Bedrohung.",
-            "Situativ (nur in bestimmten Zonen)": "Erlaubt ruhige Zwischenräume und klar abgegrenzte Höllenzonen mit eigenem Profil.",
-        }
-        return append_context_hint(descriptions.get(option, ""), f"Das kontrastiert gerade mit der Knappheit {resource_scarcity}." if resource_scarcity else "")
-    if question_id == "resource_scarcity":
-        descriptions = {
-            "Niedrig": "Lässt den Run freier atmen und verschiebt den Druck eher auf Konflikte als auf Versorgung.",
-            "Mittel": "Hält Versorgung relevant, ohne jede Entscheidung sofort in blanken Mangel zu verwandeln.",
-            "Hoch": "Macht Vorräte, Licht, Wasser und Werkzeug schnell zu eigenen Story-Treibern.",
-            "Extrem": "Schon der nächste Tag wird zur Frage von Kälte, Hunger, Improvisation und bitteren Prioritäten.",
-        }
-        return append_context_hint(descriptions.get(option, ""), f"Monsterdichte: {monsters_density}." if monsters_density else "")
-    if question_id == "resource_name":
-        descriptions = {
-            "Aether": "Wirkt archaisch-mystisch und passt gut zu Relikten, Siegeln und uralten Strukturen.",
-            "Mana": "Klingt klassisch-fantastisch und hält Magie als gut lesbaren Kernbegriff.",
-            "Ki": "Schiebt Fokus auf Körperdisziplin, innere Strömung und kontrollierte Technik.",
-            "Chakra": "Betont spirituelle Zentren, innere Balance und kultische Systeme.",
-            "Prana": "Färbt die Welt stärker lebensenergetisch und naturverbunden.",
-            "Flux": "Wirkt technomagisch, instabil und experimentell.",
-            "Essenz": "Fühlt sich roh, alchemistisch und existenziell an.",
-        }
-        return append_context_hint(descriptions.get(option, ""), f"Aktuell gesetzt: {resource_name}." if resource_name else "")
-    if question_id == "healing_frequency":
-        descriptions = {
-            "Selten": "Verletzungen bleiben länger relevant und schreiben sich tiefer in den Szenenverlauf ein.",
-            "Normal": "Hält Schaden spürbar, ohne den Run in Dauerlähmung zu drücken.",
-            "Häufig": "Erlaubt aggressiveres Spiel, weil Rückschläge eher abgefangen werden können.",
-        }
-        return append_context_hint(descriptions.get(option, ""), f"In Kombination mit {difficulty} bleibt das gut lesbar." if difficulty else "")
-    if question_id == "ruleset":
-        descriptions = {
-            "Konsequent": "Lässt Entscheidungen direkt und klar zurückschlagen, ohne Ausweichen über Zufall oder Gnade.",
-            "Dramatisch": "Gewichtet emotionale Wendungen und bittere Kosten stärker als nüchterne Härte.",
-            "Erbarmungslos": "Spielt jede falsche Entscheidung brutal aus und hält den Druck permanent hoch.",
-        }
-        return append_context_hint(descriptions.get(option, ""), f"Gerade bei Wertebereich {context.get('attribute_range', '')} wirkt das besonders klar." if context.get("attribute_range") else "")
-    if question_id == "attribute_range":
-        descriptions = {
-            "1-10": "Bleibt kompakt und schnell lesbar; kleine Unterschiede wirken sofort bedeutsam.",
-            "1-20": "Gibt etwas feinere Abstufungen, ohne das Blatt mit Zahlen zu überfrachten.",
-            "1-100": "Erlaubt sehr feine Skalen, große Schwankungen und detailreiche Progression.",
-        }
-        return append_context_hint(descriptions.get(option, ""), f"Mit {ruleset} bleibt die Skala gut greifbar." if ruleset else "")
-    if question_id == "outcome_model":
-        descriptions = {
-            "Erfolg / Misserfolg": "Hält Szenen direkter und klarer, mit harten Kanten zwischen gelungen und misslungen.",
-            "Erfolg / Teilerfolg / Misserfolg-mit-Preis": "Gibt dem GM mehr graue Zwischenräume, Kosten und bittere Kompromisse.",
-            "Cinematic (weniger Würfe, harte Konsequenzen)": "Setzt auf weniger Unterbrechung und größere Wendepunkte pro Entscheidung.",
-        }
-        return append_context_hint(descriptions.get(option, ""), f"Passt gut zu {tone}." if tone else "")
-    if question_id == "world_structure":
-        descriptions = {
-            "Hub + Dungeons": "Schafft einen wiederkehrenden sicheren Kern und klare Ausbrüche in gefährliche Zonen.",
-            "Zonen/Regionen (mit Grenzen/Fog of War)": "Betont Fortschritt über erkundete Grenzen und Stück-für-Stück-Enthüllung.",
-            "Offene Welt (Sandbox)": "Lässt die Gruppe stärker selbst treiben, umleiten und Prioritäten setzen.",
-            "Reise-Kampagne (Road-Movie)": "Schiebt Bewegung, Weggefährten, Durchgangsorte und stetigen Ortswechsel nach vorn.",
-            "Stadtzentriert (Intrigen/Fraktionen)": "Verdichtet Drama auf Beziehungen, Fraktionen, Deals und Machtspiele an einem Knotenpunkt.",
-        }
-        return append_context_hint(descriptions.get(option, ""), f"Der bisherige Ton {tone} bekommt darin einen klaren Raum." if tone else "")
-    if question_id == "world_laws":
-        hint = "Verankert ein dauerhaftes Weltgesetz, das Entscheidungen und Risiken fortlaufend färbt."
-        if theme:
-            hint = append_context_hint(hint, f"Gerade im Rahmen von {theme} kann das starke Kontraste erzeugen.")
-        return hint
-    if question_id == "char_gender":
-        return append_context_hint("Legt die Identität der Figur fest, ohne ihre Spielstärke oder Klasse vorzugeben.", f"Die Welt {theme} reagiert dann auf genau diese Figur." if theme else "")
-    if question_id == "char_age":
-        descriptions = {
-            "Teen (16-19)": "Bringt frühe Härte, Unfertigkeit und oft mehr rohen Trotz in den Run.",
-            "Jung (20-25)": "Fühlt sich beweglich, suchend und offen für schnelle Richtungswechsel an.",
-            "Erwachsen (26-35)": "Gibt der Figur greifbare Reife, Entscheidungen mit Gewicht und klare Altlasten.",
-            "Älter (36+)": "Stärkt Lebenserfahrung, Müdigkeit, Narben und eine andere Art von Autorität.",
-        }
-        return append_context_hint(descriptions.get(option, ""), f"Passt gut zu Fokus {focus}." if focus else "")
-    if question_id == "personality_tags":
-        return append_context_hint("Setzt eine spürbare Charakterkante, die in Dialogen, Risiken und Gruppenspannung sichtbar werden kann.", f"Besonders interessant neben {weakness}." if weakness else "")
-    if question_id == "strength":
-        return append_context_hint("Macht klar, worin die Figur unter Druck verlässlich glänzen darf.", f"In dieser Welt mit {theme} kann das besonders tragen." if theme else "")
-    if question_id == "weakness":
-        return append_context_hint("Gibt der Welt einen echten Hebel, um Druck auf die Figur auszuüben.", f"Das reibt sich spannend mit Stärke {strength}." if strength else "")
-    if question_id == "current_focus":
-        return append_context_hint("Bestimmt, worauf die Figur in den ersten Szenen instinktiv zusteuert.", f"Zusammen mit Stärke {strength} entsteht sofort eine klare Dynamik." if strength else "")
-    if question_id == "class_start_mode":
-        return "Legt fest, ob die Klasse sofort entsteht, von dir direkt definiert wird oder sich erst in der Story bildet."
-    if question_id == "isekai_price":
-        return append_context_hint("Sorgt dafür, dass die Ankunft sofort eine greifbare Narbe oder Last hinterlässt.", f"Bei Schwäche {weakness} kann das besonders wehtun." if weakness else "")
-    return ""
+    return setup_payloads.dynamic_option_description(question_id, option, context)
 
 def dynamic_other_hint(question: Dict[str, Any], context: Dict[str, str]) -> str:
-    theme = context.get("theme", "")
-    tone = context.get("tone", "")
-    if question["type"] == "select":
-        if context.get("setup_type") == "world":
-            return f"Wenn nichts passt, gib eine eigene Welt-Richtung an, die trotzdem mit {theme or 'dem Run'} und {tone or 'dem aktuellen Ton'} zusammenarbeitet."
-        return f"Wenn nichts passt, beschreibe eine eigene Antwort, die zur Figur und zur Welt {theme or 'des Runs'} passt."
-    if question["type"] == "multiselect":
-        if context.get("setup_type") == "world":
-            return "Eigene zusätzliche Gesetze oder Marker kannst du hier als kommagetrennte Liste ergänzen."
-        return "Eigene zusätzliche Merkmale kannst du hier als kommagetrennte Liste ergänzen."
-    return ""
+    return setup_payloads.dynamic_other_hint(question, context)
 
-def build_dynamic_option_entries(
-    question: Dict[str, Any],
-    *,
-    context: Dict[str, str],
-) -> List[Dict[str, str]]:
-    entries = []
-    for option in question.get("options", []) or []:
-        text = str(option).strip()
-        if not text:
-            continue
-        entries.append(
-            {
-                "value": text,
-                "label": text,
-                "description": dynamic_option_description(question["id"], text, context),
-            }
-        )
-    return entries
+def build_dynamic_option_entries(question: Dict[str, Any], *, context: Dict[str, str]) -> List[Dict[str, str]]:
+    return setup_payloads.build_dynamic_option_entries(question, context=context)
 
-def build_question_payload(
-    question: Dict[str, Any],
-    *,
-    campaign: Dict[str, Any],
-    setup_type: str,
-    ai_copy: str,
-    slot_name: Optional[str] = None,
-    setup_node: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    context = build_setup_option_context(
-        campaign,
-        setup_type=setup_type,
-        slot_name=slot_name,
-        setup_node=setup_node,
-    )
-    payload = {
-        "question_id": question["id"],
-        "label": question["label"],
-        "type": question["type"],
-        "required": question.get("required", False),
-        "options": question.get("options", []),
-        "option_entries": build_dynamic_option_entries(question, context=context),
-        "min_selected": question.get("min_selected"),
-        "max_selected": question.get("max_selected"),
-        "allow_other": question.get("allow_other", False),
-        "other_hint": dynamic_other_hint(question, context),
-        "ai_copy": clean_setup_ai_copy(ai_copy) or question["label"],
-        "existing_answer": None,
-    }
-    if setup_node:
-        payload["existing_answer"] = deep_copy(setup_node.get("answers", {}).get(question["id"]))
-    return payload
+def build_question_payload(question: Dict[str, Any], *, campaign: Dict[str, Any], setup_type: str, ai_copy: str, slot_name: Optional[str] = None, setup_node: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    return setup_payloads.build_question_payload(question, campaign=campaign, setup_type=setup_type, ai_copy=ai_copy, slot_name=slot_name, setup_node=setup_node, deps=setup_payload_dependencies())
 
 def setup_helper_dependencies() -> setup_helpers.SetupHelperDependencies:
     return setup_helpers.SetupHelperDependencies(
@@ -4115,125 +3847,43 @@ def setup_helper_dependencies() -> setup_helpers.SetupHelperDependencies:
     )
 
 def validate_answer_payload(question: Dict[str, Any], answer: Dict[str, Any]) -> Any:
-    return setup_helpers.validate_answer_payload(question, answer)
+    return setup_randomizer.validate_answer_payload(question, answer)
 
 def fallback_random_text(question_id: str, *, setup_type: str, campaign: Dict[str, Any], slot_name: Optional[str] = None) -> str:
-    return setup_helpers.fallback_random_text(
-        question_id,
-        setup_type=setup_type,
-        campaign=campaign,
-        slot_name=slot_name,
-        deps=setup_helper_dependencies(),
-    )
+    return setup_randomizer.fallback_random_text(question_id, setup_type=setup_type, campaign=campaign, slot_name=slot_name, deps=setup_helper_dependencies())
 
-def fallback_random_answer_payload(
-    campaign: Dict[str, Any],
-    question: Dict[str, Any],
-    *,
-    setup_type: str,
-    slot_name: Optional[str] = None,
-) -> Dict[str, Any]:
-    return setup_helpers.fallback_random_answer_payload(
-        campaign,
-        question,
-        setup_type=setup_type,
-        slot_name=slot_name,
-        deps=setup_helper_dependencies(),
-    )
+def fallback_random_answer_payload(campaign: Dict[str, Any], question: Dict[str, Any], *, setup_type: str, slot_name: Optional[str] = None) -> Dict[str, Any]:
+    return setup_randomizer.fallback_random_answer_payload(campaign, question, setup_type=setup_type, slot_name=slot_name, deps=setup_helper_dependencies())
 
-def generate_random_setup_answer(
-    campaign: Dict[str, Any],
-    question: Dict[str, Any],
-    *,
-    setup_type: str,
-    slot_name: Optional[str] = None,
-    setup_node: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    return setup_helpers.generate_random_setup_answer(
-        campaign,
-        question,
-        setup_type=setup_type,
-        slot_name=slot_name,
-        setup_node=setup_node,
-        deps=setup_helper_dependencies(),
-    )
+def generate_random_setup_answer(campaign: Dict[str, Any], question: Dict[str, Any], *, setup_type: str, slot_name: Optional[str] = None, setup_node: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    return setup_randomizer.generate_random_setup_answer(campaign, question, setup_type=setup_type, slot_name=slot_name, setup_node=setup_node, deps=setup_helper_dependencies())
 
-def store_setup_answer(
-    setup_node: Dict[str, Any],
-    question: Dict[str, Any],
-    stored: Any,
-    *,
-    player_id: Optional[str],
-    source: str = "manual",
-) -> None:
-    return setup_helpers.store_setup_answer(
-        setup_node,
-        question,
-        stored,
-        player_id=player_id,
-        source=source,
-        deps=setup_helper_dependencies(),
-    )
+def store_setup_answer(setup_node: Dict[str, Any], question: Dict[str, Any], stored: Any, *, player_id: Optional[str], source: str = "manual") -> None:
+    return setup_randomizer.store_setup_answer(setup_node, question, stored, player_id=player_id, source=source, deps=setup_helper_dependencies())
 
 def setup_answer_to_input_payload(question: Dict[str, Any], stored: Any) -> Dict[str, Any]:
-    return setup_helpers.setup_answer_to_input_payload(question, stored)
+    return setup_randomizer.setup_answer_to_input_payload(question, stored)
 
 def setup_answer_preview_text(question: Dict[str, Any], stored: Any) -> str:
-    return setup_helpers.setup_answer_preview_text(question, stored)
+    return setup_randomizer.setup_answer_preview_text(question, stored)
 
-def build_random_setup_preview(
-    campaign: Dict[str, Any],
-    setup_node: Dict[str, Any],
-    question_map: Dict[str, Dict[str, Any]],
-    *,
-    setup_type: str,
-    player_id: Optional[str],
-    slot_name: Optional[str] = None,
-    mode: str,
-    question_id: Optional[str] = None,
-    preview_answers: Optional[List["SetupAnswerIn"]] = None,
-) -> List[Dict[str, Any]]:
-    return setup_helpers.build_random_setup_preview(
-        campaign,
-        setup_node,
-        question_map,
-        setup_type=setup_type,
-        player_id=player_id,
-        slot_name=slot_name,
-        mode=mode,
-        question_id=question_id,
-        preview_answers=preview_answers,
-        deps=setup_helper_dependencies(),
-    )
+def build_random_setup_preview(campaign: Dict[str, Any], setup_node: Dict[str, Any], question_map: Dict[str, Dict[str, Any]], *, setup_type: str, player_id: Optional[str], slot_name: Optional[str] = None, mode: str, question_id: Optional[str] = None, preview_answers: Optional[List["SetupAnswerIn"]] = None) -> List[Dict[str, Any]]:
+    return setup_randomizer.build_random_setup_preview(campaign, setup_node, question_map, setup_type=setup_type, player_id=player_id, slot_name=slot_name, mode=mode, question_id=question_id, preview_answers=preview_answers, deps=setup_helper_dependencies())
 
-def apply_random_setup_preview(
-    campaign: Dict[str, Any],
-    setup_node: Dict[str, Any],
-    question_map: Dict[str, Dict[str, Any]],
-    preview_answers: List["SetupAnswerIn"],
-    *,
-    player_id: Optional[str],
-) -> int:
-    return setup_helpers.apply_random_setup_preview(
-        campaign,
-        setup_node,
-        question_map,
-        preview_answers,
-        player_id=player_id,
-        deps=setup_helper_dependencies(),
-    )
+def apply_random_setup_preview(campaign: Dict[str, Any], setup_node: Dict[str, Any], question_map: Dict[str, Dict[str, Any]], preview_answers: List["SetupAnswerIn"], *, player_id: Optional[str]) -> int:
+    return setup_randomizer.apply_random_setup_preview(campaign, setup_node, question_map, preview_answers, player_id=player_id, deps=setup_helper_dependencies())
 
 def finalize_world_setup(campaign: Dict[str, Any], player_id: Optional[str]) -> None:
-    setup_helpers.finalize_world_setup(campaign, player_id, deps=setup_helper_dependencies())
+    setup_finalization.finalize_world_setup(campaign, player_id, deps=setup_helper_dependencies())
 
 def finalize_character_setup(campaign: Dict[str, Any], slot_name: str) -> Optional[Dict[str, Any]]:
-    return setup_helpers.finalize_character_setup(campaign, slot_name, deps=setup_helper_dependencies())
+    return setup_finalization.finalize_character_setup(campaign, slot_name, deps=setup_helper_dependencies())
 
 def build_world_summary(campaign: Dict[str, Any]) -> Dict[str, Any]:
-    return setup_helpers.build_world_summary(campaign, deps=setup_helper_dependencies())
+    return setup_summaries.build_world_summary(campaign, deps=setup_helper_dependencies())
 
 def build_character_summary(campaign: Dict[str, Any], slot_name: str) -> Dict[str, Any]:
-    return setup_helpers.build_character_summary(campaign, slot_name, deps=setup_helper_dependencies())
+    return setup_summaries.build_character_summary(campaign, slot_name, deps=setup_helper_dependencies())
 
 def apply_world_summary_to_boards(campaign: Dict[str, Any], updated_by: Optional[str]) -> None:
     campaign_state_shape.apply_world_summary_to_boards(
@@ -4259,95 +3909,7 @@ def initialize_dynamic_slots(campaign: Dict[str, Any], player_count: int) -> Non
 
 
 def apply_character_summary_to_state(campaign: Dict[str, Any], slot_name: str) -> None:
-    setup_node = campaign["setup"]["characters"][slot_name]
-    summary = setup_node["summary"]
-    character = campaign["state"]["characters"][slot_name]
-    world_time = normalize_world_time(campaign["state"]["meta"])
-    age_years = infer_age_years(summary.get("age_bucket", ""))
-    character["bio"] = {
-        "name": summary.get("display_name", ""),
-        "gender": summary.get("gender", ""),
-        "age": summary.get("age_bucket", ""),
-        "age_years": age_years,
-        "age_stage": derive_age_stage(age_years),
-        "earth_life": summary.get("earth_life", ""),
-        "personality": summary.get("personality_tags", []),
-        "background_tags": summary.get("background_tags", []),
-        "strength": summary.get("strength", ""),
-        "weakness": summary.get("weakness", ""),
-        "focus": summary.get("current_focus", ""),
-        "goal": summary.get("first_goal", ""),
-        "isekai_price": summary.get("isekai_price", ""),
-        "earth_items": normalize_creator_item_list(summary.get("earth_items", [])),
-        "signature_item": clean_creator_item_name(summary.get("signature_item", "")),
-    }
-    assignment = summary.get("attribute_assignment")
-    if not isinstance(assignment, dict) or not isinstance(assignment.get("weights"), dict):
-        assignment = generate_character_attribute_weights(campaign, slot_name, summary)
-        summary["attribute_assignment"] = assignment
-    weights = normalize_attribute_weight_pool(assignment.get("weights", {}), total=120)
-    attributes = level_one_attributes_from_weights(campaign, weights)
-    summary["attribute_assignment"] = {
-        "weights": weights,
-        "source": assignment.get("source", "fallback"),
-        "pool_total": 120,
-        "level_one_budget": level_one_attribute_budget(campaign),
-        "level_one_cap": level_one_attribute_cap(campaign),
-        "values": attributes,
-    }
-    character["attributes"] = attributes
-    character["aging"] = {
-        "arrival_absolute_day": world_time["absolute_day"],
-        "days_since_arrival": 0,
-        "last_aged_absolute_day": world_time["absolute_day"],
-        "age_effects_applied": [],
-    }
-    character.setdefault("progression", {})
-    character["progression"]["resource_name"] = str((((campaign.get("state") or {}).get("world") or {}).get("settings") or {}).get("resource_name") or "Aether")
-    character["progression"]["resource_current"] = int(character.get("res_current", 5) or 5)
-    character["progression"]["resource_max"] = int(character.get("res_max", 5) or 5)
-    class_start_mode = normalized_eval_text(summary.get("class_start_mode", ""))
-    if "ki" in class_start_mode:
-        seed = summary.get("class_seed") or summary.get("current_focus") or summary.get("strength") or "Überlebender"
-        character["class_current"] = normalize_class_current(
-            {
-                "id": f"class_{re.sub(r'[^a-z0-9]+', '_', normalized_eval_text(seed)).strip('_') or 'wanderer'}",
-                "name": str(seed).strip().title(),
-                "rank": "F",
-                "level": 1,
-                "level_max": 10,
-                "xp": 0,
-                "xp_next": 100,
-                "affinity_tags": [str(summary.get("strength") or "").strip().split("/", 1)[0].lower().replace(" ", "_"), str(summary.get("current_focus") or "").strip().split("/", 1)[0].lower().replace(" ", "_")],
-                "description": f"Eine frühe Klasse, geformt aus {summary.get('strength', 'Überleben')} und dem Fokus {summary.get('current_focus', 'Unbekannt')}.",
-                "ascension": {"status": "none", "quest_id": None, "requirements": [], "result_hint": None},
-            }
-        )
-    elif "selbst" in class_start_mode or (not class_start_mode and normalized_eval_text(summary.get("class_custom_name", ""))):
-        character["class_current"] = normalize_class_current(
-            {
-                "id": f"class_{re.sub(r'[^a-z0-9]+', '_', normalized_eval_text(summary.get('class_custom_name', '') or 'eigen')).strip('_') or 'eigen'}",
-                "name": summary.get("class_custom_name") or "Eigene Klasse",
-                "rank": "F",
-                "level": 1,
-                "level_max": 10,
-                "xp": 0,
-                "xp_next": 100,
-                "affinity_tags": summary.get("class_custom_tags") or [],
-                "description": summary.get("class_custom_description") or "",
-                "ascension": {"status": "none", "quest_id": None, "requirements": [], "result_hint": None},
-            }
-        )
-    else:
-        character["class_current"] = None
-    reconcile_creator_inventory_items(campaign["state"], character)
-    refresh_skill_progression(character)
-    rebuild_character_derived(character, campaign["state"].get("items", {}), world_time)
-    reconcile_canonical_resources(character, (((campaign.get("state") or {}).get("world") or {}).get("settings") or {}))
-    strip_legacy_shadow_fields(character, (((campaign.get("state") or {}).get("world") or {}).get("settings") or {}))
-    if ENABLE_LEGACY_SHADOW_WRITEBACK:
-        write_legacy_shadow_fields(character, (((campaign.get("state") or {}).get("world") or {}).get("settings") or {}))
-    sync_scars_into_appearance(character)
+    setup_summaries.apply_character_summary_to_state(campaign, slot_name, deps=setup_summary_state_dependencies())
 
 def _campaign_slot_migration_ports() -> campaign_slot_migration.CampaignSlotMigrationPorts:
     return campaign_slot_migration.CampaignSlotMigrationPorts(
@@ -4469,45 +4031,10 @@ def public_turn(turn: Dict[str, Any], campaign: Dict[str, Any], viewer_id: Optio
     )
 
 def build_world_question_state(campaign: Dict[str, Any], viewer_id: Optional[str]) -> Optional[Dict[str, Any]]:
-    if not is_host(campaign, viewer_id):
-        return None
-    setup_node = campaign["setup"]["world"]
-    qid = current_question_id(setup_node)
-    if not qid:
-        return None
-    base_question = WORLD_QUESTION_MAP[qid]
-    question = build_question_payload(
-        base_question,
-        campaign=campaign,
-        setup_type="world",
-        ai_copy=get_persisted_question_ai_copy(setup_node, qid) or base_question["label"],
-        setup_node=setup_node,
-    )
-    return {
-        "question": question,
-        "progress": progress_payload(setup_node),
-    }
+    return setup_payloads.build_world_question_state(campaign, viewer_id, deps=setup_payload_dependencies())
 
 def build_character_question_state(campaign: Dict[str, Any], slot_name: str) -> Optional[Dict[str, Any]]:
-    setup_node = campaign["setup"]["characters"].get(slot_name)
-    if not setup_node:
-        return None
-    qid = current_question_id(setup_node)
-    if not qid:
-        return None
-    base_question = CHARACTER_QUESTION_MAP[qid]
-    question = build_question_payload(
-        base_question,
-        campaign=campaign,
-        setup_type="character",
-        ai_copy=get_persisted_question_ai_copy(setup_node, qid) or base_question["label"],
-        slot_name=slot_name,
-        setup_node=setup_node,
-    )
-    return {
-        "question": question,
-        "progress": progress_payload(setup_node),
-    }
+    return setup_payloads.build_character_question_state(campaign, slot_name, deps=setup_payload_dependencies())
 
 def build_viewer_context(campaign: Dict[str, Any], player_id: Optional[str]) -> Dict[str, Any]:
     return campaign_views.build_viewer_context(campaign, player_id, ports=_campaign_view_ports())
