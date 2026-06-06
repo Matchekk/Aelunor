@@ -67,7 +67,19 @@ from app.services.canon import gate as canon_gate_service
 from app.services.canon import npc_extractor as npc_extractor_service
 from app.services.progression import application as progression_application_service
 from app.services.progression import skills as progression_skills_service
+from app.services.characters.normalization import rebuild_character_derived
+from app.services.setup.attributes import attribute_cap_for_campaign
 from app.services.world import codex as world_codex_service
+from app.services.world.attribute_influence import (
+    apply_attribute_bias_to_patch,
+    apply_attribute_bias_to_resolution,
+    compose_attribute_prompt_hints,
+    compute_attribute_bias,
+    derive_attribute_relevance,
+)
+from app.services.world.skill_costs import apply_skill_cost_deltas_to_patch, infer_skill_cost_deltas_from_text
+from app.services.world.time import apply_world_time_advance, normalize_world_time
+from app.services.world.world_settings import normalize_world_settings
 
 _CONFIGURED = False
 _TURN_ATTRIBUTE_DEPS: Optional[TurnAttributeDependencies] = None

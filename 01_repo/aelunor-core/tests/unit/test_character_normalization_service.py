@@ -2,7 +2,6 @@ import unittest
 
 # Importing app.main wires configure_dependencies for the appearance/resource/
 # injury/progression submodules that normalize_character_state depends on.
-import app.main  # noqa: F401
 from app.services import state_engine
 from app.services.characters import normalization
 
@@ -15,7 +14,7 @@ class CharacterNormalizationServiceTests(unittest.TestCase):
             self.assertIn(key, blank)
 
     def test_normalize_character_state_stabilizes_minimal_fixture(self) -> None:
-        character = state_engine.normalize_character_state(
+        character = normalization.normalize_character_state(
             {"bio": {"name": "Aria"}}, "slot_1", {}, None
         )
         self.assertEqual(character["slot_id"], "slot_1")
@@ -24,9 +23,25 @@ class CharacterNormalizationServiceTests(unittest.TestCase):
         self.assertIn("combat_flags", character["derived"])
         self.assertIn("defense", character["derived"])
         # Idempotent: re-normalizing the result keeps the slot/bio stable.
-        again = state_engine.normalize_character_state(character, "slot_1", {}, None)
+        again = normalization.normalize_character_state(character, "slot_1", {}, None)
         self.assertEqual(again["slot_id"], "slot_1")
         self.assertEqual(again["bio"]["name"], "Aria")
+
+    def test_rebuild_all_character_derived_stabilizes_minimal_campaign(self) -> None:
+        campaign = {
+            "state": {
+                "meta": {},
+                "items": {},
+                "characters": {"slot_1": {"slot_id": "slot_1", "bio": {"name": "Aria"}}},
+            }
+        }
+
+        normalization.rebuild_all_character_derived(campaign)
+
+        character = campaign["state"]["characters"]["slot_1"]
+        self.assertEqual(character["slot_id"], "slot_1")
+        self.assertIn("derived", character)
+        self.assertIn("combat_flags", character["derived"])
 
     def test_sync_scars_into_appearance_maps_character_scars(self) -> None:
         character = {"scars": [{"id": "scar_1", "title": "Narbe", "description": "alt", "created_turn": 3}]}

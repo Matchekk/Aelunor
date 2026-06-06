@@ -1,11 +1,31 @@
-from typing import Any, Callable, Dict, Iterable
+from typing import Any, Callable, Dict, Iterable, Optional
+
+from app.config.runtime import (
+    AI_LATENCY_CLAMP,
+    CAMPAIGN_LENGTHS,
+    PACING_PROFILE_DEFAULTS,
+    PLAYER_LATENCY_CLAMP,
+    TARGET_TURNS_DEFAULTS,
+    TIMING_DEFAULTS,
+    TIMING_EMA_ALPHA,
+)
+from app.core.ids import deep_copy
+from app.services.world.progression import normalize_resource_name
+
+
+def clamp_float(value: float, minimum: float, maximum: float) -> float:
+    return max(minimum, min(maximum, float(value)))
+
+
+def default_meta_timing() -> Dict[str, Any]:
+    return deep_copy(TIMING_DEFAULTS)
 
 
 def default_campaign_length_settings(
     *,
-    deep_copy: Callable[[Any], Any],
-    target_turns_defaults: Dict[str, Any],
-    pacing_profile_defaults: Dict[str, Any],
+    deep_copy: Callable[[Any], Any] = deep_copy,
+    target_turns_defaults: Dict[str, Any] = TARGET_TURNS_DEFAULTS,
+    pacing_profile_defaults: Dict[str, Any] = PACING_PROFILE_DEFAULTS,
 ) -> Dict[str, Any]:
     return {
         "campaign_length": "medium",
@@ -17,14 +37,15 @@ def default_campaign_length_settings(
 def normalize_world_settings(
     world_settings: Any,
     *,
-    deep_copy: Callable[[Any], Any],
-    default_campaign_length_settings: Callable[[], Dict[str, Any]],
-    normalize_resource_name: Callable[[Any, str], str],
-    clamp_float: Callable[[float, float, float], float],
-    campaign_lengths: Iterable[str],
+    deep_copy: Callable[[Any], Any] = deep_copy,
+    default_campaign_length_settings: Optional[Callable[[], Dict[str, Any]]] = None,
+    normalize_resource_name: Callable[[Any, str], str] = normalize_resource_name,
+    clamp_float: Callable[[float, float, float], float] = clamp_float,
+    campaign_lengths: Iterable[str] = CAMPAIGN_LENGTHS,
 ) -> Dict[str, Any]:
     normalized = deep_copy(world_settings or {})
-    defaults = default_campaign_length_settings()
+    defaults_provider = default_campaign_length_settings or globals()["default_campaign_length_settings"]
+    defaults = defaults_provider()
     campaign_length_keys = tuple(campaign_lengths)
     normalized["resource_name"] = normalize_resource_name(normalized.get("resource_name", "Aether"), "Aether")
     normalized["consequence_severity"] = str(normalized.get("consequence_severity", "mittel") or "mittel")
@@ -73,12 +94,13 @@ def normalize_world_settings(
 def active_pacing_profile(
     state: Dict[str, Any],
     *,
-    normalize_world_settings: Callable[[Any], Dict[str, Any]],
-    deep_copy: Callable[[Any], Any],
-    campaign_lengths: Iterable[str],
-    pacing_profile_defaults: Dict[str, Any],
+    normalize_world_settings: Optional[Callable[[Any], Dict[str, Any]]] = None,
+    deep_copy: Callable[[Any], Any] = deep_copy,
+    campaign_lengths: Iterable[str] = CAMPAIGN_LENGTHS,
+    pacing_profile_defaults: Dict[str, Any] = PACING_PROFILE_DEFAULTS,
 ) -> Dict[str, Any]:
-    settings = normalize_world_settings(((state.get("world") or {}).get("settings") or {}))
+    normalize_settings = normalize_world_settings or globals()["normalize_world_settings"]
+    settings = normalize_settings(((state.get("world") or {}).get("settings") or {}))
     selected = str(settings.get("campaign_length") or "medium").lower()
     if selected not in tuple(campaign_lengths):
         selected = "medium"
@@ -91,14 +113,16 @@ def active_pacing_profile(
 def compute_turn_budget_estimates(
     state: Dict[str, Any],
     *,
-    normalize_meta_timing: Callable[[Dict[str, Any]], Dict[str, Any]],
-    normalize_world_settings: Callable[[Any], Dict[str, Any]],
-    target_turns_defaults: Dict[str, Any],
-    timing_defaults: Dict[str, Any],
+    normalize_meta_timing: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
+    normalize_world_settings: Optional[Callable[[Any], Dict[str, Any]]] = None,
+    target_turns_defaults: Dict[str, Any] = TARGET_TURNS_DEFAULTS,
+    timing_defaults: Dict[str, Any] = TIMING_DEFAULTS,
 ) -> Dict[str, Any]:
     meta = state.setdefault("meta", {})
-    timing = normalize_meta_timing(meta)
-    settings = normalize_world_settings(((state.get("world") or {}).get("settings") or {}))
+    normalize_timing = normalize_meta_timing or globals()["normalize_meta_timing"]
+    normalize_settings = normalize_world_settings or globals()["normalize_world_settings"]
+    timing = normalize_timing(meta)
+    settings = normalize_settings(((state.get("world") or {}).get("settings") or {}))
     selected = str(settings.get("campaign_length") or "medium").lower()
     target_lookup = settings.get("target_turns") or {}
     target_turns = target_lookup.get(selected)
@@ -120,11 +144,12 @@ def compute_turn_budget_estimates(
 def normalize_meta_timing(
     meta: Dict[str, Any],
     *,
-    deep_copy: Callable[[Any], Any],
-    default_meta_timing: Callable[[], Dict[str, Any]],
+    deep_copy: Callable[[Any], Any] = deep_copy,
+    default_meta_timing: Optional[Callable[[], Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
-    timing = deep_copy(meta.get("timing") or default_meta_timing())
-    defaults = default_meta_timing()
+    defaults_provider = default_meta_timing or globals()["default_meta_timing"]
+    timing = deep_copy(meta.get("timing") or defaults_provider())
+    defaults = defaults_provider()
     for key in ("ai_latency_ema_sec", "player_latency_ema_sec", "cycle_ema_sec"):
         timing[key] = float(timing.get(key, defaults[key]) or defaults[key])
     for key in ("turns_target_est", "turns_left_est"):
@@ -141,14 +166,15 @@ def update_turn_timing_ema(
     request_ts: float,
     response_ts: float,
     *,
-    normalize_meta_timing: Callable[[Dict[str, Any]], Dict[str, Any]],
-    clamp_float: Callable[[float, float, float], float],
-    ai_latency_clamp: tuple[float, float],
-    player_latency_clamp: tuple[float, float],
-    timing_ema_alpha: float,
-    timing_defaults: Dict[str, Any],
+    normalize_meta_timing: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
+    clamp_float: Callable[[float, float, float], float] = clamp_float,
+    ai_latency_clamp: tuple[float, float] = AI_LATENCY_CLAMP,
+    player_latency_clamp: tuple[float, float] = PLAYER_LATENCY_CLAMP,
+    timing_ema_alpha: float = TIMING_EMA_ALPHA,
+    timing_defaults: Dict[str, Any] = TIMING_DEFAULTS,
 ) -> Dict[str, Any]:
-    timing = normalize_meta_timing(state.setdefault("meta", {}))
+    normalize_timing = normalize_meta_timing or globals()["normalize_meta_timing"]
+    timing = normalize_timing(state.setdefault("meta", {}))
     ai_latency = clamp_float(float(response_ts - request_ts), ai_latency_clamp[0], ai_latency_clamp[1])
     timing["ai_latency_ema_sec"] = (
         (1.0 - timing_ema_alpha) * float(timing.get("ai_latency_ema_sec", timing_defaults["ai_latency_ema_sec"]))
@@ -181,10 +207,11 @@ def milestone_state_for_turn(turn_number: int, profile: Dict[str, Any]) -> Dict[
 def build_pacing_instruction_block(
     state: Dict[str, Any],
     *,
-    active_pacing_profile: Callable[[Dict[str, Any]], Dict[str, Any]],
-    milestone_state_for_turn: Callable[[int, Dict[str, Any]], Dict[str, int | bool]],
+    active_pacing_profile: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
+    milestone_state_for_turn: Callable[[int, Dict[str, Any]], Dict[str, int | bool]] = milestone_state_for_turn,
 ) -> Dict[str, Any]:
-    profile = active_pacing_profile(state)
+    active_profile = active_pacing_profile or globals()["active_pacing_profile"]
+    profile = active_profile(state)
     milestone = milestone_state_for_turn(int((state.get("meta") or {}).get("turn", 0) or 0), profile)
     lines = [
         "PACING INSTRUCTIONS:",

@@ -60,6 +60,22 @@ class RuntimeSymbolsBridgeTests(unittest.TestCase):
 
         self.assertIn("append_character_change_events", runtime_names)
 
+    def test_runtime_symbols_bridge_does_not_grow(self) -> None:
+        from app.services import state_engine
+
+        runtime = state_engine.runtime_symbols()
+
+        self.assertLessEqual(len(runtime), 10)
+        self.assertEqual(state_engine.EXPORTED_SYMBOLS, ["public_turn", "build_campaign_view"])
+        for name in (
+            "normalize_world_time",
+            "apply_world_time_advance",
+            "normalize_world_settings",
+            "rebuild_character_derived",
+            "rebuild_all_character_derived",
+        ):
+            self.assertNotIn(name, runtime)
+
     def test_turn_configure_has_targeted_state_engine_port_fallback(self) -> None:
         source = TURN_ENGINE_PATH.read_text(encoding="utf-8")
 

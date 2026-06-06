@@ -32,16 +32,11 @@ CAMPAIGNS_DIR = _runtime_core.CAMPAIGNS_DIR
 
 _RUNTIME_SYMBOL_NAMES = (
     "append_character_change_events",
-    "apply_world_time_advance",
     "current_question_id",
     "deep_copy",
     "emit_turn_phase_event",
     "ensure_question_ai_copy",
     "normalize_class_current",
-    "normalize_world_settings",
-    "normalize_world_time",
-    "rebuild_all_character_derived",
-    "rebuild_character_derived",
     "rebuild_memory_summary",
     "remember_recent_story",
     "try_generate_adventure_intro",

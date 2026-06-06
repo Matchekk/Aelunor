@@ -10,6 +10,7 @@ from app.services.characters.resource_maxima import (
     iter_equipped_item_ids,
     list_inventory_items,
 )
+from app.services.progression.skills import default_skill_state, normalize_skill_state, skill_level_value
 
 
 def calculate_carry_limit(character: Dict[str, Any]) -> int:
@@ -126,8 +127,9 @@ def calculate_attack_rating(
     hand: str,
     items_db: Dict[str, Any],
     *,
-    skill_level_value: Callable[[Dict[str, Any], str], int],
+    skill_level_value: Optional[Callable[[Dict[str, Any], str], int]] = None,
 ) -> int:
+    skill_level = skill_level_value or globals()["skill_level_value"]
     equipment = character.get("equipment", {}) or {}
     item = items_db.get(equipment.get(hand, ""), {})
     weapon_profile = item.get("weapon_profile", {}) or {}
@@ -143,11 +145,11 @@ def calculate_attack_rating(
     base = int((character.get("attributes") or {}).get(scaling_stat, 0) or 0)
     bonus = int(weapon_profile.get("attack_bonus", 0) or 0)
     if scaling_stat == "dex":
-        skill_bonus = skill_level_value(character, "athletics")
+        skill_bonus = skill_level(character, "athletics")
     elif scaling_stat in ("int", "wis"):
-        skill_bonus = skill_level_value(character, "lore_occult")
+        skill_bonus = skill_level(character, "lore_occult")
     else:
-        skill_bonus = skill_level_value(character, "athletics")
+        skill_bonus = skill_level(character, "athletics")
     effect_bonus = calculate_derived_bonus(character, items_db, f"attack_rating_{'mainhand' if hand == 'weapon' else 'offhand'}")
     return base + bonus + skill_bonus + effect_bonus
 
@@ -157,10 +159,12 @@ def skill_effective_bonus(
     skill_name: str,
     items_db: Optional[Dict[str, Any]] = None,
     *,
-    normalize_skill_state: Callable[[str, Any], Dict[str, Any]],
-    default_skill_state: Callable[[str], Dict[str, Any]],
+    normalize_skill_state: Optional[Callable[[str, Any], Dict[str, Any]]] = None,
+    default_skill_state: Optional[Callable[[str], Dict[str, Any]]] = None,
 ) -> int:
-    skill_data = normalize_skill_state(skill_name, (character.get("skills") or {}).get(skill_name, default_skill_state(skill_name)))
+    normalize_skill = normalize_skill_state or globals()["normalize_skill_state"]
+    default_skill = default_skill_state or globals()["default_skill_state"]
+    skill_data = normalize_skill(skill_name, (character.get("skills") or {}).get(skill_name, default_skill(skill_name)))
     skill_rank = int(skill_data.get("level", 1) or 1)
     if skill_rank <= 0:
         return 0

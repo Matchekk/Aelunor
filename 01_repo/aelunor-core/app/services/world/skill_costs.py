@@ -1,5 +1,10 @@
 from typing import Any, Callable, Dict, Optional
 
+from app.core.ids import deep_copy
+from app.services.characters.resources import resource_name_for_character
+from app.services.state_basics import blank_patch
+from app.services.world.text_normalization import normalized_eval_text
+
 
 def normalize_skill_cost(raw_cost: Any, *, resource_name: str) -> Optional[Dict[str, Any]]:
     if not isinstance(raw_cost, dict):
@@ -16,10 +21,13 @@ def infer_skill_cost_deltas_from_text(
     source_text: str,
     *,
     combat_context: Optional[Dict[str, Any]] = None,
-    resource_name_for_character: Callable[[Dict[str, Any], Dict[str, Any]], str],
-    normalized_eval_text: Callable[[Any], str],
-    normalize_dynamic_skill_state: Callable[..., Dict[str, Any]],
+    resource_name_for_character: Callable[[Dict[str, Any], Dict[str, Any]], str] = resource_name_for_character,
+    normalized_eval_text: Callable[[Any], str] = normalized_eval_text,
+    normalize_dynamic_skill_state: Optional[Callable[..., Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
+    if normalize_dynamic_skill_state is None:
+        from app.services.progression.skills import normalize_dynamic_skill_state
+
     if action_type == "canon":
         return {"deltas": {}, "skills": []}
     if not source_text or not ((combat_context or {}).get("active") or (combat_context or {}).get("hinted")):
@@ -67,8 +75,8 @@ def apply_skill_cost_deltas_to_patch(
     actor: str,
     delta_payload: Dict[str, Any],
     *,
-    deep_copy: Callable[[Any], Any],
-    blank_patch: Callable[[], Dict[str, Any]],
+    deep_copy: Callable[[Any], Any] = deep_copy,
+    blank_patch: Callable[[], Dict[str, Any]] = blank_patch,
 ) -> Dict[str, Any]:
     deltas = delta_payload.get("deltas") if isinstance(delta_payload, dict) else {}
     if not isinstance(deltas, dict) or not deltas:

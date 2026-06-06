@@ -44,6 +44,10 @@ def world_attribute_scale(campaign: Dict[str, Any]) -> Dict[str, Any]:
     return parse_attribute_range(None)
 
 
+def attribute_cap_for_campaign(campaign: Dict[str, Any]) -> int:
+    return max(1, int(world_attribute_scale(campaign)["max"] or 10))
+
+
 def level_one_attribute_budget(campaign: Dict[str, Any]) -> int:
     world_max = int(world_attribute_scale(campaign)["max"] or 10)
     return max(len(ATTRIBUTE_KEYS), min(120, int(round(world_max * 3.5))))

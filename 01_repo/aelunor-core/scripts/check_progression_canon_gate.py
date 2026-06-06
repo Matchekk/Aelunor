@@ -52,14 +52,17 @@ def fixture(main_module: Any) -> Dict[str, Any]:
 def main() -> int:
     m = load_main()
     from app.services import state_engine
+    from app.services.canon import gate as canon_gate_service
 
     original_extractor = m.call_progression_canon_extractor
     original_state_engine_extractor = state_engine.call_progression_canon_extractor
+    original_canon_gate_extractor = canon_gate_service.call_progression_canon_extractor
     slot = "slot_1"
 
     def set_extractor(extractor: Any) -> None:
         m.call_progression_canon_extractor = extractor
         state_engine.call_progression_canon_extractor = extractor
+        canon_gate_service.call_progression_canon_extractor = extractor
 
     try:
         # 1) High confidence -> commit
@@ -224,6 +227,7 @@ def main() -> int:
     finally:
         m.call_progression_canon_extractor = original_extractor
         state_engine.call_progression_canon_extractor = original_state_engine_extractor
+        canon_gate_service.call_progression_canon_extractor = original_canon_gate_extractor
 
 
 if __name__ == "__main__":

@@ -1,4 +1,3 @@
-import hashlib
 import json
 import math
 import os
@@ -39,6 +38,7 @@ from app.services.setup import ai_copy as setup_ai_copy
 from app.services.setup import attributes as setup_attributes
 from app.services.setup.attributes import (
     allocate_weighted_attributes,
+    attribute_cap_for_campaign,
     fallback_character_attribute_weights,
     level_one_attribute_budget,
     level_one_attribute_cap,
@@ -78,19 +78,13 @@ from app.catalogs.runtime_catalogs import (
     WORLD_FORM_CATALOG,
     WORLD_QUESTION_MAP,
 )
-from app.config.attributes import (
-    ATTRIBUTE_INFLUENCE_DISTRIBUTION,
-    ATTRIBUTE_INFLUENCE_STRENGTH,
-)
-from app.config.combat import (
-    COMBAT_END_HINTS,
-    COMBAT_NARRATIVE_HINTS,
-)
 from app.config.canon import (
     CANON_CHARACTER_FIELDS,
     CANON_GATE_ACTIVE_DOMAINS,
     CANON_GATE_DOMAINS_SUPPORTED,
 )
+from app.config.attributes import ATTRIBUTE_INFLUENCE_DISTRIBUTION, ATTRIBUTE_INFLUENCE_STRENGTH
+from app.config.combat import COMBAT_END_HINTS, COMBAT_NARRATIVE_HINTS
 from app.config.codex import (
     BEAST_BLOCKS_BY_LEVEL,
     BEAST_CODEX_BLOCK_ORDER,
@@ -180,7 +174,6 @@ from app.config.progression import (
 from app.config.runtime import (
     ACTION_TYPES,
     AI_LATENCY_CLAMP,
-    CAMPAIGN_LENGTHS,
     CONTINUE_STORY_MARKER,
     EXTRACTION_QUARANTINE_DEFAULT_MAX,
     EXTRACTION_REASON_AMBIGUOUS_CLASS,
@@ -336,14 +329,17 @@ from app.services.state_basics import (
     slot_index as _slot_index,
 )
 from app.services.characters.defaults import blank_character_state
-from app.services.characters import normalization as _char_norm
 from app.services.characters.effects import migrate_effects_from_conditions
 from app.services.characters.normalization import (
     looks_like_legacy_seeded_skills,
+    normalize_character_state,
+    rebuild_all_character_derived,
+    rebuild_character_derived,
     resolve_injury_healing,
     sync_legacy_character_fields,
     sync_scars_into_appearance,
 )
+from app.services.characters.combat_state import calculate_combat_flags, skill_effective_bonus
 from app.services.characters import appearance_state as _appearance_state_module
 from app.services.characters.appearance_state import (
     age_character_if_needed,
@@ -377,9 +373,9 @@ from app.services.characters.resource_maxima import (
     modifier_resource_key,
     rebuild_resource_maxima,
 )
-from app.services.characters import derived_stats as _derived_stats
 from app.services.characters.derived_stats import (
     calculate_armor,
+    calculate_attack_rating,
     calculate_carry_limit,
     calculate_carry_weight,
     calculate_defense,
@@ -405,10 +401,6 @@ from app.services.characters.resources import (
     write_legacy_shadow_fields,
 )
 from app.services.world.collections import stable_sorted_mapping
-# Element/species generation port wiring now lives in
-# app.services.world.element_runtime. The runtime core only keeps the few
-# underlying primitives still used by the retained LLM-backed element entry
-# points and by the combat scoring block below.
 from app.services.world.element_relations import (
     reflect_element_relation_profile_fields as _reflect_element_relation_profile_fields,
 )
@@ -417,9 +409,9 @@ from app.services.world.element_generation import (
     generate_world_elements_with_llm as _generate_world_elements_with_llm,
 )
 from app.services.world.element_entities import (
-    element_matchup_multiplier as _element_matchup_multiplier,
-    entity_element_profile_for_character as _entity_element_profile_for_character,
-    entity_element_profile_for_npc as _entity_element_profile_for_npc,
+    element_matchup_multiplier,
+    entity_element_profile_for_character,
+    entity_element_profile_for_npc,
 )
 from app.services.world.math_utils import clamp
 from app.services.world.naming import (
@@ -494,7 +486,6 @@ from app.services.context import (
     strip_markdown_like,
 )
 
-# -- Codex-Subsystem (ausgelagert nach app/services/world/codex.py) --
 from app.services.world.codex import (
     normalize_codex_entry_stable,
     normalize_codex_alias_text,
@@ -529,14 +520,14 @@ from app.services.world.codex_triggers import (
     contains_any_normalized_token,
 )
 from app.services.world.attribute_influence import (
-    apply_attribute_bias_to_patch as _apply_attribute_bias_to_patch,
-    apply_attribute_bias_to_resolution as _apply_attribute_bias_to_resolution,
-    compose_attribute_prompt_hints as _compose_attribute_prompt_hints,
-    compute_attribute_bias as _compute_attribute_bias,
-    default_attribute_influence_meta as _default_attribute_influence_meta,
-    derive_attribute_relevance as _derive_attribute_relevance,
-    normalize_attribute_influence_meta as _normalize_attribute_influence_meta,
-    scale_negative_delta as _scale_negative_delta_helper,
+    apply_attribute_bias_to_patch,
+    apply_attribute_bias_to_resolution,
+    compose_attribute_prompt_hints,
+    compute_attribute_bias,
+    default_attribute_influence_meta,
+    derive_attribute_relevance,
+    normalize_attribute_influence_meta,
+    scale_negative_delta as _scale_negative_delta,
 )
 from app.services.world.appearance import (
     appearance_event_id,
@@ -545,24 +536,24 @@ from app.services.world.appearance import (
     record_appearance_change,
 )
 from app.services.characters.appearance_changes import sync_appearance_changes
-from app.services.world.state_defaults import (
-    default_character_modifiers,
-    default_intro_state,
-    default_world_time,
-)
+from app.services.world.state_defaults import default_character_modifiers, default_intro_state, default_world_time
+from app.services.world.time import apply_world_time_advance, normalize_world_time
+from app.services.world.setup_choices import normalize_answer_summary_defaults, normalize_campaign_length_choice, normalize_ruleset_choice
 from app.services.world.world_settings import (
-    active_pacing_profile as _active_pacing_profile,
-    build_pacing_instruction_block as _build_pacing_instruction_block,
-    compute_turn_budget_estimates as _compute_turn_budget_estimates,
-    default_campaign_length_settings as _default_campaign_length_settings,
-    milestone_state_for_turn as _milestone_state_for_turn,
-    normalize_meta_timing as _normalize_meta_timing,
-    normalize_world_settings as _normalize_world_settings,
-    update_turn_timing_ema as _update_turn_timing_ema,
+    active_pacing_profile,
+    build_pacing_instruction_block,
+    clamp_float,
+    compute_turn_budget_estimates,
+    default_campaign_length_settings,
+    default_meta_timing,
+    milestone_state_for_turn,
+    normalize_meta_timing,
+    normalize_world_settings,
+    update_turn_timing_ema,
 )
 from app.services.world.skill_costs import (
-    apply_skill_cost_deltas_to_patch as _apply_skill_cost_deltas_to_patch,
-    infer_skill_cost_deltas_from_text as _infer_skill_cost_deltas_from_text,
+    apply_skill_cost_deltas_to_patch,
+    infer_skill_cost_deltas_from_text,
     normalize_skill_cost as _normalize_skill_cost,
 )
 from app.services.world.skill_ranks import (
@@ -590,16 +581,16 @@ from app.services.world.scene import (
     is_plausible_scene_name,
 )
 from app.services.world.combat import (
-    apply_combat_scaling_to_patch as _apply_combat_scaling_to_patch,
-    build_combat_scaling_context as _build_combat_scaling_context,
-    compute_character_combat_score as _compute_character_combat_score,
-    compute_npc_combat_score as _compute_npc_combat_score,
-    default_combat_meta as _default_combat_meta,
-    infer_combat_context as _infer_combat_context,
-    normalize_combat_meta as _normalize_combat_meta,
-    patch_has_combat_signal as _patch_has_combat_signal,
-    skill_rank_power_weight as _skill_rank_power_weight,
-    update_combat_meta_after_turn as _update_combat_meta_after_turn,
+    apply_combat_scaling_to_patch,
+    build_combat_scaling_context,
+    compute_character_combat_score,
+    compute_npc_combat_score,
+    default_combat_meta,
+    infer_combat_context,
+    normalize_combat_meta,
+    patch_has_combat_signal,
+    skill_rank_power_weight,
+    update_combat_meta_after_turn,
 )
 
 _CONFIGURED = False
@@ -678,7 +669,6 @@ def configure_dependencies(deps: StateEngineDependencies) -> None:
     _STATE_ENGINE_DEPS = _STATE_ENGINE_DEPS.merged(deps)
     configured_globals = _legacy_config_snapshot()
 
-    # Subsysteme mitinitialisieren
     from app.services.world import codex as _codex_module
     from app.services.world import injury_state as _injury_state_module
     from app.services.world import npc as _npc_module
@@ -729,16 +719,11 @@ EXPORTED_SYMBOLS = [
 # not the public API; remove entries as those consumers gain explicit ports.
 _STATE_ENGINE_RUNTIME_SYMBOLS = (
     'append_character_change_events',
-    'apply_world_time_advance',
     'current_question_id',
     'deep_copy',
     'emit_turn_phase_event',
     'ensure_question_ai_copy',
     'normalize_class_current',
-    'normalize_world_settings',
-    'normalize_world_time',
-    'rebuild_all_character_derived',
-    'rebuild_character_derived',
     'rebuild_memory_summary',
     'remember_recent_story',
     'try_generate_adventure_intro',
@@ -757,10 +742,6 @@ def ordered_slots(keys: List[str]) -> List[str]:
     return _ordered_slots(keys, slot_prefix=SLOT_PREFIX)
 
 
-# LLM-backed element generation stays in the runtime core so existing
-# monkeypatch-based check scripts (which patch ``call_ollama_schema`` /
-# ``generate_world_elements_with_llm`` here) keep working. The pure element
-# wiring lives in app.services.world.element_runtime.
 def generate_world_elements_with_llm(summary: Dict[str, Any]) -> List[Dict[str, Any]]:
     return _generate_world_elements_with_llm(
         summary,
@@ -899,71 +880,8 @@ def effective_skill_progress_multiplier(*args: Any, **kwargs: Any):
 def default_boards(player_id: Optional[str] = None) -> Dict[str, Any]:
     return campaign_lifecycle.default_boards(player_id)
 
-def normalize_world_time(meta: Dict[str, Any]) -> Dict[str, Any]:
-    world_time = deep_copy(meta.get("world_time") or default_world_time())
-    absolute_day = max(1, int(world_time.get("absolute_day", world_time.get("day", 1)) or 1))
-    year = ((absolute_day - 1) // 360) + 1
-    year_day = (absolute_day - 1) % 360
-    month = (year_day // 30) + 1
-    day = (year_day % 30) + 1
-    world_time["absolute_day"] = absolute_day
-    world_time["year"] = max(1, int(world_time.get("year", year) or year))
-    world_time["month"] = max(1, min(12, int(world_time.get("month", month) or month)))
-    world_time["day"] = max(1, min(30, int(world_time.get("day", day) or day)))
-    world_time["year"] = year
-    world_time["month"] = month
-    world_time["day"] = day
-    world_time["time_of_day"] = str(world_time.get("time_of_day", "night") or "night")
-    world_time["weather"] = str(world_time.get("weather", "") or "")
-    return world_time
-
 def append_character_change_events(*args: Any, **kwargs: Any):
     return _progression_application_service.append_character_change_events(*args, **kwargs)
-
-
-def calculate_attack_rating(character: Dict[str, Any], hand: str, items_db: Dict[str, Any]) -> int:
-    return _derived_stats.calculate_attack_rating(
-        character,
-        hand,
-        items_db,
-        skill_level_value=_progression_skills_service.skill_level_value,
-    )
-
-
-def calculate_combat_flags(character: Dict[str, Any]) -> Dict[str, Any]:
-    hp_current = int(character.get("hp_current", 0) or 0)
-    downed = hp_current <= 0
-    in_combat = bool(character.get("combat_state", {}).get("in_combat", False))
-    can_act = not downed
-    for effect in character.get("effects", []) or []:
-        effect_tags = set(effect.get("tags", []) or [])
-        if "stun" in effect_tags or effect.get("category") == "stun":
-            can_act = False
-        if effect.get("category") == "combat":
-            in_combat = True
-    severe_injuries = [
-        normalize_injury_state(entry)
-        for entry in (character.get("injuries") or [])
-        if isinstance(entry, dict)
-    ]
-    if any(
-        injury
-        and injury.get("severity") == "schwer"
-        and injury.get("healing_stage") in {"frisch", "heilend"}
-        for injury in severe_injuries
-    ):
-        can_act = False
-    return {"in_combat": in_combat, "downed": downed, "can_act": can_act}
-
-
-def skill_effective_bonus(character: Dict[str, Any], skill_name: str, items_db: Optional[Dict[str, Any]] = None) -> int:
-    return _derived_stats.skill_effective_bonus(
-        character,
-        skill_name,
-        items_db,
-        normalize_skill_state=_progression_skills_service.normalize_skill_state,
-        default_skill_state=_progression_skills_service.default_skill_state,
-    )
 
 def ensure_progression_shape(*args: Any, **kwargs: Any):
     return _progression_skills_service.ensure_progression_shape(*args, **kwargs)
@@ -1076,33 +994,6 @@ def build_skill_system_requests(*args: Any, **kwargs: Any):
 def apply_skill_events(*args: Any, **kwargs: Any):
     return _progression_skills_service.apply_skill_events(*args, **kwargs)
 
-
-def _character_normalization_ports() -> _char_norm.CharacterNormalizationPorts:
-    return _char_norm.CharacterNormalizationPorts(
-        normalize_world_time=normalize_world_time,
-        calculate_attack_rating=calculate_attack_rating,
-        calculate_combat_flags=calculate_combat_flags,
-    )
-
-
-def rebuild_character_derived(character: Dict[str, Any], items_db: Dict[str, Any], world_time: Optional[Dict[str, Any]] = None) -> None:
-    _char_norm.rebuild_character_derived(character, items_db, world_time, ports=_character_normalization_ports())
-
-
-def normalize_character_state(
-    character: Dict[str, Any],
-    slot_name: str,
-    items_db: Dict[str, Any],
-    world_time: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    return _char_norm.normalize_character_state(character, slot_name, items_db, world_time, ports=_character_normalization_ports())
-
-def rebuild_all_character_derived(campaign: Dict[str, Any]) -> None:
-    items_db = campaign.get("state", {}).get("items", {}) or {}
-    world_time = normalize_world_time(campaign.get("state", {}).get("meta", {}))
-    for slot_name, character in (campaign.get("state", {}).get("characters") or {}).items():
-        campaign["state"]["characters"][slot_name] = normalize_character_state(character, slot_name, items_db, world_time)
-
 def derive_scene_name(campaign: Dict[str, Any], slot_name: str) -> str:
     scene_id = (campaign.get("state", {}).get("characters", {}).get(slot_name) or {}).get("scene_id", "")
     if not scene_id:
@@ -1123,58 +1014,6 @@ def derive_scene_name(campaign: Dict[str, Any], slot_name: str) -> str:
         return "Ort: ???"
     return scene_id
 
-def normalize_answer_summary_defaults() -> Dict[str, Any]:
-    return {
-        "premise": "",
-        "tone": "",
-        "difficulty": "",
-        "death_policy": "",
-        "death_possible": True,
-        "ruleset": "",
-        "outcome_model": "",
-        "world_structure": "",
-        "world_laws": [],
-        "central_conflict": "",
-        "factions": [],
-        "taboos": "",
-        "player_count": 0,
-        "resource_scarcity": "",
-        "healing_frequency": "",
-        "monsters_density": "",
-        "theme": "",
-        "attribute_range_label": "1-10",
-        "attribute_range_min": 1,
-        "attribute_range_max": 10,
-        "resource_name": "Aether",
-        "consequence_severity": "hoch",
-        "progression_speed": "normal",
-        "evolution_cost_policy": "leicht",
-        "offclass_xp_multiplier": 0.7,
-        "onclass_xp_multiplier": 1.0,
-        "campaign_length": "medium",
-        "target_turns": deep_copy(TARGET_TURNS_DEFAULTS),
-        "pacing_profile": deep_copy(PACING_PROFILE_DEFAULTS),
-    }
-
-def default_campaign_length_settings() -> Dict[str, Any]:
-    return _default_campaign_length_settings(
-        deep_copy=deep_copy,
-        target_turns_defaults=TARGET_TURNS_DEFAULTS,
-        pacing_profile_defaults=PACING_PROFILE_DEFAULTS,
-    )
-
-def default_meta_timing() -> Dict[str, Any]:
-    return deep_copy(TIMING_DEFAULTS)
-
-def clamp_float(value: float, minimum: float, maximum: float) -> float:
-    return max(minimum, min(maximum, float(value)))
-
-def default_combat_meta() -> Dict[str, Any]:
-    return _default_combat_meta(utc_now=utc_now)
-
-def default_attribute_influence_meta() -> Dict[str, Any]:
-    return _default_attribute_influence_meta()
-
 default_extraction_quarantine = _extraction_quarantine.default_extraction_quarantine
 
 normalize_extraction_quarantine_meta = _extraction_quarantine.normalize_extraction_quarantine_meta
@@ -1185,329 +1024,6 @@ def normalize_meta_migrations(meta: Dict[str, Any]) -> Dict[str, Any]:
     migrations["npc_codex_seeded_from_story_cards"] = bool(migrations.get("npc_codex_seeded_from_story_cards", False))
     meta["migrations"] = migrations
     return migrations
-
-def normalize_world_settings(world_settings: Any) -> Dict[str, Any]:
-    return _normalize_world_settings(
-        world_settings,
-        deep_copy=deep_copy,
-        default_campaign_length_settings=default_campaign_length_settings,
-        normalize_resource_name=normalize_resource_name,
-        clamp_float=clamp_float,
-        campaign_lengths=CAMPAIGN_LENGTHS,
-    )
-
-def normalize_meta_timing(meta: Dict[str, Any]) -> Dict[str, Any]:
-    return _normalize_meta_timing(
-        meta,
-        deep_copy=deep_copy,
-        default_meta_timing=default_meta_timing,
-    )
-
-def normalize_combat_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
-    return _normalize_combat_meta(
-        meta,
-        default_combat_meta=default_combat_meta,
-        deep_copy=deep_copy,
-        action_types=ACTION_TYPES,
-        utc_now=utc_now,
-    )
-
-def normalize_attribute_influence_meta(meta: Dict[str, Any]) -> Dict[str, Any]:
-    return _normalize_attribute_influence_meta(
-        meta,
-        default_attribute_influence_meta=default_attribute_influence_meta,
-        deep_copy=deep_copy,
-        attribute_keys=ATTRIBUTE_KEYS,
-        clamp_float=clamp_float,
-    )
-
-def active_pacing_profile(state: Dict[str, Any]) -> Dict[str, Any]:
-    return _active_pacing_profile(
-        state,
-        normalize_world_settings=normalize_world_settings,
-        deep_copy=deep_copy,
-        campaign_lengths=CAMPAIGN_LENGTHS,
-        pacing_profile_defaults=PACING_PROFILE_DEFAULTS,
-    )
-
-def compute_turn_budget_estimates(state: Dict[str, Any]) -> Dict[str, Any]:
-    return _compute_turn_budget_estimates(
-        state,
-        normalize_meta_timing=normalize_meta_timing,
-        normalize_world_settings=normalize_world_settings,
-        target_turns_defaults=TARGET_TURNS_DEFAULTS,
-        timing_defaults=TIMING_DEFAULTS,
-    )
-
-def update_turn_timing_ema(state: Dict[str, Any], request_ts: float, response_ts: float) -> Dict[str, Any]:
-    return _update_turn_timing_ema(
-        state,
-        request_ts,
-        response_ts,
-        normalize_meta_timing=normalize_meta_timing,
-        clamp_float=clamp_float,
-        ai_latency_clamp=AI_LATENCY_CLAMP,
-        player_latency_clamp=PLAYER_LATENCY_CLAMP,
-        timing_ema_alpha=TIMING_EMA_ALPHA,
-        timing_defaults=TIMING_DEFAULTS,
-    )
-
-def milestone_state_for_turn(turn_number: int, profile: Dict[str, Any]) -> Dict[str, int | bool]:
-    return _milestone_state_for_turn(turn_number, profile)
-
-def build_pacing_instruction_block(state: Dict[str, Any]) -> Dict[str, Any]:
-    return _build_pacing_instruction_block(
-        state,
-        active_pacing_profile=active_pacing_profile,
-        milestone_state_for_turn=milestone_state_for_turn,
-    )
-
-def _hash_unit_interval(seed_text: str) -> float:
-    digest = hashlib.sha256(seed_text.encode("utf-8")).hexdigest()[:12]
-    value = int(digest, 16)
-    return (value % 10_000) / 10_000.0
-
-def derive_attribute_relevance(
-    state: Dict[str, Any],
-    actor: str,
-    action_type: str,
-    text: str,
-    combat_context: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    return _derive_attribute_relevance(
-        state,
-        actor,
-        action_type,
-        text,
-        combat_context,
-        normalized_eval_text=normalized_eval_text,
-        hash_unit_interval=_hash_unit_interval,
-        attribute_keys=ATTRIBUTE_KEYS,
-        attribute_influence_distribution=ATTRIBUTE_INFLUENCE_DISTRIBUTION,
-    )
-
-def compute_attribute_bias(profile: Dict[str, Any], character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> Dict[str, float]:
-    return _compute_attribute_bias(
-        profile,
-        character,
-        world_settings,
-        attribute_keys=ATTRIBUTE_KEYS,
-        attribute_influence_strength=ATTRIBUTE_INFLUENCE_STRENGTH,
-        clamp=clamp,
-        clamp_float=clamp_float,
-    )
-
-def compose_attribute_prompt_hints(profile: Dict[str, Any], bias: Dict[str, float]) -> str:
-    return _compose_attribute_prompt_hints(profile, bias)
-
-def apply_attribute_bias_to_resolution(resolution: Dict[str, Any], numeric_bias: Dict[str, float]) -> Dict[str, Any]:
-    return _apply_attribute_bias_to_resolution(
-        resolution,
-        numeric_bias,
-        deep_copy=deep_copy,
-    )
-
-def _scale_negative_delta(value: int, multiplier: float) -> int:
-    return _scale_negative_delta_helper(value, multiplier)
-
-def apply_attribute_bias_to_patch(
-    patch: Dict[str, Any],
-    actor: str,
-    numeric_bias: Dict[str, float],
-) -> tuple[Dict[str, Any], Dict[str, int]]:
-    return _apply_attribute_bias_to_patch(
-        patch,
-        actor,
-        numeric_bias,
-        deep_copy=deep_copy,
-        blank_patch=blank_patch,
-    )
-
-def infer_skill_cost_deltas_from_text(
-    state: Dict[str, Any],
-    actor: str,
-    action_type: str,
-    source_text: str,
-    *,
-    combat_context: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    return _infer_skill_cost_deltas_from_text(
-        state,
-        actor,
-        action_type,
-        source_text,
-        combat_context=combat_context,
-        resource_name_for_character=resource_name_for_character,
-        normalized_eval_text=normalized_eval_text,
-        normalize_dynamic_skill_state=normalize_dynamic_skill_state,
-    )
-
-def apply_skill_cost_deltas_to_patch(patch: Dict[str, Any], actor: str, delta_payload: Dict[str, Any]) -> Dict[str, Any]:
-    return _apply_skill_cost_deltas_to_patch(
-        patch,
-        actor,
-        delta_payload,
-        deep_copy=deep_copy,
-        blank_patch=blank_patch,
-    )
-
-def skill_rank_power_weight(rank: str) -> int:
-    return _skill_rank_power_weight(rank, normalize_skill_rank=normalize_skill_rank)
-
-def entity_element_profile_for_character(character: Dict[str, Any], world: Dict[str, Any]) -> Dict[str, List[str]]:
-    return _entity_element_profile_for_character(
-        character,
-        world,
-        normalize_class_current=normalize_class_current,
-        resolve_class_element_id=resolve_class_element_id,
-        normalize_element_id_list=normalize_element_id_list,
-    )
-
-def entity_element_profile_for_npc(npc_entry: Dict[str, Any], world: Dict[str, Any]) -> Dict[str, List[str]]:
-    return _entity_element_profile_for_npc(
-        npc_entry,
-        world,
-        normalize_class_current=normalize_class_current,
-        resolve_class_element_id=resolve_class_element_id,
-        normalize_element_id_list=normalize_element_id_list,
-    )
-
-def element_matchup_multiplier(world: Dict[str, Any], attacker_profile: Dict[str, List[str]], defender_profile: Dict[str, List[str]]) -> float:
-    return _element_matchup_multiplier(
-        world,
-        attacker_profile,
-        defender_profile,
-        resolve_element_relation=resolve_element_relation,
-        element_relation_score=ELEMENT_RELATION_SCORE,
-    )
-
-def compute_character_combat_score(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> int:
-    return _compute_character_combat_score(
-        character,
-        world_settings,
-        normalize_class_current=normalize_class_current,
-        skill_rank_power_weight=skill_rank_power_weight,
-        normalize_dynamic_skill_state=normalize_dynamic_skill_state,
-        resource_name_for_character=resource_name_for_character,
-        normalize_injury_state=normalize_injury_state,
-    )
-
-def compute_npc_combat_score(npc_entry: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> int:
-    return _compute_npc_combat_score(
-        npc_entry,
-        world_settings,
-        normalize_class_current=normalize_class_current,
-        skill_rank_power_weight=skill_rank_power_weight,
-        normalize_dynamic_skill_state=normalize_dynamic_skill_state,
-        normalize_resource_name=normalize_resource_name,
-    )
-
-def build_combat_scaling_context(state: Dict[str, Any], actor: str) -> Dict[str, Any]:
-    return _build_combat_scaling_context(
-        state,
-        actor,
-        compute_character_combat_score=compute_character_combat_score,
-        compute_npc_combat_score=compute_npc_combat_score,
-        entity_element_profile_for_character=entity_element_profile_for_character,
-        entity_element_profile_for_npc=entity_element_profile_for_npc,
-        element_matchup_multiplier=element_matchup_multiplier,
-        sorted_npc_codex_entries=sorted_npc_codex_entries,
-    )
-
-def apply_combat_scaling_to_patch(
-    patch: Dict[str, Any],
-    *,
-    actor: str,
-    combat_context: Dict[str, Any],
-    scaling_context: Dict[str, Any],
-    action_type: str,
-) -> tuple[Dict[str, Any], Dict[str, Any]]:
-    return _apply_combat_scaling_to_patch(
-        patch,
-        actor=actor,
-        combat_context=combat_context,
-        scaling_context=scaling_context,
-        action_type=action_type,
-        deep_copy=deep_copy,
-        blank_patch=blank_patch,
-    )
-
-def infer_combat_context(
-    state: Dict[str, Any],
-    actor: str,
-    action_type: str,
-    text: str,
-) -> Dict[str, Any]:
-    return _infer_combat_context(
-        state,
-        actor,
-        action_type,
-        text,
-        normalized_eval_text=normalized_eval_text,
-        normalize_combat_meta=normalize_combat_meta,
-        combat_narrative_hints=COMBAT_NARRATIVE_HINTS,
-    )
-
-def patch_has_combat_signal(patch: Dict[str, Any]) -> bool:
-    return _patch_has_combat_signal(patch)
-
-def update_combat_meta_after_turn(
-    state: Dict[str, Any],
-    *,
-    actor: str,
-    action_type: str,
-    input_text: str,
-    story_text: str,
-    patch: Dict[str, Any],
-    combat_context: Dict[str, Any],
-    resolution_summary: Dict[str, Any],
-) -> Dict[str, Any]:
-    return _update_combat_meta_after_turn(
-        state,
-        actor=actor,
-        action_type=action_type,
-        input_text=input_text,
-        story_text=story_text,
-        patch=patch,
-        combat_context=combat_context,
-        resolution_summary=resolution_summary,
-        normalize_combat_meta=normalize_combat_meta,
-        utc_now=utc_now,
-        normalized_eval_text=normalized_eval_text,
-        patch_has_combat_signal=patch_has_combat_signal,
-        combat_narrative_hints=COMBAT_NARRATIVE_HINTS,
-        combat_end_hints=COMBAT_END_HINTS,
-        make_id=make_id,
-        first_sentences=first_sentences,
-        deep_copy=deep_copy,
-    )
-
-def normalize_ruleset_choice(raw_value: Any) -> str:
-    text = str(extract_text_answer(raw_value) or raw_value or "").strip()
-    mapping = {
-        "1W20": "Konsequent",
-        "2W6": "Dramatisch",
-        "Ohne Würfel (nur Entscheidungen)": "Konsequent",
-    }
-    return mapping.get(text, text)
-
-def normalize_campaign_length_choice(raw_value: Any) -> str:
-    text = str(extract_text_answer(raw_value) or raw_value or "").strip().lower()
-    if not text:
-        return "medium"
-    mapping = {
-        "short": "short",
-        "kurz": "short",
-        "mittel": "medium",
-        "medium": "medium",
-        "open": "open",
-        "unbestimmt": "open",
-        "offen": "open",
-    }
-    normalized = mapping.get(text, text)
-    if normalized not in CAMPAIGN_LENGTHS:
-        return "medium"
-    return normalized
 
 def generate_character_attribute_weights(campaign: Dict[str, Any], slot_name: str, summary: Dict[str, Any]) -> Dict[str, Any]:
     return setup_attributes.generate_character_attribute_weights(
@@ -1537,9 +1053,6 @@ def campaign_path(campaign_id: str) -> str:
 
 def list_campaign_ids() -> List[str]:
     return campaign_persistence.list_campaign_ids(campaign_repository())
-
-def attribute_cap_for_campaign(campaign: Dict[str, Any]) -> int:
-    return max(1, int(world_attribute_scale(campaign)["max"] or 10))
 
 campaign_slots = campaign_views.campaign_slots
 display_name_for_slot = campaign_views.display_name_for_slot
@@ -2251,19 +1764,6 @@ def run_legacy_normalize_backfill(campaign: Dict[str, Any]) -> None:
     materialize_story_items_from_turn_history(campaign)
     materialize_story_abilities_from_turn_history(campaign)
     memory_service.reconcile_scene_ids_with_story(campaign, ports=_memory_ports())
-
-def apply_world_time_advance(state: Dict[str, Any], delta_days: int, delta_time_of_day: Optional[str] = None) -> None:
-    state.setdefault("meta", {})
-    world_time = normalize_world_time(state["meta"])
-    world_time["absolute_day"] = max(1, int(world_time.get("absolute_day", 1) or 1) + int(delta_days or 0))
-    if delta_time_of_day:
-        world_time["time_of_day"] = str(delta_time_of_day)
-    world_time = normalize_world_time({"world_time": world_time})
-    state["meta"]["world_time"] = world_time
-    state.setdefault("world", {})
-    state["world"]["day"] = world_time["day"]
-    state["world"]["time"] = world_time["time_of_day"]
-    state["world"]["weather"] = world_time["weather"]
 
 def intro_state(campaign: Dict[str, Any]) -> Dict[str, Any]:
     return campaign_lifecycle.intro_state(campaign)

@@ -1,14 +1,6 @@
-"""High-level character-state normalization and derived-stat rebuilds.
+"""High-level character-state normalization and derived-stat rebuilds."""
 
-Pure character-domain logic extracted from the state runtime core. Dependencies
-are imported directly from their real target modules; the few callables that the
-runtime core still owns (calendar normalization and the attack/combat-flag
-derivations that live in the runtime combat block) are injected via the small
-:class:`CharacterNormalizationPorts` dataclass instead of importing the runtime
-core back (which would be a cycle).
-"""
-from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from app.config.feature_flags import ENABLE_LEGACY_SHADOW_WRITEBACK
 from app.config.progression import SKILL_KEYS
@@ -23,12 +15,14 @@ from app.services.characters.appearance_summary import rebuild_character_appeara
 from app.services.characters.defaults import blank_character_state
 from app.services.characters.derived_stats import (
     calculate_armor,
+    calculate_attack_rating,
     calculate_carry_limit,
     calculate_carry_weight,
     calculate_defense,
     calculate_initiative,
     calculate_resistances,
 )
+from app.services.characters.combat_state import calculate_combat_flags
 from app.services.characters.effects import migrate_effects_from_conditions
 from app.services.characters.resource_maxima import (
     ensure_character_modifier_shape,
@@ -54,15 +48,7 @@ from app.services.world.injury_state import normalize_injury_state, normalize_sc
 from app.services.world.math_utils import clamp
 from app.services.world.progression import next_character_xp_for_level, normalize_class_current
 from app.services.world.state_defaults import default_world_time
-
-
-@dataclass(frozen=True)
-class CharacterNormalizationPorts:
-    """Runtime-owned callables that character normalization still relies on."""
-
-    normalize_world_time: Callable[..., Any]
-    calculate_attack_rating: Callable[..., int]
-    calculate_combat_flags: Callable[..., Dict[str, Any]]
+from app.services.world.time import normalize_world_time
 
 
 def sync_scars_into_appearance(character: Dict[str, Any]) -> None:
@@ -142,12 +128,10 @@ def rebuild_character_derived(
     character: Dict[str, Any],
     items_db: Dict[str, Any],
     world_time: Optional[Dict[str, Any]] = None,
-    *,
-    ports: CharacterNormalizationPorts,
 ) -> None:
     ensure_progression_shape(character)
     ensure_character_progression_core(character)
-    effective_world_time = ports.normalize_world_time({"world_time": world_time or default_world_time()})
+    effective_world_time = normalize_world_time({"world_time": world_time or default_world_time()})
     normalize_age_fields(character, effective_world_time)
     age_character_if_needed(character, effective_world_time)
     age_modifiers = build_age_modifiers(character)
@@ -171,15 +155,15 @@ def rebuild_character_derived(
     character["derived"] = {
         "defense": calculate_defense(character, items_db),
         "armor": calculate_armor(character, items_db),
-        "attack_rating_mainhand": ports.calculate_attack_rating(character, "weapon", items_db),
-        "attack_rating_offhand": ports.calculate_attack_rating(character, "offhand", items_db),
+        "attack_rating_mainhand": calculate_attack_rating(character, "weapon", items_db),
+        "attack_rating_offhand": calculate_attack_rating(character, "offhand", items_db),
         "initiative": calculate_initiative(character, items_db),
         "carry_limit": carry_limit,
         "carry_weight": carry_weight,
         "encumbrance_state": encumbrance_state,
         "age_modifiers": age_modifiers,
         "resistances": calculate_resistances(character, items_db),
-        "combat_flags": ports.calculate_combat_flags(character),
+        "combat_flags": calculate_combat_flags(character),
     }
     reconcile_canonical_resources(character)
     strip_legacy_shadow_fields(character)
@@ -192,8 +176,6 @@ def normalize_character_state(
     slot_name: str,
     items_db: Dict[str, Any],
     world_time: Optional[Dict[str, Any]] = None,
-    *,
-    ports: CharacterNormalizationPorts,
 ) -> Dict[str, Any]:
     base = blank_character_state(slot_name)
     merged = deep_copy(base)
@@ -334,7 +316,7 @@ def normalize_character_state(
     ingest_legacy_resources_into_canonical(merged, source_character=character)
     reconcile_canonical_resources(merged)
     resolve_injury_healing(merged, int(((character.get("meta") or {}).get("turn", 0)) or 0))
-    rebuild_character_derived(merged, items_db, world_time, ports=ports)
+    rebuild_character_derived(merged, items_db, world_time)
     ingest_legacy_resources_into_canonical(merged, source_character=character)
     reconcile_canonical_resources(merged)
     strip_legacy_shadow_fields(merged)
@@ -342,3 +324,11 @@ def normalize_character_state(
         write_legacy_shadow_fields(merged)
     sync_scars_into_appearance(merged)
     return merged
+
+
+def rebuild_all_character_derived(campaign: Dict[str, Any]) -> None:
+    state = campaign.get("state", {})
+    items_db = state.get("items", {}) or {}
+    world_time = normalize_world_time(state.get("meta", {}))
+    for slot_name, character in (state.get("characters") or {}).items():
+        state["characters"][slot_name] = normalize_character_state(character, slot_name, items_db, world_time)

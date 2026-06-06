@@ -1,7 +1,23 @@
 from typing import Any, Callable, Dict, List, Optional
 
+from app.config.combat import COMBAT_END_HINTS, COMBAT_NARRATIVE_HINTS
+from app.config.runtime import ACTION_TYPES
+from app.core.ids import deep_copy, make_id, utc_now
+from app.services.canon.extractor import sorted_npc_codex_entries
+from app.services.progression.skills import normalize_dynamic_skill_state, normalize_skill_rank
+from app.services.state_basics import blank_patch
+from app.services.world.element_entities import (
+    element_matchup_multiplier,
+    entity_element_profile_for_character,
+    entity_element_profile_for_npc,
+)
+from app.services.world.injury_state import normalize_injury_state
+from app.services.world.progression import normalize_class_current, normalize_resource_name
+from app.services.world.text_normalization import first_sentences, normalized_eval_text
+from app.services.characters.resources import resource_name_for_character
 
-def default_combat_meta(*, utc_now: Callable[[], str]) -> Dict[str, Any]:
+
+def default_combat_meta(*, utc_now: Callable[[], str] = utc_now) -> Dict[str, Any]:
     return {
         "active": False,
         "combat_id": "",
@@ -17,13 +33,14 @@ def default_combat_meta(*, utc_now: Callable[[], str]) -> Dict[str, Any]:
 def normalize_combat_meta(
     meta: Dict[str, Any],
     *,
-    default_combat_meta: Callable[[], Dict[str, Any]],
-    deep_copy: Callable[[Any], Any],
-    action_types: set[str],
-    utc_now: Callable[[], str],
+    default_combat_meta: Optional[Callable[[], Dict[str, Any]]] = None,
+    deep_copy: Callable[[Any], Any] = deep_copy,
+    action_types: set[str] = ACTION_TYPES,
+    utc_now: Callable[[], str] = utc_now,
 ) -> Dict[str, Any]:
-    combat = deep_copy(meta.get("combat") or default_combat_meta())
-    defaults = default_combat_meta()
+    defaults_provider = default_combat_meta or globals()["default_combat_meta"]
+    combat = deep_copy(meta.get("combat") or defaults_provider())
+    defaults = defaults_provider()
     combat["active"] = bool(combat.get("active", defaults["active"]))
     combat["combat_id"] = str(combat.get("combat_id") or "").strip()
     combat["round"] = max(0, int(combat.get("round", defaults["round"]) or defaults["round"]))
@@ -54,7 +71,11 @@ def normalize_combat_meta(
     return combat
 
 
-def skill_rank_power_weight(rank: str, *, normalize_skill_rank: Callable[[Any], str]) -> int:
+def skill_rank_power_weight(
+    rank: str,
+    *,
+    normalize_skill_rank: Callable[[Any], str] = normalize_skill_rank,
+) -> int:
     return {"F": 1, "E": 2, "D": 3, "C": 4, "B": 5, "A": 7, "S": 9}.get(normalize_skill_rank(rank), 1)
 
 
@@ -62,11 +83,11 @@ def compute_character_combat_score(
     character: Dict[str, Any],
     world_settings: Optional[Dict[str, Any]] = None,
     *,
-    normalize_class_current: Callable[[Any], Optional[Dict[str, Any]]],
-    skill_rank_power_weight: Callable[[str], int],
-    normalize_dynamic_skill_state: Callable[..., Dict[str, Any]],
-    resource_name_for_character: Callable[[Dict[str, Any], Optional[Dict[str, Any]]], str],
-    normalize_injury_state: Callable[[Any], Optional[Dict[str, Any]]],
+    normalize_class_current: Callable[[Any], Optional[Dict[str, Any]]] = normalize_class_current,
+    skill_rank_power_weight: Callable[[str], int] = skill_rank_power_weight,
+    normalize_dynamic_skill_state: Callable[..., Dict[str, Any]] = normalize_dynamic_skill_state,
+    resource_name_for_character: Callable[[Dict[str, Any], Optional[Dict[str, Any]]], str] = resource_name_for_character,
+    normalize_injury_state: Callable[[Any], Optional[Dict[str, Any]]] = normalize_injury_state,
 ) -> int:
     attrs = character.get("attributes") or {}
     level = max(1, int(character.get("level", 1) or 1))
@@ -119,10 +140,10 @@ def compute_npc_combat_score(
     npc_entry: Dict[str, Any],
     world_settings: Optional[Dict[str, Any]] = None,
     *,
-    normalize_class_current: Callable[[Any], Optional[Dict[str, Any]]],
-    skill_rank_power_weight: Callable[[str], int],
-    normalize_dynamic_skill_state: Callable[..., Dict[str, Any]],
-    normalize_resource_name: Callable[[Any, str], str],
+    normalize_class_current: Callable[[Any], Optional[Dict[str, Any]]] = normalize_class_current,
+    skill_rank_power_weight: Callable[[str], int] = skill_rank_power_weight,
+    normalize_dynamic_skill_state: Callable[..., Dict[str, Any]] = normalize_dynamic_skill_state,
+    normalize_resource_name: Callable[[Any, str], str] = normalize_resource_name,
 ) -> int:
     level = max(1, int(npc_entry.get("level", 1) or 1))
     class_current = normalize_class_current(npc_entry.get("class_current")) or {}
@@ -150,12 +171,12 @@ def build_combat_scaling_context(
     state: Dict[str, Any],
     actor: str,
     *,
-    compute_character_combat_score: Callable[[Dict[str, Any], Optional[Dict[str, Any]]], int],
-    compute_npc_combat_score: Callable[[Dict[str, Any], Optional[Dict[str, Any]]], int],
-    entity_element_profile_for_character: Callable[[Dict[str, Any], Dict[str, Any]], Dict[str, List[str]]],
-    entity_element_profile_for_npc: Callable[[Dict[str, Any], Dict[str, Any]], Dict[str, List[str]]],
-    element_matchup_multiplier: Callable[[Dict[str, Any], Dict[str, List[str]], Dict[str, List[str]]], float],
-    sorted_npc_codex_entries: Callable[[Dict[str, Any]], List[Dict[str, Any]]],
+    compute_character_combat_score: Callable[[Dict[str, Any], Optional[Dict[str, Any]]], int] = compute_character_combat_score,
+    compute_npc_combat_score: Callable[[Dict[str, Any], Optional[Dict[str, Any]]], int] = compute_npc_combat_score,
+    entity_element_profile_for_character: Callable[[Dict[str, Any], Dict[str, Any]], Dict[str, List[str]]] = entity_element_profile_for_character,
+    entity_element_profile_for_npc: Callable[[Dict[str, Any], Dict[str, Any]], Dict[str, List[str]]] = entity_element_profile_for_npc,
+    element_matchup_multiplier: Callable[[Dict[str, Any], Dict[str, List[str]], Dict[str, List[str]]], float] = element_matchup_multiplier,
+    sorted_npc_codex_entries: Callable[[Dict[str, Any]], List[Dict[str, Any]]] = sorted_npc_codex_entries,
 ) -> Dict[str, Any]:
     world_settings = ((state.get("world") or {}).get("settings") or {})
     world_model = state.get("world") if isinstance(state.get("world"), dict) else {}
@@ -213,8 +234,8 @@ def apply_combat_scaling_to_patch(
     combat_context: Dict[str, Any],
     scaling_context: Dict[str, Any],
     action_type: str,
-    deep_copy: Callable[[Any], Any],
-    blank_patch: Callable[[], Dict[str, Any]],
+    deep_copy: Callable[[Any], Any] = deep_copy,
+    blank_patch: Callable[[], Dict[str, Any]] = blank_patch,
 ) -> tuple[Dict[str, Any], Dict[str, Any]]:
     if action_type == "canon":
         return patch, {"applied": False, "multiplier": 1.0}
@@ -272,9 +293,9 @@ def infer_combat_context(
     action_type: str,
     text: str,
     *,
-    normalized_eval_text: Callable[[Any], str],
-    normalize_combat_meta: Callable[[Dict[str, Any]], Dict[str, Any]],
-    combat_narrative_hints: tuple[str, ...],
+    normalized_eval_text: Callable[[Any], str] = normalized_eval_text,
+    normalize_combat_meta: Callable[[Dict[str, Any]], Dict[str, Any]] = normalize_combat_meta,
+    combat_narrative_hints: tuple[str, ...] = COMBAT_NARRATIVE_HINTS,
 ) -> Dict[str, Any]:
     normalized_text = normalized_eval_text(text)
     meta_combat = normalize_combat_meta(state.setdefault("meta", {}))
@@ -317,15 +338,15 @@ def update_combat_meta_after_turn(
     patch: Dict[str, Any],
     combat_context: Dict[str, Any],
     resolution_summary: Dict[str, Any],
-    normalize_combat_meta: Callable[[Dict[str, Any]], Dict[str, Any]],
-    utc_now: Callable[[], str],
-    normalized_eval_text: Callable[[Any], str],
-    patch_has_combat_signal: Callable[[Dict[str, Any]], bool],
-    combat_narrative_hints: tuple[str, ...],
-    combat_end_hints: tuple[str, ...],
-    make_id: Callable[[str], str],
-    first_sentences: Callable[[str, int], str],
-    deep_copy: Callable[[Any], Any],
+    normalize_combat_meta: Callable[[Dict[str, Any]], Dict[str, Any]] = normalize_combat_meta,
+    utc_now: Callable[[], str] = utc_now,
+    normalized_eval_text: Callable[[Any], str] = normalized_eval_text,
+    patch_has_combat_signal: Callable[[Dict[str, Any]], bool] = patch_has_combat_signal,
+    combat_narrative_hints: tuple[str, ...] = COMBAT_NARRATIVE_HINTS,
+    combat_end_hints: tuple[str, ...] = COMBAT_END_HINTS,
+    make_id: Callable[[str], str] = make_id,
+    first_sentences: Callable[[str, int], str] = first_sentences,
+    deep_copy: Callable[[Any], Any] = deep_copy,
 ) -> Dict[str, Any]:
     meta = state.setdefault("meta", {})
     combat = normalize_combat_meta(meta)

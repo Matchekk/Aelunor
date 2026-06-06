@@ -1,5 +1,13 @@
 from typing import Any, Callable, Dict, Optional
 
+from app.config.attributes import ATTRIBUTE_INFLUENCE_DISTRIBUTION, ATTRIBUTE_INFLUENCE_STRENGTH
+from app.config.progression import ATTRIBUTE_KEYS
+from app.core.ids import deep_copy
+from app.services.state_basics import blank_patch
+from app.services.world.math_utils import clamp
+from app.services.world.text_normalization import normalized_eval_text
+from app.services.world.world_settings import clamp_float
+
 
 def default_attribute_influence_meta() -> Dict[str, Any]:
     return {
@@ -22,10 +30,10 @@ def default_attribute_influence_meta() -> Dict[str, Any]:
 def normalize_attribute_influence_meta(
     meta: Dict[str, Any],
     *,
-    default_attribute_influence_meta: Callable[[], Dict[str, Any]],
-    deep_copy: Callable[[Any], Any],
-    attribute_keys: tuple[str, ...],
-    clamp_float: Callable[[float, float, float], float],
+    default_attribute_influence_meta: Callable[[], Dict[str, Any]] = default_attribute_influence_meta,
+    deep_copy: Callable[[Any], Any] = deep_copy,
+    attribute_keys: tuple[str, ...] = ATTRIBUTE_KEYS,
+    clamp_float: Callable[[float, float, float], float] = clamp_float,
 ) -> Dict[str, Any]:
     influence = deep_copy(meta.get("attribute_influence") or default_attribute_influence_meta())
     defaults = default_attribute_influence_meta()
@@ -61,10 +69,10 @@ def derive_attribute_relevance(
     text: str,
     combat_context: Optional[Dict[str, Any]] = None,
     *,
-    normalized_eval_text: Callable[[Any], str],
-    hash_unit_interval: Callable[[str], float],
-    attribute_keys: tuple[str, ...],
-    attribute_influence_distribution: tuple[tuple[str, float], ...],
+    normalized_eval_text: Callable[[Any], str] = normalized_eval_text,
+    hash_unit_interval: Optional[Callable[[str], float]] = None,
+    attribute_keys: tuple[str, ...] = ATTRIBUTE_KEYS,
+    attribute_influence_distribution: tuple[tuple[str, float], ...] = ATTRIBUTE_INFLUENCE_DISTRIBUTION,
 ) -> Dict[str, Any]:
     character = ((state.get("characters") or {}).get(actor) or {})
     attrs = character.get("attributes", {}) or {}
@@ -100,6 +108,14 @@ def derive_attribute_relevance(
     primary_attributes = [entry[1] for entry in scored[:2] if entry[0] > 0]
     if not primary_attributes:
         primary_attributes = ["luck"]
+
+    if hash_unit_interval is None:
+        import hashlib
+
+        def hash_unit_interval(seed_text: str) -> float:
+            digest = hashlib.sha256(seed_text.encode("utf-8")).hexdigest()[:12]
+            value = int(digest, 16)
+            return (value % 10_000) / 10_000.0
 
     roll = hash_unit_interval(f"{int((state.get('meta') or {}).get('turn', 0) or 0)}|{actor}|{action_type}|{normalized_text[:180]}")
     cursor = 0.0
@@ -139,10 +155,10 @@ def compute_attribute_bias(
     character: Dict[str, Any],
     world_settings: Optional[Dict[str, Any]] = None,
     *,
-    attribute_keys: tuple[str, ...],
-    attribute_influence_strength: Dict[str, float],
-    clamp: Callable[[int, int, int], int],
-    clamp_float: Callable[[float, float, float], float],
+    attribute_keys: tuple[str, ...] = ATTRIBUTE_KEYS,
+    attribute_influence_strength: Dict[str, float] = ATTRIBUTE_INFLUENCE_STRENGTH,
+    clamp: Callable[[int, int, int], int] = clamp,
+    clamp_float: Callable[[float, float, float], float] = clamp_float,
 ) -> Dict[str, float]:
     attrs = (character or {}).get("attributes", {}) or {}
     tier = str((profile or {}).get("influence_tier") or "none").lower()
@@ -216,7 +232,7 @@ def apply_attribute_bias_to_resolution(
     resolution: Dict[str, Any],
     numeric_bias: Dict[str, float],
     *,
-    deep_copy: Callable[[Any], Any],
+    deep_copy: Callable[[Any], Any] = deep_copy,
 ) -> Dict[str, Any]:
     adjusted = deep_copy(resolution or {})
     if "damage_taken" in adjusted:
@@ -245,8 +261,8 @@ def apply_attribute_bias_to_patch(
     actor: str,
     numeric_bias: Dict[str, float],
     *,
-    deep_copy: Callable[[Any], Any],
-    blank_patch: Callable[[], Dict[str, Any]],
+    deep_copy: Callable[[Any], Any] = deep_copy,
+    blank_patch: Callable[[], Dict[str, Any]] = blank_patch,
 ) -> tuple[Dict[str, Any], Dict[str, int]]:
     adjusted = deep_copy(patch or blank_patch())
     per_actor = (adjusted.get("characters") or {}).get(actor)

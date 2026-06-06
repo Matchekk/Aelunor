@@ -7,9 +7,16 @@ from app.services.campaigns import persistence as campaign_persistence
 from app.services.campaigns import views as campaign_views
 from app.services.boards import diary as board_diary
 from app.services.boards import revisions as board_revisions
+from app.services.characters.normalization import (
+    normalize_character_state,
+    rebuild_all_character_derived,
+    rebuild_character_derived,
+)
 from app.services.sheets import character as character_sheet_service
 from app.services.sheets import npc as npc_sheet_service
 from app.services.state_basics import make_join_code
+from app.services.world.time import apply_world_time_advance, normalize_world_time
+from app.services.world.world_settings import normalize_world_settings
 
 
 def _state_engine_symbol(runtime: Mapping[str, Any], name: str) -> Any:
@@ -134,7 +141,7 @@ def _find_campaign_by_join_code(runtime: Mapping[str, Any]) -> Callable[[str], A
 def _party_view_ports(runtime: Mapping[str, Any]) -> Any:
     return SimpleNamespace(
         blank_character_state=_state_engine_symbol(runtime, "blank_character_state"),
-        normalize_character_state=_state_engine_symbol(runtime, "normalize_character_state"),
+        normalize_character_state=normalize_character_state,
         normalize_class_current=_state_engine_symbol(runtime, "normalize_class_current"),
         next_character_xp_for_level=_state_engine_symbol(runtime, "next_character_xp_for_level"),
         resource_name_for_character=_state_engine_symbol(runtime, "resource_name_for_character"),
@@ -150,7 +157,7 @@ def _build_party_overview(runtime: Mapping[str, Any]) -> Callable[[Any], Any]:
 
 def _character_sheet_ports(runtime: Mapping[str, Any]) -> Any:
     return character_sheet_service.CharacterSheetPorts(
-        normalize_character_state=_state_engine_symbol(runtime, "normalize_character_state"),
+        normalize_character_state=normalize_character_state,
         reconcile_canonical_resources=_state_engine_symbol(runtime, "reconcile_canonical_resources"),
         build_compat_resources_view=_state_engine_symbol(runtime, "build_compat_resources_view"),
         list_inventory_items=_state_engine_symbol(runtime, "list_inventory_items"),
@@ -225,7 +232,7 @@ def build_setup_service_dependencies(runtime: Mapping[str, Any], *, setup_servic
         deep_copy=runtime["deep_copy"],
         build_world_summary=_state_engine_symbol(runtime, "build_world_summary"),
         build_character_summary=_state_engine_symbol(runtime, "build_character_summary"),
-        normalize_world_settings=runtime["normalize_world_settings"],
+        normalize_world_settings=normalize_world_settings,
         apply_world_summary_to_boards=_state_engine_symbol(runtime, "apply_world_summary_to_boards"),
         apply_character_summary_to_state=_state_engine_symbol(runtime, "apply_character_summary_to_state"),
         campaign_slots=campaign_party.campaign_slots,
@@ -315,12 +322,12 @@ def build_campaign_service_dependencies(runtime: Mapping[str, Any], *, campaign_
         start_blocking_action=live_state_service.start_blocking_action,
         clear_blocking_action=live_state_service.clear_blocking_action,
         try_generate_adventure_intro=runtime["try_generate_adventure_intro"],
-        apply_world_time_advance=runtime["apply_world_time_advance"],
-        rebuild_all_character_derived=runtime["rebuild_all_character_derived"],
+        apply_world_time_advance=apply_world_time_advance,
+        rebuild_all_character_derived=rebuild_all_character_derived,
         append_character_change_events=runtime["append_character_change_events"],
         normalize_class_current=runtime["normalize_class_current"],
-        rebuild_character_derived=runtime["rebuild_character_derived"],
-        normalize_world_time=runtime["normalize_world_time"],
+        rebuild_character_derived=rebuild_character_derived,
+        normalize_world_time=normalize_world_time,
         campaign_path=_campaign_path(runtime),
         clear_live_campaign_state=live_state_service.clear_campaign_state,
     )
