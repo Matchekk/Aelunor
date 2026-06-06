@@ -9,7 +9,12 @@ from app.services.characters.resources import resource_name_for_character
 from app.services.progression import skills
 from app.services.world import progression as _world_progression
 from app.services.world.codex import normalize_codex_alias_text
-from app.services.world.element_class_paths import resolve_class_path_rank_node
+from app.services.world.element_class_paths import (
+    resolve_class_element_id as _resolve_class_element_id,
+    resolve_class_path_rank_node as _resolve_class_path_rank_node,
+)
+from app.services.world.element_ids import normalize_element_id_list as _normalize_element_id_list
+from app.services.world.element_profiles import element_id_from_name
 from app.services.world.math_utils import clamp
 from app.services.world.progression import default_class_current, normalize_class_current
 from app.services.world.text_normalization import normalized_eval_text
@@ -121,6 +126,36 @@ def build_elemental_core_skill_payload(
         },
         resource_name=resource_name,
     )
+
+
+def resolve_class_element_id(current_class: Optional[Dict[str, Any]], world: Dict[str, Any]) -> Optional[str]:
+    return _resolve_class_element_id(
+        current_class,
+        world,
+        normalize_class_current=normalize_class_current,
+        normalize_element_id_list=normalize_element_id_list,
+    )
+
+
+def resolve_class_path_rank_node(world: Dict[str, Any], current_class: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    return _resolve_class_path_rank_node(
+        world,
+        current_class,
+        normalize_class_current=normalize_class_current,
+        resolve_class_element_id=resolve_class_element_id,
+        normalize_skill_rank=skills.normalize_skill_rank,
+        deep_copy=deep_copy,
+    )
+
+
+def normalize_element_id_list(values: Any, world: Optional[Dict[str, Any]] = None) -> List[str]:
+    return _normalize_element_id_list(
+        values,
+        world,
+        normalize_codex_alias_text=normalize_codex_alias_text,
+        element_id_from_name=element_id_from_name,
+    )
+
 
 def ensure_class_rank_core_skills(
     character: Dict[str, Any],

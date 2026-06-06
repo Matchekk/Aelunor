@@ -2,6 +2,7 @@ import ast
 import unittest
 from pathlib import Path
 
+from app.services import state_engine
 from app.services.progression import classes
 
 
@@ -36,6 +37,46 @@ class ProgressionClassesServiceTests(unittest.TestCase):
         self.assertEqual(messages, ["Klassenaufstieg bereit: Spark.", "Klassenfortschritt: Spark erreicht Lv 2/2."])
         self.assertEqual(character["class_current"]["level"], 2)
         self.assertEqual(character["class_current"]["ascension"]["status"], "available")
+
+    def test_ensure_class_rank_core_skills_wires_element_path_ports(self) -> None:
+        character = {
+            "slot_id": "slot_1",
+            "bio": {"name": "Matchek"},
+            "class_current": {
+                "id": "class_flame_guard",
+                "name": "Flame Guard",
+                "rank": "f",
+                "element_id": "elem_fire",
+            },
+            "skills": {},
+        }
+        world = {
+            "elements": {"elem_fire": {"name": "Fire"}},
+            "element_class_paths": {
+                "elem_fire": [
+                    {
+                        "id": "path_flame",
+                        "name": "Flame Path",
+                        "ranks": {
+                            "F": {
+                                "core_skills_required": ["Spark Guard"],
+                                "core_skills_unlockable": ["Ember Step"],
+                                "signature_skills": [],
+                            }
+                        },
+                    }
+                ]
+            },
+        }
+
+        messages = classes.ensure_class_rank_core_skills(character, world, {}, unlock_extra=False)
+
+        self.assertEqual(messages, ["Matchek schaltet den Klassenkern-Skill Spark Guard frei."])
+        self.assertIn("skill_spark_guard", character["skills"])
+        self.assertEqual(character["class_current"]["path_id"], "path_flame")
+        self.assertEqual(character["class_current"]["path_rank"], "F")
+        self.assertEqual(character["class_current"]["element_id"], "elem_fire")
+        self.assertEqual(len(state_engine.runtime_symbols()), 143)
 
 
 if __name__ == "__main__":

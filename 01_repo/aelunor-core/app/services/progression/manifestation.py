@@ -18,10 +18,12 @@ from app.services.canon.progression_gate import (
 from app.services.characters.resources import resource_name_for_character
 from app.services.extraction.items import sentence_mentions_actor_name
 from app.services.progression import skills
-from app.services.world.codex import stable_sorted_unique_strings
-from app.services.world.element_class_paths import resolve_class_element_id
-from app.services.world.element_ids import normalize_element_id_list
+from app.services.world.codex import normalize_codex_alias_text, stable_sorted_unique_strings
+from app.services.world.element_class_paths import resolve_class_element_id as _resolve_class_element_id
+from app.services.world.element_ids import normalize_element_id_list as _normalize_element_id_list
+from app.services.world.element_profiles import element_id_from_name
 from app.services.world.math_utils import clamp
+from app.services.world.progression import normalize_class_current
 from app.services.world.text_normalization import first_sentences, normalized_eval_text
 from app.text.patterns import (
     MANIFESTATION_COST_CUES,
@@ -66,6 +68,24 @@ def clamp_float(value: float, minimum: float, maximum: float) -> float:
 def _hash_unit_interval(seed_text: str) -> float:
     digest = hashlib.sha256(str(seed_text or "").encode("utf-8")).hexdigest()[:12]
     return int(digest, 16) / float(0xFFFFFFFFFFFF)
+
+
+def normalize_element_id_list(values: Any, world: Optional[Dict[str, Any]] = None) -> List[str]:
+    return _normalize_element_id_list(
+        values,
+        world,
+        normalize_codex_alias_text=normalize_codex_alias_text,
+        element_id_from_name=element_id_from_name,
+    )
+
+
+def resolve_class_element_id(current_class: Optional[Dict[str, Any]], world: Dict[str, Any]) -> Optional[str]:
+    return _resolve_class_element_id(
+        current_class,
+        world,
+        normalize_class_current=normalize_class_current,
+        normalize_element_id_list=normalize_element_id_list,
+    )
 
 
 def canonicalize_manifested_skill_payload(

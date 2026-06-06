@@ -2,6 +2,7 @@ import ast
 import unittest
 from pathlib import Path
 
+from app.services import state_engine
 from app.services.progression import manifestation
 
 
@@ -40,6 +41,34 @@ class ProgressionManifestationServiceTests(unittest.TestCase):
 
         self.assertEqual(name, "Klingenfokus")
         self.assertEqual(calls[0][1]["temperature"], 0.7)
+
+    def test_canonicalize_manifested_skill_payload_wires_element_ports(self) -> None:
+        world = {
+            "elements": {"elem_fire": {"name": "Fire"}},
+            "element_alias_index": {"fire": ["elem_fire"]},
+        }
+        character = {
+            "slot_id": "slot_1",
+            "bio": {"name": "Ada"},
+            "class_current": {"name": "Flame Guard", "element_id": "elem_fire"},
+        }
+
+        skill = manifestation.canonicalize_manifested_skill_payload(
+            raw_skill={
+                "name": "Flame Focus",
+                "rank": "F",
+                "elements": ["Fire"],
+                "element_primary": "Fire",
+            },
+            character=character,
+            world=world,
+            world_settings={},
+        )
+
+        self.assertIsNotNone(skill)
+        self.assertEqual(skill["elements"], ["elem_fire"])
+        self.assertEqual(skill["element_primary"], "elem_fire")
+        self.assertEqual(len(state_engine.runtime_symbols()), 143)
 
 
 if __name__ == "__main__":
