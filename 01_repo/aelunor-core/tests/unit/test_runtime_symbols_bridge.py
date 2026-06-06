@@ -44,14 +44,19 @@ class RuntimeSymbolsBridgeTests(unittest.TestCase):
         exports = module_assignment_literal(STATE_ENGINE_PATH, "EXPORTED_SYMBOLS")
 
         self.assertEqual(exports, ["public_turn", "build_campaign_view"])
+        self.assertLess(len(STATE_ENGINE_PATH.read_text(encoding="utf-8").splitlines()), 1000)
 
     def test_turn_port_names_are_removed_from_runtime_symbols(self) -> None:
-        runtime_names = set(module_assignment_literal(STATE_ENGINE_PATH, "_STATE_ENGINE_RUNTIME_SYMBOLS"))
+        from app.services import state_engine
+
+        runtime_names = set(state_engine.runtime_symbols())
 
         self.assertTrue(TURN_PORT_NAMES.isdisjoint(runtime_names))
 
     def test_campaign_character_change_hook_stays_in_runtime_symbols(self) -> None:
-        runtime_names = set(module_assignment_literal(STATE_ENGINE_PATH, "_STATE_ENGINE_RUNTIME_SYMBOLS"))
+        from app.services import state_engine
+
+        runtime_names = set(state_engine.runtime_symbols())
 
         self.assertIn("append_character_change_events", runtime_names)
 

@@ -862,13 +862,12 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(rows[0]["status_effect_tags"], ["Blind"])
         self.assertEqual(rows[0]["aliases"], ["Glas"])
 
-    def test_state_engine_llm_element_generation_wrapper_preserves_patchable_call(self) -> None:
-        original_call = state_engine.call_ollama_schema
-        try:
-            state_engine.call_ollama_schema = lambda *_args, **_kwargs: {"elements": [{"name": "Traum", "theme": "Schlaf"}]}
-            rows = state_engine.generate_world_elements_with_llm({"theme": "Traum"})
-        finally:
-            state_engine.call_ollama_schema = original_call
+    def test_llm_element_generation_uses_injected_schema_port(self) -> None:
+        rows = element_generation.generate_world_elements_with_llm(
+            {"theme": "Traum"},
+            call_ollama_schema=lambda *_args, **_kwargs: {"elements": [{"name": "Traum", "theme": "Schlaf"}]},
+            element_generator_schema={"type": "object"},
+        )
 
         self.assertEqual(rows[0]["name"], "Traum")
         self.assertEqual(rows[0]["theme"], "Schlaf")
@@ -1438,15 +1437,15 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(normalized["action_queue"], [{"turn": 2, "actor": "slot_1", "action_type": "combat", "summary": "Hit", "created_at": "now"}])
         self.assertEqual(meta["combat"], normalized)
 
-    def test_state_engine_combat_meta_wrappers_preserve_contract(self) -> None:
-        state_engine.configure({"utc_now": lambda: "now", "ACTION_TYPES": {"combat"}})
-
-        with (
-            patch.object(state_engine, "utc_now", lambda: "now"),
-            patch.object(state_engine, "ACTION_TYPES", {"combat"}),
-        ):
-            default_meta = state_engine.default_combat_meta()
-            normalized = state_engine.normalize_combat_meta({"combat": {"action_queue": [{"actor": "slot_1", "action_type": "combat"}]}})
+    def test_combat_meta_helpers_use_injected_runtime_ports(self) -> None:
+        default_meta = combat.default_combat_meta(utc_now=lambda: "now")
+        normalized = combat.normalize_combat_meta(
+            {"combat": {"action_queue": [{"actor": "slot_1", "action_type": "combat"}]}},
+            default_combat_meta=lambda: combat.default_combat_meta(utc_now=lambda: "now"),
+            deep_copy=copy.deepcopy,
+            action_types={"combat"},
+            utc_now=lambda: "now",
+        )
 
         self.assertEqual(default_meta["updated_at"], "now")
         self.assertEqual(normalized["action_queue"][0]["created_at"], "now")

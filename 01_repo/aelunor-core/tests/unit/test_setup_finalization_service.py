@@ -58,7 +58,7 @@ class SetupFinalizationServiceTests(unittest.TestCase):
         self.assertEqual(character["bio"]["name"], "Aria")
         self.assertEqual(character["progression"]["resource_name"], "Mana")
         self.assertEqual(character["class_current"]["name"], "Klingenwacht")
-        self.assertEqual(len(state_engine.runtime_symbols()), 140)
+        self.assertEqual(len(state_engine.runtime_symbols()), 42)
 
 
 if __name__ == "__main__":

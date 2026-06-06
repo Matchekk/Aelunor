@@ -39,7 +39,7 @@ class SetupAiCopyServiceTests(unittest.TestCase):
 
         self.assertEqual(result, "Bestehender Text")
         self.assertEqual(calls, [])
-        self.assertEqual(len(state_engine.runtime_symbols()), 140)
+        self.assertEqual(len(state_engine.runtime_symbols()), 42)
 
 
 if __name__ == "__main__":

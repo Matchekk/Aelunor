@@ -23,28 +23,16 @@ class CanonProgressionGateServiceTests(unittest.TestCase):
         ):
             self.assertIn(name, function_names)
 
-    def test_state_engine_keeps_thin_progression_gate_wrappers(self) -> None:
+    def test_state_engine_no_longer_defines_progression_gate_wrappers(self) -> None:
         tree = ast.parse(STATE_ENGINE_PATH.read_text(encoding="utf-8"))
-        wrappers = {
-            node.name: ast.unparse(node)
-            for node in tree.body
-            if isinstance(node, ast.FunctionDef)
-            and node.name in {
-                "detect_progression_claim_types",
-                "progression_claim_coverage_for_actor_patch",
-                "merge_progression_patch_additive",
-                "call_progression_canon_extractor",
-            }
-        }
+        function_names = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
 
-        self.assertEqual(set(wrappers), {
+        self.assertTrue(function_names.isdisjoint({
             "detect_progression_claim_types",
             "progression_claim_coverage_for_actor_patch",
             "merge_progression_patch_additive",
             "call_progression_canon_extractor",
-        })
-        for source in wrappers.values():
-            self.assertIn("_progression_gate_service.", source)
+        }))
 
     def test_progression_claim_coverage_detects_existing_structured_patch(self) -> None:
         patch = {

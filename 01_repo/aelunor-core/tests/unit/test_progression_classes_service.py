@@ -76,7 +76,7 @@ class ProgressionClassesServiceTests(unittest.TestCase):
         self.assertEqual(character["class_current"]["path_id"], "path_flame")
         self.assertEqual(character["class_current"]["path_rank"], "F")
         self.assertEqual(character["class_current"]["element_id"], "elem_fire")
-        self.assertEqual(len(state_engine.runtime_symbols()), 140)
+        self.assertEqual(len(state_engine.runtime_symbols()), 42)
 
 
 if __name__ == "__main__":

@@ -18,12 +18,11 @@ class ProgressionSkillsServiceTests(unittest.TestCase):
         for name in ("normalize_dynamic_skill_state", "merge_dynamic_skill", "grant_skill_xp", "apply_skill_events"):
             self.assertIn(name, function_names)
 
-    def test_state_engine_keeps_thin_skill_wrapper_for_compatibility(self) -> None:
+    def test_state_engine_no_longer_defines_skill_wrapper_for_compatibility(self) -> None:
         tree = ast.parse(STATE_ENGINE_PATH.read_text(encoding="utf-8"))
-        wrapper = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "normalize_dynamic_skill_state")
+        function_names = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
 
-        self.assertEqual(len(wrapper.body), 1)
-        self.assertIn("_progression_skills_service.normalize_dynamic_skill_state", ast.unparse(wrapper))
+        self.assertNotIn("normalize_dynamic_skill_state", function_names)
 
     def test_grant_skill_xp_levels_existing_skill(self) -> None:
         character = {

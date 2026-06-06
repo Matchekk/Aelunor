@@ -17,7 +17,7 @@ class StateEngineServiceExtractionTests(unittest.TestCase):
 
     def test_runtime_symbols_keep_internal_transition_path(self) -> None:
         runtime = state_engine.runtime_symbols()
-        self.assertLessEqual(len(runtime), 150)
+        self.assertLessEqual(len(runtime), 60)
         self.assertNotIn("blank_character_state", runtime)
         self.assertNotIn("default_appearance_profile", runtime)
         self.assertNotIn("build_character_sheet_view", runtime)
@@ -64,15 +64,10 @@ class StateEngineServiceExtractionTests(unittest.TestCase):
         ):
             self.assertNotIn(name, runtime)
         for name in (
-            "active_party",
-            "active_turns",
-            "blank_patch",
-            "campaign_slots",
-            "normalize_patch_semantics",
-            "ensure_item_shape",
-            "normalize_equipment_update_payload",
             "append_character_change_events",
             "current_question_id",
+            "remember_recent_story",
+            "rebuild_memory_summary",
         ):
             self.assertIs(runtime[name], getattr(state_engine, name))
 

@@ -67,7 +67,7 @@ class CampaignNormalizationServiceTests(unittest.TestCase):
         runtime = state_engine.runtime_symbols()
 
         self.assertEqual(state_engine.EXPORTED_SYMBOLS, ["public_turn", "build_campaign_view"])
-        self.assertEqual(len(runtime), 140)
+        self.assertEqual(len(runtime), 42)
         for name in (
             "create_campaign_record",
             "load_campaign",

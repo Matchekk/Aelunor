@@ -61,6 +61,7 @@ from app.services.turn.dependencies import (
     TurnProgressionDependencies,
     build_turn_llm_dependencies,
 )
+from app.services.turn.runtime_inventory import all_dependency_names
 from app.services.canon import extractor as canon_extractor_service
 from app.services.canon import gate as canon_gate_service
 from app.services.canon import npc_extractor as npc_extractor_service
@@ -613,6 +614,15 @@ def configure(main_globals: Dict[str, Any]) -> None:
         if attribute_deps is not None:
             configure_turn_attribute_dependencies(attribute_deps)
     globals().update({key: value for key, value in main_globals.items() if key not in _TURN_PORT_NAMES})
+    state_source = main_globals.get("state_engine")
+    if state_source is not None:
+        globals().update(
+            {
+                name: getattr(state_source, name)
+                for name in (*all_dependency_names(), "compute_attribute_bias", "compose_attribute_prompt_hints")
+                if name not in globals() and hasattr(state_source, name)
+            }
+        )
     _configure_patch_sanitizer_if_ready()
     _configure_patch_validator_if_ready()
     _CONFIGURED = True

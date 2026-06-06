@@ -68,12 +68,15 @@ def main() -> None:
     temp_dir = tempfile.mkdtemp(prefix="isekai_codex_checks_")
     os.environ["DATA_DIR"] = temp_dir
 
-    import app.main as main_module
     from app.services import state_engine
+    from app.services.state import runtime_core
 
-    main_module = runtime_module(importlib.reload(main_module))
     state_engine.ensure_question_ai_copy = lambda *_args, **_kwargs: None
-    state_engine.generate_world_elements_with_llm = lambda _summary: []
+    runtime_core.ensure_question_ai_copy = lambda *_args, **_kwargs: None
+    runtime_core.generate_world_elements_with_llm = lambda _summary: []
+
+    import app.main as main_module
+    main_module = runtime_module(importlib.reload(main_module))
 
     # 1) Weltgenerierung erzeugt mehrere Rassen/Bestien
     campaign, slot_id = prepare_campaign(main_module)

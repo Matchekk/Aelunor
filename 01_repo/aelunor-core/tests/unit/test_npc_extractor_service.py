@@ -36,12 +36,11 @@ class NpcExtractorServiceTests(unittest.TestCase):
         self.assertIn("NPC_EXTRACTOR_SYSTEM_PROMPT", source)
         self.assertIn("NPC_EXTRACTOR_SCHEMA", source)
 
-    def test_state_engine_keeps_thin_npc_wrappers(self) -> None:
+    def test_state_engine_no_longer_defines_private_npc_wrappers(self) -> None:
         source = STATE_ENGINE_PATH.read_text(encoding="utf-8")
 
         for name in NPC_FUNCTIONS:
-            self.assertIn(f"def {name}(*args: Any, **kwargs: Any):", source)
-            self.assertIn(f"return _npc_extractor_service.{name}(*args, **kwargs)", source)
+            self.assertNotIn(f"def {name}", source)
 
 
 if __name__ == "__main__":

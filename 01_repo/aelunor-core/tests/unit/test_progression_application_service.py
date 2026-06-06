@@ -18,12 +18,11 @@ class ProgressionApplicationServiceTests(unittest.TestCase):
         for name in ("apply_progression_events", "infer_progression_events_from_patch", "append_character_change_events"):
             self.assertIn(name, function_names)
 
-    def test_state_engine_keeps_thin_apply_progression_wrapper(self) -> None:
+    def test_state_engine_no_longer_defines_apply_progression_wrapper(self) -> None:
         tree = ast.parse(STATE_ENGINE_PATH.read_text(encoding="utf-8"))
-        wrapper = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "apply_progression_events")
+        function_names = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
 
-        self.assertEqual(len(wrapper.body), 1)
-        self.assertIn("_progression_application_service.apply_progression_events", ast.unparse(wrapper))
+        self.assertNotIn("apply_progression_events", function_names)
 
     def test_apply_progression_events_applies_explicit_training_event(self) -> None:
         state = {

@@ -17,19 +17,11 @@ class CanonGateServiceTests(unittest.TestCase):
 
         self.assertIn("run_canon_gate", function_names)
 
-    def test_state_engine_keeps_only_thin_run_canon_gate_wrapper(self) -> None:
+    def test_state_engine_no_longer_defines_run_canon_gate_wrapper(self) -> None:
         tree = ast.parse(STATE_ENGINE_PATH.read_text(encoding="utf-8"))
-        run_gate = next(
-            node
-            for node in tree.body
-            if isinstance(node, ast.FunctionDef) and node.name == "run_canon_gate"
-        )
+        function_names = {node.name for node in tree.body if isinstance(node, ast.FunctionDef)}
 
-        self.assertEqual(len(run_gate.body), 1)
-        self.assertIn(
-            "_canon_gate_service.run_canon_gate",
-            ast.unparse(run_gate),
-        )
+        self.assertNotIn("run_canon_gate", function_names)
 
     def test_run_canon_gate_skips_when_no_progression_claims(self) -> None:
         campaign = {
