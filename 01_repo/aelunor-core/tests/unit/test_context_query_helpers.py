@@ -85,9 +85,11 @@ class ContextQueryHelperTests(unittest.TestCase):
     def test_runtime_symbols_and_public_exports_stay_small(self) -> None:
         self.assertEqual(state_engine.EXPORTED_SYMBOLS, ["public_turn", "build_campaign_view"])
         runtime = state_engine.runtime_symbols()
-        self.assertEqual(len(runtime), 42)
-        self.assertIn("parse_context_intent", runtime)
-        self.assertIn("build_context_knowledge_index", runtime)
+        self.assertLess(len(runtime), 25)
+        # Context-query helpers now live in app.services.context and are wired
+        # directly into the context-service factory, no longer via the bridge.
+        self.assertNotIn("parse_context_intent", runtime)
+        self.assertNotIn("build_context_knowledge_index", runtime)
 
     def test_context_signature_is_stable_for_equal_state(self) -> None:
         left = context_state_signature({"b": 2, "a": 1})
