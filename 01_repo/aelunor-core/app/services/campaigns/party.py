@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional
 
 from app.config.runtime import MAX_PLAYERS
-from app.core.ids import utc_now
+from app.services.boards.diary import default_player_diary_entry
 from app.services.state_basics import is_slot_id, ordered_slots, slot_id, slot_index
 
 
@@ -81,17 +81,6 @@ def public_player(player_id: str, player: CampaignState) -> CampaignState:
         "display_name": player.get("display_name", ""),
         "joined_at": player.get("joined_at"),
         "last_seen_at": player.get("last_seen_at"),
-    }
-
-
-def default_player_diary_entry(player_id: str, display_name: str) -> CampaignState:
-    now = utc_now()
-    return {
-        "player_id": player_id,
-        "display_name": display_name,
-        "content": "",
-        "updated_at": now,
-        "updated_by": player_id,
     }
 
 

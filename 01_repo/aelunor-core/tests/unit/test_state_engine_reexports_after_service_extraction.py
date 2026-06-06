@@ -20,6 +20,9 @@ class StateEngineServiceExtractionTests(unittest.TestCase):
         self.assertLessEqual(len(runtime), 150)
         self.assertNotIn("blank_character_state", runtime)
         self.assertNotIn("default_appearance_profile", runtime)
+        self.assertNotIn("build_character_sheet_view", runtime)
+        self.assertNotIn("build_npc_sheet_view", runtime)
+        self.assertNotIn("log_board_revision", runtime)
         for name in (
             "call_ollama_json",
             "call_ollama_schema",

@@ -5,6 +5,10 @@ from app.services.campaigns import lifecycle as campaign_lifecycle
 from app.services.campaigns import party as campaign_party
 from app.services.campaigns import persistence as campaign_persistence
 from app.services.campaigns import views as campaign_views
+from app.services.boards import diary as board_diary
+from app.services.boards import revisions as board_revisions
+from app.services.sheets import character as character_sheet_service
+from app.services.sheets import npc as npc_sheet_service
 from app.services.state_basics import make_join_code
 
 
@@ -144,6 +148,59 @@ def _build_party_overview(runtime: Mapping[str, Any]) -> Callable[[Any], Any]:
     return lambda campaign: campaign_party.build_party_overview(campaign, ports=ports)
 
 
+def _character_sheet_ports(runtime: Mapping[str, Any]) -> Any:
+    return character_sheet_service.CharacterSheetPorts(
+        normalize_character_state=_state_engine_symbol(runtime, "normalize_character_state"),
+        reconcile_canonical_resources=_state_engine_symbol(runtime, "reconcile_canonical_resources"),
+        build_compat_resources_view=_state_engine_symbol(runtime, "build_compat_resources_view"),
+        list_inventory_items=_state_engine_symbol(runtime, "list_inventory_items"),
+        ensure_item_shape=_state_engine_symbol(runtime, "ensure_item_shape"),
+        resource_name_for_character=_state_engine_symbol(runtime, "resource_name_for_character"),
+        normalize_class_current=_state_engine_symbol(runtime, "normalize_class_current"),
+        normalize_dynamic_skill_state=_state_engine_symbol(runtime, "normalize_dynamic_skill_state"),
+        class_affinity_match=_state_engine_symbol(runtime, "class_affinity_match"),
+        effective_skill_progress_multiplier=_state_engine_symbol(runtime, "effective_skill_progress_multiplier"),
+        skill_rank_sort_value=_state_engine_symbol(runtime, "skill_rank_sort_value"),
+        build_skill_fusion_hints=_state_engine_symbol(runtime, "build_skill_fusion_hints"),
+        calculate_derived_bonus=_state_engine_symbol(runtime, "calculate_derived_bonus"),
+        world_attribute_scale=_state_engine_symbol(runtime, "world_attribute_scale"),
+        display_name_for_slot=campaign_party.display_name_for_slot,
+        derive_scene_name=_state_engine_symbol(runtime, "derive_scene_name"),
+        next_character_xp_for_level=_state_engine_symbol(runtime, "next_character_xp_for_level"),
+    )
+
+
+def _build_character_sheet_view(runtime: Mapping[str, Any]) -> Callable[[Any, str], Any]:
+    ports = _character_sheet_ports(runtime)
+    return lambda campaign, slot_name: character_sheet_service.build_character_sheet_view(campaign, slot_name, ports=ports)
+
+
+def _npc_sheet_ports(runtime: Mapping[str, Any]) -> Any:
+    return npc_sheet_service.NpcSheetPorts(
+        normalize_npc_entry=_state_engine_symbol(runtime, "normalize_npc_entry"),
+        scene_name_from_state=_state_engine_symbol(runtime, "scene_name_from_state"),
+        normalize_class_current=_state_engine_symbol(runtime, "normalize_class_current"),
+        normalize_resource_name=_state_engine_symbol(runtime, "normalize_resource_name"),
+        normalize_dynamic_skill_state=_state_engine_symbol(runtime, "normalize_dynamic_skill_state"),
+        skill_rank_sort_value=_state_engine_symbol(runtime, "skill_rank_sort_value"),
+        next_character_xp_for_level=_state_engine_symbol(runtime, "next_character_xp_for_level"),
+    )
+
+
+def _build_npc_sheet_view(runtime: Mapping[str, Any]) -> Callable[[Any, str], Any]:
+    ports = _npc_sheet_ports(runtime)
+    return lambda campaign, npc_id: npc_sheet_service.build_npc_sheet_view(campaign, npc_id, ports=ports)
+
+
+def _log_board_revision(runtime: Mapping[str, Any]) -> Callable[..., None]:
+    return lambda campaign, **kwargs: board_revisions.log_board_revision(
+        campaign,
+        **kwargs,
+        make_id=runtime["make_id"],
+        utc_now=runtime["utc_now"],
+    )
+
+
 def build_setup_service_dependencies(runtime: Mapping[str, Any], *, setup_service: Any, live_state_service: Any) -> Any:
     return setup_service.SetupServiceDependencies(
         load_campaign=_load_campaign(runtime),
@@ -281,8 +338,8 @@ def build_sheets_service_dependencies(runtime: Mapping[str, Any], *, sheets_serv
         load_campaign=_load_campaign(runtime),
         authenticate_player=campaign_lifecycle.authenticate_player,
         build_party_overview=_build_party_overview(runtime),
-        build_character_sheet_view=runtime["build_character_sheet_view"],
-        build_npc_sheet_view=runtime["build_npc_sheet_view"],
+        build_character_sheet_view=_build_character_sheet_view(runtime),
+        build_npc_sheet_view=_build_npc_sheet_view(runtime),
     )
 
 
@@ -294,7 +351,7 @@ def build_boards_service_dependencies(runtime: Mapping[str, Any], *, boards_serv
         save_campaign=_save_campaign(runtime),
         utc_now=runtime["utc_now"],
         deep_copy=runtime["deep_copy"],
-        log_board_revision=runtime["log_board_revision"],
-        default_player_diary_entry=campaign_party.default_player_diary_entry,
+        log_board_revision=_log_board_revision(runtime),
+        default_player_diary_entry=board_diary.default_player_diary_entry,
         make_id=runtime["make_id"],
     )

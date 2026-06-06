@@ -85,7 +85,7 @@ class ContextQueryHelperTests(unittest.TestCase):
     def test_runtime_symbols_and_public_exports_stay_small(self) -> None:
         self.assertEqual(state_engine.EXPORTED_SYMBOLS, ["public_turn", "build_campaign_view"])
         runtime = state_engine.runtime_symbols()
-        self.assertEqual(len(runtime), 143)
+        self.assertEqual(len(runtime), 140)
         self.assertIn("parse_context_intent", runtime)
         self.assertIn("build_context_knowledge_index", runtime)
 

@@ -68,7 +68,7 @@ class ProgressionManifestationServiceTests(unittest.TestCase):
         self.assertIsNotNone(skill)
         self.assertEqual(skill["elements"], ["elem_fire"])
         self.assertEqual(skill["element_primary"], "elem_fire")
-        self.assertEqual(len(state_engine.runtime_symbols()), 143)
+        self.assertEqual(len(state_engine.runtime_symbols()), 140)
 
 
 if __name__ == "__main__":

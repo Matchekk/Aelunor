@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 from app.serializers import campaign_view as campaign_view_serializer
+from app.services.boards.public import build_public_boards as _build_public_boards
+from app.services.setup.answers import extract_text_answer
 from app.services.state_basics import is_slot_id
 from app.services.campaigns.party import (
     active_party,
@@ -9,7 +11,6 @@ from app.services.campaigns.party import (
     build_party_overview,
     campaign_slots,
     compact_conditions,
-    default_player_diary_entry,
     display_name_for_slot,
     expected_setup_slots,
     player_claim,
@@ -31,10 +32,6 @@ def is_host(campaign: CampaignState, player_id: Optional[str]) -> bool:
 
 def is_campaign_player(campaign: CampaignState, player_id: Optional[str]) -> bool:
     return campaign_view_serializer.is_campaign_player(campaign, player_id)
-
-
-def filter_private_diary_content(content: Any, viewer_is_owner: bool) -> str:
-    return campaign_view_serializer.filter_private_diary_content(content, viewer_is_owner)
 
 
 @dataclass(frozen=True)
@@ -167,13 +164,40 @@ def build_setup_runtime(campaign: CampaignState, viewer_id: Optional[str], *, po
     }
 
 
+def setup_summary_preview(campaign: CampaignState, setup_type: str, slot_name: Optional[str] = None) -> CampaignState:
+    if setup_type == "world":
+        summary = ((campaign.get("setup") or {}).get("world") or {}).get("summary") or {}
+        if not summary:
+            answers = (((campaign.get("setup") or {}).get("world") or {}).get("answers") or {})
+            summary = {
+                "theme": extract_text_answer(answers.get("theme")),
+                "tone": extract_text_answer(answers.get("tone")),
+                "resource_name": extract_text_answer(answers.get("resource_name")),
+                "central_conflict": extract_text_answer(answers.get("central_conflict")),
+            }
+        return {
+            "theme": summary.get("theme", ""),
+            "tone": summary.get("tone", ""),
+            "resource_name": summary.get("resource_name", ""),
+            "campaign_length": summary.get("campaign_length", ""),
+            "central_conflict": summary.get("central_conflict", ""),
+            "world_structure": summary.get("world_structure", ""),
+        }
+    setup_node = (((campaign.get("setup") or {}).get("characters") or {}).get(slot_name or "")) or {}
+    summary = setup_node.get("summary") or {}
+    answers = setup_node.get("answers") or {}
+    return {
+        "display_name": summary.get("display_name") or extract_text_answer(answers.get("char_name")),
+        "focus": summary.get("current_focus") or extract_text_answer(answers.get("current_focus")),
+        "class_start_mode": summary.get("class_start_mode") or extract_text_answer(answers.get("class_start_mode")),
+        "first_goal": summary.get("first_goal") or extract_text_answer(answers.get("first_goal")),
+        "strength": summary.get("strength") or extract_text_answer(answers.get("strength")),
+        "weakness": summary.get("weakness") or extract_text_answer(answers.get("weakness")),
+    }
+
+
 def build_public_boards(campaign: CampaignState, viewer_id: Optional[str], *, ports: CampaignViewPorts) -> CampaignState:
-    return campaign_view_serializer.build_public_boards(
-        campaign,
-        viewer_id,
-        deep_copy=ports.deep_copy,
-        filter_private_diary_content_fn=filter_private_diary_content,
-    )
+    return _build_public_boards(campaign, viewer_id, copy_value=ports.deep_copy)
 
 
 def build_campaign_view(campaign: CampaignState, viewer_id: Optional[str], *, ports: CampaignViewPorts) -> CampaignState:
