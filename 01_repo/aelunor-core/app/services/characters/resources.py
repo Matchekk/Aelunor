@@ -2,6 +2,7 @@ import re
 from typing import Any, Dict, Optional
 
 from app.config.feature_flags import ENABLE_LEGACY_SHADOW_WRITEBACK
+from app.config.progression import RESOURCE_KEYS
 from app.core.ids import deep_copy
 from app.services.world.math_utils import clamp
 from app.services.world.progression import normalize_resource_name
@@ -213,3 +214,73 @@ def sync_canonical_resources(character: Dict[str, Any], world_settings: Optional
         write_legacy_shadow_fields(character, world_settings)
     else:
         strip_legacy_shadow_fields(character, world_settings)
+
+
+def resource_delta_payload() -> Dict[str, int]:
+    return {key: 0 for key in RESOURCE_KEYS}
+
+
+def canonical_resources_set_from_payload(
+    resources_set_payload: Any,
+    character: Dict[str, Any],
+    world_settings: Optional[Dict[str, Any]] = None,
+) -> Dict[str, int]:
+    canonical: Dict[str, int] = {}
+    if not isinstance(resources_set_payload, dict):
+        return canonical
+    for key in ("hp_current", "hp_max", "sta_current", "sta_max", "res_current", "res_max", "carry_current", "carry_max"):
+        if key in resources_set_payload:
+            canonical[key] = max(0, int(resources_set_payload.get(key, 0) or 0))
+    for raw_key, raw_value in resources_set_payload.items():
+        mapped = canonical_resource_field_name(raw_key)
+        if not mapped:
+            continue
+        if isinstance(raw_value, dict):
+            if mapped == "hp":
+                if "current" in raw_value:
+                    canonical["hp_current"] = max(0, int(raw_value.get("current", 0) or 0))
+                if "max" in raw_value:
+                    canonical["hp_max"] = max(1, int(raw_value.get("max", 0) or 0))
+            elif mapped == "stamina":
+                if "current" in raw_value:
+                    canonical["sta_current"] = max(0, int(raw_value.get("current", 0) or 0))
+                if "max" in raw_value:
+                    canonical["sta_max"] = max(0, int(raw_value.get("max", 0) or 0))
+            elif mapped == "aether":
+                if "current" in raw_value:
+                    canonical["res_current"] = max(0, int(raw_value.get("current", 0) or 0))
+                if "max" in raw_value:
+                    canonical["res_max"] = max(0, int(raw_value.get("max", 0) or 0))
+        else:
+            numeric = max(0, int(raw_value or 0))
+            if mapped == "hp":
+                canonical.setdefault("hp_current", numeric)
+            elif mapped == "stamina":
+                canonical.setdefault("sta_current", numeric)
+            elif mapped == "aether":
+                canonical.setdefault("res_current", numeric)
+    if "res_max" in canonical and "res_current" in canonical:
+        canonical["res_current"] = clamp(canonical["res_current"], 0, canonical["res_max"])
+    if "hp_max" in canonical and "hp_current" in canonical:
+        canonical["hp_current"] = clamp(canonical["hp_current"], 0, max(1, canonical["hp_max"]))
+    if "sta_max" in canonical and "sta_current" in canonical:
+        canonical["sta_current"] = clamp(canonical["sta_current"], 0, max(0, canonical["sta_max"]))
+    return canonical
+
+
+def canonical_resource_deltas_from_update(upd: Dict[str, Any]) -> Dict[str, int]:
+    deltas = {"hp_current": 0, "sta_current": 0, "res_current": 0, "carry_current": 0}
+    deltas["hp_current"] += int(upd.get("hp_delta", 0) or 0)
+    deltas["sta_current"] += int(upd.get("stamina_delta", 0) or 0)
+    raw_deltas = upd.get("resources_delta") if isinstance(upd.get("resources_delta"), dict) else {}
+    for raw_key, raw_value in raw_deltas.items():
+        mapped = canonical_resource_field_name(raw_key)
+        if mapped == "hp":
+            deltas["hp_current"] += int(raw_value or 0)
+        elif mapped == "stamina":
+            deltas["sta_current"] += int(raw_value or 0)
+        elif mapped == "aether":
+            deltas["res_current"] += int(raw_value or 0)
+        elif str(raw_key or "").strip().lower() == "carry":
+            deltas["carry_current"] += int(raw_value or 0)
+    return deltas

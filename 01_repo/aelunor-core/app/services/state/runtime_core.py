@@ -36,6 +36,17 @@ from app.services.setup.flow import (
     setup_question_is_applicable,
 )
 from app.services.setup import ai_copy as setup_ai_copy
+from app.services.setup import attributes as setup_attributes
+from app.services.setup.attributes import (
+    allocate_weighted_attributes,
+    fallback_character_attribute_weights,
+    level_one_attribute_budget,
+    level_one_attribute_cap,
+    level_one_attributes_from_weights,
+    normalize_attribute_weight_pool,
+    parse_attribute_range,
+    world_attribute_scale,
+)
 from app.services.setup import finalization as setup_finalization
 from app.services.setup import payloads as setup_payloads
 from app.services.setup import randomizer as setup_randomizer
@@ -271,6 +282,17 @@ from app.services.patch_payloads import (
     normalize_patch_payload,
     normalize_patch_semantics,
 )
+from app.services.boards.plotpoints import (
+    normalize_event_entry,
+    normalize_plotpoint_entry,
+    normalize_plotpoint_update_entry,
+)
+from app.services.turn.output_normalization import (
+    normalize_model_output_payload,
+    normalize_request_entry,
+    normalize_request_option_text,
+    normalize_requests_payload,
+)
 from app.services.campaigns import lifecycle as campaign_lifecycle
 from app.services.campaigns import normalization as campaign_normalization
 from app.services.campaigns import persistence as campaign_persistence
@@ -360,11 +382,14 @@ from app.services.characters.derived_stats import (
 )
 from app.services.characters.resources import (
     build_compat_resources_view,
+    canonical_resource_deltas_from_update,
     canonical_resource_field_name,
+    canonical_resources_set_from_payload,
     ingest_legacy_resources_into_canonical,
     legacy_misc_resource_deltas_from_update,
     legacy_misc_resources_set_from_payload,
     reconcile_canonical_resources,
+    resource_delta_payload,
     resource_name_for_character,
     strip_legacy_resource_shadows,
     strip_legacy_shadow_fields,
@@ -498,6 +523,12 @@ from app.services.world.codex import (
     codex_seed_for_state,
     ensure_world_codex_from_setup,
 )
+from app.services.world.codex_triggers import (
+    apply_codex_triggers,
+    collect_beast_observed_abilities,
+    collect_codex_triggers,
+    contains_any_normalized_token,
+)
 from app.services.world.attribute_influence import (
     apply_attribute_bias_to_patch as _apply_attribute_bias_to_patch,
     apply_attribute_bias_to_resolution as _apply_attribute_bias_to_resolution,
@@ -509,12 +540,12 @@ from app.services.world.attribute_influence import (
     scale_negative_delta as _scale_negative_delta_helper,
 )
 from app.services.world.appearance import (
-    active_faction_ids as _active_faction_ids,
-    appearance_event_id as _appearance_event_id,
+    appearance_event_id,
     default_appearance_profile,
-    format_appearance_message as _format_appearance_message,
-    record_appearance_change as _record_appearance_change,
+    format_appearance_message,
+    record_appearance_change,
 )
+from app.services.characters.appearance_changes import sync_appearance_changes
 from app.services.world.state_defaults import (
     default_character_modifiers,
     default_intro_state,
@@ -1343,73 +1374,6 @@ def looks_like_legacy_seeded_skills(skills: Dict[str, Any]) -> bool:
 def default_boards(player_id: Optional[str] = None) -> Dict[str, Any]:
     return campaign_lifecycle.default_boards(player_id)
 
-def resource_delta_payload() -> Dict[str, int]:
-    return {key: 0 for key in RESOURCE_KEYS}
-
-def canonical_resources_set_from_payload(
-    resources_set_payload: Any,
-    character: Dict[str, Any],
-    world_settings: Optional[Dict[str, Any]] = None,
-) -> Dict[str, int]:
-    canonical: Dict[str, int] = {}
-    if not isinstance(resources_set_payload, dict):
-        return canonical
-    for key in ("hp_current", "hp_max", "sta_current", "sta_max", "res_current", "res_max", "carry_current", "carry_max"):
-        if key in resources_set_payload:
-            canonical[key] = max(0, int(resources_set_payload.get(key, 0) or 0))
-    for raw_key, raw_value in resources_set_payload.items():
-        mapped = canonical_resource_field_name(raw_key)
-        if not mapped:
-            continue
-        if isinstance(raw_value, dict):
-            if mapped == "hp":
-                if "current" in raw_value:
-                    canonical["hp_current"] = max(0, int(raw_value.get("current", 0) or 0))
-                if "max" in raw_value:
-                    canonical["hp_max"] = max(1, int(raw_value.get("max", 0) or 0))
-            elif mapped == "stamina":
-                if "current" in raw_value:
-                    canonical["sta_current"] = max(0, int(raw_value.get("current", 0) or 0))
-                if "max" in raw_value:
-                    canonical["sta_max"] = max(0, int(raw_value.get("max", 0) or 0))
-            elif mapped == "aether":
-                if "current" in raw_value:
-                    canonical["res_current"] = max(0, int(raw_value.get("current", 0) or 0))
-                if "max" in raw_value:
-                    canonical["res_max"] = max(0, int(raw_value.get("max", 0) or 0))
-        else:
-            numeric = max(0, int(raw_value or 0))
-            if mapped == "hp":
-                canonical.setdefault("hp_current", numeric)
-            elif mapped == "stamina":
-                canonical.setdefault("sta_current", numeric)
-            elif mapped == "aether":
-                canonical.setdefault("res_current", numeric)
-    if "res_max" in canonical and "res_current" in canonical:
-        canonical["res_current"] = clamp(canonical["res_current"], 0, canonical["res_max"])
-    if "hp_max" in canonical and "hp_current" in canonical:
-        canonical["hp_current"] = clamp(canonical["hp_current"], 0, max(1, canonical["hp_max"]))
-    if "sta_max" in canonical and "sta_current" in canonical:
-        canonical["sta_current"] = clamp(canonical["sta_current"], 0, max(0, canonical["sta_max"]))
-    return canonical
-
-def canonical_resource_deltas_from_update(upd: Dict[str, Any]) -> Dict[str, int]:
-    deltas = {"hp_current": 0, "sta_current": 0, "res_current": 0, "carry_current": 0}
-    deltas["hp_current"] += int(upd.get("hp_delta", 0) or 0)
-    deltas["sta_current"] += int(upd.get("stamina_delta", 0) or 0)
-    raw_deltas = upd.get("resources_delta") if isinstance(upd.get("resources_delta"), dict) else {}
-    for raw_key, raw_value in raw_deltas.items():
-        mapped = canonical_resource_field_name(raw_key)
-        if mapped == "hp":
-            deltas["hp_current"] += int(raw_value or 0)
-        elif mapped == "stamina":
-            deltas["sta_current"] += int(raw_value or 0)
-        elif mapped == "aether":
-            deltas["res_current"] += int(raw_value or 0)
-        elif str(raw_key or "").strip().lower() == "carry":
-            deltas["carry_current"] += int(raw_value or 0)
-    return deltas
-
 def normalize_world_time(meta: Dict[str, Any]) -> Dict[str, Any]:
     world_time = deep_copy(meta.get("world_time") or default_world_time())
     absolute_day = max(1, int(world_time.get("absolute_day", world_time.get("day", 1)) or 1))
@@ -1438,140 +1402,6 @@ def sync_legacy_character_fields(character: Dict[str, Any], world_settings: Opti
         for effect in (character.get("effects") or [])
         if effect.get("visible", True) and effect.get("name")
     ][:6]
-
-def appearance_event_id(slot_name: str, kind: str, source: str, turn_number: int, absolute_day: int, new_value: str) -> str:
-    return _appearance_event_id(slot_name, kind, source, turn_number, absolute_day, new_value)
-
-def format_appearance_message(display_name: str, kind: str, source: str, new_value: str) -> str:
-    return _format_appearance_message(display_name, kind, source, new_value)
-
-def record_appearance_change(
-    character: Dict[str, Any],
-    *,
-    slot_name: str,
-    turn_number: int,
-    absolute_day: int,
-    kind: str,
-    source: str,
-    old_value: str,
-    new_value: str,
-) -> Optional[Dict[str, Any]]:
-    return _record_appearance_change(
-        character,
-        slot_name=slot_name,
-        turn_number=turn_number,
-        absolute_day=absolute_day,
-        kind=kind,
-        source=source,
-        old_value=old_value,
-        new_value=new_value,
-    )
-
-def sync_appearance_changes(
-    before_character: Dict[str, Any],
-    after_character: Dict[str, Any],
-    *,
-    slot_name: str,
-    turn_number: int,
-    absolute_day: int,
-) -> List[Dict[str, Any]]:
-    generated = []
-    before_app = normalize_appearance_state(before_character)
-    after_app = normalize_appearance_state(after_character)
-    before_bio = before_character.get("bio", {}) or {}
-    after_bio = after_character.get("bio", {}) or {}
-    if before_bio.get("age_stage") != after_bio.get("age_stage"):
-        event = record_appearance_change(
-            after_character,
-            slot_name=slot_name,
-            turn_number=turn_number,
-            absolute_day=absolute_day,
-            kind="aging_stage",
-            source="age_stage",
-            old_value=str(before_bio.get("age_stage", "")),
-            new_value=str(after_bio.get("age_stage", "")),
-        )
-        if event:
-            generated.append(event)
-    before_corruption = corruption_bucket(int((((before_character.get("resources") or {}).get("corruption") or {}).get("current", 0)) or 0))
-    after_corruption = corruption_bucket(int((((after_character.get("resources") or {}).get("corruption") or {}).get("current", 0)) or 0))
-    if before_corruption != after_corruption:
-        event = record_appearance_change(
-            after_character,
-            slot_name=slot_name,
-            turn_number=turn_number,
-            absolute_day=absolute_day,
-            kind="corruption_threshold",
-            source="corruption",
-            old_value=str(before_app.get("aura", "none")),
-            new_value=str(after_app.get("summary_short", "")),
-        )
-        if event:
-            generated.append(event)
-    if before_app.get("build") != after_app.get("build") or before_app.get("muscle") != after_app.get("muscle"):
-        source = "str"
-        if (before_character.get("attributes") or {}).get("dex") != (after_character.get("attributes") or {}).get("dex"):
-            source = "dex"
-        elif (before_character.get("attributes") or {}).get("con") != (after_character.get("attributes") or {}).get("con"):
-            source = "con"
-        event = record_appearance_change(
-            after_character,
-            slot_name=slot_name,
-            turn_number=turn_number,
-            absolute_day=absolute_day,
-            kind="stat_threshold",
-            source=source,
-            old_value=build_appearance_summary_short({"appearance": before_app}),
-            new_value=build_appearance_summary_short({"appearance": after_app}),
-        )
-        if event:
-            generated.append(event)
-    before_class = ((normalize_class_current(before_character.get("class_current")) or {}).get("id", ""))
-    after_class = ((normalize_class_current(after_character.get("class_current")) or {}).get("id", ""))
-    if before_class != after_class and after_class:
-        event = record_appearance_change(
-            after_character,
-            slot_name=slot_name,
-            turn_number=turn_number,
-            absolute_day=absolute_day,
-            kind="class_visual",
-            source=after_class,
-            old_value=before_class,
-            new_value=after_app.get("summary_short", ""),
-        )
-        if event:
-            generated.append(event)
-    before_factions = _active_faction_ids(before_character)
-    after_factions = _active_faction_ids(after_character)
-    if before_factions != after_factions and after_factions:
-        event = record_appearance_change(
-            after_character,
-            slot_name=slot_name,
-            turn_number=turn_number,
-            absolute_day=absolute_day,
-            kind="faction_visual",
-            source="faction",
-            old_value=", ".join(sorted(before_factions)),
-            new_value=after_app.get("summary_short", ""),
-        )
-        if event:
-            generated.append(event)
-    before_scars = {entry.get("label") for entry in (before_app.get("scars") or [])}
-    after_scars = {entry.get("label") for entry in (after_app.get("scars") or [])}
-    for scar_label in sorted(after_scars - before_scars):
-        event = record_appearance_change(
-            after_character,
-            slot_name=slot_name,
-            turn_number=turn_number,
-            absolute_day=absolute_day,
-            kind="scar_added",
-            source="scar",
-            old_value="",
-            new_value=scar_label,
-        )
-        if event:
-            generated.append(event)
-    return generated
 
 def append_character_change_events(*args: Any, **kwargs: Any):
     return _progression_application_service.append_character_change_events(*args, **kwargs)
@@ -2361,229 +2191,9 @@ def normalize_campaign_length_choice(raw_value: Any) -> str:
         return "medium"
     return normalized
 
-def parse_attribute_range(raw_value: Any) -> Dict[str, Any]:
-    text = extract_text_answer(raw_value)
-    match = re.search(r"1\s*-\s*(100|20|10)", text)
-    maximum = int(match.group(1)) if match else 10
-    return {
-        "label": f"1-{maximum}",
-        "min": 1,
-        "max": maximum,
-    }
-
-def world_attribute_scale(campaign: Dict[str, Any]) -> Dict[str, Any]:
-    world_setup = (((campaign.get("setup") or {}).get("world")) or {})
-    answers = (world_setup.get("answers") or {})
-    summary = (world_setup.get("summary") or {})
-    if answers.get("attribute_range"):
-        return parse_attribute_range(answers.get("attribute_range"))
-    if summary.get("attribute_range_max"):
-        return {
-            "label": str(summary.get("attribute_range_label") or f"1-{int(summary.get('attribute_range_max') or 10)}"),
-            "min": int(summary.get("attribute_range_min", 1) or 1),
-            "max": int(summary.get("attribute_range_max", 10) or 10),
-        }
-    return parse_attribute_range(None)
-
-def level_one_attribute_budget(campaign: Dict[str, Any]) -> int:
-    world_max = int(world_attribute_scale(campaign)["max"] or 10)
-    return max(len(ATTRIBUTE_KEYS), min(120, int(round(world_max * 3.5))))
-
-def level_one_attribute_cap(campaign: Dict[str, Any]) -> int:
-    world_max = int(world_attribute_scale(campaign)["max"] or 10)
-    if world_max <= 10:
-        return 10
-    if world_max <= 20:
-        return 18
-    return min(world_max, 32)
-
-def normalize_attribute_weight_pool(raw_weights: Dict[str, Any], total: int = 120) -> Dict[str, int]:
-    cleaned = {
-        key: max(1, int(raw_weights.get(key, 0) or 0))
-        for key in ATTRIBUTE_KEYS
-    }
-    raw_total = sum(cleaned.values()) or len(ATTRIBUTE_KEYS)
-    scaled = {
-        key: (cleaned[key] / raw_total) * total
-        for key in ATTRIBUTE_KEYS
-    }
-    normalized = {key: max(1, int(math.floor(value))) for key, value in scaled.items()}
-    delta = total - sum(normalized.values())
-    if delta > 0:
-        order = sorted(
-            ATTRIBUTE_KEYS,
-            key=lambda key: (scaled[key] - normalized[key], cleaned[key]),
-            reverse=True,
-        )
-        index = 0
-        while delta > 0 and order:
-            key = order[index % len(order)]
-            normalized[key] += 1
-            delta -= 1
-            index += 1
-    elif delta < 0:
-        order = sorted(
-            ATTRIBUTE_KEYS,
-            key=lambda key: (scaled[key] - normalized[key], normalized[key]),
-        )
-        index = 0
-        while delta < 0 and order:
-            key = order[index % len(order)]
-            if normalized[key] > 1:
-                normalized[key] -= 1
-                delta += 1
-            index += 1
-            if index > 200:
-                break
-    return normalized
-
-def allocate_weighted_attributes(
-    weights: Dict[str, int],
-    *,
-    total_budget: int,
-    max_value: int,
-    min_value: int = 1,
-) -> Dict[str, int]:
-    values = {key: int(min_value) for key in ATTRIBUTE_KEYS}
-    remaining = max(0, int(total_budget) - (min_value * len(ATTRIBUTE_KEYS)))
-    total_weight = sum(max(0, int(weights.get(key, 0) or 0)) for key in ATTRIBUTE_KEYS) or len(ATTRIBUTE_KEYS)
-    scaled_additions = {
-        key: (remaining * max(0, int(weights.get(key, 0) or 0))) / total_weight
-        for key in ATTRIBUTE_KEYS
-    }
-    remainders: List[tuple[float, str]] = []
-    for key in ATTRIBUTE_KEYS:
-        cap_room = max(0, int(max_value) - values[key])
-        addition = min(cap_room, int(math.floor(scaled_additions[key])))
-        values[key] += addition
-        remainders.append((scaled_additions[key] - addition, key))
-    delta = int(total_budget) - sum(values.values())
-    order = [key for _, key in sorted(remainders, reverse=True)]
-    if not order:
-        order = list(ATTRIBUTE_KEYS)
-    guard = 0
-    while delta > 0 and guard < 500:
-        changed = False
-        for key in order:
-            if values[key] < int(max_value):
-                values[key] += 1
-                delta -= 1
-                changed = True
-                if delta <= 0:
-                    break
-        if not changed:
-            break
-        guard += 1
-    return {key: clamp(int(values[key]), int(min_value), int(max_value)) for key in ATTRIBUTE_KEYS}
-
-def fallback_character_attribute_weights(summary: Dict[str, Any]) -> Dict[str, int]:
-    weights = {key: 16 for key in ATTRIBUTE_KEYS}
-    class_tags = {normalized_eval_text(entry) for entry in (summary.get("class_custom_tags") or []) if normalized_eval_text(entry)}
-    if any(tag in class_tags for tag in ("körper", "kampf", "schutz")):
-        for key, delta in {"str": 8, "con": 8, "dex": 2}.items():
-            weights[key] = max(1, weights[key] + delta)
-    if any(tag in class_tags for tag in ("bewegung", "heimlichkeit", "sinn")):
-        for key, delta in {"dex": 10, "wis": 7, "luck": 3}.items():
-            weights[key] = max(1, weights[key] + delta)
-    if any(tag in class_tags for tag in ("sozial", "sprache", "einfluss")):
-        for key, delta in {"cha": 10, "wis": 4, "int": 3}.items():
-            weights[key] = max(1, weights[key] + delta)
-    if any(tag in class_tags for tag in ("technik", "improvisation", "werkzeug", "okkult", "ritual", "schatten")):
-        for key, delta in {"int": 8, "wis": 5, "luck": 3}.items():
-            weights[key] = max(1, weights[key] + delta)
-
-    strength_text = normalized_eval_text(summary.get("strength", ""))
-    weakness_text = normalized_eval_text(summary.get("weakness", ""))
-    focus_text = normalized_eval_text(summary.get("current_focus", ""))
-
-    if any(token in strength_text for token in ("kraft", "athlet", "nahkampf")):
-        weights["str"] += 6
-        weights["con"] += 3
-    if any(token in strength_text for token in ("sinne", "spur", "schleich", "unauff")):
-        weights["dex"] += 6
-        weights["wis"] += 4
-    if any(token in strength_text for token in ("okkult", "wissen", "technik", "tueft", "plan")):
-        weights["int"] += 6
-        weights["wis"] += 2
-    if any(token in strength_text for token in ("sozial", "uberzeug", "ueberzeug", "dominanz", "einschuch", "einschuech")):
-        weights["cha"] += 6
-
-    if any(token in weakness_text for token in ("angst", "flucht", "konfliktscheu")):
-        weights["con"] -= 3
-        weights["cha"] -= 1
-    if any(token in weakness_text for token in ("naiv", "vertrauen")):
-        weights["wis"] -= 3
-    if any(token in weakness_text for token in ("wut", "jähzorn", "jaehzorn", "uber", "uebermut", "ungeduld")):
-        weights["wis"] -= 2
-        weights["cha"] -= 1
-    if any(token in weakness_text for token in ("ausdauer", "erschopf", "erschoepf")):
-        weights["con"] -= 4
-    if any(token in weakness_text for token in ("orientierung", "paranoia")):
-        weights["wis"] -= 2
-
-    if "uberleben" in focus_text or "ueberleben" in focus_text or "flucht" in focus_text:
-        weights["con"] += 3
-        weights["wis"] += 3
-    if "macht" in focus_text or "skills" in focus_text:
-        weights["str"] += 2
-        weights["int"] += 2
-    if "wahrheit" in focus_text or "geheim" in focus_text:
-        weights["int"] += 3
-        weights["wis"] += 3
-    if "rache" in focus_text:
-        weights["str"] += 3
-        weights["dex"] += 2
-    if "reichen" in focus_text or "loot" in focus_text:
-        weights["luck"] += 3
-        weights["dex"] += 2
-
-    return normalize_attribute_weight_pool(weights, total=120)
-
 def generate_character_attribute_weights(campaign: Dict[str, Any], slot_name: str, summary: Dict[str, Any]) -> Dict[str, Any]:
-    world_summary = (((campaign.get("setup") or {}).get("world") or {}).get("summary") or {})
-    payload = {
-        "slot_id": slot_name,
-        "display_name": summary.get("display_name", ""),
-        "gender": summary.get("gender", ""),
-        "age_bucket": summary.get("age_bucket", ""),
-        "class_start_mode": summary.get("class_start_mode", ""),
-        "class_seed": summary.get("class_seed", ""),
-        "class_custom_tags": summary.get("class_custom_tags", []),
-        "strength": summary.get("strength", ""),
-        "weakness": summary.get("weakness", ""),
-        "current_focus": summary.get("current_focus", ""),
-        "isekai_price": summary.get("isekai_price", ""),
-        "personality_tags": summary.get("personality_tags", []),
-        "background_tags": summary.get("background_tags", []),
-        "earth_life": summary.get("earth_life", ""),
-        "world": {
-            "theme": world_summary.get("theme", ""),
-            "tone": world_summary.get("tone", ""),
-            "difficulty": world_summary.get("difficulty", ""),
-            "attribute_range": world_attribute_scale(campaign)["label"],
-        },
-        "pool_total": 120,
-        "note": "Verteile nur Gewichte. Die finalen Level-1-Startwerte werden serverseitig aus diesem Pool abgeleitet.",
-    }
-    try:
-        raw = call_ollama_schema(
-            CHARACTER_ATTRIBUTE_SYSTEM_PROMPT,
-            json.dumps(payload, ensure_ascii=False),
-            CHARACTER_ATTRIBUTE_SCHEMA,
-            timeout=90,
-            temperature=0.35,
-        )
-        weights = normalize_attribute_weight_pool(raw if isinstance(raw, dict) else {}, total=120)
-        return {"weights": weights, "source": "ai"}
-    except Exception:
-        return {"weights": fallback_character_attribute_weights(summary), "source": "fallback"}
-
-def level_one_attributes_from_weights(campaign: Dict[str, Any], weights: Dict[str, int]) -> Dict[str, int]:
-    return allocate_weighted_attributes(
-        weights,
-        total_budget=level_one_attribute_budget(campaign),
-        max_value=level_one_attribute_cap(campaign),
-        min_value=1,
+    return setup_attributes.generate_character_attribute_weights(
+        campaign, slot_name, summary, call_ollama_schema=call_ollama_schema
     )
 
 def default_character_setup_node() -> Dict[str, Any]:
@@ -2675,72 +2285,6 @@ def call_ollama_text(system: str, user: str) -> str:
         temperature=0.35,
         num_ctx=4096,
     )
-
-def normalize_plotpoint_entry(raw: Any) -> Optional[Dict[str, Any]]:
-    if isinstance(raw, str):
-        text = raw.strip()
-        if not text:
-            return None
-        return {
-            "id": make_id("pp"),
-            "type": "story",
-            "title": text[:120],
-            "status": "active",
-            "owner": None,
-            "notes": text,
-            "requirements": [],
-        }
-    if not isinstance(raw, dict):
-        return None
-    plotpoint = deep_copy(raw)
-    pid = str(plotpoint.get("id") or plotpoint.get("point_id") or plotpoint.get("entry_id") or make_id("pp")).strip()
-    title = str(plotpoint.get("title") or plotpoint.get("name") or plotpoint.get("description") or pid).strip()
-    notes = str(plotpoint.get("notes") or plotpoint.get("description") or plotpoint.get("content") or "").strip()
-    status = str(plotpoint.get("status") or "active").strip().lower()
-    if status not in {"active", "done", "failed"}:
-        status = "active"
-    owner = str(plotpoint.get("owner") or "").strip() or None
-    requirements = [str(entry).strip() for entry in (plotpoint.get("requirements") or []) if str(entry).strip()]
-    normalized = {
-        **plotpoint,
-        "id": pid,
-        "type": str(plotpoint.get("type") or "story").strip() or "story",
-        "title": title or pid,
-        "status": status,
-        "owner": owner,
-        "notes": notes,
-        "requirements": requirements,
-    }
-    return normalized
-
-def normalize_plotpoint_update_entry(raw: Any) -> Optional[Dict[str, Any]]:
-    if not isinstance(raw, dict):
-        return None
-    pid = str(raw.get("id") or raw.get("point_id") or raw.get("entry_id") or "").strip()
-    if not pid:
-        return None
-    normalized: Dict[str, Any] = {"id": pid}
-    if raw.get("status"):
-        status = str(raw.get("status") or "").strip().lower()
-        if status in {"active", "done", "failed"}:
-            normalized["status"] = status
-    notes = str(raw.get("notes") or raw.get("description") or raw.get("content") or "").strip()
-    if notes:
-        normalized["notes"] = notes
-    return normalized
-
-def normalize_event_entry(raw: Any) -> Optional[str]:
-    if isinstance(raw, str):
-        text = raw.strip()
-        return text or None
-    if isinstance(raw, dict):
-        for key in ("text", "detail", "description", "content", "title", "name", "event"):
-            text = str(raw.get(key) or "").strip()
-            if text:
-                return text
-        return json.dumps(raw, ensure_ascii=False)[:300]
-    text = str(raw or "").strip()
-    return text or None
 
 def repair_json_payload_with_model(
     system: str,
@@ -2854,375 +2398,11 @@ def pick_more_specific_text(*args: Any, **kwargs: Any):
 def apply_npc_upserts(*args: Any, **kwargs: Any):
     return _npc_extractor_service.apply_npc_upserts(*args, **kwargs)
 
-def contains_any_normalized_token(text: str, tokens: set) -> bool:
-    normalized_text = normalize_codex_alias_text(text)
-    if not normalized_text:
-        return False
-    for token in (tokens or set()):
-        token_norm = normalize_codex_alias_text(token)
-        if not token_norm:
-            continue
-        if re.search(rf"(?<!\w){re.escape(token_norm)}(?!\w)", normalized_text):
-            return True
-    return False
-
-def collect_beast_observed_abilities(text: str, beast_profile: Dict[str, Any]) -> List[str]:
-    normalized_text = normalize_codex_alias_text(text)
-    observed: List[str] = []
-    for ability in (beast_profile.get("known_abilities") or []):
-        ability_text = str(ability or "").strip()
-        if not ability_text:
-            continue
-        ability_norm = normalize_codex_alias_text(ability_text)
-        if ability_norm and re.search(rf"(?<!\w){re.escape(ability_norm)}(?!\w)", normalized_text):
-            observed.append(ability_text)
-    return observed
-
-def collect_codex_triggers(
-    campaign: Dict[str, Any],
-    state: Dict[str, Any],
-    *,
-    actor: str,
-    action_type: str,
-    player_text: str,
-    gm_text: str,
-    patch: Dict[str, Any],
-    npc_updates: List[str],
-    turn_number: int,
-) -> Dict[str, Any]:
-    normalize_world_codex_structures(state)
-    world = state.get("world") or {}
-    races = world.get("races") if isinstance(world.get("races"), dict) else {}
-    beasts = world.get("beast_types") if isinstance(world.get("beast_types"), dict) else {}
-    race_alias_index = world.get("race_alias_index") if isinstance(world.get("race_alias_index"), dict) else {}
-    beast_alias_index = world.get("beast_alias_index") if isinstance(world.get("beast_alias_index"), dict) else {}
-    exact_name_index = build_world_exact_name_index(world)
-
-    text_parts = [str(player_text or "").strip(), str(gm_text or "").strip()]
-    for event in (patch.get("events_add") or []):
-        if str(event or "").strip():
-            text_parts.append(str(event).strip())
-    combined_text = "\n".join(part for part in text_parts if part)
-
-    race_result = resolve_codex_entity_ids(combined_text, race_alias_index, exact_name_index.get("race_names") or {})
-    beast_result = resolve_codex_entity_ids(combined_text, beast_alias_index, exact_name_index.get("beast_names") or {})
-    triggers_by_key: Dict[Tuple[str, str], Dict[str, Any]] = {}
-
-    def merge_trigger(kind: str, entity_id: str, payload: Dict[str, Any]) -> None:
-        key = (kind, entity_id)
-        existing = triggers_by_key.get(key)
-        if not existing:
-            triggers_by_key[key] = {
-                "kind": kind,
-                "entity_id": entity_id,
-                "knowledge_target": int(payload.get("knowledge_target", 0) or 0),
-                "trigger_type": str(payload.get("trigger_type") or ""),
-                "encounter_inc": int(payload.get("encounter_inc", 0) or 0),
-                "known_individuals": stable_sorted_unique_strings(payload.get("known_individuals") or [], limit=32),
-                "observed_abilities": stable_sorted_unique_strings(payload.get("observed_abilities") or [], limit=32),
-                "defeated_inc": int(payload.get("defeated_inc", 0) or 0),
-            }
-            return
-        existing["knowledge_target"] = max(int(existing.get("knowledge_target", 0) or 0), int(payload.get("knowledge_target", 0) or 0))
-        existing["encounter_inc"] = int(existing.get("encounter_inc", 0) or 0) + int(payload.get("encounter_inc", 0) or 0)
-        existing["defeated_inc"] = int(existing.get("defeated_inc", 0) or 0) + int(payload.get("defeated_inc", 0) or 0)
-        existing["known_individuals"] = stable_sorted_unique_strings(
-            list(existing.get("known_individuals") or []) + list(payload.get("known_individuals") or []),
-            limit=32,
-        )
-        existing["observed_abilities"] = stable_sorted_unique_strings(
-            list(existing.get("observed_abilities") or []) + list(payload.get("observed_abilities") or []),
-            limit=32,
-        )
-        if int(payload.get("knowledge_target", 0) or 0) >= int(existing.get("knowledge_target", 0) or 0):
-            existing["trigger_type"] = str(payload.get("trigger_type") or existing.get("trigger_type") or "")
-
-    race_contact = contains_any_normalized_token(combined_text, CODEX_RACE_TRIGGER_CONTACT)
-    race_lore = contains_any_normalized_token(combined_text, CODEX_RACE_TRIGGER_LORE)
-    beast_combat = contains_any_normalized_token(combined_text, CODEX_BEAST_TRIGGER_COMBAT)
-    beast_defeat = contains_any_normalized_token(combined_text, CODEX_BEAST_TRIGGER_DEFEAT)
-    beast_ability = contains_any_normalized_token(combined_text, CODEX_BEAST_TRIGGER_ABILITY)
-
-    for race_id in (race_result.get("matched") or []):
-        knowledge_target = 1
-        trigger_type = "race_first_contact"
-        if race_contact:
-            knowledge_target = max(knowledge_target, 2)
-            trigger_type = "race_first_contact"
-        if race_lore:
-            knowledge_target = max(knowledge_target, 3)
-            trigger_type = "race_lore_discovered"
-        merge_trigger(
-            CODEX_KIND_RACE,
-            race_id,
-            {
-                "knowledge_target": knowledge_target,
-                "trigger_type": trigger_type,
-                "encounter_inc": 1,
-            },
-        )
-
-    for beast_id in (beast_result.get("matched") or []):
-        beast_profile = (beasts.get(beast_id) or {}) if isinstance(beasts, dict) else {}
-        knowledge_target = 1
-        trigger_type = "beast_first_sighting"
-        defeated_inc = 0
-        if beast_combat:
-            knowledge_target = max(knowledge_target, 2)
-            trigger_type = "beast_first_sighting"
-        if beast_ability:
-            knowledge_target = max(knowledge_target, 3)
-            trigger_type = "beast_ability_observed"
-        if beast_defeat:
-            knowledge_target = max(knowledge_target, 3)
-            trigger_type = "beast_defeated"
-            defeated_inc = 1
-        if contains_any_normalized_token(combined_text, CODEX_RACE_TRIGGER_LORE):
-            knowledge_target = max(knowledge_target, 4)
-            trigger_type = "codex_research_unlock"
-        merge_trigger(
-            CODEX_KIND_BEAST,
-            beast_id,
-            {
-                "knowledge_target": knowledge_target,
-                "trigger_type": trigger_type,
-                "encounter_inc": 1,
-                "defeated_inc": defeated_inc,
-                "observed_abilities": collect_beast_observed_abilities(combined_text, beast_profile),
-            },
-        )
-
-    npc_codex = state.get("npc_codex") if isinstance(state.get("npc_codex"), dict) else {}
-    for npc_id in (npc_updates or []):
-        npc = npc_codex.get(npc_id) if isinstance(npc_codex, dict) else None
-        if not isinstance(npc, dict):
-            continue
-        race_name = str(npc.get("race") or "").strip()
-        npc_name = str(npc.get("name") or "").strip()
-        if not race_name:
-            continue
-        npc_race_result = resolve_codex_entity_ids(race_name, race_alias_index, exact_name_index.get("race_names") or {})
-        for race_id in (npc_race_result.get("matched") or []):
-            merge_trigger(
-                CODEX_KIND_RACE,
-                race_id,
-                {
-                    "knowledge_target": 2,
-                    "trigger_type": "race_first_contact",
-                    "encounter_inc": 1,
-                    "known_individuals": [npc_name] if npc_name else [],
-                },
-            )
-
-    return {
-        "triggers": list(triggers_by_key.values()),
-        "ambiguous": {
-            "races": deep_copy(race_result.get("ambiguous") or []),
-            "beasts": deep_copy(beast_result.get("ambiguous") or []),
-        },
-        "source_turn": int(turn_number or 0),
-        "actor": actor,
-        "action_type": action_type,
-    }
-
-def apply_codex_triggers(state: Dict[str, Any], trigger_bundle: Dict[str, Any], *, turn_number: int) -> List[Dict[str, Any]]:
-    normalize_world_codex_structures(state)
-    world = state.get("world") or {}
-    races = world.get("races") if isinstance(world.get("races"), dict) else {}
-    beasts = world.get("beast_types") if isinstance(world.get("beast_types"), dict) else {}
-    codex = state.setdefault("codex", {})
-    codex_races = codex.setdefault("races", {})
-    codex_beasts = codex.setdefault("beasts", {})
-    updates: List[Dict[str, Any]] = []
-
-    for trigger in (trigger_bundle.get("triggers") or []):
-        kind = str(trigger.get("kind") or "").strip().lower()
-        entity_id = str(trigger.get("entity_id") or "").strip()
-        if not entity_id:
-            continue
-        if kind == CODEX_KIND_RACE and entity_id not in races:
-            continue
-        if kind == CODEX_KIND_BEAST and entity_id not in beasts:
-            continue
-        profile = races.get(entity_id) if kind == CODEX_KIND_RACE else beasts.get(entity_id)
-        if not isinstance(profile, dict):
-            continue
-        target_map = codex_races if kind == CODEX_KIND_RACE else codex_beasts
-        entry_before = normalize_codex_entry_stable(target_map.get(entity_id), kind=kind)
-        entry_after = deep_copy(entry_before)
-        entry_after["encounter_count"] = int(entry_after.get("encounter_count", 0) or 0) + max(0, int(trigger.get("encounter_inc", 0) or 0))
-        entry_after["knowledge_level"] = clamp(
-            max(int(entry_after.get("knowledge_level", 0) or 0), int(trigger.get("knowledge_target", 0) or 0)),
-            CODEX_KNOWLEDGE_LEVEL_MIN,
-            CODEX_KNOWLEDGE_LEVEL_MAX,
-        )
-        if int(entry_after.get("knowledge_level", 0) or 0) > 0:
-            entry_after["discovered"] = True
-            if not int(entry_after.get("first_seen_turn", 0) or 0):
-                entry_after["first_seen_turn"] = max(0, int(turn_number or 0))
-        entry_after["last_updated_turn"] = max(int(entry_after.get("last_updated_turn", 0) or 0), max(0, int(turn_number or 0)))
-        derived_blocks = codex_blocks_for_level(kind, int(entry_after.get("knowledge_level", 0) or 0))
-        entry_after["known_blocks"] = [block for block in codex_block_order(kind) if block in set((entry_after.get("known_blocks") or []) + derived_blocks)]
-        profile_facts = codex_facts_for_blocks(kind, profile, entry_after.get("known_blocks") or [])
-        entry_after["known_facts"] = merge_known_facts_stable(entry_after.get("known_facts") or [], profile_facts)
-
-        if kind == CODEX_KIND_RACE:
-            entry_after["known_individuals"] = stable_sorted_unique_strings(
-                list(entry_after.get("known_individuals") or []) + list(trigger.get("known_individuals") or []),
-                limit=64,
-            )
-        else:
-            entry_after["defeated_count"] = int(entry_after.get("defeated_count", 0) or 0) + max(0, int(trigger.get("defeated_inc", 0) or 0))
-            entry_after["observed_abilities"] = stable_sorted_unique_strings(
-                list(entry_after.get("observed_abilities") or []) + list(trigger.get("observed_abilities") or []),
-                limit=64,
-            )
-
-        normalized_after = normalize_codex_entry_stable(entry_after, kind=kind)
-        target_map[entity_id] = normalized_after
-        if normalized_after != entry_before:
-            updates.append(
-                {
-                    "kind": kind,
-                    "entity_id": entity_id,
-                    "name": str(profile.get("name") or entity_id),
-                    "trigger_type": str(trigger.get("trigger_type") or ""),
-                    "knowledge_before": int(entry_before.get("knowledge_level", 0) or 0),
-                    "knowledge_after": int(normalized_after.get("knowledge_level", 0) or 0),
-                    "new_blocks": [
-                        block
-                        for block in (normalized_after.get("known_blocks") or [])
-                        if block not in (entry_before.get("known_blocks") or [])
-                    ],
-                }
-            )
-
-    for ambiguous_kind, rows in ((trigger_bundle.get("ambiguous") or {}).items()):
-        for row in (rows or []):
-            alias = str((row or {}).get("alias") or "").strip()
-            entity_ids = [str(entry).strip() for entry in ((row or {}).get("entity_ids") or []) if str(entry).strip()]
-            if not alias or len(entity_ids) < 2:
-                continue
-            updates.append(
-                {
-                    "kind": "ambiguous",
-                    "entity_kind": ambiguous_kind[:-1] if ambiguous_kind.endswith("s") else ambiguous_kind,
-                    "alias": alias,
-                    "entity_ids": entity_ids,
-                }
-            )
-
-    normalize_world_codex_structures(state)
-    return updates
-
 def build_npc_extractor_context_packet(*args: Any, **kwargs: Any):
     return _npc_extractor_service.build_npc_extractor_context_packet(*args, **kwargs)
 
 def call_npc_extractor(*args: Any, **kwargs: Any):
     return _npc_extractor_service.call_npc_extractor(*args, **kwargs)
-
-def normalize_request_option_text(option: Any) -> str:
-    if isinstance(option, dict):
-        for key in ("text", "label", "value", "name", "title"):
-            value = option.get(key)
-            if value is not None and str(value).strip():
-                return str(value).strip()
-        return ""
-    if option is None:
-        return ""
-    if isinstance(option, (list, tuple, set)):
-        return ""
-    return str(option).strip()
-
-def normalize_request_entry(entry: Any, *, default_actor: str = "") -> Optional[Dict[str, Any]]:
-    if not isinstance(entry, dict):
-        return None
-    request_type = str(entry.get("type") or "").strip().lower()
-    question = str(entry.get("question") or entry.get("prompt") or "").strip()
-    raw_options = entry.get("options")
-    if raw_options is None:
-        raw_options = entry.get("choices")
-    if isinstance(raw_options, dict):
-        raw_options = list(raw_options.values())
-    elif raw_options is None:
-        raw_options = []
-    elif not isinstance(raw_options, list):
-        raw_options = [raw_options]
-    options: List[str] = []
-    seen = set()
-    for raw_option in raw_options:
-        option_text = normalize_request_option_text(raw_option)
-        normalized_option = normalized_eval_text(option_text)
-        if not option_text or normalized_option in seen:
-            continue
-        seen.add(normalized_option)
-        options.append(option_text)
-    if request_type not in {"clarify", "choice", "none"}:
-        if options:
-            request_type = "choice"
-        elif question:
-            request_type = "clarify"
-        else:
-            request_type = "none"
-    if request_type == "choice" and not options:
-        request_type = "clarify" if question else "none"
-    actor = str(entry.get("actor") or default_actor or "").strip()
-    normalized_entry: Dict[str, Any] = {"type": request_type, "actor": actor}
-    if request_type in {"clarify", "choice"} and question:
-        normalized_entry["question"] = question
-    if request_type == "choice" and options:
-        normalized_entry["options"] = options
-    return normalized_entry
-
-def normalize_requests_payload(payload: Any, *, default_actor: str = "") -> List[Dict[str, Any]]:
-    if payload is None:
-        raw_entries: List[Any] = []
-    elif isinstance(payload, dict):
-        raw_entries = [payload]
-    elif isinstance(payload, list):
-        raw_entries = payload
-    else:
-        raw_entries = []
-    normalized_entries: List[Dict[str, Any]] = []
-    for raw_entry in raw_entries:
-        normalized_entry = normalize_request_entry(raw_entry, default_actor=default_actor)
-        if normalized_entry:
-            normalized_entries.append(normalized_entry)
-    return normalized_entries
-
-def normalize_model_output_payload(payload: Any, *, default_actor: str = "") -> Dict[str, Any]:
-    candidate = payload
-    if isinstance(candidate, dict):
-        for wrapper_key in ("response", "result", "output", "content", "data"):
-            wrapped = candidate.get(wrapper_key)
-            if isinstance(wrapped, dict) and (
-                "story" in wrapped
-                or "patch" in wrapped
-                or "requests" in wrapped
-                or "gm_text" in wrapped
-                or "text" in wrapped
-            ):
-                candidate = wrapped
-                break
-    if not isinstance(candidate, dict):
-        return {}
-
-    story = candidate.get("story")
-    if not isinstance(story, str) or not story.strip():
-        for fallback_key in ("gm_text", "text", "narration", "message"):
-            fallback_story = candidate.get(fallback_key)
-            if isinstance(fallback_story, str) and fallback_story.strip():
-                story = fallback_story
-                break
-
-    patch = normalize_patch_payload(candidate.get("patch"))
-
-    normalized = {
-        "story": str(story or "").strip(),
-        "patch": patch,
-        "requests": normalize_requests_payload(candidate.get("requests"), default_actor=default_actor),
-    }
-    return normalized if normalized["story"] else {}
 
 def call_ollama_chat(
     system: str,
