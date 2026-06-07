@@ -57,3 +57,6 @@ Moegliche Folgearbeiten:
 - Hard Validator-Regeln
 - Runtime World-Bible Extensions
 - Entity Quarantine
+
+Das aktuelle read-only Reporting-Script ist in `entity_guard_reporting.md`
+beschrieben.
