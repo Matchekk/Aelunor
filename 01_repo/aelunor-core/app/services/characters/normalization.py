@@ -22,6 +22,7 @@ from app.services.characters.derived_stats import (
     calculate_initiative,
     calculate_resistances,
 )
+from app.services.characters.living_profile import normalize_living_profile
 from app.services.characters.combat_state import calculate_combat_flags
 from app.services.characters.effects import migrate_effects_from_conditions
 from app.services.characters.resource_maxima import (
@@ -176,6 +177,8 @@ def normalize_character_state(
     slot_name: str,
     items_db: Dict[str, Any],
     world_time: Optional[Dict[str, Any]] = None,
+    world_bible: Optional[Dict[str, Any]] = None,
+    setup_answers: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     base = blank_character_state(slot_name)
     merged = deep_copy(base)
@@ -323,6 +326,12 @@ def normalize_character_state(
     if ENABLE_LEGACY_SHADOW_WRITEBACK:
         write_legacy_shadow_fields(merged)
     sync_scars_into_appearance(merged)
+    merged["living_profile"] = normalize_living_profile(
+        character.get("living_profile"),
+        character=merged,
+        world_bible=world_bible,
+        setup_answers=setup_answers,
+    )
     return merged
 
 

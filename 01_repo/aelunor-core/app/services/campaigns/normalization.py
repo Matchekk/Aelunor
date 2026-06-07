@@ -6,6 +6,7 @@ from app.config.codex import CODEX_DEFAULT_META
 from app.config.feature_flags import ENABLE_HEURISTIC_NORMALIZE_BACKFILL
 from app.config.runtime import PHASES
 from app.services.campaigns import lifecycle, party, views
+from app.services.world.world_bible import normalize_world_bible
 
 
 CampaignState = Dict[str, Any]
@@ -88,6 +89,7 @@ def normalize_campaign(campaign: CampaignState, *, ports: CampaignNormalizationP
     state["world"].setdefault("element_relations", {})
     state["world"].setdefault("element_alias_index", {})
     state["world"].setdefault("element_class_paths", {})
+    state["world"]["bible"] = normalize_world_bible(state["world"].get("bible"), world=state["world"])
     state["world"]["day"] = state["meta"]["world_time"]["day"]
     state["world"]["time"] = state["meta"]["world_time"]["time_of_day"]
     state["world"]["weather"] = state["meta"]["world_time"]["weather"]
@@ -153,15 +155,24 @@ def normalize_campaign(campaign: CampaignState, *, ports: CampaignNormalizationP
     setup.setdefault("characters", {})
     if setup["world"].get("completed"):
         ports.ensure_world_codex_from_setup(state, setup["world"].get("summary") or {})
+        state["world"]["bible"] = normalize_world_bible(
+            state["world"].get("bible"),
+            setup_answers=setup["world"].get("summary") or setup["world"].get("answers") or {},
+            world=state["world"],
+        )
 
     effective_world_time = ports.normalize_world_time(state["meta"])
     for slot_name in party.campaign_slots(campaign):
         state["characters"].setdefault(slot_name, ports.blank_character_state(slot_name))
+        setup["characters"].setdefault(slot_name, ports.default_character_setup_node())
+        character_setup_node = setup["characters"].get(slot_name) or {}
         state["characters"][slot_name] = ports.normalize_character_state(
             state["characters"][slot_name],
             slot_name,
             state.get("items", {}),
             effective_world_time,
+            world_bible=(state.get("world") or {}).get("bible"),
+            setup_answers=character_setup_node.get("summary") or character_setup_node.get("answers") or {},
         )
         character = state["characters"][slot_name]
         for field in ("element_affinities", "element_resistances", "element_weaknesses"):
@@ -181,7 +192,6 @@ def normalize_campaign(campaign: CampaignState, *, ports: CampaignNormalizationP
             normalized_skills[normalized_skill["id"]] = normalized_skill
         character["skills"] = normalized_skills
         ports.reconcile_creator_inventory_items(state, character)
-        setup["characters"].setdefault(slot_name, ports.default_character_setup_node())
         setup["characters"][slot_name]["question_queue"] = ports.build_character_question_queue()
         setup["characters"][slot_name].setdefault("answers", {})
         setup["characters"][slot_name].setdefault("summary", {})

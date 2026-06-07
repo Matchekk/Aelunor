@@ -1,5 +1,6 @@
 from typing import Any, Dict
 
+from app.services.characters.living_profile import default_living_profile
 from app.services.world.appearance import default_appearance_profile
 from app.services.world.state_defaults import default_character_modifiers
 
@@ -25,6 +26,7 @@ def blank_character_state(slot_name: str) -> Dict[str, Any]:
             "signature_item": "",
         },
         "scene_id": "",
+        "living_profile": default_living_profile(),
         "appearance": default_appearance_profile(),
         "appearance_history": [],
         "class_current": None,

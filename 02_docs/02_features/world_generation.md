@@ -12,6 +12,8 @@ World Generation entsteht derzeit aus Setup-Antworten, Fallback-Logik und option
 ## Generierte Bereiche
 
 - Weltzusammenfassung
+- World Bible v1 als kanonische Quelle fuer Identitaet, Sprache, Naming,
+  Metaphysik und Stil. Siehe `world_bible.md`.
 - Elemente und Element-Relationen
 - Races und Beast Types
 - Codex-/World-Info-Grundlagen

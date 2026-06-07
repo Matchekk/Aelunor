@@ -7,6 +7,8 @@ Klassen sind Teil des Character-/Progression-Systems.
 - Class-Snapshots sind im Frontend-Vertrag `CharacterClassSnapshot` modelliert.
 - Character Drawers zeigen aktuelle Klasse, Rang, Level und Ascension-nahe Felder.
 - Progression-Patches koennen Klassenentwicklung betreffen.
+- Wiedererkennbare Charakterhaltung und Verhalten liegen im Living Character
+  Profile. Siehe `living_character_system.md`.
 
 ## Regel
 
