@@ -75,3 +75,4 @@ aus `identity`, `linguistics`, `naming_rules`, `metaphysics`, `progression`,
 `races_and_beasts`, `items` und `tone_and_style` ableiten.
 
 Die Prompt-Einbindung ist in `context_injection.md` beschrieben.
+Der diagnostische Namens- und Entity-Check ist in `entity_guard.md` beschrieben.
