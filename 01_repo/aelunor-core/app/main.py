@@ -183,7 +183,9 @@ from app.core.paths import (
     RUNTIME_CONFIG,
     STATIC_DIR,
     UI_V1_ASSETS_DIR,
+    UI_V1_BRAND_DIR,
     UI_V1_DIST_DIR,
+    UI_V1_ICONS_DIR,
     ensure_storage_dirs,
 )
 from app.dependencies.factories import (
@@ -358,6 +360,8 @@ del _name
 app = FastAPI(title="Aelunor")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 app.mount("/v1/assets", StaticFiles(directory=UI_V1_ASSETS_DIR, check_dir=False), name="v1-assets")
+app.mount("/v1/brand", StaticFiles(directory=UI_V1_BRAND_DIR, check_dir=False), name="v1-brand")
+app.mount("/v1/icons", StaticFiles(directory=UI_V1_ICONS_DIR, check_dir=False), name="v1-icons")
 
 @app.get("/")
 def index() -> RedirectResponse:

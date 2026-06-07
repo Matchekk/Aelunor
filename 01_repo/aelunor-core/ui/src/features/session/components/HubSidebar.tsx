@@ -1,28 +1,36 @@
+import type { V1AppPage } from "../../../app/routing/routes";
+
+export type HubSidebarTarget = V1AppPage | "settings";
+
 interface HubNavItem {
+  id: HubSidebarTarget;
   label: string;
   icon: string;
   icon_src?: string;
-  active?: boolean;
-  disabled?: boolean;
 }
 
 const HUB_NAV_ITEMS: HubNavItem[] = [
-  { label: "Hub", icon: "H", icon_src: "/static/icons/hub_icon_sidebar.png", active: true },
-  { label: "Campaign", icon: "C", icon_src: "/static/icons/campaign_icon_sidebar.png", disabled: true },
-  { label: "Characters", icon: "P", icon_src: "/static/icons/characters_icon_png.png", disabled: true },
-  { label: "World", icon: "W", icon_src: "/static/icons/world_icon_sidebar.png", disabled: true },
-  { label: "Quests", icon: "Q", icon_src: "/static/icons/quests_icon_sidebar.png", disabled: true },
-  { label: "Inventory", icon: "I", icon_src: "/static/icons/inventory_icon_sidebar.png", disabled: true },
-  { label: "Codex", icon: "X", icon_src: "/static/icons/codex_icon_sidebar.png", disabled: true },
-  { label: "Settings", icon: "S", icon_src: "/static/icons/settings_icon_sidebar.png", disabled: true },
+  { id: "hub", label: "Hub", icon: "H", icon_src: "/v1/icons/hub_icon_sidebar.png" },
+  { id: "campaigns", label: "Campaign", icon: "C", icon_src: "/v1/icons/campaign_icon_sidebar.png" },
+  { id: "characters", label: "Characters", icon: "P", icon_src: "/v1/icons/characters_icon_png.png" },
+  { id: "world", label: "World", icon: "W", icon_src: "/v1/icons/world_icon_sidebar.png" },
+  { id: "quests", label: "Quests", icon: "Q", icon_src: "/v1/icons/quests_icon_sidebar.png" },
+  { id: "inventory", label: "Inventory", icon: "I", icon_src: "/v1/icons/inventory_icon_sidebar.png" },
+  { id: "codex", label: "Codex", icon: "X", icon_src: "/v1/icons/codex_icon_sidebar.png" },
+  { id: "settings", label: "Settings", icon: "S", icon_src: "/v1/icons/settings_icon_sidebar.png" },
 ];
 
-export function HubSidebar() {
+interface HubSidebarProps {
+  active_target: V1AppPage;
+  on_select: (target: HubSidebarTarget, return_focus_element: HTMLElement | null) => void;
+}
+
+export function HubSidebar({ active_target, on_select }: HubSidebarProps) {
   return (
     <aside className="hub-sidebar" aria-label="Aelunor Navigation">
       <div className="hub-sidebar-brand">
         <span className="hub-sidebar-mark" aria-hidden="true">
-          <img src="/static/brand/aelunor-icon-512x512.png" alt="" />
+          <img src="/v1/brand/aelunor-icon-512x512.png" alt="" />
         </span>
         <strong>AELUNOR</strong>
       </div>
@@ -31,10 +39,12 @@ export function HubSidebar() {
           <button
             key={item.label}
             type="button"
-            className={`hub-sidebar-link${item.active ? " is-active" : ""}`}
-            aria-current={item.active ? "page" : undefined}
-            disabled={item.disabled}
-            title={item.disabled ? `${item.label} ist im Hub noch nicht als Route aktiv.` : item.label}
+            className={`hub-sidebar-link${item.id === active_target ? " is-active" : ""}`}
+            aria-current={item.id === active_target ? "page" : undefined}
+            title={item.label}
+            onClick={(event) => {
+              on_select(item.id, event.currentTarget);
+            }}
           >
             <span className={`hub-sidebar-icon${item.icon_src ? " has-image" : ""}`} aria-hidden="true">
               {item.icon_src ? <img src={item.icon_src} alt="" /> : item.icon}
@@ -43,9 +53,6 @@ export function HubSidebar() {
           </button>
         ))}
       </nav>
-      <div className="hub-sidebar-footer" aria-hidden="true">
-        <span />
-      </div>
     </aside>
   );
 }

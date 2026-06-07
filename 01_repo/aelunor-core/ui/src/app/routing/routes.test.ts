@@ -7,12 +7,23 @@ describe("parseV1RouteIntent", () => {
   it("parses the root and hub routes", () => {
     expect(parseV1RouteIntent("/v1")).toEqual({
       kind: "root",
+      app_page: null,
       campaign_id: null,
       workspace: null,
     });
 
     expect(parseV1RouteIntent("/v1/hub")).toEqual({
-      kind: "hub",
+      kind: "app",
+      app_page: "hub",
+      campaign_id: null,
+      workspace: null,
+    });
+  });
+
+  it("parses top-level app page routes", () => {
+    expect(parseV1RouteIntent("/v1/characters")).toEqual({
+      kind: "app",
+      app_page: "characters",
       campaign_id: null,
       workspace: null,
     });
@@ -21,6 +32,7 @@ describe("parseV1RouteIntent", () => {
   it("parses campaign workspace routes", () => {
     expect(parseV1RouteIntent("/v1/campaign/cmp_123/play")).toEqual({
       kind: "campaign",
+      app_page: null,
       campaign_id: "cmp_123",
       workspace: "play",
     });
@@ -29,6 +41,7 @@ describe("parseV1RouteIntent", () => {
   it("rejects unknown routes", () => {
     expect(parseV1RouteIntent("/v1/campaign/cmp_123/unknown")).toEqual({
       kind: "unknown",
+      app_page: null,
       campaign_id: null,
       workspace: null,
     });
@@ -85,4 +98,3 @@ describe("normalizePlayRouteState", () => {
     expect(serializePlayRouteState(routeState)).toBe("?scene=scene_square&drawer=codex&codex=race_aurin");
   });
 });
-

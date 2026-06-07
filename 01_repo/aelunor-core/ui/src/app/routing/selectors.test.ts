@@ -108,6 +108,7 @@ describe("deriveRouteRenderState", () => {
       deriveRouteIntentResolution(
         {
           kind: "campaign",
+          app_page: null,
           campaign_id: campaign.campaign_meta.campaign_id,
           workspace: "claim",
         },

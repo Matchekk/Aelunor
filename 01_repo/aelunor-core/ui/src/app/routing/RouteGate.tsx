@@ -77,9 +77,10 @@ export function RouteGate({
     return <Navigate to={sessionIsActive ? buildV1RootPath() : buildV1HubPath()} replace />;
   }
 
-  if (intent.kind === "hub") {
+  if (intent.kind === "app") {
     return (
       <SessionHubWorkspace
+        app_page={intent.app_page ?? "hub"}
         active_session={active_session}
         on_active_session_change={on_active_session_change}
         route_error_message={hubRouteState.hub_error_message ?? null}

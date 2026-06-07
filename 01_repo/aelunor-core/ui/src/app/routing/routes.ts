@@ -5,14 +5,18 @@ import type { CodexKind, DrawerType } from "../../features/drawers/drawerStore";
 import { deriveSceneOptions, type SceneFilterId } from "../../features/scenes/selectors";
 
 export type CampaignRouteWorkspace = "claim" | "setup" | "play";
-export type V1RouteKind = "root" | "hub" | "campaign" | "unknown";
+export type V1AppPage = "hub" | "campaigns" | "characters" | "world" | "quests" | "inventory" | "codex";
+export type V1RouteKind = "root" | "app" | "campaign" | "unknown";
 export type SurfaceHistoryKind = "boards" | "drawer" | "context" | "scene";
 
 export interface ParsedV1RouteIntent {
   kind: V1RouteKind;
+  app_page: V1AppPage | null;
   campaign_id: string | null;
   workspace: CampaignRouteWorkspace | null;
 }
+
+const V1_APP_PAGES = new Set<V1AppPage>(["hub", "campaigns", "characters", "world", "quests", "inventory", "codex"]);
 
 export interface DrawerRouteIntent {
   drawer_type: DrawerType;
@@ -74,6 +78,10 @@ export function buildV1HubPath(): string {
   return "/v1/hub";
 }
 
+export function buildV1AppPath(page: V1AppPage): string {
+  return page === "hub" ? buildV1HubPath() : `/v1/${page}`;
+}
+
 export function buildCampaignPath(campaign_id: string, workspace: CampaignRouteWorkspace): string {
   return `/v1/campaign/${campaign_id}/${workspace}`;
 }
@@ -84,6 +92,7 @@ export function parseV1RouteIntent(pathname: string): ParsedV1RouteIntent {
   if (normalized === "/v1") {
     return {
       kind: "root",
+      app_page: null,
       campaign_id: null,
       workspace: null,
     };
@@ -91,7 +100,19 @@ export function parseV1RouteIntent(pathname: string): ParsedV1RouteIntent {
 
   if (normalized === "/v1/hub") {
     return {
-      kind: "hub",
+      kind: "app",
+      app_page: "hub",
+      campaign_id: null,
+      workspace: null,
+    };
+  }
+
+  const appPageMatch = normalized.match(/^\/v1\/([^/]+)$/);
+  const app_page = appPageMatch ? normalizePathSegment(decodeURIComponent(appPageMatch[1] ?? "")) : null;
+  if (app_page && V1_APP_PAGES.has(app_page as V1AppPage)) {
+    return {
+      kind: "app",
+      app_page: app_page as V1AppPage,
       campaign_id: null,
       workspace: null,
     };
@@ -101,6 +122,7 @@ export function parseV1RouteIntent(pathname: string): ParsedV1RouteIntent {
   if (!campaignMatch) {
     return {
       kind: "unknown",
+      app_page: null,
       campaign_id: null,
       workspace: null,
     };
@@ -111,6 +133,7 @@ export function parseV1RouteIntent(pathname: string): ParsedV1RouteIntent {
   if (!campaign_id || !workspace || !["claim", "setup", "play"].includes(workspace)) {
     return {
       kind: "unknown",
+      app_page: null,
       campaign_id: null,
       workspace: null,
     };
@@ -118,6 +141,7 @@ export function parseV1RouteIntent(pathname: string): ParsedV1RouteIntent {
 
   return {
     kind: "campaign",
+    app_page: null,
     campaign_id,
     workspace: workspace as CampaignRouteWorkspace,
   };

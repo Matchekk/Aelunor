@@ -4,7 +4,6 @@ import { AelunorDivider, AelunorPanelFrame } from "../../../shared/ui/aelunorAss
 interface HubHeroProps {
   has_active_session: boolean;
   active_campaign_id: string | null;
-  active_join_code: string | null;
   latest_entry: SessionLibraryEntry | null;
   resume_pending_campaign_id: string | null;
   on_resume_current: () => void;
@@ -21,7 +20,6 @@ function getHeroTitle(hasActiveSession: boolean, latestEntry: SessionLibraryEntr
 export function HubHero({
   has_active_session,
   active_campaign_id,
-  active_join_code,
   latest_entry,
   resume_pending_campaign_id,
   on_resume_current,
@@ -32,13 +30,9 @@ export function HubHero({
   const activePending = active_campaign_id ? resume_pending_campaign_id === active_campaign_id : false;
   const latestPending = latest_entry ? resume_pending_campaign_id === latest_entry.campaign_id : false;
   const heroTitle = getHeroTitle(has_active_session, latest_entry);
-  const heroCode = active_join_code || latest_entry?.join_code || "kein Code";
 
   return (
     <AelunorPanelFrame className="hub-hero-panel" variant="hero" texture aria-labelledby="hub-hero-title">
-      <div className="hub-hero-watermark" aria-hidden="true">
-        <img src="/static/brand/aelunor-icon-512x512.png" alt="" />
-      </div>
       <div className="hub-hero-copy">
         <p className="hub-hero-chapter">Campaign Control</p>
         <AelunorDivider variant="small" />
@@ -57,25 +51,15 @@ export function HubHero({
               {latestPending ? "Session wird geprüft" : "Continue Campaign"}
             </button>
           ) : (
-            <a className="hub-hero-primary aelunor-button-ornate" href="#hub-create-panel">
+            <a className="hub-hero-primary aelunor-button-ornate" href="/v1/campaigns">
               Create Campaign
             </a>
           )}
-          <a className="hub-hero-secondary aelunor-button-ornate is-secondary" href="#hub-join-panel">
+          <a className="hub-hero-secondary aelunor-button-ornate is-secondary" href="/v1/campaigns">
             Join Campaign
           </a>
         </div>
       </div>
-      <dl className="hub-hero-meta" aria-label="Aktive Session Übersicht">
-        <div>
-          <dt>Status</dt>
-          <dd>{has_active_session ? "Session Active" : "Keine aktive Session"}</dd>
-        </div>
-        <div>
-          <dt>Campaign Code</dt>
-          <dd>{heroCode}</dd>
-        </div>
-      </dl>
     </AelunorPanelFrame>
   );
 }

@@ -28,6 +28,12 @@
   user-select: none;
 }
 
+.aelunor-frame-overlay,
+.aelunor-corner,
+.aelunor-divider {
+  display: none;
+}
+
 .aelunor-frame-overlay {
   position: absolute;
   inset: 0.18rem;
@@ -43,13 +49,13 @@
 }
 
 .aelunor-frame-overlay.is-card {
-  background-image: url("/static/brand/ui-kit/frame-card.png");
+  background-image: url("/v1/brand/ui-kit/frame-card.png");
 }
 
 .aelunor-frame-overlay.is-hero {
   inset: 0.45rem;
   opacity: 0.5;
-  background-image: url("/static/brand/ui-kit/frame-hero.png");
+  background-image: url("/v1/brand/ui-kit/frame-hero.png");
   filter:
     drop-shadow(0 0 20px rgba(125, 220, 255, 0.22))
     drop-shadow(0 0 2px rgba(242, 245, 247, 0.34));
@@ -57,7 +63,7 @@
 
 .aelunor-frame-overlay.is-modal,
 .aelunor-frame-overlay.is-compact {
-  background-image: url("/static/brand/ui-kit/frame-card.png");
+  background-image: url("/v1/brand/ui-kit/frame-card.png");
 }
 
 .aelunor-frame-overlay.is-compact {
@@ -81,25 +87,25 @@
 .aelunor-corner-tl {
   top: -0.18rem;
   left: -0.18rem;
-  background-image: url("/static/brand/ui-kit/panel-corner-tl.png");
+  background-image: url("/v1/brand/ui-kit/panel-corner-tl.png");
 }
 
 .aelunor-corner-tr {
   top: -0.18rem;
   right: -0.18rem;
-  background-image: url("/static/brand/ui-kit/panel-corner-tr.png");
+  background-image: url("/v1/brand/ui-kit/panel-corner-tr.png");
 }
 
 .aelunor-corner-bl {
   bottom: -0.18rem;
   left: -0.18rem;
-  background-image: url("/static/brand/ui-kit/panel-corner-bl.png");
+  background-image: url("/v1/brand/ui-kit/panel-corner-bl.png");
 }
 
 .aelunor-corner-br {
   right: -0.18rem;
   bottom: -0.18rem;
-  background-image: url("/static/brand/ui-kit/panel-corner-br.png");
+  background-image: url("/v1/brand/ui-kit/panel-corner-br.png");
 }
 
 .aelunor-divider {
@@ -107,7 +113,7 @@
   width: min(100%, 34rem);
   height: 2.65rem;
   margin: 0.15rem 0 0.35rem;
-  background: url("/static/brand/ui-kit/divider-arcane-wide.png") center / contain no-repeat;
+  background: url("/v1/brand/ui-kit/divider-arcane-wide.png") center / contain no-repeat;
   opacity: 0.68;
   filter: drop-shadow(0 0 10px rgba(125, 220, 255, 0.2));
 }
@@ -116,7 +122,7 @@
   width: min(100%, 15rem);
   height: 1.55rem;
   margin: 0.25rem 0 0.1rem;
-  background-image: url("/static/brand/ui-kit/divider-arcane-small.png");
+  background-image: url("/v1/brand/ui-kit/divider-arcane-small.png");
   opacity: 0.6;
 }
 
@@ -132,7 +138,7 @@
   opacity: 0.16;
   background:
     radial-gradient(circle at 20% 0%, rgba(125, 220, 255, 0.2), transparent 16rem),
-    url("/static/brand/ui-kit/texture-arcane-noise.webp") center / 18rem auto repeat;
+    url("/v1/brand/ui-kit/texture-arcane-noise.webp") center / 18rem auto repeat;
   mix-blend-mode: screen;
 }
 
@@ -142,6 +148,7 @@
 
 .aelunor-button-ornate::before,
 .aelunor-button-ornate::after {
+  display: none;
   content: "";
   position: absolute;
   pointer-events: none;
@@ -150,7 +157,7 @@
 .aelunor-button-ornate::before {
   inset: 0.12rem;
   border-radius: inherit;
-  background: url("/static/brand/ui-kit/frame-button-primary.png") center / 100% 100% no-repeat;
+  background: url("/v1/brand/ui-kit/frame-button-primary.png") center / 100% 100% no-repeat;
   opacity: 0.38;
   mix-blend-mode: screen;
 }
@@ -163,7 +170,7 @@
 }
 
 .aelunor-button-ornate.is-secondary::before {
-  background-image: url("/static/brand/ui-kit/frame-button-secondary.png");
+  background-image: url("/v1/brand/ui-kit/frame-button-secondary.png");
   opacity: 0.3;
 }
 
@@ -187,12 +194,13 @@
 
 .aelunor-icon-frame::before,
 .hub-sidebar-link.is-active .hub-sidebar-icon.has-image::before {
+  display: none;
   content: "";
   position: absolute;
   inset: -0.3rem;
   z-index: var(--ael-z-surface);
   pointer-events: none;
-  background: url("/static/brand/ui-kit/icon-frame-circle.png") center / contain no-repeat;
+  background: url("/v1/brand/ui-kit/icon-frame-circle.png") center / contain no-repeat;
   opacity: 0.72;
   filter: drop-shadow(0 0 14px rgba(125, 220, 255, 0.3));
 }
@@ -220,64 +228,64 @@
   inset: 0;
   pointer-events: none;
   opacity: 0.12;
-  background: url("/static/brand/ui-kit/texture-arcane-noise.webp") center / 18rem auto repeat;
+  background: url("/v1/brand/ui-kit/texture-arcane-noise.webp") center / 18rem auto repeat;
   mix-blend-mode: screen;
 }
 
 .aelunor-scene-background.is-aelunor-hybrid {
-  background-image: url("/static/brand/wallpapers/aelunor-hybrid.png");
+  background-image: url("/v1/brand/wallpapers/aelunor-hybrid.png");
 }
 
 .aelunor-scene-background.is-hub-reference {
-  background-image: url("/static/brand/wallpapers/hub-reference.png");
+  background-image: url("/v1/brand/wallpapers/hub-reference.png");
 }
 
 .aelunor-scene-background.is-nachtblau {
-  background-image: url("/static/brand/wallpapers/nachtblau.png");
+  background-image: url("/v1/brand/wallpapers/nachtblau.png");
 }
 
 .aelunor-scene-background.is-tavern {
-  background-image: url("/static/brand/wallpapers/tavern.png");
+  background-image: url("/v1/brand/wallpapers/tavern.png");
 }
 
 .aelunor-scene-background.is-waldlichtung {
-  background-image: url("/static/brand/wallpapers/waldlichtung.png");
+  background-image: url("/v1/brand/wallpapers/waldlichtung.png");
 }
 
 .aelunor-scene-background.is-wallpaper-ancient-temple-arcane {
-  background-image: url("/static/brand/wallpapers/wallpaper-ancient-temple-arcane.png");
+  background-image: url("/v1/brand/wallpapers/wallpaper-ancient-temple-arcane.png");
 }
 
 .aelunor-scene-background.is-wallpaper-campfire-long-rest {
-  background-image: url("/static/brand/wallpapers/wallpaper-campfire-long-rest.png");
+  background-image: url("/v1/brand/wallpapers/wallpaper-campfire-long-rest.png");
 }
 
 .aelunor-scene-background.is-wallpaper-city-night-market {
-  background-image: url("/static/brand/wallpapers/wallpaper-city-night-market.png");
+  background-image: url("/v1/brand/wallpapers/wallpaper-city-night-market.png");
 }
 
 .aelunor-scene-background.is-wallpaper-desert-sandstone-temple {
-  background-image: url("/static/brand/wallpapers/wallpaper-desert-sandstone-temple.png");
+  background-image: url("/v1/brand/wallpapers/wallpaper-desert-sandstone-temple.png");
 }
 
 .aelunor-scene-background.is-wallpaper-dungeon-shattered-causeway {
-  background-image: url("/static/brand/wallpapers/wallpaper-dungeon-shattered-causeway.png");
+  background-image: url("/v1/brand/wallpapers/wallpaper-dungeon-shattered-causeway.png");
 }
 
 .aelunor-scene-background.is-wallpaper-forest-glade {
-  background-image: url("/static/brand/wallpapers/wallpaper-forest-glade.png");
+  background-image: url("/v1/brand/wallpapers/wallpaper-forest-glade.png");
 }
 
 .aelunor-scene-background.is-wallpaper-frostlands-northern-ruins {
-  background-image: url("/static/brand/wallpapers/wallpaper-frostlands-northern-ruins.png");
+  background-image: url("/v1/brand/wallpapers/wallpaper-frostlands-northern-ruins.png");
 }
 
 .aelunor-scene-background.is-wallpaper-moonlit-crossroads {
-  background-image: url("/static/brand/wallpapers/wallpaper-moonlit-crossroads.png");
+  background-image: url("/v1/brand/wallpapers/wallpaper-moonlit-crossroads.png");
 }
 
 .aelunor-scene-background.is-wallpaper-tavern-interior {
-  background-image: url("/static/brand/wallpapers/wallpaper-tavern-interior.png");
+  background-image: url("/v1/brand/wallpapers/wallpaper-tavern-interior.png");
 }
 
 .aelunor-empty-state {
@@ -292,7 +300,7 @@
   left: 1rem;
   height: 1.8rem;
   pointer-events: none;
-  background: url("/static/brand/ui-kit/divider-arcane-small.png") center / contain no-repeat;
+  background: url("/v1/brand/ui-kit/divider-arcane-small.png") center / contain no-repeat;
   opacity: 0.32;
 }
 
@@ -314,4 +322,15 @@
   .aelunor-button-ornate::before {
     transition: none;
   }
+}
+
+/* Temporary quiet mode: keep panel structure, hide ornamental frames. */
+.aelunor-frame-overlay,
+.aelunor-corner,
+.aelunor-divider,
+.aelunor-button-ornate::before,
+.aelunor-button-ornate::after,
+.aelunor-icon-frame::before,
+.hub-sidebar-link.is-active .hub-sidebar-icon.has-image::before {
+  display: none !important;
 }

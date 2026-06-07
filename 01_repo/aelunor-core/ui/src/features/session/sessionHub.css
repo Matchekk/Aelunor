@@ -83,7 +83,6 @@
 }
 
 .hub-sidebar::before,
-.hub-sidebar::after,
 .hub-topbar::before,
 .hub-hero-panel::before,
 .hub-context-panel::before,
@@ -105,16 +104,6 @@
     linear-gradient(0deg, rgba(125, 220, 255, 0.22), transparent 3rem) bottom left / 1px 4.5rem no-repeat,
     linear-gradient(270deg, rgba(242, 245, 247, 0.24), transparent 4rem) bottom right / 6rem 1px no-repeat,
     linear-gradient(0deg, rgba(242, 245, 247, 0.2), transparent 3rem) bottom right / 1px 4.5rem no-repeat;
-}
-
-.hub-sidebar::after {
-  inset: auto -10% 0 -10%;
-  height: 16rem;
-  border-radius: 0;
-  background:
-    linear-gradient(180deg, transparent, rgba(3, 7, 13, 0.9) 62%),
-    url("/static/brand/wallpapers/Nachtblau.png") center bottom / cover no-repeat;
-  opacity: 0.42;
 }
 
 .hub-sidebar-brand {
@@ -171,6 +160,7 @@
   border-radius: 0.5rem;
   background: transparent;
   color: #d7dee7;
+  cursor: pointer;
   font: inherit;
   font-weight: 650;
   text-align: left;
@@ -181,7 +171,7 @@
     color 180ms ease;
 }
 
-.hub-sidebar-link:hover:not(:disabled),
+.hub-sidebar-link:hover,
 .hub-sidebar-link.is-active {
   border-color: rgba(125, 220, 255, 0.62);
   background:
@@ -204,11 +194,6 @@
   background: #06101a;
   transform: translateY(-50%) rotate(45deg);
   box-shadow: 0 0 14px rgba(102, 217, 255, 0.85);
-}
-
-.hub-sidebar-link:disabled {
-  cursor: default;
-  opacity: 0.72;
 }
 
 .hub-sidebar-icon {
@@ -246,16 +231,8 @@
   transform: none;
 }
 
-.hub-sidebar-footer {
-  position: absolute;
-  right: 1.1rem;
-  bottom: 1.5rem;
-  left: 1.1rem;
-  height: 4.2rem;
-  border-bottom: 1px solid rgba(125, 220, 255, 0.2);
-}
-
 .hub-main-frame {
+  position: relative;
   display: grid;
   align-content: start;
   gap: 1rem;
@@ -263,25 +240,69 @@
   padding: 1.25rem 1.25rem 2rem;
 }
 
-.aelunor-hud-hub .hub-topbar {
-  position: relative;
+.hub-page-header {
+  min-height: 15rem;
+  padding: 2.1rem 2.4rem;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 1rem;
-  align-items: center;
-  min-height: 5.1rem;
-  padding: 0.85rem 1.1rem;
-  border: 1px solid var(--hub-border);
-  border-radius: var(--hub-radius-lg);
-  background:
-    linear-gradient(180deg, rgba(4, 10, 18, 0.92), rgba(4, 10, 18, 0.76)),
-    radial-gradient(circle at 70% 0%, rgba(102, 217, 255, 0.12), transparent 22rem);
-  box-shadow: var(--hub-shadow), inset 0 1px rgba(255, 255, 255, 0.06);
+  align-content: center;
+  gap: 0.35rem;
 }
 
+.hub-page-header h1 {
+  margin: 0;
+  max-width: 44rem;
+  color: var(--hub-text);
+  font-size: clamp(2.2rem, 4vw, 4rem);
+  font-family: var(--v1-font-display);
+  font-weight: 650;
+  line-height: 0.98;
+}
+
+.hub-page-description {
+  max-width: 54rem;
+  margin: 0;
+  color: var(--hub-muted);
+  font-size: 1.02rem;
+  line-height: 1.65;
+}
+
+.hub-domain-panel {
+  min-height: 22rem;
+  padding: 1.55rem;
+}
+
+.hub-domain-panel .status-muted {
+  max-width: 52rem;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.hub-domain-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.35rem;
+}
+
+.aelunor-hud-hub .hub-topbar {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 5;
+  display: flex;
+  justify-content: flex-end;
+  width: min(100% - 2rem, 48rem);
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.aelunor-hud-hub .hub-topbar::before,
 .aelunor-hud-hub .hub-topbar::after {
-  inset: auto 1.1rem 0.75rem 1.1rem;
-  background: linear-gradient(90deg, transparent, rgba(125, 220, 255, 0.42), transparent);
+  display: none;
 }
 
 .aelunor-hud-hub .hub-topbar-brand {
@@ -394,6 +415,7 @@
   height: 2.55rem;
   display: inline-grid;
   place-items: center;
+  padding: 0;
   border: 1px solid rgba(180, 210, 230, 0.18);
   border-radius: 50%;
   background: rgba(3, 7, 13, 0.6);
@@ -404,31 +426,40 @@
 
 .hub-profile-orb,
 .hub-profile-orb img {
-  width: 2rem;
-  height: 2rem;
+  width: 1.95rem;
+  height: 1.95rem;
   border-radius: 50%;
 }
 
+.hub-profile-orb {
+  display: inline-grid;
+  place-items: center;
+}
+
 .hub-profile-orb img {
-  object-fit: cover;
+  display: block;
+  width: 1.7rem;
+  height: 1.7rem;
+  object-fit: contain;
   filter: drop-shadow(0 0 8px rgba(125, 220, 255, 0.42));
 }
 
 .hub-hero-panel {
   position: relative;
-  min-height: 22rem;
+  min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(14rem, 0.28fr);
-  align-items: end;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
   gap: 1rem;
-  padding: clamp(1.35rem, 2.8vw, 2.75rem);
+  padding: clamp(1.35rem, 2.2vw, 2rem);
   border: 1px solid rgba(180, 210, 230, 0.24);
   border-radius: var(--hub-radius-lg);
   overflow: hidden;
   background:
-    linear-gradient(90deg, rgba(3, 7, 13, 0.98) 0%, rgba(3, 7, 13, 0.78) 42%, rgba(3, 7, 13, 0.52) 72%),
-    linear-gradient(180deg, rgba(3, 7, 13, 0.48), rgba(3, 7, 13, 0.92)),
-    url("/static/brand/wallpapers/hub-reference.png") center 10% / cover no-repeat;
+    radial-gradient(circle at 18% 42%, rgba(125, 220, 255, 0.14), transparent 17rem),
+    radial-gradient(circle at 72% 18%, rgba(216, 184, 106, 0.08), transparent 18rem),
+    linear-gradient(90deg, rgba(3, 7, 13, 0.98) 0%, rgba(8, 22, 34, 0.9) 48%, rgba(3, 7, 13, 0.94) 100%),
+    linear-gradient(180deg, rgba(9, 24, 38, 0.78), rgba(3, 7, 13, 0.96));
   box-shadow: var(--hub-shadow), inset 0 1px rgba(255, 255, 255, 0.08);
 }
 
@@ -438,30 +469,13 @@
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(180deg, rgba(3, 7, 13, 0.18), rgba(3, 7, 13, 0.48)),
-    radial-gradient(circle at 76% 18%, rgba(125, 220, 255, 0.2), transparent 18rem),
-    radial-gradient(circle at 32% 72%, rgba(102, 217, 255, 0.16), transparent 12rem),
-    radial-gradient(circle at 50% 50%, rgba(216, 184, 106, 0.06), transparent 30rem);
+    linear-gradient(90deg, rgba(125, 220, 255, 0.07) 1px, transparent 1px) 0 0 / 9rem 100%,
+    linear-gradient(180deg, rgba(242, 245, 247, 0.045) 1px, transparent 1px) 0 0 / 100% 4.5rem,
+    linear-gradient(180deg, rgba(3, 7, 13, 0.1), rgba(3, 7, 13, 0.38)),
+    radial-gradient(circle at 50% 50%, rgba(216, 184, 106, 0.035), transparent 30rem);
 }
 
-.hub-hero-watermark {
-  position: absolute;
-  left: 4rem;
-  top: 1.1rem;
-  width: 18rem;
-  height: 18rem;
-  opacity: 0.08;
-  filter: blur(1px);
-  animation: hub-pulse 8s ease-in-out infinite;
-}
-
-@keyframes hub-pulse {
-  0%, 100% { opacity: 0.08; transform: scale(1); }
-  50% { opacity: 0.12; transform: scale(1.02); }
-}
-
-.hub-hero-copy,
-.hub-hero-meta {
+.hub-hero-copy {
   position: relative;
   z-index: 1;
 }
@@ -583,36 +597,6 @@
   opacity: 0.74;
 }
 
-.hub-hero-meta {
-  align-self: stretch;
-  display: grid;
-  align-content: end;
-  gap: 0.7rem;
-  margin: 0;
-}
-
-.hub-hero-meta div {
-  padding: 0.75rem 0.85rem;
-  border: 1px solid rgba(180, 210, 230, 0.16);
-  border-radius: 0.55rem;
-  background: rgba(3, 7, 13, 0.56);
-  backdrop-filter: blur(12px);
-}
-
-.hub-hero-meta dt {
-  color: var(--hub-gold);
-  font-family: var(--v1-font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.hub-hero-meta dd {
-  margin: 0.15rem 0 0;
-  color: var(--hub-text);
-  font-weight: 800;
-}
-
 .hub-feature-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.95fr) minmax(0, 1.05fr);
@@ -679,11 +663,48 @@
   line-height: 1.45;
 }
 
+.hub-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(28rem, 0.88fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.hub-overview-main {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.hub-overview-grid .hub-context-rail {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  align-items: start;
+}
+
+.hub-overview-grid .hub-context-panel {
+  min-height: 11.25rem;
+}
+
+.hub-overview-grid .hub-mini-map,
+.hub-overview-grid .hub-compass {
+  display: none;
+}
+
+.hub-overview-grid .hub-arcane-widget {
+  min-height: 0;
+  padding: 0;
+}
+
 .hub-dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(20rem, 0.8fr) minmax(18.5rem, 0.62fr);
   gap: 1rem;
   align-items: start;
+}
+
+.hub-dashboard-grid.is-single-column {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .hub-dashboard-main,
@@ -1136,7 +1157,7 @@
   border-radius: 0.5rem;
   background:
     linear-gradient(180deg, rgba(3, 7, 13, 0), rgba(3, 7, 13, 0.42)),
-    url("/static/brand/wallpapers/hub-reference.png") center 35% / cover no-repeat;
+    url("/v1/brand/wallpapers/hub-reference.png") center 35% / cover no-repeat;
 }
 
 .hub-arcane-widget {
@@ -1234,6 +1255,14 @@
     grid-template-columns: 14.5rem minmax(0, 1fr);
   }
 
+  .hub-overview-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hub-overview-grid .hub-context-rail {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .hub-dashboard-grid {
     grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.8fr);
   }
@@ -1293,13 +1322,12 @@
     min-width: 10rem;
   }
 
-  .hub-sidebar-footer,
-  .hub-sidebar::after {
-    display: none;
-  }
-
   .hub-dashboard-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hub-overview-grid .hub-context-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .hub-context-rail {
@@ -1317,22 +1345,36 @@
   }
 
   .hub-topbar-meta {
-    justify-content: flex-start;
+    justify-content: flex-end;
   }
 
   .hub-hero-panel {
     grid-template-columns: 1fr;
-    min-height: 24rem;
     background-position: 58% 20%;
-  }
-
-  .hub-hero-meta {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .hub-feature-grid,
   .hub-context-rail {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hub-overview-grid .hub-feature-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .hub-overview-grid .hub-feature-card {
+    min-height: 0;
+    padding: 0.95rem;
+  }
+
+  .hub-overview-grid .hub-feature-card strong {
+    font-size: 0.86rem;
+    line-height: 1.35;
+  }
+
+  .hub-overview-grid .hub-context-panel {
+    min-height: 0;
+    padding: 0.9rem;
   }
 
   .session-library-item.hub-campaign-item {
@@ -1350,7 +1392,6 @@
   }
 
   .hub-hero-panel {
-    min-height: 28rem;
     padding: 1.1rem;
   }
 
@@ -1373,10 +1414,6 @@
   .session-library-item-actions button,
   .session-inline-actions button {
     width: 100%;
-  }
-
-  .hub-hero-meta {
-    grid-template-columns: 1fr;
   }
 }
 

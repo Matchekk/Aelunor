@@ -5,7 +5,7 @@ import "./sessionHub.css";
 
 import type { SessionBootstrap } from "../../app/bootstrap/sessionStorage";
 import { clearSessionBootstrap, readSessionBootstrap, writeSessionBootstrap } from "../../app/bootstrap/sessionStorage";
-import { buildCampaignPath } from "../../app/routing/routes";
+import { buildCampaignPath, buildV1AppPath, type V1AppPage } from "../../app/routing/routes";
 import { deriveRouteRenderState } from "../../app/routing/selectors";
 import { campaignQueryOptions } from "../../entities/campaign/queries";
 import { useWaitingSignal } from "../../shared/waiting/hooks";
@@ -21,18 +21,21 @@ import {
 } from "./sessionLibrary";
 import { hasActiveSession, toSessionBootstrap } from "./selectors";
 import { CreateCampaignCard } from "./components/CreateCampaignCard";
+import { HubAppPage } from "./components/HubAppPage";
 import { HubContextRail } from "./components/HubContextRail";
 import { HubContinuationPanel } from "./components/HubContinuationPanel";
 import { HubFeatureCards } from "./components/HubFeatureCards";
 import { HubHero } from "./components/HubHero";
-import { HubSidebar } from "./components/HubSidebar";
+import { HubSidebar, type HubSidebarTarget } from "./components/HubSidebar";
 import { HubTopBar } from "./components/HubTopBar";
 import { JoinCampaignCard } from "./components/JoinCampaignCard";
 import { LlmStatusPanel } from "./components/LlmStatusPanel";
 import { SessionEditorDialog } from "./components/SessionEditorDialog";
 import { SessionLibraryPanel } from "./components/SessionLibraryPanel";
+import { SettingsDialog } from "../../shared/ui/SettingsDialog";
 
 interface SessionHubWorkspaceProps {
+  app_page: V1AppPage;
   active_session: SessionBootstrap;
   on_active_session_change: (session: SessionBootstrap) => void;
   route_error_message?: string | null;
@@ -99,6 +102,7 @@ function activeElement(): HTMLElement | null {
 }
 
 export function SessionHubWorkspace({
+  app_page,
   active_session,
   on_active_session_change,
   route_error_message = null,
@@ -112,6 +116,8 @@ export function SessionHubWorkspace({
   const [lastFailedCampaignId, setLastFailedCampaignId] = useState<string | null>(null);
   const [editingEntry, setEditingEntry] = useState<SessionLibraryEntry | null>(null);
   const [editorReturnFocus, setEditorReturnFocus] = useState<HTMLElement | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsReturnFocus, setSettingsReturnFocus] = useState<HTMLElement | null>(null);
 
   const createMutation = useCreateCampaignMutation();
   const joinMutation = useJoinCampaignMutation();
@@ -357,26 +363,50 @@ export function SessionHubWorkspace({
     void handleResumeEntry(latestLibraryEntry);
   }, [handleResumeEntry, latestLibraryEntry]);
 
+  const openSettings = useCallback((return_focus_element: HTMLElement | null) => {
+    setSettingsReturnFocus(return_focus_element);
+    setSettingsOpen(true);
+  }, []);
+
+  const openCampaignSurface = useCallback(
+    (page: V1AppPage) => {
+      const campaign_id = active_session.campaign_id;
+      if (!campaign_id) {
+        navigate(buildV1AppPath("campaigns"));
+        return;
+      }
+
+      const surfaceSearch: Partial<Record<V1AppPage, string>> = {
+        world: "?boards=world_info",
+        quests: "?boards=story_cards",
+        codex: "?context=1",
+      };
+      navigate(`${buildCampaignPath(campaign_id, "play")}${surfaceSearch[page] ?? ""}`);
+    },
+    [active_session.campaign_id, navigate],
+  );
+
+  const handleSidebarSelect = useCallback(
+    (target: HubSidebarTarget, return_focus_element: HTMLElement | null) => {
+      if (target === "settings") {
+        openSettings(return_focus_element);
+        return;
+      }
+      setStatusMessage(null);
+      navigate(buildV1AppPath(target));
+    },
+    [navigate, openSettings],
+  );
+
   return (
-    <main className="v1-app-shell session-hub-shell gateway-shell aelunor-hud-hub">
-      <HubSidebar />
+    <main id="hub-top" className="v1-app-shell session-hub-shell gateway-shell aelunor-hud-hub">
+      <HubSidebar active_target={app_page} on_select={handleSidebarSelect} />
       <div className="hub-main-frame">
         <HubTopBar
           session_count={libraryEntries.length}
           has_active_session={currentSessionIsActive}
-          campaign_title={latestLibraryEntry?.campaign_title ?? latestLibraryEntry?.label ?? null}
+          on_open_settings={openSettings}
         />
-        <HubHero
-          has_active_session={currentSessionIsActive}
-          active_campaign_id={active_session.campaign_id}
-          active_join_code={active_session.join_code}
-          latest_entry={latestLibraryEntry}
-          resume_pending_campaign_id={resumePendingCampaignId}
-          on_resume_current={resumeCurrentSession}
-          on_resume_latest={resumeLatestSession}
-        />
-        <HubFeatureCards />
-
         {lastFailedCampaignId ? (
           <section className="v1-panel session-card hub-alert-card">
             <div className="v1-panel-head">
@@ -394,8 +424,21 @@ export function SessionHubWorkspace({
           </section>
         ) : null}
 
-        <section className="hub-dashboard-grid">
-          <div className="hub-dashboard-main">
+        <HubAppPage
+          page={app_page}
+          has_active_session={currentSessionIsActive}
+          hero={
+            <HubHero
+              has_active_session={currentSessionIsActive}
+              active_campaign_id={active_session.campaign_id}
+              latest_entry={latestLibraryEntry}
+              resume_pending_campaign_id={resumePendingCampaignId}
+              on_resume_current={resumeCurrentSession}
+              on_resume_latest={resumeLatestSession}
+            />
+          }
+          features={<HubFeatureCards />}
+          continuation={
             <HubContinuationPanel
               has_active_session={currentSessionIsActive}
               active_campaign_id={active_session.campaign_id}
@@ -408,52 +451,53 @@ export function SessionHubWorkspace({
               on_resume_latest={resumeLatestSession}
               on_clear_current={clearCurrentSession}
             />
-            <section className="hub-campaigns-main">
-              <SessionLibraryPanel
-                entries={libraryEntries}
-                resume_pending_campaign_id={resumePendingCampaignId}
-                on_resume={handleResumeEntry}
-                on_edit={(entry) => {
-                  setEditorReturnFocus(activeElement());
-                  setEditingEntry(entry);
-                }}
-                on_forget={handleForgetEntry}
-              />
-            </section>
-          </div>
-
-          <section className="hub-actions-grid" aria-label="Campaign Aktionen">
-            <div id="hub-create-panel">
-              <CreateCampaignCard
-                is_pending={createMutation.isPending}
-                error_message={createError}
-                default_display_name={suggestedDisplayName}
-                on_submit={handleCreateSubmit}
-              />
-            </div>
-            <div id="hub-join-panel">
-              <JoinCampaignCard
-                is_pending={joinMutation.isPending}
-                error_message={joinError}
-                default_display_name={suggestedDisplayName}
-                on_submit={handleJoinSubmit}
-              />
-            </div>
-          </section>
-
-          <HubContextRail
-            session_count={libraryEntries.length}
-            has_active_session={currentSessionIsActive}
-            latest_entry={latestLibraryEntry}
-            active_campaign_id={active_session.campaign_id}
-            active_join_code={active_session.join_code}
-          />
-        </section>
-
-        <details className="hub-diagnostics">
-          <summary>System / Diagnose (optional)</summary>
-          <LlmStatusPanel />
-        </details>
+          }
+          session_library={
+            <SessionLibraryPanel
+              entries={libraryEntries}
+              resume_pending_campaign_id={resumePendingCampaignId}
+              on_resume={handleResumeEntry}
+              on_edit={(entry) => {
+                setEditorReturnFocus(activeElement());
+                setEditingEntry(entry);
+              }}
+              on_forget={handleForgetEntry}
+            />
+          }
+          create_campaign={
+            <CreateCampaignCard
+              is_pending={createMutation.isPending}
+              error_message={createError}
+              default_display_name={suggestedDisplayName}
+              on_submit={handleCreateSubmit}
+            />
+          }
+          join_campaign={
+            <JoinCampaignCard
+              is_pending={joinMutation.isPending}
+              error_message={joinError}
+              default_display_name={suggestedDisplayName}
+              on_submit={handleJoinSubmit}
+            />
+          }
+          context_rail={
+            <HubContextRail
+              session_count={libraryEntries.length}
+              has_active_session={currentSessionIsActive}
+              latest_entry={latestLibraryEntry}
+              active_campaign_id={active_session.campaign_id}
+              active_join_code={active_session.join_code}
+            />
+          }
+          diagnostics={
+            <details className="hub-diagnostics">
+              <summary>System / Diagnose (optional)</summary>
+              <LlmStatusPanel />
+            </details>
+          }
+          on_open_campaigns={() => navigate(buildV1AppPath("campaigns"))}
+          on_open_campaign_surface={openCampaignSurface}
+        />
 
         <SessionEditorDialog
           open={Boolean(editingEntry)}
@@ -463,6 +507,11 @@ export function SessionHubWorkspace({
           on_rename={handleRenameEntry}
           on_export={handleExportEntry}
           on_delete={handleDeleteEntry}
+        />
+        <SettingsDialog
+          open={settingsOpen}
+          on_close={() => setSettingsOpen(false)}
+          return_focus_element={settingsReturnFocus}
         />
       </div>
     </main>

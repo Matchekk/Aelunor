@@ -17,7 +17,7 @@ export function GameSidebar({ items, footer }: GameSidebarProps) {
   return (
     <nav className="game-sidebar" aria-label="Aelunor Spielbereiche">
       <div className="game-sidebar-brand">
-        <img src="/static/brand/aelunor-icon-512x512.png" alt="" />
+        <img src="/v1/brand/aelunor-icon-512x512.png" alt="" />
         <span>Aelunor</span>
       </div>
       <div className="game-sidebar-items">

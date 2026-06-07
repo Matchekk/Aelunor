@@ -1,0 +1,240 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1320" viewBox="0 0 1920 1320" role="img" aria-labelledby="title desc">
+  <title id="title">Aelunor aktuelles Strukturdiagramm</title>
+  <desc id="desc">Aktuelle technische Struktur der Aelunor Webapp mit React Frontend, FastAPI Backend, Services, Storage und externen Generatoren.</desc>
+  <defs>
+    <linearGradient id="pageBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f7f3e8"/>
+      <stop offset="0.52" stop-color="#eef5f1"/>
+      <stop offset="1" stop-color="#f6efe4"/>
+    </linearGradient>
+    <linearGradient id="frontendBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#eaf4ff"/>
+    </linearGradient>
+    <linearGradient id="backendBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#eef8f1"/>
+    </linearGradient>
+    <linearGradient id="domainBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#fff3df"/>
+    </linearGradient>
+    <linearGradient id="storageBg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f4ecff"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#40536a"/>
+    </marker>
+    <marker id="arrowLive" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1d7f6e"/>
+    </marker>
+    <style>
+      .bg { fill: url(#pageBg); }
+      .title { font: 800 42px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #182234; letter-spacing: 0; }
+      .subtitle { font: 500 20px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #536170; letter-spacing: 0; }
+      .band-title { font: 800 24px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #1d2b3d; letter-spacing: 0; }
+      .band-note { font: 500 15px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #5d6b79; letter-spacing: 0; }
+      .group { stroke-width: 2; rx: 22; }
+      .frontend { fill: url(#frontendBg); stroke: #8bbbe6; }
+      .backend { fill: url(#backendBg); stroke: #94c99d; }
+      .domain { fill: url(#domainBg); stroke: #e0b36d; }
+      .storage { fill: url(#storageBg); stroke: #b7a1df; }
+      .repo { fill: #ffffff; stroke: #d7dde5; stroke-width: 1.6; rx: 14; }
+      .repo-strong { fill: #fdfefe; stroke: #8da1b7; stroke-width: 2; rx: 16; }
+      .label { font: 800 17px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #202c3a; letter-spacing: 0; }
+      .body { font: 500 14px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #546272; letter-spacing: 0; }
+      .small { font: 500 13px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #667484; letter-spacing: 0; }
+      .pill { fill: #eef4f8; stroke: #cbd8e3; stroke-width: 1; rx: 16; }
+      .pill-text { font: 700 13px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #46576a; letter-spacing: 0; }
+      .arrow { fill: none; stroke: #40536a; stroke-width: 2.4; marker-end: url(#arrow); }
+      .arrow-light { fill: none; stroke: #8795a5; stroke-width: 2; marker-end: url(#arrow); }
+      .arrow-live { fill: none; stroke: #1d7f6e; stroke-width: 2.8; stroke-dasharray: 8 8; marker-end: url(#arrowLive); }
+      .flow-label { font: 700 13px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #40536a; letter-spacing: 0; }
+      .live-label { font: 800 13px Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #1d7f6e; letter-spacing: 0; }
+      .muted-line { stroke: #d6dde6; stroke-width: 1.4; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1920" height="1320"/>
+
+  <text class="title" x="70" y="78">Aelunor Webapp: aktuelles Strukturdiagramm</text>
+  <text class="subtitle" x="70" y="112">Stand: 2026-06-03 · aktive UI: React/Vite unter /v1 · Legacy-UI entfernt · Persistenz: JSON-Campaign-Dateien</text>
+
+  <rect class="pill" x="70" y="140" width="242" height="34"/>
+  <text class="pill-text" x="92" y="162">Root / leitet auf /v1 weiter</text>
+  <rect class="pill" x="328" y="140" width="255" height="34"/>
+  <text class="pill-text" x="350" y="162">/static nur Brand-/Icon-Assets</text>
+  <rect class="pill" x="600" y="140" width="252" height="34"/>
+  <text class="pill-text" x="622" y="162">SSE ist Live-Sync, nicht Truth</text>
+
+  <!-- Main groups -->
+  <rect class="group frontend" x="60" y="210" width="1760" height="260"/>
+  <text class="band-title" x="92" y="250">Frontend · 01_repo/aelunor-core/ui/src</text>
+  <text class="band-note" x="92" y="276">React/Vite-v1 rendert die aktive Produktoberflaeche. Lokaler UI-State bleibt neben der Campaign-Truth.</text>
+
+  <rect class="group backend" x="60" y="515" width="1760" height="260"/>
+  <text class="band-title" x="92" y="555">Backend / API · 01_repo/aelunor-core/app</text>
+  <text class="band-note" x="92" y="581">FastAPI glue, duenne Router und HTTP/SSE-Contracts fuer Kampagnen, Setup, Claims, Turns, Boards, Context und Presence.</text>
+
+  <rect class="group domain" x="60" y="820" width="1760" height="260"/>
+  <text class="band-title" x="92" y="860">Domain-Logik, Generatoren und Infrastruktur</text>
+  <text class="band-note" x="92" y="886">Services orchestrieren State, Regeln und Turn-Pipeline. Adapter und Repository kapseln externe IO und Dateipersistenz.</text>
+
+  <rect class="group storage" x="60" y="1125" width="1760" height="140"/>
+  <text class="band-title" x="92" y="1165">Storage, Runtime und externe Services</text>
+  <text class="band-note" x="92" y="1191">Campaign JSON ist persistente Wahrheit. Browser Storage ist lokal. Ollama ist optionaler externer Generator.</text>
+
+  <!-- Frontend boxes -->
+  <rect class="repo-strong" x="92" y="305" width="260" height="110"/>
+  <text class="label" x="118" y="336">App Shell</text>
+  <text class="body" x="118" y="362">main.tsx, AppRoot.tsx</text>
+  <text class="body" x="118" y="386">Provider: Query, Theme, Presence</text>
+
+  <rect class="repo" x="388" y="305" width="260" height="110"/>
+  <text class="label" x="414" y="336">Routing Gate</text>
+  <text class="body" x="414" y="362">app/routing</text>
+  <text class="body" x="414" y="386">Hub · Claim · Setup · Play</text>
+
+  <rect class="repo" x="684" y="305" width="290" height="110"/>
+  <text class="label" x="710" y="336">Feature Workspaces</text>
+  <text class="body" x="710" y="362">session, setup, claim, play</text>
+  <text class="body" x="710" y="386">boards, context, drawers, scenes</text>
+
+  <rect class="repo" x="1010" y="305" width="275" height="110"/>
+  <text class="label" x="1036" y="336">Shared Client Layer</text>
+  <text class="body" x="1036" y="362">shared/api, shared/sse</text>
+  <text class="body" x="1036" y="386">contracts, endpoints, httpClient</text>
+
+  <rect class="repo" x="1320" y="305" width="225" height="110"/>
+  <text class="label" x="1346" y="336">State Stores</text>
+  <text class="body" x="1346" y="362">presence, settings</text>
+  <text class="body" x="1346" y="386">layout, drawer, context</text>
+
+  <rect class="repo" x="1580" y="305" width="205" height="110"/>
+  <text class="label" x="1606" y="336">Styles / Assets</text>
+  <text class="body" x="1606" y="362">tokens, themes</text>
+  <text class="body" x="1606" y="386">brand assets via /static</text>
+
+  <!-- Backend boxes -->
+  <rect class="repo-strong" x="92" y="610" width="260" height="110"/>
+  <text class="label" x="118" y="641">FastAPI Wiring</text>
+  <text class="body" x="118" y="667">app/main.py</text>
+  <text class="body" x="118" y="691">mounts /v1, /static, routers</text>
+
+  <rect class="repo" x="388" y="610" width="260" height="110"/>
+  <text class="label" x="414" y="641">Routers</text>
+  <text class="body" x="414" y="667">campaigns, setup, claim</text>
+  <text class="body" x="414" y="691">turns, boards, context, sheets</text>
+
+  <rect class="repo" x="684" y="610" width="270" height="110"/>
+  <text class="label" x="710" y="641">Schemas / Serializers</text>
+  <text class="body" x="710" y="667">schemas/api.py</text>
+  <text class="body" x="710" y="691">serializers/campaign_view.py</text>
+
+  <rect class="repo" x="990" y="610" width="275" height="110"/>
+  <text class="label" x="1016" y="641">API Contracts</text>
+  <text class="body" x="1016" y="667">HTTP JSON endpoints</text>
+  <text class="body" x="1016" y="691">SSE tickets + streams</text>
+
+  <rect class="repo" x="1302" y="610" width="230" height="110"/>
+  <text class="label" x="1328" y="641">Runtime Config</text>
+  <text class="body" x="1328" y="667">runtime_config.py</text>
+  <text class="body" x="1328" y="691">DATA_DIR, Ollama URL</text>
+
+  <rect class="repo" x="1568" y="610" width="217" height="110"/>
+  <text class="label" x="1594" y="641">Desktop Start</text>
+  <text class="body" x="1594" y="667">desktop_launcher.py</text>
+  <text class="body" x="1594" y="691">local app packaging path</text>
+
+  <!-- Domain boxes -->
+  <rect class="repo-strong" x="92" y="915" width="290" height="110"/>
+  <text class="label" x="118" y="946">Service Layer</text>
+  <text class="body" x="118" y="972">campaign, setup, claim, turn</text>
+  <text class="body" x="118" y="996">boards, context, sheets, presence</text>
+
+  <rect class="repo" x="418" y="915" width="280" height="110"/>
+  <text class="label" x="444" y="946">State Engine</text>
+  <text class="body" x="444" y="972">state_engine.py, state_basics.py</text>
+  <text class="body" x="444" y="996">normalization, save/load, setup</text>
+
+  <rect class="repo" x="734" y="915" width="280" height="110"/>
+  <text class="label" x="760" y="946">Turn Pipeline</text>
+  <text class="body" x="760" y="972">turn_engine.py, services/turn</text>
+  <text class="body" x="760" y="996">patch sanitize, validate, apply</text>
+
+  <rect class="repo" x="1050" y="915" width="260" height="110"/>
+  <text class="label" x="1076" y="946">World Modules</text>
+  <text class="body" x="1076" y="972">services/world</text>
+  <text class="body" x="1076" y="996">codex, progression, elements</text>
+
+  <rect class="repo" x="1346" y="915" width="205" height="110"/>
+  <text class="label" x="1372" y="946">LLM Adapter</text>
+  <text class="body" x="1372" y="972">adapters/llm.py</text>
+  <text class="body" x="1372" y="996">Ollama IO boundary</text>
+
+  <rect class="repo" x="1586" y="915" width="200" height="110"/>
+  <text class="label" x="1612" y="946">Repository</text>
+  <text class="body" x="1612" y="972">repositories/</text>
+  <text class="body" x="1612" y="996">atomic Campaign JSON</text>
+
+  <!-- Storage boxes -->
+  <rect class="repo" x="92" y="1210" width="310" height="40"/>
+  <text class="label" x="118" y="1236">DATA_DIR/campaigns/*.json</text>
+
+  <rect class="repo" x="438" y="1210" width="270" height="40"/>
+  <text class="label" x="464" y="1236">In-Memory Live State</text>
+
+  <rect class="repo" x="744" y="1210" width="310" height="40"/>
+  <text class="label" x="770" y="1236">Browser Storage</text>
+
+  <rect class="repo" x="1090" y="1210" width="270" height="40"/>
+  <text class="label" x="1116" y="1236">Ollama /api/chat + /api/tags</text>
+
+  <rect class="repo" x="1396" y="1210" width="390" height="40"/>
+  <text class="label" x="1422" y="1236">Tests, scripts, docs, prompts</text>
+
+  <!-- horizontal flow arrows frontend -->
+  <path class="arrow-light" d="M 352 360 L 382 360"/>
+  <path class="arrow-light" d="M 648 360 L 678 360"/>
+  <path class="arrow-light" d="M 974 360 L 1004 360"/>
+  <path class="arrow-light" d="M 1285 360 L 1314 360"/>
+  <path class="arrow-light" d="M 1545 360 L 1574 360"/>
+
+  <!-- vertical flow arrows -->
+  <path class="arrow" d="M 1148 415 C 1148 475 222 485 222 604"/>
+  <text class="flow-label" x="626" y="492">HTTP fetch: /api/* · Campaign Snapshot · Mutationen</text>
+
+  <path class="arrow" d="M 222 720 C 222 790 236 840 236 909"/>
+  <text class="flow-label" x="260" y="803">Router delegieren Fachlogik an Services</text>
+
+  <path class="arrow" d="M 382 970 L 412 970"/>
+  <path class="arrow" d="M 698 970 L 728 970"/>
+  <path class="arrow" d="M 1014 970 L 1044 970"/>
+  <path class="arrow" d="M 1310 970 L 1340 970"/>
+  <path class="arrow" d="M 1551 970 L 1580 970"/>
+
+  <path class="arrow" d="M 1686 1025 C 1686 1094 248 1094 248 1204"/>
+  <text class="flow-label" x="1036" y="1104">persistente Truth: JSON speichern/laden</text>
+
+  <path class="arrow-live" d="M 560 1025 C 560 1080 573 1138 573 1204"/>
+  <text class="live-label" x="603" y="1100">Presence, blocking actions, SSE subscribers</text>
+
+  <path class="arrow-light" d="M 1448 1025 C 1448 1110 1225 1127 1225 1204"/>
+  <text class="flow-label" x="1280" y="1100">LLM calls ueber Adapter</text>
+
+  <path class="arrow-light" d="M 1432 415 C 1432 1110 900 1120 900 1204"/>
+  <text class="flow-label" x="1178" y="756">localStorage / sessionStorage / Drafts / UI Settings</text>
+
+  <path class="arrow-live" d="M 573 1210 C 573 1110 1198 1098 1198 415"/>
+  <text class="live-label" x="1008" y="1162">SSE campaign_sync / presence_sync invalidiert UI Cache</text>
+
+  <!-- backend internal relations -->
+  <path class="arrow-light" d="M 352 665 L 382 665"/>
+  <path class="arrow-light" d="M 648 665 L 678 665"/>
+  <path class="arrow-light" d="M 954 665 L 984 665"/>
+  <path class="arrow-light" d="M 1265 665 L 1296 665"/>
+
+  <line class="muted-line" x1="92" y1="760" x2="1788" y2="760"/>
+  <text class="small" x="92" y="1292">Hinweis: Diese Datei beschreibt den aktuellen Strukturstand. Die ungestagten lokalen UI-Aenderungen sind nicht separat bewertet.</text>
+</svg>
