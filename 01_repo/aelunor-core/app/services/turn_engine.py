@@ -49,6 +49,7 @@ from app.services.turn.patch_validator import (
 from app.services.turn.prompt_payloads import build_turn_system_prompt, build_turn_user_prompt
 from app.services.turn.records import build_turn_record_payload
 from app.services.turn.setup_context import prepare_turn_working_state
+from app.services.turn.world_character_context import build_world_character_context_packet
 from app.services.turn.story_length_guard import (
     rewrite_story_length_guard as _rewrite_story_length_guard,
 )
@@ -1256,6 +1257,9 @@ def create_turn_record(
     )
 
     context = build_context_packet(campaign, working_state, actor, action_type)
+    context_campaign = {**campaign, "state": working_state}
+    actor_slot = actor if is_slot_id(actor) and actor in (working_state.get("characters") or {}) else None
+    world_character_context = build_world_character_context_packet(context_campaign, actor_slot=actor_slot)
     user_prompt, actor_display, actor_resolution_hint = build_turn_user_prompt(
         campaign=campaign,
         actor=actor,
@@ -1267,6 +1271,7 @@ def create_turn_record(
         display_name_for_slot=display_name_for_slot,
         is_slot_id=is_slot_id,
         is_first_person_action=is_first_person_action,
+        consistency_context=world_character_context["combined_text"],
     )
     system_prompt = build_turn_system_prompt(
         system_prompt_base=SYSTEM_PROMPT,
@@ -1290,6 +1295,7 @@ def create_turn_record(
         "attribute_bias": attribute_bias,
         "combat_context": combat_context,
         "combat_scaling": combat_scaling_context,
+        "world_character_context": world_character_context,
     }
 
     narrator_patch = blank_patch()

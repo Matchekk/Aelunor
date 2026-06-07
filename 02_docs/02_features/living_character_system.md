@@ -86,3 +86,5 @@ Fuer Spielercharaktere gilt:
 Spaetere Turn-Prompts sollen die kompakte Living-Profile-Summary nutzen. Eine
 automatische Aktualisierung aus Turn-Historie, Drift-Validatoren, UI und
 LLM-basierte Profilgenerierung gehoeren in spaetere PRs.
+
+Die aktuelle Prompt-Einbindung ist in `context_injection.md` beschrieben.

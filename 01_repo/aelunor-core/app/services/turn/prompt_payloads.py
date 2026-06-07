@@ -34,6 +34,7 @@ def build_turn_user_prompt(
     display_name_for_slot: Callable[[Dict[str, Any], str], str],
     is_slot_id: Callable[[str], bool],
     is_first_person_action: Callable[[str], bool],
+    consistency_context: str = "",
 ) -> Tuple[str, str, List[str]]:
     actor_display = display_name_for_slot(campaign, actor) if is_slot_id(actor) else actor
     actor_resolution_hint = build_actor_resolution_hint(
@@ -54,6 +55,7 @@ def build_turn_user_prompt(
     user_prompt = (
         "CONTEXT_PACKET(JSON):\n"
         + context
+        + ("\n\n" + consistency_context if consistency_context else "")
         + "\n\nOUTPUT-KONTRAKT:\n"
         + turn_response_json_contract
         + "\n\nPLAYER_ACTION(JSON):\n"

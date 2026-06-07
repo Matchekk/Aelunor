@@ -73,3 +73,5 @@ Turn-Prompts sollen die kompakte World-Bible-Summary nutzen. Generatoren fuer
 Skills, Klassen, Items, Races, Beasts, Fraktionen, Orte und Titel sollen Namen
 aus `identity`, `linguistics`, `naming_rules`, `metaphysics`, `progression`,
 `races_and_beasts`, `items` und `tone_and_style` ableiten.
+
+Die Prompt-Einbindung ist in `context_injection.md` beschrieben.
