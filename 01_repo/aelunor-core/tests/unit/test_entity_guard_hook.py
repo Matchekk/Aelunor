@@ -81,6 +81,24 @@ def test_collect_patch_entities_for_guard_supports_real_patch_shapes_and_dedupe(
     assert "Karnbund" in names
 
 
+def test_collect_patch_entities_does_not_treat_moment_titles_as_items():
+    patch = {
+        "items_new": {
+            "moment_1": {"name": "Hand zurueck - zu spaet", "kind": "event"},
+            "item_veyr": {"name": "Veyrglas-Klinge"},
+            "item_support": {"name": "Support Gear", "tags": ["training"]},
+        }
+    }
+
+    entities = collect_patch_entities_for_guard(patch)
+    lookup = {(entry["entity_type"], entry["name"]) for entry in entities}
+
+    assert ("item", "Hand zurueck - zu spaet") not in lookup
+    assert ("plotpoint", "Hand zurueck - zu spaet") in lookup
+    assert ("item", "Veyrglas-Klinge") in lookup
+    assert ("item", "Support Gear") in lookup
+
+
 def test_build_patch_entity_guard_report_returns_summary_and_missing_bible_is_safe():
     report = build_patch_entity_guard_report(_patch(), _bible())
     missing = build_patch_entity_guard_report(_patch(), None)

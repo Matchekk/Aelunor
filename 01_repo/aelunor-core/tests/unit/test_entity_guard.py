@@ -24,7 +24,7 @@ def _fantasy_bible():
         "linguistics": {
             "world_languages": {
                 "primary_language": {
-                    "common_roots": ["veyr", "karn", "nok", "thar"],
+                    "common_roots": ["veyr", "karn", "nok", "thar", "ssereth", "vael"],
                     "example_words": {"oath": "karn", "night": "nok"},
                 }
             },
@@ -45,6 +45,9 @@ def _fantasy_bible():
                 "examples": ["Veyrglas-Klinge"],
                 "avoid": ["Heiltrank"],
             },
+            "settlements": {"patterns": [], "examples": ["Ssereth-Vael", "Nok-Thar"], "avoid": []},
+            "factions": {"patterns": [], "examples": ["Orden des Bluttores"], "avoid": []},
+            "titles": {"patterns": [], "examples": ["Bluttor-Hueter"], "avoid": []},
         },
         "metaphysics": {"main_power_name": "Veyr", "power_source": "Eid, Blut und Erinnerung"},
         "elements": {"status_effect_vocabulary": ["Aschebrand", "Veyr-Riss"]},
@@ -62,7 +65,8 @@ def _superhero_bible():
         },
         "created_from_setup": {"theme": "MHA-artige Hero Academy"},
         "naming_rules": {
-            "people": {"patterns": ["Japanese given name + family name"], "examples": ["Akira Tanaka"], "avoid": []},
+            "people": {"patterns": ["Japanese given name + family name"], "examples": ["Akira Tanaka", "Rei Hoshikawa", "Daichi Mori"], "avoid": []},
+            "titles": {"patterns": ["Role or class office"], "examples": ["Class Representative"], "avoid": []},
             "factions": {"patterns": ["School or Hero Office"], "examples": ["Hoshino Academy", "Pro Hero Office"], "avoid": []},
             "skills": {"patterns": ["Quirk: {concept}", "{codename} Rush"], "examples": ["Quirk: Glass Nerve", "Zero-Point Grip"], "avoid": ["Magic Sword"]},
         },
@@ -143,6 +147,28 @@ def test_superhero_academy_accepts_japanese_and_school_names():
     assert person["score"] >= 60
     assert faction["score"] >= 70
     assert faction["status"] == "ok"
+
+
+def test_dark_fantasy_survival_is_not_inferred_as_post_apocalyptic():
+    bible = _fantasy_bible()
+    bible["created_from_setup"] = {
+        "theme": "Dark fantasy survival world with cursed magic, races, beasts and invented languages.",
+        "world_structure": "ruins and dangerous Eidstrassen",
+    }
+
+    assert infer_world_naming_mode(bible) == "dark_fantasy"
+
+
+def test_plotpoint_names_are_recognized_and_scored_from_world_signals():
+    fantasy = assess_entity_name_against_world_bible("Geluebde des Tores von Ssereth-Vael", "plotpoint", _fantasy_bible())
+    rescue = assess_entity_name_against_world_bible("Rettung von Rei Hoshikawa", "plotpoint", _superhero_bible())
+    attention = assess_entity_name_against_world_bible("Daichi Moris Aufmerksamkeit", "plotpoint", _superhero_bible())
+
+    assert fantasy["entity_type"] == "plotpoint"
+    assert "Entity type is not recognized by the guard." not in fantasy["reasons"]
+    assert fantasy["score"] >= 70
+    assert rescue["score"] >= 70
+    assert attention["score"] >= 60
 
 
 def test_modern_name_in_fantasy_is_not_rewarded_without_bible_permission():

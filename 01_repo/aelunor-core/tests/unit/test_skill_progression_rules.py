@@ -9,6 +9,7 @@ from app.services.progression.skills import (
     normalize_skill_store,
     skill_id_from_name,
 )
+from app.services.progression import classes, manifestation
 
 
 def test_default_skill_currently_starts_at_level_zero_xp_zero_and_no_rank() -> None:
@@ -88,3 +89,10 @@ def test_ability_id_from_name_is_stable_and_normalize_ability_preserves_it() -> 
 
     assert ability_id == "ability_leuchtende-klinge"
     assert ability["id"] == ability_id
+
+
+def test_progression_element_id_ports_resolve_name_without_type_error() -> None:
+    world = {"elements": {"elem_feuer_herz": {"name": "Feuer Herz"}}, "element_alias_index": {}}
+
+    assert classes.normalize_element_id_list(["Feuer Herz"], world) == ["elem_feuer_herz"]
+    assert manifestation.normalize_element_id_list(["Feuer Herz"], world) == ["elem_feuer_herz"]

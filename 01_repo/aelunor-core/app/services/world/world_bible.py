@@ -6,6 +6,14 @@ import json
 import re
 from typing import Any, Dict, Iterable, List
 
+from app.services.world.world_bible_fallback_content import (
+    clean_language_roots,
+    fallback_naming_examples,
+    fallback_race_languages,
+    fallback_roots_for_setup,
+    infer_setup_naming_mode,
+)
+
 
 WorldBible = Dict[str, Any]
 
@@ -332,6 +340,7 @@ def _normalize_rule_blocks(bible: WorldBible) -> None:
 
 
 def _apply_fallback_linguistics(bible: WorldBible, roots: List[str], world_name: str, resource: str) -> None:
+    roots = clean_language_roots(roots)
     bible["linguistics"]["world_languages"]["primary_language"].update(
         {"name": f"{world_name}-Gemeinsprache", "sound": "hart, erinnernd, mit kurzen Roots", "phonetic_rules": ["Konsonantencluster tragen Herkunft.", "Bindestriche markieren kulturelle Doppeldeutung."], "common_roots": roots[:6], "example_words": {roots[0]: "Quelle", roots[1]: "Ort", roots[2]: "Eid"}}
     )
@@ -341,15 +350,20 @@ def _apply_fallback_linguistics(bible: WorldBible, roots: List[str], world_name:
 
 
 def _apply_fallback_rules(bible: WorldBible, roots: List[str], resource: str, setup: Dict[str, Any]) -> None:
-    bible["metaphysics"].update({"main_power_name": resource, "main_power_description": f"{resource} entsteht aus Handlung, Erinnerung und Preis.", "power_source": setup["world_structure"] or "Weltgesetz", "power_cost": "Jede Wirkung braucht Quelle, Risiko oder Nachhall.", "world_laws": setup["world_laws"], "taboos": _list(setup["taboos"]), "death_rule": "Tod ist eine kanonische Konsequenz, wenn das Setup ihn erlaubt.", "healing_rule": "Heilung benoetigt Material, Zeit, Schuld oder Ressourcen.", "corruption_rule": "Macht ohne bezahlten Preis hinterlaesst Spuren."})
+    mode = infer_setup_naming_mode(setup)
+    examples = fallback_naming_examples(setup, roots, resource)
+    bible["metaphysics"].update({"main_power_name": resource, "main_power_description": f"{resource} entsteht aus Handlung, Erinnerung und Preis.", "power_source": setup["world_structure"] or "Weltgesetz", "power_cost": "Jede Wirkung braucht Quelle, Risiko oder Nachhall.", "power_limitations": ["Wirkungen brauchen sichtbare Kosten oder Erschoepfung.", "Namen, Orte und Materialien begrenzen die Kraft."], "world_laws": setup["world_laws"], "taboos": _list(setup["taboos"]), "death_rule": "Tod ist eine kanonische Konsequenz, wenn das Setup ihn erlaubt.", "healing_rule": "Heilung benoetigt Material, Zeit, Schuld oder Ressourcen.", "corruption_rule": "Macht ohne bezahlten Preis hinterlaesst Spuren."})
     for key in _naming_rule_keys():
         bible["naming_rules"][key]["avoid"] = GENERIC_FORBIDDEN_TERMS
+        bible["naming_rules"][key]["examples"] = examples.get(key, [])
     bible["naming_rules"]["skills"]["patterns"] = [f"{roots[0].title()}-{roots[2].title()} + Handlung", f"{resource} + Kosten + sichtbare Spur"]
     bible["naming_rules"]["items"]["patterns"] = [f"Materialroot {roots[3]} + Herkunft + Nebenwirkung", "Keine generischen Verbrauchsitems ohne Kultur."]
     bible["progression"].update({"class_origin_rules": "Klassen entstehen aus Biografie, Handlung und Weltresonanz.", "class_naming_rules": ["Klassen tragen Weltroots, Eid, Ort oder Preis."], "skill_manifestation_rules": ["Skills manifestieren aus Handlung, Trauma, Elementresonanz und Kosten."], "skill_cost_rules": [f"{resource} ist begrenzt und nie kostenlos."], "ascension_rules": "Aufstieg braucht Milestone, Risiko und kanonische Begruendung.", "forbidden_progression_patterns": ["kostenlose Heilung", "beliebige Klassen ohne Ursprung"]})
     bible["races_and_beasts"].update({"race_origin_rules": "Intelligente Races haben Endonyme, Exonyme und eigene Naming-Logik.", "race_naming_rules": ["Race-Namen aus Sprache, Selbstbild und Fremdzuschreibung ableiten."], "beast_origin_rules": "Beasts folgen Oekologie, Spur und Entdeckung.", "beast_naming_rules": ["Beast-Namen aus Verhalten, Habitat oder Warnroots ableiten."], "ecology_rules": ["Kein Monster ohne Habitat, Spur oder Nahrungskette."], "knowledge_discovery_rules": ["Codex-Wissen wird durch Kontakt, Lore oder Kampf freigelegt."]})
-    bible["items"].update({"material_vocabulary": [roots[3], roots[4], resource, f"{resource}-Rest"], "item_naming_rules": bible["naming_rules"]["items"]["patterns"], "earth_item_transformation_rules": ["Erdgegenstaende werden durch Material, Herkunft und Weltkosten umgedeutet."]})
-    bible["tone_and_style"].update({"narration_rules": [setup["tone"] or "konkret, koerperlich, weltgebunden"], "forbidden_words": GENERIC_FORBIDDEN_TERMS, "preferred_motifs": [setup["theme"], setup["central_conflict"], resource]})
+    item_rules = ["Support Gear hat Funktion, Training und Limit."] if mode == "superhero_academy" else ["Relikte tragen Herkunft, Material und Fluchspur.", "Klingen, Siegel und Glas brauchen Kostenlogik."]
+    bible["items"].update({"material_vocabulary": [roots[3], roots[4], resource, f"{resource}-Rest"], "item_naming_rules": bible["naming_rules"]["items"]["patterns"], "curse_rules": [] if mode == "superhero_academy" else ["Flueche brauchen Ausloeser, Preis und sichtbare Spur."], "relic_rules": item_rules, "earth_item_transformation_rules": ["Erdgegenstaende werden durch Material, Herkunft und Weltkosten umgedeutet."]})
+    bible["linguistics"]["race_languages"].update(fallback_race_languages(setup, roots))
+    bible["tone_and_style"].update({"narration_rules": [setup["tone"] or "konkret, koerperlich, weltgebunden"], "forbidden_words": GENERIC_FORBIDDEN_TERMS, "preferred_motifs": [setup["theme"], setup["central_conflict"], resource], "sensory_palette": {"sights": [resource, roots[0]], "sounds": ["Klicken", "Atem"], "smells": [], "textures": ["kaltes Metall"]}})
 
 
 def _normalize_world_element_ids(bible: WorldBible, world: Any) -> None:
@@ -371,12 +385,7 @@ def _should_generate_fallback(raw: Dict[str, Any], setup_answers: Any) -> bool:
 
 
 def _roots_for_setup(setup: Dict[str, Any], seed: str) -> List[str]:
-    source = " ".join(str(setup.get(key) or "") for key in ("theme", "tone", "resource_name", "world_structure", "central_conflict"))
-    tokens = [re.sub(r"[^A-Za-z0-9]+", "", part).lower()[:5] for part in source.split()]
-    roots = [token for token in tokens if len(token) >= 3]
-    fallback = ["veyr", "keth", "orn", "thar", "nok", "ael", "kar", "ssar", "morn", "hal"]
-    offset = int(seed[:2], 16) % len(fallback)
-    return _unique_strings(roots + fallback[offset:] + fallback[:offset])[:10]
+    return fallback_roots_for_setup(setup, seed)
 
 
 def _generated_name(roots: List[str], seed: str) -> str:

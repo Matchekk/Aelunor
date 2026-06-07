@@ -476,13 +476,14 @@ def turn_attribute_dependencies() -> TurnAttributeDependencies:
 
 
 def _default_turn_llm_dependencies() -> TurnLlmDependencies:
-    from app.adapters.ollama_config import OLLAMA_ADAPTER, OLLAMA_TEMPERATURE, OLLAMA_TIMEOUT_SEC
+    from app.adapters.llm_config import LLM_ADAPTER
+    from app.adapters.ollama_config import OLLAMA_TEMPERATURE, OLLAMA_TIMEOUT_SEC
     from app.catalogs.runtime_catalogs import RESPONSE_SCHEMA
     from app.config.errors import ERROR_CODE_JSON_REPAIR as DEFAULT_ERROR_CODE_JSON_REPAIR
     from app.services.llm.client import build_default_llm_client_settings
 
     return build_turn_llm_dependencies(
-        adapter=OLLAMA_ADAPTER,
+        adapter=LLM_ADAPTER,
         settings=build_default_llm_client_settings(
             timeout_sec=OLLAMA_TIMEOUT_SEC,
             temperature=OLLAMA_TEMPERATURE,

@@ -1,4 +1,7 @@
+import inspect
 import json
+
+import pytest
 
 from scripts import run_ai_story_smoke as smoke
 
@@ -17,6 +20,69 @@ def test_parse_args_and_turn_cap():
     assert args.out == "tmp.md"
     assert args.keep_campaign is True
     assert smoke.normalize_turn_count(args.turns) == smoke.MAX_TURNS
+
+
+def test_parse_args_accepts_action_type_and_debug_traceback_alias():
+    args = smoke.parse_args(["--action-type", "do", "--traceback"])
+
+    assert args.action_type == "do"
+    assert args.debug is True
+
+    args = smoke.parse_args(["--debug"])
+    assert args.debug is True
+
+
+def test_smoke_runner_does_not_hardcode_invalid_play_action_type():
+    source = inspect.getsource(smoke.run_story_smoke)
+
+    assert 'action_type="play"' not in source
+    assert "resolve_smoke_action_type" in source
+
+
+def test_resolve_smoke_action_type_prefers_valid_player_action_from_config():
+    action_type = smoke.resolve_smoke_action_type(configured_action_types=("story", "do", "say"))
+
+    assert action_type == "do"
+    assert action_type in smoke.available_smoke_action_types(("story", "do", "say"))
+
+
+def test_seed_start_scene_creates_known_character_scene():
+    scenario = smoke.SCENARIOS["dark-fantasy"]
+    state = {"characters": {"slot_1": {}}}
+
+    smoke._seed_start_scene(state, scenario)
+
+    scene_id = scenario.start_scene["id"]
+    assert state["characters"]["slot_1"]["scene_id"] == scene_id
+    assert scene_id in state["scenes"]
+    assert scene_id in state["map"]["nodes"]
+
+
+def test_invalid_action_type_formats_clear_error_without_naked_keyerror():
+    with pytest.raises(ValueError) as raised:
+        smoke.resolve_smoke_action_type("play", configured_action_types=("do", "story"))
+
+    message = smoke.format_smoke_failure(
+        smoke.SmokeRunFailure(
+            phase="turn_creation",
+            scenario_key="dark-fantasy",
+            turn_index=1,
+            actor="slot_1",
+            action_type="play",
+            available_action_types=("do", "story"),
+            original=raised.value,
+        )
+    )
+
+    assert "phase=turn_creation" in message
+    assert "scenario=dark-fantasy" in message
+    assert "turn=1" in message
+    assert "Actor: slot_1" in message
+    assert "Action type: play" in message
+    assert "Available action types: do, story" in message
+    assert "Original error type: ValueError" in message
+    assert "Action type 'play' is not configured." in message
+    assert "KeyError('play')" not in message
 
 
 def test_resolve_provider_prefers_argument_then_aelunor_env():

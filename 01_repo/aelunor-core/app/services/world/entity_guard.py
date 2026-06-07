@@ -5,7 +5,7 @@ from difflib import SequenceMatcher
 from typing import Any, Dict, Iterable, List
 
 
-KNOWN_ENTITY_TYPES = {"person", "skill", "item", "location", "faction", "beast", "race", "title", "class"}
+KNOWN_ENTITY_TYPES = {"person", "skill", "item", "location", "faction", "beast", "race", "title", "class", "plotpoint"}
 GENERIC_TERMS = {
     "feuerball", "heiltrank", "magiergilde", "goblinhoehle", "goblinhöhle", "dunkler wald",
     "schattenklinge", "eisdrache", "kriegerklasse", "magieschild", "feuerklinge", "eispfeil",
@@ -182,12 +182,15 @@ def collect_world_bible_name_signals(world_bible: dict | None) -> dict:
         signals["race_roots"].extend(_terms(list(common_roots.values())))
         for patterns in _dict(language.get("naming_patterns")).values():
             signals["patterns"].setdefault("all", []).extend(_terms(patterns))
+            signals["patterns"].setdefault("plotpoint", []).extend(_terms(patterns))
     signals["race_roots"].extend(_terms(_dict(linguistics.get("faction_dialects")).values()))
     for key, rule in naming_rules.items():
         entity_key = _rule_entity_type(key)
         rule = _dict(rule)
         examples = _terms(rule.get("examples"))
         signals["examples"].setdefault(entity_key, []).extend(examples)
+        if key in {"titles", "factions", "regions", "settlements", "people"}:
+            signals["examples"].setdefault("plotpoint", []).extend(examples)
         signals["examples"]["all"].extend(examples)
         signals["allowed_terms"].extend(examples)
         signals["avoid_terms"].setdefault(entity_key, []).extend(_terms(rule.get("avoid")))
@@ -200,6 +203,7 @@ def collect_world_bible_name_signals(world_bible: dict | None) -> dict:
     signals["forbidden_terms"].extend(_terms(identity.get("forbidden_generic_feel")))
     signals["forbidden_terms"].extend(_terms(tone.get("forbidden_words")))
     signals["metaphysics_terms"].extend(_terms([metaphysics.get("main_power_name"), metaphysics.get("power_source"), metaphysics.get("power_cost")]))
+    signals["metaphysics_terms"].extend(_terms(tone.get("preferred_motifs")))
     signals["element_terms"].extend(_terms(elements.get("status_effect_vocabulary")) + _terms(elements.get("element_language_rules")))
     signals["material_terms"].extend(_terms(items.get("material_vocabulary")) + _terms(_dict(items.get("rarity_language")).values()))
     return {key: _dedupe_signal(value) for key, value in signals.items()}
@@ -217,18 +221,46 @@ def infer_world_naming_mode(world_bible: dict | None) -> str:
         _dict(bible.get("tone_and_style")).get("preferred_motifs"),
         _dict(bible.get("naming_rules")),
     ])))
+    if any(needle in text for needle in ("superheld", "superhero", "hero academy", "quirk", "academy", "akademie", "class 1", "pro hero")):
+        return "superhero_academy"
+
+    fantasy_needles = (
+        "dark fantasy",
+        "duester",
+        "dunkel",
+        "sakral",
+        "blut",
+        "eide",
+        "eid",
+        "grim",
+        "fantasy",
+        "magie",
+        "magic",
+        "cursed",
+        "curse",
+        "relikt",
+        "relic",
+        "beast",
+        "race",
+        "races",
+        "echsen",
+        "metaphys",
+        "invented language",
+        "element",
+    )
+    if any(needle in text for needle in fantasy_needles):
+        return "dark_fantasy" if any(needle in text for needle in ("dark fantasy", "duester", "dunkel", "sakral", "blut", "eid", "cursed", "curse", "relikt", "relic")) else "invented_fantasy"
+    if any(needle in text for needle in ("isekai", "reinkarn", "summoned", "beschworen")):
+        return "isekai_fantasy"
+
     checks = [
-        ("superhero_academy", ("superheld", "hero", "quirk", "academy", "akademie", "class 1", "pro hero")),
         ("modern_japanese", ("japan", "tokyo", "mha", "anime", "schul", "academy", "akademie")),
         ("cyberpunk", ("cyber", "neon", "konzern", "corp", "implant", "runner", "net")),
         ("sci_fi", ("sci fi", "space", "raumschiff", "kolonie", "planet", "alien")),
         ("pirate", ("pirat", "hafen", "schiff", "reef", "captain", "kapitaen", "sturm")),
-        ("post_apocalyptic", ("postapok", "apokal", "ruinen", "wasteland", "survival")),
+        ("post_apocalyptic", ("postapok", "apokal", "wasteland")),
         ("mystery", ("mystery", "detektiv", "geheimnis", "okkult", "ermittlung")),
-        ("isekai_fantasy", ("isekai", "reinkarn", "summoned", "beschworen")),
-        ("dark_fantasy", ("dark fantasy", "duester", "dunkel", "sakral", "blut", "eide", "grim")),
         ("modern_global", ("modern", "gegenwart", "schule", "stadt", "hospital", "high school")),
-        ("invented_fantasy", ("fantasy", "magie", "dungeon", "element", "mittelalter")),
     ]
     for mode, needles in checks:
         if any(needle in text for needle in needles):
@@ -240,7 +272,7 @@ def name_matches_world_naming_mode(name: str, entity_type: str, naming_mode: str
     name_text = _text(name)
     name_norm = _norm(name_text)
     if naming_mode in {"modern_japanese", "superhero_academy"}:
-        return _looks_japanese_person_name(name_text) or any(token in name_norm for token in ("academy", "akademie", "class", "hero", "quirk", "support gear", "license", "office"))
+        return _looks_japanese_person_name(name_text) or _contains_japanese_name_token(name_text) or any(token in name_norm for token in ("academy", "akademie", "class", "hero", "quirk", "support gear", "license", "office"))
     if naming_mode == "modern_global":
         return _looks_modern_person_name(name_text) or any(token in name_norm for token in ("hospital", "high", "school", "central", "westbridge", "office"))
     if naming_mode == "cyberpunk":
@@ -307,10 +339,11 @@ def _matches_any(name_norm: str, terms: Iterable[str]) -> List[str]:
 
 def _matching_examples(name: str, examples: Iterable[str]) -> List[str]:
     name_norm = _norm(name)
+    name_loose = _loose_possessive_norm(name)
     found = []
     for example in examples:
         example_norm = _norm(example)
-        if example_norm and (example_norm in name_norm or name_norm in example_norm or SequenceMatcher(None, name_norm, example_norm).ratio() >= 0.72):
+        if example_norm and (example_norm in name_norm or example_norm in name_loose or name_norm in example_norm or SequenceMatcher(None, name_norm, example_norm).ratio() >= 0.72):
             found.append(_text(example))
     return _unique(found)
 
@@ -326,12 +359,17 @@ def _looks_japanese_person_name(name: str) -> bool:
     return bool(parts & common) and _looks_modern_person_name(name)
 
 
+def _contains_japanese_name_token(name: str) -> bool:
+    common = {"akira", "mina", "daichi", "yume", "sato", "tanaka", "kuroda", "hoshino", "kaminari", "mika", "ren", "rei", "mori"}
+    return bool(set(_norm(name).split()) & common)
+
+
 def _is_multiterm(name: str) -> bool:
     return bool(re.search(r"[\s'\-:]", _text(name)))
 
 
 def _rule_entity_type(key: str) -> str:
-    mapping = {"people": "person", "settlements": "location", "regions": "location", "ruins": "location", "beasts": "beast", "factions": "faction", "skills": "skill", "items": "item", "titles": "title"}
+    mapping = {"people": "person", "settlements": "location", "regions": "location", "ruins": "location", "beasts": "beast", "factions": "faction", "skills": "skill", "items": "item", "titles": "title", "plotpoints": "plotpoint"}
     return mapping.get(str(key), str(key))
 
 
@@ -387,6 +425,11 @@ def _norm(value: Any) -> str:
     text = _text(value).lower()
     text = text.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
     return re.sub(r"[^a-z0-9]+", " ", text).strip()
+
+
+def _loose_possessive_norm(value: Any) -> str:
+    words = _norm(value).split()
+    return " ".join(word[:-1] if len(word) > 4 and word.endswith("s") else word for word in words)
 
 
 def _unique(values: Iterable[Any]) -> List[str]:

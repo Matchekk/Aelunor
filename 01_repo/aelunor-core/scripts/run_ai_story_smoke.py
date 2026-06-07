@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import traceback
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -8,6 +9,15 @@ CORE_ROOT = Path(__file__).resolve().parents[1]
 if str(CORE_ROOT) not in sys.path:
     sys.path.insert(0, str(CORE_ROOT))
 
+from scripts.ai_story_smoke_actions import (
+    SMOKE_ACTOR,
+    SMOKE_PLAYER_ID,
+    SmokeRunFailure,
+    available_smoke_action_types,
+    build_generic_smoke_failure,
+    format_smoke_failure,
+    resolve_smoke_action_type,
+)
 from scripts.ai_story_smoke_scenarios import SCENARIOS, SmokeScenario
 from scripts.ai_story_smoke_support import (
     MAX_TURNS,
@@ -37,9 +47,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     configure_provider_environment(provider)
     print("WARNUNG: Dieser manuelle Smoke-Test nutzt echte LLM-Aufrufe und kann API-Kosten verursachen.", file=sys.stderr)
     try:
-        report_data, campaign_path = run_story_smoke(provider=provider, scenario_key=args.scenario, turns=turns)
+        report_data, campaign_path = run_story_smoke(
+            provider=provider,
+            scenario_key=args.scenario,
+            turns=turns,
+            action_type=args.action_type,
+        )
+    except SmokeRunFailure as exc:
+        print(format_smoke_failure(exc), file=sys.stderr)
+        if args.debug:
+            traceback.print_exception(exc, file=sys.stderr)
+        return 1
     except Exception as exc:
-        print(f"AI Story Smoke abgebrochen: {exc}", file=sys.stderr)
+        print(format_smoke_failure(build_generic_smoke_failure(exc, scenario_key=args.scenario)), file=sys.stderr)
+        if args.debug:
+            traceback.print_exception(exc, file=sys.stderr)
         return 1
     out_path = Path(args.out) if args.out else default_report_path()
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -53,7 +75,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-def run_story_smoke(*, provider: str, scenario_key: str, turns: int) -> tuple[dict[str, Any], Path | None]:
+def run_story_smoke(*, provider: str, scenario_key: str, turns: int, action_type: str | None = None) -> tuple[dict[str, Any], Path | None]:
     from app import main as app_main
     from app.core.ids import hash_secret, make_id, utc_now
     from app.services import state_engine, turn_engine
@@ -63,6 +85,19 @@ def run_story_smoke(*, provider: str, scenario_key: str, turns: int) -> tuple[di
     from scripts.report_world_bible_quality import build_world_bible_quality_review, render_markdown_report as render_bible_quality_markdown
 
     scenario = SCENARIOS[scenario_key]
+    available_action_types = available_smoke_action_types()
+    try:
+        smoke_action_type = resolve_smoke_action_type(action_type, available_action_types)
+    except ValueError as exc:
+        raise SmokeRunFailure(
+            phase="action_type_resolution",
+            scenario_key=scenario.key,
+            actor=SMOKE_ACTOR,
+            action_type=action_type or "",
+            available_action_types=available_action_types,
+            original=exc,
+        ) from exc
+
     turn_engine.configure(app_main.__dict__)
     state_engine.ensure_campaign_storage()
     campaign, campaign_path = _build_campaign(
@@ -76,15 +111,26 @@ def run_story_smoke(*, provider: str, scenario_key: str, turns: int) -> tuple[di
     )
     turn_samples: list[dict[str, Any]] = []
     completed = 0
-    for action in scenario.actions[:turns]:
-        turn = turn_engine.create_turn_record(
-            campaign=campaign,
-            actor="slot_1",
-            player_id="player_smoke_host",
-            action_type="play",
-            content=action,
-            trace_ctx={"trace_id": f"ai_smoke_{scenario.key}_{completed + 1}"},
-        )
+    for turn_index, action in enumerate(scenario.actions[:turns], start=1):
+        try:
+            turn = turn_engine.create_turn_record(
+                campaign=campaign,
+                actor=SMOKE_ACTOR,
+                player_id=SMOKE_PLAYER_ID,
+                action_type=smoke_action_type,
+                content=action,
+                trace_ctx={"trace_id": f"ai_smoke_{scenario.key}_{turn_index}"},
+            )
+        except Exception as exc:
+            raise SmokeRunFailure(
+                phase="turn_creation",
+                scenario_key=scenario.key,
+                turn_index=turn_index,
+                actor=SMOKE_ACTOR,
+                action_type=smoke_action_type,
+                available_action_types=available_action_types,
+                original=exc,
+            ) from exc
         completed += 1
         state_engine.save_campaign(campaign, reason="ai_story_smoke")
         turn_samples.append(turn_sample(action, turn))
@@ -146,6 +192,7 @@ def _build_campaign(
     character = _smoke_character(state_engine, scenario, world_bible, living_profile_factory)
     state.setdefault("world", {})["bible"] = world_bible
     state.setdefault("characters", {})["slot_1"] = character
+    _seed_start_scene(state, scenario)
     state.setdefault("meta", {})["phase"] = "active"
     state["meta"]["turn"] = 0
     state["meta"]["intro_state"] = _generated_intro_state()
@@ -199,6 +246,30 @@ def _smoke_character(state_engine: Any, scenario: SmokeScenario, world_bible: di
     }
     character["living_profile"] = living_profile_factory(character, world_bible=world_bible, setup_answers=scenario.character)
     return character
+
+
+def _seed_start_scene(state: dict[str, Any], scenario: SmokeScenario) -> None:
+    scene = scenario.start_scene
+    scene_id = str(scene.get("id") or "").strip()
+    if not scene_id:
+        return
+    scene_name = str(scene.get("name") or scene_id).strip()
+    danger = int(scene.get("danger") or 0)
+    state.setdefault("map", {"nodes": {}, "edges": []}).setdefault("nodes", {})[scene_id] = {
+        "name": scene_name,
+        "type": str(scene.get("type") or "location"),
+        "danger": danger,
+        "discovered": True,
+    }
+    state.setdefault("map", {"nodes": {}, "edges": []}).setdefault("edges", [])
+    state.setdefault("scenes", {})[scene_id] = {
+        "name": scene_name,
+        "danger": danger,
+        "notes": str(scene.get("notes") or ""),
+    }
+    character = (state.get("characters") or {}).get("slot_1")
+    if isinstance(character, dict):
+        character["scene_id"] = scene_id
 
 
 def _generated_intro_state() -> dict[str, str]:

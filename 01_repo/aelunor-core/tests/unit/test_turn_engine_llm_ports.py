@@ -32,6 +32,17 @@ class TurnEngineLlmPortTests(unittest.TestCase):
         self.assertIn("build_turn_llm_dependencies", self.source)
         self.assertIn("build_default_llm_client_settings", self.source)
 
+    def test_default_turn_llm_dependencies_use_selected_llm_adapter(self) -> None:
+        default_function = next(
+            node
+            for node in self.tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "_default_turn_llm_dependencies"
+        )
+        default_source = ast.get_source_segment(self.source, default_function) or ""
+
+        self.assertIn("LLM_ADAPTER", default_source)
+        self.assertNotIn("adapter=OLLAMA_ADAPTER", default_source)
+
 
 if __name__ == "__main__":
     unittest.main()

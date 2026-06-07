@@ -22,7 +22,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--turns", type=int, default=DEFAULT_TURNS)
     parser.add_argument("--scenario", choices=sorted(SCENARIOS), default="dark-fantasy")
     parser.add_argument("--out", default=None)
+    parser.add_argument("--action-type", default=None, help="Configured Aelunor turn action type to use for smoke turns.")
     parser.add_argument("--keep-campaign", action="store_true")
+    parser.add_argument("--debug", "--traceback", dest="debug", action="store_true", help="Print full traceback on smoke failure.")
     return parser.parse_args(argv)
 
 

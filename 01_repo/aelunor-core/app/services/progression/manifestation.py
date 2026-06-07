@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from app.config.combat import COMBAT_NARRATIVE_HINTS
 from app.config.progression import DEFAULT_DYNAMIC_SKILL_LEVEL_MAX, FIRST_SKILL_FORCE_PROBABILITY
-from app.core.ids import deep_copy
+from app.core.ids import deep_copy, make_id
 from app.prompts.system_prompts import MANIFESTATION_SKILL_NAME_SYSTEM_PROMPT
 from app.schemas.llm import MANIFESTATION_SKILL_NAME_SCHEMA
 from app.services.canon.progression_gate import (
@@ -21,7 +21,7 @@ from app.services.progression import skills
 from app.services.world.codex import normalize_codex_alias_text, stable_sorted_unique_strings
 from app.services.world.element_class_paths import resolve_class_element_id as _resolve_class_element_id
 from app.services.world.element_ids import normalize_element_id_list as _normalize_element_id_list
-from app.services.world.element_profiles import element_id_from_name
+from app.services.world.element_profiles import element_id_from_name as _element_id_from_name
 from app.services.world.math_utils import clamp
 from app.services.world.progression import normalize_class_current
 from app.services.world.text_normalization import first_sentences, normalized_eval_text
@@ -76,6 +76,14 @@ def normalize_element_id_list(values: Any, world: Optional[Dict[str, Any]] = Non
         world,
         normalize_codex_alias_text=normalize_codex_alias_text,
         element_id_from_name=element_id_from_name,
+    )
+
+
+def element_id_from_name(name: str) -> str:
+    return _element_id_from_name(
+        name,
+        normalize_codex_alias_text=normalize_codex_alias_text,
+        make_id=make_id,
     )
 
 

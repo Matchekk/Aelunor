@@ -10,6 +10,7 @@ class SmokeScenario:
     title: str
     setup_answers: dict[str, Any]
     character: dict[str, Any]
+    start_scene: dict[str, Any]
     actions: list[str]
 
 
@@ -42,6 +43,13 @@ SCENARIOS: dict[str, SmokeScenario] = {
             "focus": "Relikte, Sprache und Rettung",
             "class_name": "Eidlaeuferin",
             "skill_name": "Veyrgriff",
+        },
+        start_scene={
+            "id": "scene_tor_ssereth_vael",
+            "name": "Tor von Ssereth-Vael",
+            "type": "location",
+            "danger": 4,
+            "notes": "Smoke-Startszene mit fremden Runen und einem Echsenmenschen am Stadttor.",
         },
         actions=[
             "Ich untersuche die fremden Runen am Tor und frage den Echsenmenschen nach dem Namen dieser Stadt.",
@@ -78,6 +86,13 @@ SCENARIOS: dict[str, SmokeScenario] = {
             "focus": "Quirk-Training, Support Gear und Rivalitaet",
             "class_name": "First-Year Hero Candidate",
             "skill_name": "Pulse Step",
+        },
+        start_scene={
+            "id": "scene_hoshino_training_arena",
+            "name": "Hoshino Academy Trainingsarena",
+            "type": "location",
+            "danger": 1,
+            "notes": "Smoke-Startszene fuer die erste Trainingsstunde und Quirk-Beobachtungen.",
         },
         actions=[
             "Ich stelle mich in der ersten Trainingsstunde vor und beobachte die Quirks der anderen.",

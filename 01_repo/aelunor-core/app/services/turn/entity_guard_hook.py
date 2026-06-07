@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, Iterable, List
 
+from app.services.turn.entity_guard_item_classifier import looks_like_item_payload, looks_like_moment_or_plotpoint
 from app.services.world.entity_guard import build_entity_guard_report
 
 
@@ -85,6 +86,8 @@ def collect_item_entities(patch: dict) -> list[dict]:
         iterable = []
     for key, item in iterable:
         item = item if isinstance(item, dict) else {}
+        if not looks_like_item_payload(item):
+            continue
         name = _name_or_readable_id(item.get("name"), item.get("id") or key)
         if name:
             entities.append({"entity_type": "item", "name": name, "source_path": f"items_new[{key}].name"})
@@ -158,6 +161,19 @@ def collect_plotpoint_entities(patch: dict) -> list[dict]:
                 name = _text(plotpoint.get("title") or plotpoint.get("name"))
                 if name:
                     entities.append({"entity_type": "plotpoint", "name": name, "source_path": f"{key}[{index}].title"})
+    items_new = patch.get("items_new") or {}
+    if isinstance(items_new, dict):
+        iterable = items_new.items()
+    elif isinstance(items_new, list):
+        iterable = enumerate(items_new)
+    else:
+        iterable = []
+    for key, item in iterable:
+        if not isinstance(item, dict) or looks_like_item_payload(item):
+            continue
+        name = _text(item.get("title") or item.get("name"))
+        if name and looks_like_moment_or_plotpoint(item, name):
+            entities.append({"entity_type": "plotpoint", "name": name, "source_path": f"items_new[{key}].title"})
     return entities
 
 
@@ -247,7 +263,9 @@ def _text(value: Any) -> str:
 
 
 def _norm(value: Any) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", _text(value).lower()).strip()
+    text = _text(value).lower()
+    text = text.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
+    return re.sub(r"[^a-z0-9]+", " ", text).strip()
 
 
 def _empty_summary() -> dict:

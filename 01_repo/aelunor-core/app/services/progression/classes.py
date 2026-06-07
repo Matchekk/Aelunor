@@ -4,7 +4,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from app.config.progression import CLASS_ASCENSION_STATUSES, DEFAULT_DYNAMIC_SKILL_LEVEL_MAX, LEGACY_ROLE_CLASS_MAP, SKILL_RANK_ORDER
-from app.core.ids import deep_copy
+from app.core.ids import deep_copy, make_id
 from app.services.characters.resources import resource_name_for_character
 from app.services.progression import skills
 from app.services.world import progression as _world_progression
@@ -14,7 +14,7 @@ from app.services.world.element_class_paths import (
     resolve_class_path_rank_node as _resolve_class_path_rank_node,
 )
 from app.services.world.element_ids import normalize_element_id_list as _normalize_element_id_list
-from app.services.world.element_profiles import element_id_from_name
+from app.services.world.element_profiles import element_id_from_name as _element_id_from_name
 from app.services.world.math_utils import clamp
 from app.services.world.progression import default_class_current, normalize_class_current
 from app.services.world.text_normalization import normalized_eval_text
@@ -145,6 +145,14 @@ def resolve_class_path_rank_node(world: Dict[str, Any], current_class: Optional[
         resolve_class_element_id=resolve_class_element_id,
         normalize_skill_rank=skills.normalize_skill_rank,
         deep_copy=deep_copy,
+    )
+
+
+def element_id_from_name(name: str) -> str:
+    return _element_id_from_name(
+        name,
+        normalize_codex_alias_text=normalize_codex_alias_text,
+        make_id=make_id,
     )
 
 

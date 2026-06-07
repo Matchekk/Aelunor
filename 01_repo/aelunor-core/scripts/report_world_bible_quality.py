@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
+
+CORE_ROOT = Path(__file__).resolve().parents[1]
+if str(CORE_ROOT) not in sys.path:
+    sys.path.insert(0, str(CORE_ROOT))
 
 from app.core.paths import CAMPAIGNS_DIR
 from app.services.world.entity_guard import infer_world_naming_mode, looks_like_generic_fantasy_name

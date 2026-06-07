@@ -26,6 +26,34 @@ def _setup_summary():
     }
 
 
+def _dark_fantasy_setup():
+    return {
+        "theme": "Dark fantasy survival world with invented languages, cursed relics, dangerous magic costs and Echsenvoelker.",
+        "tone": "sakral, kalt, koerperlich, bedrohlich",
+        "difficulty": "hart",
+        "resource_name": "Veyr",
+        "world_structure": "zerbrochene Stadtstaaten an alten Eidstrassen",
+        "world_laws": ["Magie entsteht aus Erinnerung, Blut und Eid."],
+        "central_conflict": "Echsenvoelker bewahren alte Ortsnamen wie Ssereth-Vael.",
+        "factions_raw": "Eidwacht; Ssar-Keth-Keeper",
+        "taboos": "kostenlose Heilung, generische Magiergilden",
+    }
+
+
+def _superhero_setup():
+    return {
+        "theme": "Modern Japanese superhero academy with students, hero names, quirks, support gear and public rankings.",
+        "tone": "energiegeladen, kompetitiv, warm",
+        "difficulty": "mittel",
+        "resource_name": "Drive",
+        "world_structure": "moderne Akademien, Trainingsarenen, Agenturen und Stadtbezirke",
+        "world_laws": ["Kraefte sind persoenlich und koerperlich begrenzt."],
+        "central_conflict": "Schueler muessen Ruhm, Sicherheit und Verantwortung ausbalancieren.",
+        "factions_raw": "Hoshino Academy; Klasse 1-B; Support Lab",
+        "taboos": "Fantasy-Rassen erzwingen, generische Zauber",
+    }
+
+
 def test_default_world_bible_has_complete_v1_shape():
     bible = default_world_bible()
 
@@ -60,6 +88,46 @@ def test_fallback_world_bible_is_deterministic_and_uses_setup_values():
     assert first["created_from_setup"]["world_laws"] == setup["world_laws"]
     assert first["metaphysics"]["main_power_name"] == "Veyr"
     assert "Veyr" in first["items"]["material_vocabulary"]
+
+
+def test_fallback_world_bible_fills_naming_examples_for_dark_fantasy():
+    bible = generate_world_bible_fallback(_dark_fantasy_setup())
+
+    assert bible["naming_rules"]["settlements"]["examples"][:3] == ["Ssereth-Vael", "Nok-Thar", "Karnvar"]
+    assert "Karn-Griff" in bible["naming_rules"]["skills"]["examples"]
+    assert "Veyrglas-Klinge" in bible["naming_rules"]["items"]["examples"]
+    assert "Aschenmaul" in bible["naming_rules"]["beasts"]["examples"]
+
+
+def test_fallback_world_bible_fills_modern_superhero_examples_without_fantasy_bias():
+    bible = generate_world_bible_fallback(_superhero_setup())
+
+    assert "Akira Tanaka" in bible["naming_rules"]["people"]["examples"]
+    assert "Hoshino Academy" in bible["naming_rules"]["factions"]["examples"]
+    assert "Support Gear" in bible["naming_rules"]["items"]["examples"]
+    assert "Pro Hero" in bible["naming_rules"]["titles"]["examples"]
+    assert "Veyrglas-Klinge" not in bible["naming_rules"]["items"]["examples"]
+
+
+def test_fallback_race_language_exists_for_race_relevant_dark_fantasy():
+    bible = generate_world_bible_fallback(_dark_fantasy_setup())
+    language = bible["linguistics"]["race_languages"]["race_lizardfolk"]
+
+    assert language["language_name"] == "Ssarrek"
+    assert language["self_name_for_race"] == "Ssar-Keth"
+    assert "ssar" in language["common_roots"]
+    assert language["translation_behavior"]["partial_understanding_creates_wrong_category"] is True
+
+
+def test_fallback_language_roots_are_controlled_not_english_setup_fillers():
+    bible = generate_world_bible_fallback(_dark_fantasy_setup())
+    roots = []
+    for language in bible["linguistics"]["world_languages"].values():
+        roots.extend(language["common_roots"])
+
+    lowered = {str(root).lower() for root in roots}
+    assert not {"world", "with", "survi"} & lowered
+    assert {"ssar", "vael", "karn"} & lowered
 
 
 def test_normalize_race_language_supports_endonyms_roots_and_patterns():
