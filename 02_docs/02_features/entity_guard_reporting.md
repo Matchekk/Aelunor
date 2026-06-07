@@ -56,3 +56,6 @@ Die Daten koennen spaeter helfen bei:
 - Runtime World-Bible Extensions
 - Review-Scripts fuer Longruns
 - Entity-Quarantine-Entscheidungen
+
+Zur Einordnung, ob Guard-Findings an schwacher Bible-DNA liegen, nutze
+zusaetzlich `world_bible_quality_reporting.md`.

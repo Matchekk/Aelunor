@@ -77,3 +77,4 @@ aus `identity`, `linguistics`, `naming_rules`, `metaphysics`, `progression`,
 Die Prompt-Einbindung ist in `context_injection.md` beschrieben.
 Der diagnostische Namens- und Entity-Check ist in `entity_guard.md` beschrieben.
 Der beobachtende Patch-Hook fuer neue Entitaeten ist in `entity_guard_hook.md` beschrieben.
+Die read-only Qualitaetsauswertung der Bible ist in `world_bible_quality_reporting.md` beschrieben.
