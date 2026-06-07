@@ -12,6 +12,7 @@ if str(CORE_ROOT) not in sys.path:
     sys.path.insert(0, str(CORE_ROOT))
 
 from app.core.paths import CAMPAIGNS_DIR
+from scripts.report_filters import add_campaign_filter_args, build_filter_options, filter_campaigns
 
 
 STATUSES = ("ok", "weak", "generic", "forbidden", "needs_review", "unknown")
@@ -85,12 +86,13 @@ def flatten_entity_guard_report(report: dict, *, campaign_meta: dict, turn: dict
                 "source_path": str(entry.get("source_path") or ""),
                 "source_paths": [str(path) for path in (entry.get("source_paths") or []) if str(path).strip()],
                 "requires_review": bool(entry.get("requires_review")),
+                "count": 1,
             }
         )
     return rows
 
 
-def build_entity_guard_review(campaigns: list[dict]) -> dict:
+def build_entity_guard_review(campaigns: list[dict], *, filter_meta: dict | None = None) -> dict:
     rows: list[dict] = []
     campaign_rows: list[dict] = []
     turns_scanned = 0
@@ -109,9 +111,10 @@ def build_entity_guard_review(campaigns: list[dict]) -> dict:
                 guarded_turn_keys.add((campaign_id, int(turn.get("turn_number", 0) or 0), str(turn.get("turn_id") or "")))
             for report in guard_reports:
                 flattened = flatten_entity_guard_report(report, campaign_meta=meta, turn=turn)
-                rows.extend(flattened)
                 campaign_reports.extend(flattened)
-        campaign_rows.append(_campaign_breakdown_row(meta, len(campaign_turns), campaign_guarded_turns, campaign_reports))
+        deduped_campaign_reports = _dedupe_rows(campaign_reports)
+        rows.extend(deduped_campaign_reports)
+        campaign_rows.append(_campaign_breakdown_row(meta, len(campaign_turns), campaign_guarded_turns, deduped_campaign_reports))
     status_counts = Counter(row["status"] for row in rows)
     summary = {
         "campaigns_scanned": len(campaigns),
@@ -123,6 +126,8 @@ def build_entity_guard_review(campaigns: list[dict]) -> dict:
         "lowest_score": min((row["score"] for row in rows), default=None),
         "highest_score": max((row["score"] for row in rows), default=None),
     }
+    if isinstance(filter_meta, dict):
+        summary.update(filter_meta)
     return {
         "summary": summary,
         "by_entity_type": _by_entity_type(rows),
@@ -147,9 +152,15 @@ def render_markdown_report(review: dict, *, limit: int = 50) -> str:
         f"Average score: {_fmt_score(summary.get('average_score'))}",
         f"Lowest score: {_fmt_score(summary.get('lowest_score'))}",
         f"Highest score: {_fmt_score(summary.get('highest_score'))}",
-        "",
-        "## Status Distribution",
     ]
+    if summary.get("filters"):
+        lines.extend(["", "Filters:"])
+        filters = summary.get("filters") or {}
+        for key in sorted(filters):
+            lines.append(f"- {key}: {_fmt_filter(filters[key])}")
+    if summary.get("campaigns_skipped"):
+        lines.append(f"Campaigns skipped: {summary.get('campaigns_skipped')}")
+    lines.extend(["", "## Status Distribution"])
     distribution = summary.get("status_distribution") or {}
     lines.extend(f"{status}: {distribution.get(status, 0)}" for status in STATUSES)
     lines.extend(["", "## By Entity Type", "entity_type | total | ok | weak | generic | forbidden | needs_review | unknown | avg_score", "--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---:"])
@@ -160,9 +171,9 @@ def render_markdown_report(review: dict, *, limit: int = 50) -> str:
     lines.extend(["", "## Problem Names", "name | entity_type | count | worst_status | worst_score | example_campaign | example_turn", "--- | --- | ---: | --- | ---: | --- | ---"])
     for row in (review.get("problem_names") or [])[:limit]:
         lines.append(f"{row['name']} | {row['entity_type']} | {row['count']} | {row['worst_status']} | {row['worst_score']} | {row['example_campaign']} | {row['example_turn']}")
-    lines.extend(["", "## Worst Reports", "score | status | entity_type | name | campaign_id | turn_number | reasons", "---: | --- | --- | --- | --- | ---: | ---"])
+    lines.extend(["", "## Worst Reports", "score | count | status | entity_type | name | campaign_id | turn_number | reasons", "---: | ---: | --- | --- | --- | --- | ---: | ---"])
     for row in (review.get("worst_reports") or [])[:limit]:
-        lines.append(f"{row['score']} | {row['status']} | {row['entity_type']} | {row['name']} | {row['campaign_id']} | {row['turn_number']} | {'; '.join(row.get('reasons') or [])[:240]}")
+        lines.append(f"{row['score']} | {row.get('count', 1)} | {row['status']} | {row['entity_type']} | {row['name']} | {row['campaign_id']} | {row['turn_number']} | {'; '.join(row.get('reasons') or [])[:240]}")
     lines.extend(["", "## Problem Terms", "term | count | examples", "--- | ---: | ---"])
     for row in (review.get("problem_terms") or [])[:limit]:
         lines.append(f"{row['term']} | {row['count']} | {', '.join(row.get('examples') or [])}")
@@ -197,9 +208,11 @@ def main() -> int:
     parser.add_argument("--out", default=None)
     parser.add_argument("--limit", type=int, default=50)
     parser.add_argument("--min-status", default=None, choices=STATUSES)
+    add_campaign_filter_args(parser)
     args = parser.parse_args()
     campaigns = [campaign for path in iter_campaign_files(args.campaign_id) if (campaign := load_campaign_json(path)) is not None]
-    review = build_entity_guard_review(campaigns)
+    campaigns, filter_meta = filter_campaigns(campaigns, build_filter_options(args), report_kind="entity_guard")
+    review = build_entity_guard_review(campaigns, filter_meta=filter_meta)
     if args.min_status:
         review = _filter_review_min_status(review, args.min_status)
     output = json.dumps(review, ensure_ascii=False, indent=2) + "\n" if args.as_json else render_markdown_report(review, limit=args.limit)
@@ -231,6 +244,7 @@ def _campaign_breakdown_row(meta: dict, turns_scanned: int, guarded_turns: int, 
         "turns_scanned": turns_scanned,
         "guarded_turns": guarded_turns,
         "total_entities": len(rows),
+        "observed_entities": sum(int(entry.get("count", 1) or 1) for entry in rows),
         "avg_score": _avg([entry["score"] for entry in rows]),
     }
     row.update({status: int(counts.get(status, 0)) for status in STATUSES})
@@ -247,6 +261,7 @@ def _by_entity_type(rows: list[dict]) -> dict:
         output[entity_type] = {
             "entity_type": entity_type,
             "total": len(entries),
+            "observed": sum(int(entry.get("count", 1) or 1) for entry in entries),
             "avg_score": _avg([entry["score"] for entry in entries]),
             **{status: int(counts.get(status, 0)) for status in STATUSES},
         }
@@ -265,7 +280,7 @@ def _problem_names(rows: list[dict]) -> list[dict]:
             {
                 "name": name,
                 "entity_type": entity_type,
-                "count": len(entries),
+                "count": sum(int(entry.get("count", 1) or 1) for entry in entries),
                 "worst_status": worst["status"],
                 "worst_score": worst["score"],
                 "example_campaign": worst["campaign_id"],
@@ -295,6 +310,24 @@ def _filter_review_min_status(review: dict, min_status: str) -> dict:
     return filtered
 
 
+def _dedupe_rows(rows: list[dict]) -> list[dict]:
+    deduped: dict[tuple[str, int, str, str, str, int], dict] = {}
+    for row in rows:
+        key = (
+            row["campaign_id"],
+            int(row["turn_number"]),
+            row["entity_type"],
+            _norm(row["name"]),
+            row["status"],
+            int(row["score"]),
+        )
+        current = deduped.setdefault(key, {**row, "count": 0})
+        current["count"] = int(current.get("count", 0) or 0) + 1
+        for field in ("reasons", "source_paths", "forbidden_terms_found", "avoid_terms_found", "matched_roots"):
+            current[field] = _unique([*(current.get(field) or []), *(row.get(field) or [])])
+    return list(deduped.values())
+
+
 def _status(value: Any) -> str:
     text = str(value or "unknown")
     return text if text in STATUSES else "unknown"
@@ -309,6 +342,29 @@ def _avg(values: Iterable[int]) -> Optional[float]:
 
 def _fmt_score(value: Any) -> str:
     return "-" if value is None else str(value)
+
+
+def _fmt_filter(value: Any) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, list):
+        return ", ".join(str(entry) for entry in value)
+    return str(value)
+
+
+def _norm(value: Any) -> str:
+    return "".join(ch for ch in str(value or "").casefold() if ch.isalnum())
+
+
+def _unique(values: Iterable[Any]) -> list[Any]:
+    out = []
+    seen = set()
+    for value in values:
+        key = str(value)
+        if key and key not in seen:
+            seen.add(key)
+            out.append(value)
+    return out
 
 
 if __name__ == "__main__":

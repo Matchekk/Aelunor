@@ -12,6 +12,7 @@ if str(CORE_ROOT) not in sys.path:
 
 from app.core.paths import CAMPAIGNS_DIR
 from app.services.world.entity_guard import infer_world_naming_mode, looks_like_generic_fantasy_name
+from scripts.report_filters import add_campaign_filter_args, build_filter_options, filter_campaigns
 
 
 CATEGORY_MAX = {
@@ -230,7 +231,7 @@ def assess_tone_and_style_quality(bible: dict) -> dict:
     return result
 
 
-def build_world_bible_quality_review(campaigns: list[dict]) -> dict:
+def build_world_bible_quality_review(campaigns: list[dict], *, filter_meta: dict | None = None) -> dict:
     rows = []
     for campaign in campaigns:
         meta = _dict(campaign.get("campaign_meta"))
@@ -243,7 +244,10 @@ def build_world_bible_quality_review(campaigns: list[dict]) -> dict:
             }
         )
     average = round(sum(row["score"] for row in rows) / len(rows), 2) if rows else None
-    return {"summary": {"campaigns_scanned": len(rows), "average_score": average}, "campaigns": rows}
+    summary = {"campaigns_scanned": len(rows), "average_score": average}
+    if isinstance(filter_meta, dict):
+        summary.update(filter_meta)
+    return {"summary": summary, "campaigns": rows}
 
 
 def render_markdown_report(review: dict, *, limit: int = 50) -> str:
@@ -254,12 +258,15 @@ def render_markdown_report(review: dict, *, limit: int = 50) -> str:
         "",
         f"Campaigns scanned: {summary.get('campaigns_scanned', 0)}",
         f"Average score: {_fmt(summary.get('average_score'))}",
-        "",
-        "## Campaign Breakdown",
-        "",
-        "| Campaign | Title | Score | Naming Mode | Main Weak Areas |",
-        "| --- | --- | ---: | --- | --- |",
     ]
+    if summary.get("filters"):
+        lines.extend(["", "Filters:"])
+        filters = summary.get("filters") or {}
+        for key in sorted(filters):
+            lines.append(f"- {key}: {_fmt_filter(filters[key])}")
+    if summary.get("campaigns_skipped"):
+        lines.append(f"Campaigns skipped: {summary.get('campaigns_skipped')}")
+    lines.extend(["", "## Campaign Breakdown", "", "| Campaign | Title | Score | Naming Mode | Main Weak Areas |", "| --- | --- | ---: | --- | --- |"])
     for row in campaigns:
         lines.append(f"| {row['campaign_id']} | {row['title']} | {row['score']} | {row['naming_mode']} | {', '.join(row.get('weak_areas') or []) or '-'} |")
     lines.extend(["", "## Detailed Findings"])
@@ -280,9 +287,11 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", dest="as_json")
     parser.add_argument("--out", default=None)
     parser.add_argument("--limit", type=int, default=50)
+    add_campaign_filter_args(parser)
     args = parser.parse_args()
     campaigns = [campaign for path in iter_campaign_files(args.campaign_id) if (campaign := load_campaign_json(path)) is not None]
-    review = build_world_bible_quality_review(campaigns)
+    campaigns, filter_meta = filter_campaigns(campaigns, build_filter_options(args), report_kind="world_bible")
+    review = build_world_bible_quality_review(campaigns, filter_meta=filter_meta)
     output = json.dumps(review, ensure_ascii=False, indent=2) + "\n" if args.as_json else render_markdown_report(review, limit=args.limit)
     if args.out:
         Path(args.out).write_text(output, encoding="utf-8")
@@ -376,6 +385,14 @@ def _unique(values: Iterable[str]) -> list[str]:
 
 def _fmt(value: Any) -> str:
     return "-" if value is None else str(value)
+
+
+def _fmt_filter(value: Any) -> str:
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, list):
+        return ", ".join(str(entry) for entry in value)
+    return str(value)
 
 
 if __name__ == "__main__":

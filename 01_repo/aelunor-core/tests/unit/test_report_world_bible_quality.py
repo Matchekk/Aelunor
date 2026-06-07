@@ -69,11 +69,16 @@ def _full_bible():
     }
 
 
-def _campaign(campaign_id="camp_1", bible=None):
+def _campaign(campaign_id="camp_1", bible=None, *, title=None, turns=None, created_at="2026-06-07T12:00:00+00:00"):
     return {
-        "campaign_meta": {"campaign_id": campaign_id, "title": campaign_id.title()},
+        "campaign_meta": {"campaign_id": campaign_id, "title": title or campaign_id.title(), "created_at": created_at},
         "state": {"world": {"bible": bible or {}}},
+        "turns": list(turns or []),
     }
+
+
+def _turn(turn_number=1):
+    return {"turn_id": f"turn_{turn_number}", "turn_number": turn_number}
 
 
 def test_campaign_without_bible_does_not_crash_and_scores_low():
@@ -160,6 +165,20 @@ def test_render_markdown_contains_breakdown_and_details():
     assert "Category Scores:" in markdown
 
 
+def test_render_markdown_shows_active_filters():
+    review = report.build_world_bible_quality_review(
+        [_campaign("smoke", _full_bible(), title="AI Smoke - Clean", turns=[_turn()])],
+        filter_meta={"filters": {"only_smoke": True, "exclude_empty": True, "min_turns": 1}, "campaigns_skipped": 3},
+    )
+    markdown = report.render_markdown_report(review)
+
+    assert "Filters:" in markdown
+    assert "- only_smoke: true" in markdown
+    assert "- exclude_empty: true" in markdown
+    assert "- min_turns: 1" in markdown
+    assert "Campaigns skipped: 3" in markdown
+
+
 def test_json_review_is_serializable():
     encoded = json.dumps(report.build_world_bible_quality_review([_campaign("good", _full_bible())]), ensure_ascii=False)
 
@@ -178,3 +197,55 @@ def test_campaign_file_helpers_and_main_out(tmp_path, monkeypatch):
     assert report.load_campaign_json(campaigns_dir / "camp_1.json")["campaign_meta"]["campaign_id"] == "camp_1"
     assert report.main() == 0
     assert json.loads(out_path.read_text(encoding="utf-8"))["summary"]["campaigns_scanned"] == 1
+
+
+def test_main_filters_exclude_empty_only_smoke_and_min_turns(tmp_path, monkeypatch):
+    campaigns_dir = tmp_path / "campaigns"
+    campaigns_dir.mkdir()
+    campaigns = [
+        _campaign("smoke_ok", _full_bible(), title="AI Smoke - Clean", turns=[_turn()]),
+        _campaign("smoke_old", _full_bible(), title="AI Smoke - Clean", turns=[_turn()], created_at="2026-06-01T12:00:00+00:00"),
+        _campaign("smoke_empty", _full_bible(), title="AI Smoke - Empty", turns=[]),
+        _campaign("pipeline", {}, title="Pipeline Campaign", turns=[_turn()]),
+    ]
+    for campaign in campaigns:
+        (campaigns_dir / f"{campaign['campaign_meta']['campaign_id']}.json").write_text(json.dumps(campaign, ensure_ascii=False), encoding="utf-8")
+    out_path = tmp_path / "quality.json"
+    monkeypatch.setattr(report, "CAMPAIGNS_DIR", str(campaigns_dir))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["report_world_bible_quality.py", "--only-smoke", "--exclude-empty", "--min-turns", "1", "--json", "--out", str(out_path)],
+    )
+
+    assert report.main() == 0
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["summary"]["campaigns_scanned"] == 1
+    assert payload["summary"]["campaigns_skipped"] == 3
+    assert payload["summary"]["skip_reasons"]["older_smoke_run"] == 1
+    assert payload["summary"]["filters"]["only_smoke"] is True
+    assert payload["summary"]["filters"]["exclude_empty"] is True
+    assert payload["summary"]["filters"]["min_turns"] == 1
+    assert payload["campaigns"][0]["campaign_id"] == "smoke_ok"
+
+
+def test_main_title_and_created_after_filters_work(tmp_path, monkeypatch):
+    campaigns_dir = tmp_path / "campaigns"
+    campaigns_dir.mkdir()
+    campaigns = [
+        _campaign("dark", _full_bible(), title="AI Smoke - Dark Fantasy", turns=[_turn()], created_at="2026-06-07T12:00:00+00:00"),
+        _campaign("super", _full_bible(), title="AI Smoke - Superhero Academy", turns=[_turn()], created_at="2026-06-07T12:00:00+00:00"),
+        _campaign("old", _full_bible(), title="AI Smoke - Old", turns=[_turn()], created_at="2026-06-01T12:00:00+00:00"),
+    ]
+    for campaign in campaigns:
+        (campaigns_dir / f"{campaign['campaign_meta']['campaign_id']}.json").write_text(json.dumps(campaign, ensure_ascii=False), encoding="utf-8")
+    out_path = tmp_path / "quality.json"
+    monkeypatch.setattr(report, "CAMPAIGNS_DIR", str(campaigns_dir))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["report_world_bible_quality.py", "--title-contains", "Smoke", "--exclude-title", "Superhero", "--created-after", "2026-06-06", "--json", "--out", str(out_path)],
+    )
+
+    assert report.main() == 0
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["summary"]["campaigns_scanned"] == 1
+    assert payload["campaigns"][0]["campaign_id"] == "dark"

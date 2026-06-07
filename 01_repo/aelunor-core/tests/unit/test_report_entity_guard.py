@@ -47,6 +47,22 @@ def _campaign_with_guard():
     }
 
 
+def _campaign(campaign_id: str, title: str, turns: list[dict], *, bible: dict | None = None):
+    return {
+        "campaign_meta": {"campaign_id": campaign_id, "title": title, "created_at": "2026-06-07T12:00:00+00:00"},
+        "state": {"world": {"bible": bible or {"identity": {"world_name": "Smoke World"}}}},
+        "turns": turns,
+    }
+
+
+def _guard_turn(turn_number: int = 1, reports: list[dict] | None = None):
+    return {
+        "turn_id": f"turn_{turn_number}",
+        "turn_number": turn_number,
+        "entity_guard": {"summary": {"total": len(reports or [])}, "reports": reports or [_entry("Nok-Thar", "location", "ok", 90)]},
+    }
+
+
 def test_empty_campaign_does_not_crash():
     review = report.build_entity_guard_review([{"campaign_meta": {"campaign_id": "empty"}, "turns": []}])
 
@@ -93,6 +109,17 @@ def test_build_review_counts_status_distribution_and_entity_types():
     assert review["by_entity_type"]["location"]["ok"] == 1
 
 
+def test_build_review_dedupes_identical_entity_guard_reports():
+    duplicate = _entry("Nok-Thar", "location", "weak", 45)
+    campaign = _campaign("camp_dup", "AI Smoke - Duplicate", [_guard_turn(reports=[duplicate, duplicate, duplicate])])
+
+    review = report.build_entity_guard_review([campaign])
+
+    assert review["summary"]["entities_assessed"] == 1
+    assert len(review["worst_reports"]) == 1
+    assert review["worst_reports"][0]["count"] == 3
+
+
 def test_problem_names_and_worst_reports_are_aggregated_and_sorted():
     review = report.build_entity_guard_review([_campaign_with_guard()])
 
@@ -119,6 +146,20 @@ def test_render_markdown_contains_required_sections():
     assert "Feuerball" in markdown
 
 
+def test_render_markdown_shows_active_filters():
+    review = report.build_entity_guard_review(
+        [_campaign("camp_smoke", "AI Smoke - Clean", [_guard_turn()])],
+        filter_meta={"filters": {"only_smoke": True, "exclude_empty": True, "min_turns": 1}, "campaigns_skipped": 2},
+    )
+    markdown = report.render_markdown_report(review)
+
+    assert "Filters:" in markdown
+    assert "- only_smoke: true" in markdown
+    assert "- exclude_empty: true" in markdown
+    assert "- min_turns: 1" in markdown
+    assert "Campaigns skipped: 2" in markdown
+
+
 def test_json_review_is_serializable():
     review = report.build_entity_guard_review([_campaign_with_guard()])
 
@@ -137,6 +178,57 @@ def test_load_campaign_json_and_iter_campaign_files_use_temp_data(tmp_path, monk
     assert report.iter_campaign_files("camp_1") == [path]
     assert report.load_campaign_json(path)["campaign_meta"]["campaign_id"] == "camp_1"
     assert report.load_campaign_json(campaigns_dir / "missing.json") is None
+
+
+def test_main_filters_exclude_empty_only_smoke_and_min_turns(tmp_path, monkeypatch):
+    campaigns_dir = tmp_path / "campaigns"
+    campaigns_dir.mkdir()
+    campaigns = [
+        _campaign("smoke_ok", "AI Smoke - Clean", [_guard_turn()]),
+        _campaign("smoke_old", "AI Smoke - Clean", [_guard_turn()]),
+        _campaign("smoke_empty", "AI Smoke - Empty", []),
+        _campaign("pipeline", "Pipeline Campaign", [_guard_turn()]),
+    ]
+    campaigns[1]["campaign_meta"]["created_at"] = "2026-06-01T12:00:00+00:00"
+    for campaign in campaigns:
+        (campaigns_dir / f"{campaign['campaign_meta']['campaign_id']}.json").write_text(json.dumps(campaign, ensure_ascii=False), encoding="utf-8")
+    out_path = tmp_path / "report.json"
+    monkeypatch.setattr(report, "CAMPAIGNS_DIR", str(campaigns_dir))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["report_entity_guard.py", "--only-smoke", "--exclude-empty", "--min-turns", "1", "--json", "--out", str(out_path)],
+    )
+
+    assert report.main() == 0
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["summary"]["campaigns_scanned"] == 1
+    assert payload["summary"]["campaigns_skipped"] == 3
+    assert payload["summary"]["skip_reasons"]["older_smoke_run"] == 1
+    assert payload["summary"]["filters"]["only_smoke"] is True
+    assert payload["summary"]["filters"]["exclude_empty"] is True
+    assert payload["summary"]["filters"]["min_turns"] == 1
+    assert payload["campaigns"][0]["campaign_id"] == "smoke_ok"
+
+
+def test_main_title_filters_work(tmp_path, monkeypatch):
+    campaigns_dir = tmp_path / "campaigns"
+    campaigns_dir.mkdir()
+    for campaign in [
+        _campaign("dark", "AI Smoke - Dark Fantasy", [_guard_turn()]),
+        _campaign("super", "AI Smoke - Superhero Academy", [_guard_turn()]),
+    ]:
+        (campaigns_dir / f"{campaign['campaign_meta']['campaign_id']}.json").write_text(json.dumps(campaign, ensure_ascii=False), encoding="utf-8")
+    out_path = tmp_path / "report.json"
+    monkeypatch.setattr(report, "CAMPAIGNS_DIR", str(campaigns_dir))
+    monkeypatch.setattr(
+        "sys.argv",
+        ["report_entity_guard.py", "--title-contains", "Smoke", "--exclude-title", "Superhero", "--json", "--out", str(out_path)],
+    )
+
+    assert report.main() == 0
+    payload = json.loads(out_path.read_text(encoding="utf-8"))
+    assert payload["summary"]["campaigns_scanned"] == 1
+    assert payload["campaigns"][0]["campaign_id"] == "dark"
 
 
 def test_main_json_out_writes_only_explicit_out_file(tmp_path, monkeypatch):
