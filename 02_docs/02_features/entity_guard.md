@@ -71,3 +71,5 @@ automatisch um.
 Folge-PRs koennen den Guard weich in Patch-Sanitizer, Patch-Validator,
 Turn-Trace oder eine Entity-Quarantine einhaengen. Harte Rejects sollten erst
 kommen, wenn Reports in echten Kampagnen ausreichend stabil und hilfreich sind.
+
+Der beobachtende Turn-/Patch-Hook ist in `entity_guard_hook.md` beschrieben.

@@ -30,6 +30,7 @@ from app.services.turn.patch_apply_normalization import apply_patch_character_la
 from app.services.turn.patch_apply_plotpoints import apply_patch_plotpoint_updates
 from app.services.turn.patch_apply_resources import apply_patch_character_resource_attribute_updates
 from app.services.turn.patch_apply_time import apply_patch_time_advance
+from app.services.turn.entity_guard_hook import build_patch_entity_guard_report
 from app.services.turn.flow_errors import build_narrator_turn_error
 from app.services.turn.patch_limits import (
     enforce_non_milestone_patch_limits as _enforce_non_milestone_patch_limits,
@@ -1729,6 +1730,13 @@ def create_turn_record(
         turn_number=int(state_after.get("meta", {}).get("turn", 0) or 0),
     )
     skill_requests = build_skill_system_requests(campaign, state_before, state_after)
+    world_bible = ((state_after.get("world") or {}).get("bible") or {})
+    entity_guard = {
+        "narrator": build_patch_entity_guard_report(narrator_patch, world_bible, max_reports=8),
+        "extractor": build_patch_entity_guard_report(extractor_patch, world_bible, max_reports=8),
+        "merged": build_patch_entity_guard_report(patch, world_bible, max_reports=12),
+    }
+    prompt_payload["entity_guard"] = entity_guard
     turn_record = build_turn_record_payload(
         campaign=campaign,
         actor=actor,
@@ -1754,6 +1762,7 @@ def create_turn_record(
         state_after=state_after,
         retry_of_turn_id=retry_of_turn_id,
         prompt_payload=prompt_payload,
+        entity_guard=entity_guard,
         make_id=make_id,
         utc_now=utc_now,
         deep_copy=deep_copy,

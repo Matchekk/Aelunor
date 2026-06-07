@@ -27,6 +27,7 @@ def build_turn_record_payload(
     state_after: Dict[str, Any],
     retry_of_turn_id: Optional[str],
     prompt_payload: Dict[str, Any],
+    entity_guard: Optional[Dict[str, Any]] = None,
     make_id: Callable[[str], str],
     utc_now: Callable[[], str],
     deep_copy: Callable[[Any], Any],
@@ -69,4 +70,5 @@ def build_turn_record_payload(
         "updated_at": now,
         "edit_history": [],
         "prompt_payload": prompt_payload,
+        "entity_guard": deep_copy(entity_guard or {"summary": {"total": 0}, "reports": []}),
     }

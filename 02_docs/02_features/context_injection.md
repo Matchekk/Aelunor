@@ -55,7 +55,7 @@ Spieleraktion setzen.
 
 Moegliche Folgearbeiten:
 
-- Entity Name Guard, siehe `entity_guard.md`
+- Entity Name Guard und Hook, siehe `entity_guard.md` und `entity_guard_hook.md`
 - Living Profile Update nach Turns
 - Pattern Extraction aus Turn-Historie
 - Codex Discovery fuer Alias- und Sprachaufloesung
