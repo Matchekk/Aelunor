@@ -331,9 +331,8 @@ def progression_claim_coverage_for_actor_patch(patch: Dict[str, Any], actor: str
     if skills_set:
         coverage.add("skill_claim")
         for raw_skill in skills_set.values():
-            if isinstance(raw_skill, dict):
-                if int(raw_skill.get("level", 1) or 1) > 1 or int(raw_skill.get("xp", 0) or 0) > 0:
-                    coverage.add("skill_level_claim")
+            if isinstance(raw_skill, dict) and (_safe_int(raw_skill.get("level"), 1) > 1 or _safe_int(raw_skill.get("xp"), 0) > 0):
+                coverage.add("skill_level_claim")
                 break
 
     skills_delta = actor_patch.get("skills_delta") if isinstance(actor_patch.get("skills_delta"), dict) else {}
@@ -343,7 +342,7 @@ def progression_claim_coverage_for_actor_patch(patch: Dict[str, Any], actor: str
     class_set = normalize_class_current(actor_patch.get("class_set"))
     if class_set:
         coverage.add("class_claim")
-        if int(class_set.get("level", 1) or 1) > 1:
+        if _safe_int(class_set.get("level"), 1) > 1:
             coverage.add("class_level_claim")
 
     class_update = actor_patch.get("class_update") if isinstance(actor_patch.get("class_update"), dict) else {}

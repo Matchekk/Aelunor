@@ -100,7 +100,7 @@ def resolve_injury_healing(character: Dict[str, Any], current_turn: int) -> List
 
 
 def looks_like_legacy_seeded_skills(skills: Dict[str, Any]) -> bool:
-    if not skills or set(skills.keys()) != set(SKILL_KEYS):
+    if not isinstance(skills, dict) or not skills or set(skills.keys()) != set(SKILL_KEYS):
         return False
     for skill_name in SKILL_KEYS:
         skill = normalize_skill_state(skill_name, skills.get(skill_name))
@@ -137,11 +137,19 @@ def rebuild_character_derived(
     age_character_if_needed(character, effective_world_time)
     age_modifiers = build_age_modifiers(character)
     ensure_character_modifier_shape(character)
-    current_corruption = (character.setdefault("resources", {}).setdefault("corruption", {}) or {}).get("current", 0)
-    max_corruption = (character["resources"].get("corruption") or {}).get("max", 0)
+    resources = character.get("resources")
+    if not isinstance(resources, dict):
+        resources = {}
+        character["resources"] = resources
+    corruption = resources.get("corruption")
+    if not isinstance(corruption, dict):
+        corruption = {}
+        resources["corruption"] = corruption
+    current_corruption = corruption.get("current", 0)
+    max_corruption = corruption.get("max", 0)
     if int(max_corruption or 0) <= 10:
-        character["resources"]["corruption"]["current"] = clamp(int(current_corruption or 0) * 10, 0, 100)
-        character["resources"]["corruption"]["max"] = 100
+        corruption["current"] = clamp(int(current_corruption or 0) * 10, 0, 100)
+        corruption["max"] = 100
 
     items_db = {item_id: ensure_item_shape(item_id, item) for item_id, item in (items_db or {}).items()}
     rebuild_resource_maxima(character, items_db, age_modifiers)
@@ -251,7 +259,7 @@ def normalize_character_state(
     merged["element_affinities"] = [str(value).strip() for value in (character.get("element_affinities") or []) if str(value).strip()][:8]
     merged["element_resistances"] = [str(value).strip() for value in (character.get("element_resistances") or []) if str(value).strip()][:8]
     merged["element_weaknesses"] = [str(value).strip() for value in (character.get("element_weaknesses") or []) if str(value).strip()][:8]
-    raw_skills = character.get("skills", {}) or {}
+    raw_skills = character.get("skills") if isinstance(character.get("skills"), dict) else {}
     if looks_like_legacy_seeded_skills(raw_skills):
         raw_skills = {}
     merged["progression"].update(character.get("progression", {}) or {})

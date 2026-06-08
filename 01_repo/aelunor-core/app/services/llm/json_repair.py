@@ -82,13 +82,20 @@ def extract_json_payload(text: str) -> Dict[str, Any]:
     if not content:
         raise RuntimeError("Model returned empty content.")
     try:
-        return json.loads(content)
+        parsed = json.loads(content)
+        if isinstance(parsed, dict):
+            return parsed
+        # Valid JSON but not an object (e.g. a top-level array/string/number).
+        # Fall through to object-extraction/repair so callers always get a dict
+        # instead of crashing on dict-style access.
     except json.JSONDecodeError:
         pass
     snippet = first_balanced_json_object(content)
     if snippet:
         try:
-            return json.loads(snippet)
+            parsed_snippet = json.loads(snippet)
+            if isinstance(parsed_snippet, dict):
+                return parsed_snippet
         except json.JSONDecodeError:
             pass
     repaired = repair_truncated_json_object(content)

@@ -970,7 +970,10 @@ class TurnEngineTests(unittest.TestCase):
         self.assertEqual(turn_record["created_at"], "2026-03-10T00:00:00+00:00")
         self.assertEqual(turn_record["updated_at"], "2026-03-10T00:00:00+00:00")
         self.assertEqual(turn_record["retry_of_turn_id"], "turn_retry")
-        self.assertIs(turn_record["state_before"], state_before)
+        # state_before is now defensively deep-copied like state_after (snapshot,
+        # not an alias of the live working state).
+        self.assertIsNot(turn_record["state_before"], state_before)
+        self.assertEqual(turn_record["state_before"], state_before)
         self.assertIsNot(turn_record["state_after"], state_after)
         attribute_profile["primary_attributes"].append("dex")
         self.assertEqual(turn_record["attribute_profile"], {"primary_attributes": ["str"]})

@@ -2,6 +2,15 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 
+def _safe_int(value: Any, default: int) -> int:
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 @dataclass(frozen=True)
 class PatchSanitizerDependencies:
     normalize_patch_semantics: Callable[[Any], Dict[str, Any]]
@@ -179,7 +188,7 @@ def sanitize_patch(state: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, An
                 "id": node_id,
                 "name": node_name,
                 "type": str(node.get("type") or "location").strip() or "location",
-                "danger": deps.clamp(int(node.get("danger", 1) or 1), 0, 10),
+                "danger": deps.clamp(_safe_int(node.get("danger"), 1), 0, 10),
                 "discovered": bool(node.get("discovered", True)),
             }
         )

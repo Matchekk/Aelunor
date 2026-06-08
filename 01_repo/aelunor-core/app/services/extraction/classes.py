@@ -39,7 +39,7 @@ def clean_auto_class_name(name: str) -> str:
         text = text[4:].strip()
     if text.startswith("des "):
         text = text[4:].strip()
-    if len(text) > 4 and text.endswith("s") and not text.endswith(("ss", "us", "is")):
+    if len(text) > 4 and text.endswith("s") and not text.endswith(("ss", "us", "is", "os", "as", "es", "ys")):
         text = text[:-1]
     return text.strip()
 
@@ -47,8 +47,13 @@ def extract_auto_class_change(text: str, actor_display: str) -> Optional[Dict[st
     content = str(text or "").strip()
     if not content:
         return None
-    actor_name = re.escape(actor_display)
-    subject_pattern = rf"(?:\b{actor_name}\b|\b(?:er|sie)\b)"
+    actor_display = str(actor_display or "").strip()
+    if actor_display:
+        subject_pattern = rf"(?:\b{re.escape(actor_display)}\b|\b(?:er|sie)\b)"
+    else:
+        # Empty actor_display would make `\b{actor}\b` an empty-string match that
+        # fires on any subject; restrict to pronouns so a class is not mis-attributed.
+        subject_pattern = r"\b(?:er|sie)\b"
     class_name_pattern = r"([A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9'’\-]+(?:\s+[A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9'’\-]+){0,3})"
     rank_pattern = r"(?:\s*\(([A-FS])\s*-?\s*Rang\))?"
     patterns = [

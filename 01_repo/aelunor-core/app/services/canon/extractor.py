@@ -260,11 +260,11 @@ def build_extractor_context_packet(
         "characters": {
             slot_name: {
                 "display_name": display_name_for_slot(campaign, slot_name),
-                "scene_id": (state.get("characters", {}).get(slot_name) or {}).get("scene_id", ""),
-                "element_affinities": (state.get("characters", {}).get(slot_name) or {}).get("element_affinities", []),
-                "element_resistances": (state.get("characters", {}).get(slot_name) or {}).get("element_resistances", []),
-                "element_weaknesses": (state.get("characters", {}).get(slot_name) or {}).get("element_weaknesses", []),
-                "class_current": normalize_class_current((state.get("characters", {}).get(slot_name) or {}).get("class_current")),
+                "scene_id": ((state.get("characters") or {}).get(slot_name) or {}).get("scene_id", ""),
+                "element_affinities": ((state.get("characters") or {}).get(slot_name) or {}).get("element_affinities", []),
+                "element_resistances": ((state.get("characters") or {}).get(slot_name) or {}).get("element_resistances", []),
+                "element_weaknesses": ((state.get("characters") or {}).get(slot_name) or {}).get("element_weaknesses", []),
+                "class_current": normalize_class_current(((state.get("characters") or {}).get(slot_name) or {}).get("class_current")),
                 "skills": [
                     {
                         "id": skill.get("id"),
@@ -281,9 +281,9 @@ def build_extractor_context_packet(
                                 skill_value,
                                 skill_id=skill_id,
                                 skill_name=(skill_value or {}).get("name", skill_id) if isinstance(skill_value, dict) else skill_id,
-                                resource_name=resource_name_for_character((state.get("characters", {}).get(slot_name) or {}), world_settings),
+                                resource_name=resource_name_for_character(((state.get("characters") or {}).get(slot_name) or {}), world_settings),
                             )
-                            for skill_id, skill_value in (((state.get("characters", {}).get(slot_name) or {}).get("skills") or {}).items())
+                            for skill_id, skill_value in ((((state.get("characters") or {}).get(slot_name) or {}).get("skills") or {}).items())
                         ],
                         key=lambda entry: (skill_rank_sort_value(entry.get("rank")), entry.get("level", 1), entry.get("name", "")),
                         reverse=True,
@@ -291,7 +291,7 @@ def build_extractor_context_packet(
                 ],
                 "inventory_names": [
                     ((state.get("items", {}) or {}).get(entry.get("item_id"), {}) or {}).get("name", "")
-                    for entry in list_inventory_items((state.get("characters", {}).get(slot_name) or {}))
+                    for entry in list_inventory_items(((state.get("characters") or {}).get(slot_name) or {}))
                 ],
             }
             for slot_name in campaign_slots(campaign)

@@ -285,17 +285,17 @@ def canonical_resources_set_from_payload(
 
 def canonical_resource_deltas_from_update(upd: Dict[str, Any]) -> Dict[str, int]:
     deltas = {"hp_current": 0, "sta_current": 0, "res_current": 0, "carry_current": 0}
-    deltas["hp_current"] += int(upd.get("hp_delta", 0) or 0)
-    deltas["sta_current"] += int(upd.get("stamina_delta", 0) or 0)
+    deltas["hp_current"] += coerce_current_value(upd.get("hp_delta"), 0)
+    deltas["sta_current"] += coerce_current_value(upd.get("stamina_delta"), 0)
     raw_deltas = upd.get("resources_delta") if isinstance(upd.get("resources_delta"), dict) else {}
     for raw_key, raw_value in raw_deltas.items():
         mapped = canonical_resource_field_name(raw_key)
         if mapped == "hp":
-            deltas["hp_current"] += int(raw_value or 0)
+            deltas["hp_current"] += coerce_current_value(raw_value, 0)
         elif mapped == "stamina":
-            deltas["sta_current"] += int(raw_value or 0)
+            deltas["sta_current"] += coerce_current_value(raw_value, 0)
         elif mapped == "aether":
-            deltas["res_current"] += int(raw_value or 0)
+            deltas["res_current"] += coerce_current_value(raw_value, 0)
         elif str(raw_key or "").strip().lower() == "carry":
-            deltas["carry_current"] += int(raw_value or 0)
+            deltas["carry_current"] += coerce_current_value(raw_value, 0)
     return deltas

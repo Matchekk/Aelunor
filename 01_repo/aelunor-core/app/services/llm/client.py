@@ -168,7 +168,7 @@ def call_ollama_json(
         )
         return parsed
     except RuntimeError as exc:
-        if "Model returned non-JSON content" not in str(exc):
+        if "Model returned non-JSON content" not in str(exc) and "Model returned empty content" not in str(exc):
             raise
         emit_turn_phase_event(
             trace_ctx,
@@ -237,7 +237,7 @@ def call_ollama_schema(
     try:
         return extract_json_payload(content)
     except RuntimeError as exc:
-        if "Model returned non-JSON content" not in str(exc):
+        if "Model returned non-JSON content" not in str(exc) and "Model returned empty content" not in str(exc):
             raise
         return repair_json_payload_with_model(
             adapter,

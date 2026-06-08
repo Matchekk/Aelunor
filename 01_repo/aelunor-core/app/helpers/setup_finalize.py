@@ -10,7 +10,8 @@ def _coerce_player_count(value: Any, *, default: int = 1) -> int:
     if isinstance(value, (int, float)):
         try:
             return int(value)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
+            # OverflowError: int(float('inf')); ValueError: int(float('nan'))
             return default
     text = str(value or "").strip()
     if not text:

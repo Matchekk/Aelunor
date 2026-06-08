@@ -62,7 +62,7 @@ def build_turn_record_payload(
         "npc_updates": deep_copy(npc_updates),
         "codex_updates": deep_copy(codex_updates),
         "combat_meta": deep_copy(updated_combat),
-        "state_before": state_before,
+        "state_before": deep_copy(state_before),
         "state_after": deep_copy(state_after),
         "retry_of_turn_id": retry_of_turn_id,
         "edited_at": None,

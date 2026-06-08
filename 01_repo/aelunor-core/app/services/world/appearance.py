@@ -60,7 +60,7 @@ def record_appearance_change(
         return None
     display_name = (character.get("bio") or {}).get("name") or slot_name
     event_id = appearance_event_id(slot_name, kind, source, turn_number, absolute_day, new_value)
-    if any(entry.get("event_id") == event_id for entry in (character.get("appearance_history") or [])):
+    if any(isinstance(entry, dict) and entry.get("event_id") == event_id for entry in (character.get("appearance_history") or [])):
         return None
     event = {
         "event_id": event_id,

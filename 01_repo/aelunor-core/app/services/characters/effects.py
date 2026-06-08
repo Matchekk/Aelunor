@@ -8,8 +8,11 @@ from app.core.ids import make_id
 
 
 def migrate_effects_from_conditions(character: Dict[str, Any]) -> None:
-    effects = character.setdefault("effects", [])
-    existing = {effect.get("name") for effect in effects}
+    effects = character.get("effects")
+    if not isinstance(effects, list):
+        effects = []
+        character["effects"] = effects
+    existing = {effect.get("name") for effect in effects if isinstance(effect, dict)}
     for condition in character.get("conditions", []) or []:
         if condition and condition not in existing:
             effects.append(

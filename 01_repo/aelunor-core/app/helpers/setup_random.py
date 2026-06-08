@@ -69,7 +69,9 @@ def fallback_random_answer_payload(
     if qtype == "multiselect":
         if not options:
             return {"selected": [], "other_values": []}
-        count = random.randint(min_selected, min(max_selected, len(options)))
+        upper = max(0, min(max_selected, len(options)))
+        lower = max(0, min(min_selected, upper))
+        count = random.randint(lower, upper)
         return {"selected": random.sample(options, count), "other_values": []}
     return {"value": ""}
 

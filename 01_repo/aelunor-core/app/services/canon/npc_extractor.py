@@ -24,6 +24,15 @@ from app.services.world.text_normalization import normalized_eval_text
 from app.text.patterns import NPC_GENERIC_NAME_TOKENS
 
 
+def _safe_int(value: Any, default: int) -> int:
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _missing_dependency(name: str) -> Callable[..., Any]:
     def _missing(*_args: Any, **_kwargs: Any) -> Any:
         raise RuntimeError(f"NPC extractor dependency is not configured: {name}")
@@ -163,7 +172,7 @@ def best_matching_npc_id(state: Dict[str, Any], name: str) -> str:
 def npc_relevance_score(upsert: Dict[str, Any], source_text: str) -> int:
     explicit = upsert.get("relevance_score")
     if explicit is not None:
-        return max(0, int(explicit or 0))
+        return max(0, _safe_int(explicit, 0))
     score = 0
     if str(upsert.get("goal") or "").strip():
         score += 2
@@ -235,7 +244,7 @@ def apply_npc_upserts(
         entry["role_hint"] = pick_more_specific_text(entry.get("role_hint", ""), raw.get("role_hint") or "")
         entry["faction"] = pick_more_specific_text(entry.get("faction", ""), raw.get("faction") or "")
         entry["level"] = clamp(
-            max(int(entry.get("level", 1) or 1), int(raw.get("level", 0) or 0)),
+            max(_safe_int(entry.get("level"), 1), _safe_int(raw.get("level"), 0)),
             1,
             999,
         )

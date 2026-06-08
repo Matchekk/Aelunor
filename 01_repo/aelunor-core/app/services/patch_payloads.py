@@ -37,13 +37,15 @@ def normalize_patch_payload(payload: Any) -> Dict[str, Any]:
             }
         normalized["meta"] = normalized_meta
 
+    # deep_copy so the normalized patch never aliases the caller's input dicts;
+    # normalize_patch_semantics mutates these sub-dicts (scene_id/scene_set).
     for key in ("characters", "items_new"):
         value = patch.get(key)
-        normalized[key] = value if isinstance(value, dict) else {}
+        normalized[key] = deep_copy(value) if isinstance(value, dict) else {}
 
     for key in ("plotpoints_add", "plotpoints_update", "map_add_nodes", "map_add_edges", "events_add"):
         value = patch.get(key)
-        normalized[key] = value if isinstance(value, list) else []
+        normalized[key] = deep_copy(value) if isinstance(value, list) else []
 
     return normalized
 
