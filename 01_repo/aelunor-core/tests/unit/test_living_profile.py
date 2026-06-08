@@ -167,6 +167,38 @@ def test_fallback_weakness_paranoia_yields_cautious_hints_not_diagnosis():
         assert clinical not in payload
 
 
+def test_fallback_living_engine_neutral_character_has_no_false_string_leak():
+    # Regression: boolean short-circuit (`flag and "text"`) used to inject the
+    # literal string "False" into list fields when the flag was False.
+    character = {
+        "slot_id": "slot_x",
+        "bio": {"name": "Neutral", "personality": ["ruhig"], "strength": "klug", "weakness": "stolz", "goal": "reich werden", "focus": "planen"},
+        "class_current": {"name": "Buchhalter"},
+        "skills": {},
+    }
+
+    profile = generate_living_profile_fallback(character, world_bible=_world_bible())
+
+    leaky_lists = (
+        profile["behavior_policy"]["default_strategies"]
+        + profile["behavior_policy"]["override_conditions"]
+        + profile["dialogue_policy"]["stress_modulation"]
+    )
+    assert all(isinstance(entry, str) for entry in leaky_lists)
+    assert "False" not in leaky_lists
+    assert "True" not in leaky_lists
+
+
+def test_summary_survives_non_string_expectation_entries():
+    # Regression: numeric entries survived `_list` normalization and crashed the
+    # summary on `part.rstrip(".")`.
+    profile = normalize_living_profile({"identity": {"name": "X"}, "expectation_model": {"threat_interpretations": [5]}})
+
+    summary = build_living_profile_prompt_summary(profile)
+
+    assert "Expectations:" in summary
+
+
 def test_fallback_living_engine_is_deterministic():
     character = _character()
     character["bio"]["isekai_price"] = "verlorene Stimme"

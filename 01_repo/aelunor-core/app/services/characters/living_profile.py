@@ -404,7 +404,7 @@ def _living_engine_summary_lines(normalized: LivingProfile) -> List[str]:
     need_line = needs.get("current_pressure") or ", ".join(_list(needs.get("psychological_needs"))[:2]) or "noch offen"
     threats = _list(expectation.get("threat_interpretations"))
     trust = _list(expectation.get("trust_interpretations"))
-    expect_line = "; ".join(part.rstrip(".") for part in (threats[:1] + trust[:1])) or "Erwartungen entstehen aus Lage und Erfahrung"
+    expect_line = "; ".join(_string(part).rstrip(".") for part in (threats[:1] + trust[:1])) or "Erwartungen entstehen aus Lage und Erfahrung"
     stress = _list(dialogue.get("stress_modulation"))
     stress_line = "; ".join(stress[:2]) or "unter Druck koerperlich lesbar"
     lines = [f"Body/Needs: {body_line}; Druck/Bedarf: {need_line}."]
@@ -581,14 +581,14 @@ def _apply_fallback_living_engine(
             "default_strategies": _unique_strings(
                 [
                     "Informationen sammeln, bevor entschieden wird" if fear_flavored else "auf bekannte Staerke zurueckgreifen",
-                    protective and "Schutz vor eigener Sicherheit stellen",
-                    strength and f"auf {strength} setzen",
+                    "Schutz vor eigener Sicherheit stellen" if protective else "",
+                    f"auf {strength} setzen" if strength else "",
                 ]
             ),
             "override_conditions": _unique_strings(
                 [
-                    protective and "wenn jemand akut in Gefahr ist: Formalitaet fallen lassen und schnell handeln",
-                    fear_flavored and "bei oeffentlicher Beschaemung: weniger preisgeben, mehr Regel-/Distanzsprache",
+                    "wenn jemand akut in Gefahr ist: Formalitaet fallen lassen und schnell handeln" if protective else "",
+                    "bei oeffentlicher Beschaemung: weniger preisgeben, mehr Regel-/Distanzsprache" if fear_flavored else "",
                 ]
             ),
         }
@@ -596,7 +596,7 @@ def _apply_fallback_living_engine(
 
     profile["dialogue_policy"].update(
         {
-            "stress_modulation": _unique_strings(["unter Druck kuerzere Saetze", "Koerper wird stiller", _contains(personality, ("humor", "witz", "sarkas")) and "Humor als Schutz"]),
+            "stress_modulation": _unique_strings(["unter Druck kuerzere Saetze", "Koerper wird stiller", "Humor als Schutz" if _contains(personality, ("humor", "witz", "sarkas")) else ""]),
             "safety_modulation": ["in Sicherheit waermer, laengere Saetze, mehr 'wir'-Sprache"],
             "deception_notes": ["bei Luege keine Klischee-Cues; eher Auslassung, Umstellung und Selbstschutz"],
         }
