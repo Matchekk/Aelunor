@@ -13,6 +13,21 @@ def configure(main_globals: Dict[str, Any]) -> None:
     globals().update(main_globals)
 
 
+def coerce_current_value(value: Any, default: int) -> int:
+    """Coerce a stored *current* resource value to int.
+
+    Treats only a missing/None value as "use default". A legitimate stored 0
+    (downed/dead/empty) must survive instead of being read as "missing" and
+    silently restored to the maximum.
+    """
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def resource_name_for_character(character: Dict[str, Any], world_settings: Optional[Dict[str, Any]] = None) -> str:
     progression = character.get("progression", {}) or {}
     resource_name = normalize_resource_name(progression.get("resource_name", ""))
@@ -96,11 +111,11 @@ def reconcile_canonical_resources(character: Dict[str, Any], world_settings: Opt
         "Aether",
     )
     character["hp_max"] = max(1, int(character.get("hp_max", 10) or 10))
-    character["hp_current"] = clamp(int(character.get("hp_current", character["hp_max"]) or character["hp_max"]), 0, character["hp_max"])
+    character["hp_current"] = clamp(coerce_current_value(character.get("hp_current"), character["hp_max"]), 0, character["hp_max"])
     character["sta_max"] = max(0, int(character.get("sta_max", 10) or 10))
-    character["sta_current"] = clamp(int(character.get("sta_current", character["sta_max"]) or character["sta_max"]), 0, character["sta_max"])
+    character["sta_current"] = clamp(coerce_current_value(character.get("sta_current"), character["sta_max"]), 0, character["sta_max"])
     character["res_max"] = max(0, int(character.get("res_max", 5) or 5))
-    character["res_current"] = clamp(int(character.get("res_current", character["res_max"]) or character["res_max"]), 0, character["res_max"])
+    character["res_current"] = clamp(coerce_current_value(character.get("res_current"), character["res_max"]), 0, character["res_max"])
     character["carry_max"] = max(0, int(character.get("carry_max", 10) or 10))
     character["carry_current"] = clamp(int(character.get("carry_current", 0) or 0), 0, character["carry_max"])
     progression["resource_name"] = resource_label

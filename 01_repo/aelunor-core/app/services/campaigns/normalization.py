@@ -50,10 +50,24 @@ class CampaignNormalizationPorts:
     compute_turn_budget_estimates: Callable[[CampaignState], CampaignState]
 
 
+def _ensure_dict(container: Dict[str, Any], key: str, default_factory: Callable[[], Any]) -> Any:
+    """Replace a missing or non-dict (e.g. JSON ``null``) container with a default.
+
+    ``dict.setdefault`` only fills missing keys; a key explicitly set to ``null``
+    in a hand-edited / truncated save survives as ``None`` and then crashes the
+    load path on ``.setdefault``/``.get``. This coerces such values to a usable
+    dict so corrupt saves degrade gracefully instead of raising a 500."""
+    value = container.get(key)
+    if not isinstance(value, dict):
+        value = default_factory()
+        container[key] = value
+    return value
+
+
 def normalize_campaign(campaign: CampaignState, *, ports: CampaignNormalizationPorts) -> CampaignState:
-    campaign.setdefault("state", ports.deep_copy(ports.initial_state))
-    campaign.setdefault("players", {})
-    campaign.setdefault("boards", lifecycle.default_boards())
+    _ensure_dict(campaign, "state", lambda: ports.deep_copy(ports.initial_state))
+    _ensure_dict(campaign, "players", dict)
+    _ensure_dict(campaign, "boards", lifecycle.default_boards)
     campaign.setdefault("claims", {})
     campaign.setdefault("turns", [])
     campaign.setdefault("board_revisions", [])
@@ -63,7 +77,7 @@ def normalize_campaign(campaign: CampaignState, *, ports: CampaignNormalizationP
         ports.migrate_campaign_to_dynamic_slots(campaign)
 
     state = campaign["state"]
-    state.setdefault("meta", ports.deep_copy(ports.initial_state["meta"]))
+    _ensure_dict(state, "meta", lambda: ports.deep_copy(ports.initial_state["meta"]))
     if state["meta"].get("phase") == "character_creation":
         state["meta"]["phase"] = "character_setup_open"
     if state["meta"].get("phase") == "character_setup":
@@ -82,7 +96,7 @@ def normalize_campaign(campaign: CampaignState, *, ports: CampaignNormalizationP
     else:
         state["meta"]["intro_state"] = ports.default_intro_state()
     state["meta"]["world_time"] = ports.normalize_world_time(state["meta"])
-    state.setdefault("world", ports.deep_copy(ports.initial_state["world"]))
+    _ensure_dict(state, "world", lambda: ports.deep_copy(ports.initial_state["world"]))
     state["world"].setdefault("settings", {})
     state["world"]["settings"] = ports.normalize_world_settings(state["world"].get("settings") or {})
     state["world"].setdefault("elements", {})
@@ -122,8 +136,9 @@ def normalize_campaign(campaign: CampaignState, *, ports: CampaignNormalizationP
     boards.setdefault("story_cards", [])
     boards.setdefault("world_info", [])
     boards.setdefault("memory_summary", lifecycle.default_boards()["memory_summary"])
-    boards.setdefault("player_diaries", {})
+    _ensure_dict(boards, "player_diaries", dict)
     for player_id, player in (campaign.get("players") or {}).items():
+        player = player if isinstance(player, dict) else {}
         boards["player_diaries"].setdefault(
             player_id,
             party.default_player_diary_entry(player_id, player.get("display_name", "")),
@@ -137,16 +152,16 @@ def normalize_campaign(campaign: CampaignState, *, ports: CampaignNormalizationP
             ports.normalize_npc_codex_state(campaign)
         migrations_meta["npc_codex_seeded_from_story_cards"] = True
 
-    setup = campaign.setdefault("setup", ports.default_setup())
+    setup = _ensure_dict(campaign, "setup", ports.default_setup)
     if setup.get("version") != 4:
         fallback = ports.default_setup()
-        fallback["world"].update(setup.get("world", {}))
-        fallback["characters"].update(setup.get("characters", {}))
+        fallback["world"].update(setup.get("world") if isinstance(setup.get("world"), dict) else {})
+        fallback["characters"].update(setup.get("characters") if isinstance(setup.get("characters"), dict) else {})
         setup = campaign["setup"] = fallback
     setup.setdefault("engine", {})
     setup["engine"]["world_catalog_version"] = CATALOG_VERSION
     setup["engine"]["character_catalog_version"] = CATALOG_VERSION
-    setup.setdefault("world", ports.default_setup()["world"])
+    _ensure_dict(setup, "world", lambda: ports.default_setup()["world"])
     setup["world"]["question_queue"] = ports.build_world_question_queue()
     setup["world"].setdefault("answers", {})
     setup["world"].setdefault("summary", {})

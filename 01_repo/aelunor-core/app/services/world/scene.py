@@ -14,14 +14,14 @@ def canonical_scene_id(name: str) -> str:
 
 
 def clean_scene_name(raw_name: str) -> str:
-    name = str(raw_name or "").strip(" .,:;!?\"â€œâ€â€ž'()[]{}")
+    name = str(raw_name or "").strip(" .,:;!?\"“”„'()[]{}")
     name = re.sub(r"\s+", " ", name).strip()
     stop_suffixes = (
         " und",
         " oder",
         " als",
         " wobei",
-        " wÃ¤hrend",
+        " während",
         " doch",
         " dann",
         " dort",
@@ -32,7 +32,7 @@ def clean_scene_name(raw_name: str) -> str:
     for suffix in stop_suffixes:
         if lowered.endswith(suffix):
             cut = len(name) - len(suffix)
-            name = name[:cut].strip(" .,:;!?\"â€œâ€â€ž'")
+            name = name[:cut].strip(" .,:;!?\"“”„'")
             lowered = normalized_eval_text(name)
     return name
 
@@ -107,25 +107,25 @@ def extract_scene_candidates(text: str, actor_display: str) -> List[Dict[str, st
     content = str(text or "")
     if not content.strip():
         return []
-    name_pattern = r"([A-ZÃ„Ã–Ãœ][A-Za-zÃ„Ã–ÃœÃ¤Ã¶Ã¼ÃŸ0-9'â€™\-]+(?:\s+[A-ZÃ„Ã–Ãœ][A-Za-zÃ„Ã–ÃœÃ¤Ã¶Ã¼ÃŸ0-9'â€™\-]+){0,5})"
+    name_pattern = r"([A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9'’\-]+(?:\s+[A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9'’\-]+){0,5})"
     article_prefix = r"(?:den|die|das|dem|der|ein|eine|einen|einem|einer)\s+"
     arrival_patterns = (
         (rf"\bDie Gruppe (?:ist jetzt in|erreicht|betritt|gelangt nach|geht nach|zieht nach|kommt in|kommt nach)\s+(?:{article_prefix})?{name_pattern}", "group"),
         (rf"\bIhr (?:erreicht|betretet|gelangt nach|geht nach|kommt in|kommt nach|zieht nach)\s+(?:{article_prefix})?{name_pattern}", "group"),
-        (rf"\bDie Gruppe [^.!?\n]*?\b(?:steht|steht jetzt|befindet sich|lagert|ruht|kÃ¤mpft)\s+(?:in|an|auf|unter)\s+(?:{article_prefix})?{name_pattern}", "group"),
-        (rf"\bIhr [^.!?\n]*?\b(?:steht|steht jetzt|befindet euch|seid|lagert|ruht|kÃ¤mpft)\s+(?:in|an|auf|unter)\s+(?:{article_prefix})?{name_pattern}", "group"),
+        (rf"\bDie Gruppe [^.!?\n]*?\b(?:steht|steht jetzt|befindet sich|lagert|ruht|kämpft)\s+(?:in|an|auf|unter)\s+(?:{article_prefix})?{name_pattern}", "group"),
+        (rf"\bIhr [^.!?\n]*?\b(?:steht|steht jetzt|befindet euch|seid|lagert|ruht|kämpft)\s+(?:in|an|auf|unter)\s+(?:{article_prefix})?{name_pattern}", "group"),
         (rf"\bDie Gruppe [^.!?\n]*?\bin den Ruinen von\s+(?:{article_prefix})?{name_pattern}", "group"),
         (rf"\bIhr [^.!?\n]*?\bin den Ruinen von\s+(?:{article_prefix})?{name_pattern}", "group"),
         (rf"\b{re.escape(actor_display)} (?:ist jetzt in|erreicht|betritt|gelangt nach|geht nach|zieht nach|kommt in|kommt nach)\s+(?:{article_prefix})?{name_pattern}", "actor"),
-        (rf"\b{re.escape(actor_display)} [^.!?\n]*?\b(?:steht|steht jetzt|befindet sich|lagert|ruht|kÃ¤mpft)\s+(?:in|an|auf|unter)\s+(?:{article_prefix})?{name_pattern}", "actor"),
+        (rf"\b{re.escape(actor_display)} [^.!?\n]*?\b(?:steht|steht jetzt|befindet sich|lagert|ruht|kämpft)\s+(?:in|an|auf|unter)\s+(?:{article_prefix})?{name_pattern}", "actor"),
         (rf"\b{re.escape(actor_display)} [^.!?\n]*?\bin den Ruinen von\s+(?:{article_prefix})?{name_pattern}", "actor"),
         (rf"\b(?:er|sie) (?:ist jetzt in|erreicht|betritt|gelangt nach|geht nach|zieht nach|kommt in|kommt nach)\s+(?:{article_prefix})?{name_pattern}", "actor"),
-        (rf"\b(?:er|sie) [^.!?\n]*?\b(?:steht|steht jetzt|befindet sich|lagert|ruht|kÃ¤mpft)\s+(?:in|an|auf|unter)\s+(?:{article_prefix})?{name_pattern}", "actor"),
+        (rf"\b(?:er|sie) [^.!?\n]*?\b(?:steht|steht jetzt|befindet sich|lagert|ruht|kämpft)\s+(?:in|an|auf|unter)\s+(?:{article_prefix})?{name_pattern}", "actor"),
         (rf"\b(?:er|sie) [^.!?\n]*?\bin den Ruinen von\s+(?:{article_prefix})?{name_pattern}", "actor"),
     )
     mention_patterns = (
         (rf"\bin den Ruinen von\s+{name_pattern}", "mention"),
-        (rf"\bin der NÃ¤he von\s+{name_pattern}", "mention"),
+        (rf"\bin der Nähe von\s+{name_pattern}", "mention"),
         (rf"\bnahe\s+{name_pattern}", "mention"),
         (rf"\bam\s+{name_pattern}", "mention"),
         (rf"\bauf dem\s+{name_pattern}", "mention"),
@@ -159,8 +159,8 @@ def extract_scene_candidates(text: str, actor_display: str) -> List[Dict[str, st
 def extract_descriptive_scene_name(text: str) -> Optional[str]:
     content = str(text or "")
     descriptor_patterns = (
-        r"\bin (?:einer|einem|der|dem|eine|ein)\s+([a-zÃ¤Ã¶Ã¼ÃŸ][a-zÃ¤Ã¶Ã¼ÃŸ\-\s]{2,48}?(?:nische|kammer|gang|krypta|ruine|tempel|lichtung|schlucht))\b",
-        r"\bam (?:rand|eingang) (?:von|der)\s+([a-zÃ¤Ã¶Ã¼ÃŸ][a-zÃ¤Ã¶Ã¼ÃŸ\-\s]{2,48}?(?:ruine|krypta|lichtung|schlucht|festung|tempel))\b",
+        r"\bin (?:einer|einem|der|dem|eine|ein)\s+([a-zäöüß][a-zäöüß\-\s]{2,48}?(?:nische|kammer|gang|krypta|ruine|tempel|lichtung|schlucht))\b",
+        r"\bam (?:rand|eingang) (?:von|der)\s+([a-zäöüß][a-zäöüß\-\s]{2,48}?(?:ruine|krypta|lichtung|schlucht|festung|tempel))\b",
     )
     for pattern in descriptor_patterns:
         match = re.search(pattern, content, flags=re.IGNORECASE)

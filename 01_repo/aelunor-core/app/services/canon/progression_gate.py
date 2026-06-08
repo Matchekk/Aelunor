@@ -113,6 +113,20 @@ def normalize_progression_event_severity(value: Any) -> str:
     severity = str(value or "medium").strip().lower()
     return severity if severity in PROGRESSION_EVENT_SEVERITIES else "medium"
 
+def _safe_int(value: Any, default: int) -> int:
+    """Coerce arbitrary (LLM-supplied) values to int, falling back to default.
+
+    Prevents a non-numeric ``source_turn`` in an extractor patch from raising
+    ValueError inside merge_progression_patch_additive, which runs outside the
+    gate's try/except and would otherwise abort the entire turn."""
+    if value is None:
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def normalize_progression_event(
     raw_event: Any,
     *,
@@ -145,7 +159,7 @@ def normalize_progression_event(
         "target_element_id": target_element_id,
         "severity": normalize_progression_event_severity(raw_event.get("severity")),
         "tags": list(dict.fromkeys(tags)),
-        "source_turn": max(0, int(raw_event.get("source_turn", source_turn) or source_turn)),
+        "source_turn": max(0, _safe_int(raw_event.get("source_turn"), source_turn)),
         "reason": reason,
         "metadata": metadata if isinstance(metadata, dict) else {},
         "skill": skill_payload if isinstance(skill_payload, dict) else {},

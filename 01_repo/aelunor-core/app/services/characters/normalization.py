@@ -320,7 +320,10 @@ def normalize_character_state(
     reconcile_canonical_resources(merged)
     resolve_injury_healing(merged, int(((character.get("meta") or {}).get("turn", 0)) or 0))
     rebuild_character_derived(merged, items_db, world_time)
-    ingest_legacy_resources_into_canonical(merged, source_character=character)
+    # NOTE: do not re-ingest legacy resources here. rebuild_character_derived is the
+    # authority for hp/sta/res maxima (attribute-derived); a second ingest would revert
+    # them to the raw legacy/default values on the first normalize, making normalization
+    # non-idempotent (normalize(x) != normalize(normalize(x))). Only reconcile/clamp.
     reconcile_canonical_resources(merged)
     strip_legacy_shadow_fields(merged)
     if ENABLE_LEGACY_SHADOW_WRITEBACK:

@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 from app.config.feature_flags import ENABLE_LEGACY_SHADOW_WRITEBACK
 from app.config.progression import RESOURCE_KEYS
 from app.core.ids import deep_copy
-from app.services.characters.resources import strip_legacy_resource_shadows
+from app.services.characters.resources import coerce_current_value, strip_legacy_resource_shadows
 from app.services.world.math_utils import clamp
 from app.services.world.progression import normalize_class_current
 from app.services.world.state_defaults import default_character_modifiers
@@ -224,9 +224,9 @@ def rebuild_resource_maxima(character: Dict[str, Any], items_db: Dict[str, Any],
     character["hp_max"] = max(1, int(hp_layer.get("max", character.get("hp_max", 10)) or character.get("hp_max", 10) or 10))
     character["sta_max"] = max(0, int(sta_layer.get("max", character.get("sta_max", 10)) or character.get("sta_max", 10) or 10))
     character["res_max"] = max(0, int(res_layer.get("max", character.get("res_max", 5)) or character.get("res_max", 5) or 5))
-    character["hp_current"] = clamp(int(character.get("hp_current", hp_layer.get("current", character["hp_max"])) or hp_layer.get("current", character["hp_max"]) or character["hp_max"]), 0, character["hp_max"])
-    character["sta_current"] = clamp(int(character.get("sta_current", sta_layer.get("current", character["sta_max"])) or sta_layer.get("current", character["sta_max"]) or character["sta_max"]), 0, character["sta_max"])
-    character["res_current"] = clamp(int(character.get("res_current", res_layer.get("current", character["res_max"])) or res_layer.get("current", character["res_max"]) or character["res_max"]), 0, character["res_max"])
+    character["hp_current"] = clamp(coerce_current_value(character.get("hp_current", hp_layer.get("current", character["hp_max"])), character["hp_max"]), 0, character["hp_max"])
+    character["sta_current"] = clamp(coerce_current_value(character.get("sta_current", sta_layer.get("current", character["sta_max"])), character["sta_max"]), 0, character["sta_max"])
+    character["res_current"] = clamp(coerce_current_value(character.get("res_current", res_layer.get("current", character["res_max"])), character["res_max"]), 0, character["res_max"])
 
     if ENABLE_LEGACY_SHADOW_WRITEBACK:
         character.setdefault("resources", {})

@@ -44,6 +44,15 @@ from app.services.world.text_normalization import normalized_eval_text
 from app.text.patterns import ABILITY_UNLOCK_TRIGGER_PATTERNS
 
 
+def clamp_float(value: float, minimum: float, maximum: float) -> float:
+    """Local copy to avoid a circular import with progression.manifestation
+    (which imports this module). Mirrors manifestation.clamp_float."""
+    try:
+        return max(minimum, min(maximum, float(value)))
+    except (TypeError, ValueError):
+        return minimum
+
+
 def skill_rank_for_level(level: int) -> str:
     return _skill_rank_for_level(level, skill_rank_thresholds=SKILL_RANK_THRESHOLDS)
 
@@ -647,7 +656,7 @@ def ensure_character_progression_core(character: Dict[str, Any]) -> None:
                     "name": str(seed.get("name") or "").strip() or seed_id,
                     "theme_tags": [str(tag).strip() for tag in (seed.get("theme_tags") or []) if str(tag).strip()][:8],
                     "source_turn": max(0, int(seed.get("source_turn", 0) or 0)),
-                    "confidence": clamp_float(float(seed.get("confidence", 0.0) or 0.0), 0.0, 1.0),
+                    "confidence": clamp_float(seed.get("confidence", 0.0), 0.0, 1.0),
                     "status": str(seed.get("status") or "latent").strip().lower() if str(seed.get("status") or "").strip().lower() in {"latent", "confirmed", "unlocked"} else "latent",
                     "related_skill_ids": [str(value).strip() for value in (seed.get("related_skill_ids") or []) if str(value).strip()][:6],
                 }
