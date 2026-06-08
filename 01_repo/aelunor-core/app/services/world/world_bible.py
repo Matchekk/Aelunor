@@ -29,6 +29,28 @@ GENERIC_FORBIDDEN_TERMS = [
     "Dunkler Wald",
 ]
 
+ROOT_CAUSE_TYPES = ("mundane", "political", "ecological", "metaphysical", "divine", "technological", "unknown")
+ROOT_CAUSE_SCALES = ("local", "regional", "continental", "cosmic")
+
+SETTLEMENT_DEFAULT_QUESTIONS = [
+    "Warum existiert dieser Ort?",
+    "Wovon lebt er?",
+    "Wer kontrolliert ihn?",
+    "Was fehlt ihm?",
+    "Wovor fuerchtet er sich?",
+    "Welche Ressource, Luege oder Wunde haelt ihn zusammen?",
+    "Was passiert, wenn die Spieler nie eingreifen?",
+]
+
+FACTION_DEFAULT_QUESTIONS = [
+    "Was will die Fraktion oeffentlich?",
+    "Was will sie wirklich?",
+    "Was besitzt sie?",
+    "Was fuerchtet sie?",
+    "Wer widerspricht intern?",
+    "Was tut sie als Naechstes, wenn niemand sie stoppt?",
+]
+
 
 def default_world_bible() -> WorldBible:
     return {
@@ -147,6 +169,50 @@ def default_world_bible() -> WorldBible:
             "background_style_hints": [],
             "region_style_variants": [],
         },
+        "living_world": {
+            "theme_engine": {
+                "primary_theme": "",
+                "secondary_themes": [],
+                "theme_questions": [],
+                "theme_antipatterns": [],
+            },
+            "root_cause": {
+                "type": "unknown",
+                "public_surface": "",
+                "hidden_truth": "",
+                "scale": "regional",
+                "known_to_players": False,
+            },
+            "world_wound": {
+                "old_break": "",
+                "current_echoes": [],
+                "false_explanations": [],
+                "visible_traces": [],
+            },
+            "world_laws_extended": [],
+            "ripple_engine": {
+                "root_to_ripples": [],
+                "active_pressure_points": [],
+                "escalation_style": "",
+            },
+            "settlement_logic": {
+                "default_questions": list(SETTLEMENT_DEFAULT_QUESTIONS),
+                "settlement_rules": [],
+                "institution_rules": [],
+                "ritual_rules": [],
+            },
+            "faction_logic": {
+                "default_questions": list(FACTION_DEFAULT_QUESTIONS),
+                "pressure_rules": [],
+                "reaction_rules": [],
+            },
+            "plot_logic": {
+                "quest_design_rules": [],
+                "clue_rules": [],
+                "anti_railroad_rules": [],
+                "consequence_rules": [],
+            },
+        },
         "runtime_controls": {
             "generic_name_guard": True,
             "require_bible_derived_names": True,
@@ -170,6 +236,7 @@ def normalize_world_bible(raw: Any, setup_answers: Any = None, world: Any = None
         bible["created_from_setup"] = extract_world_bible_created_from_setup(setup_answers)
     _normalize_language_blocks(bible)
     _normalize_rule_blocks(bible)
+    _normalize_living_world(bible)
     _normalize_world_element_ids(bible, world)
     return bible
 
@@ -198,6 +265,7 @@ def generate_world_bible_fallback(setup_answers: Any, world: Any = None) -> Worl
     )
     _apply_fallback_linguistics(bible, roots, world_name, resource)
     _apply_fallback_rules(bible, roots, resource, setup)
+    _apply_fallback_living_world(bible, roots, resource, setup)
     _normalize_world_element_ids(bible, world)
     return normalize_world_bible(bible, world=world)
 
@@ -226,8 +294,43 @@ def build_world_bible_prompt_summary(bible: Any) -> str:
             f"Skills: {'; '.join(skill_rules[:4]) or 'Skills aus Handlung, Kosten, Quelle und Weltmetaphysik ableiten.'}",
             f"Items: {'; '.join(item_rules[:4]) or 'Items brauchen Herkunft, Material, Nebenwirkung und weltsprachliche Namen.'}",
             f"Forbidden: {', '.join(forbidden[:12]) or 'Generische Begriffe ohne Weltlogik.'}",
+            *_living_world_summary_lines(normalized.get("living_world")),
         ]
     )
+
+
+def _living_world_summary_lines(living_world: Any) -> List[str]:
+    living = _dict(living_world)
+    theme = _dict(living.get("theme_engine"))
+    primary_theme = _string(theme.get("primary_theme"))
+    ripple = _dict(living.get("ripple_engine"))
+    ripples = _list_dicts(ripple.get("root_to_ripples"))
+    if not primary_theme and not ripples:
+        return []
+    root = _dict(living.get("root_cause"))
+    if _bool(root.get("known_to_players"), False) and _string(root.get("public_surface")):
+        pressure = f"Root Cause (bekannt): {_string(root.get('public_surface'))}"
+    else:
+        pressure = "hidden pressure wirkt ueber Ressourcen, Migration und soziale Spannung"
+    ripple_bits = []
+    for entry in ripples[:3]:
+        cause = _string(entry.get("cause"))
+        primary = _string(entry.get("primary_ripple")) or _string(entry.get("local_symptom"))
+        if cause or primary:
+            ripple_bits.append(" -> ".join(part.rstrip(".") for part in (cause, primary) if part))
+    settlement = _dict(living.get("settlement_logic"))
+    settlement_rule = next(iter(_list(settlement.get("settlement_rules"))), "Jeder Ort braucht Existenzgrund, Ressource, Machtzentrum, Mangel, Geruecht und Zukunft ohne Spieler.")
+    faction = _dict(living.get("faction_logic"))
+    faction_rule = next(iter(_list(faction.get("pressure_rules"))), "Fraktionen handeln aus Ressourcen, Angst, Status und internen Widerspruechen.")
+    lines = [
+        f"Living World: Theme={primary_theme or 'offen'}; {pressure}.",
+    ]
+    if ripple_bits:
+        lines.append(f"Ripples: {'; '.join(ripple_bits)}.")
+    lines.append(f"Settlement Logic: {settlement_rule}")
+    lines.append(f"Faction Logic: {faction_rule}")
+    lines.append("Quest Logic: Keine harte Hauptquest aufzwingen; lokale Symptome, Hinweise und Konsequenzen ausspielen.")
+    return lines
 
 
 def extract_world_bible_created_from_setup(setup_answers: Any) -> Dict[str, Any]:
@@ -339,6 +442,90 @@ def _normalize_rule_blocks(bible: WorldBible) -> None:
             bible[section][key] = _list(bible[section].get(key))
 
 
+def _normalize_living_world(bible: WorldBible) -> None:
+    living = bible.setdefault("living_world", {})
+    theme = _dict(living.get("theme_engine"))
+    living["theme_engine"] = {
+        "primary_theme": _string(theme.get("primary_theme")),
+        "secondary_themes": _list(theme.get("secondary_themes")),
+        "theme_questions": _list(theme.get("theme_questions")),
+        "theme_antipatterns": _list(theme.get("theme_antipatterns")),
+    }
+    root = _dict(living.get("root_cause"))
+    root_type = _string(root.get("type"), "unknown").lower()
+    root_scale = _string(root.get("scale"), "regional").lower()
+    living["root_cause"] = {
+        "type": root_type if root_type in ROOT_CAUSE_TYPES else "unknown",
+        "public_surface": _string(root.get("public_surface")),
+        "hidden_truth": _string(root.get("hidden_truth")),
+        "scale": root_scale if root_scale in ROOT_CAUSE_SCALES else "regional",
+        "known_to_players": _bool(root.get("known_to_players"), False),
+    }
+    wound = _dict(living.get("world_wound"))
+    living["world_wound"] = {
+        "old_break": _string(wound.get("old_break")),
+        "current_echoes": _list(wound.get("current_echoes")),
+        "false_explanations": _list(wound.get("false_explanations")),
+        "visible_traces": _list(wound.get("visible_traces")),
+    }
+    living["world_laws_extended"] = [
+        _normalize_world_law_extended(entry) for entry in _list_dicts(living.get("world_laws_extended"))
+    ]
+    ripple = _dict(living.get("ripple_engine"))
+    living["ripple_engine"] = {
+        "root_to_ripples": [_normalize_ripple(entry) for entry in _list_dicts(ripple.get("root_to_ripples"))],
+        "active_pressure_points": _list(ripple.get("active_pressure_points")),
+        "escalation_style": _string(ripple.get("escalation_style")),
+    }
+    settlement = _dict(living.get("settlement_logic"))
+    settlement_questions = _list(settlement.get("default_questions")) or list(SETTLEMENT_DEFAULT_QUESTIONS)
+    living["settlement_logic"] = {
+        "default_questions": settlement_questions,
+        "settlement_rules": _list(settlement.get("settlement_rules")),
+        "institution_rules": _list(settlement.get("institution_rules")),
+        "ritual_rules": _list(settlement.get("ritual_rules")),
+    }
+    faction = _dict(living.get("faction_logic"))
+    faction_questions = _list(faction.get("default_questions")) or list(FACTION_DEFAULT_QUESTIONS)
+    living["faction_logic"] = {
+        "default_questions": faction_questions,
+        "pressure_rules": _list(faction.get("pressure_rules")),
+        "reaction_rules": _list(faction.get("reaction_rules")),
+    }
+    plot = _dict(living.get("plot_logic"))
+    living["plot_logic"] = {
+        "quest_design_rules": _list(plot.get("quest_design_rules")),
+        "clue_rules": _list(plot.get("clue_rules")),
+        "anti_railroad_rules": _list(plot.get("anti_railroad_rules")),
+        "consequence_rules": _list(plot.get("consequence_rules")),
+    }
+
+
+def _normalize_world_law_extended(raw: Any) -> Dict[str, Any]:
+    data = _dict(raw)
+    return {
+        "id": _string(data.get("id")),
+        "principle": _string(data.get("principle")),
+        "cost": _string(data.get("cost")),
+        "limit": _string(data.get("limit")),
+        "social_effect": _string(data.get("social_effect")),
+        "failure_mode": _string(data.get("failure_mode")),
+    }
+
+
+def _normalize_ripple(raw: Any) -> Dict[str, Any]:
+    data = _dict(raw)
+    return {
+        "cause": _string(data.get("cause")),
+        "primary_ripple": _string(data.get("primary_ripple")),
+        "secondary_ripple": _string(data.get("secondary_ripple")),
+        "local_symptom": _string(data.get("local_symptom")),
+        "quest_hooks": _list(data.get("quest_hooks")),
+        "clues": _list(data.get("clues")),
+        "if_players_do_nothing": _string(data.get("if_players_do_nothing")),
+    }
+
+
 def _apply_fallback_linguistics(bible: WorldBible, roots: List[str], world_name: str, resource: str) -> None:
     roots = clean_language_roots(roots)
     bible["linguistics"]["world_languages"]["primary_language"].update(
@@ -364,6 +551,106 @@ def _apply_fallback_rules(bible: WorldBible, roots: List[str], resource: str, se
     bible["items"].update({"material_vocabulary": [roots[3], roots[4], resource, f"{resource}-Rest"], "item_naming_rules": bible["naming_rules"]["items"]["patterns"], "curse_rules": [] if mode == "superhero_academy" else ["Flueche brauchen Ausloeser, Preis und sichtbare Spur."], "relic_rules": item_rules, "earth_item_transformation_rules": ["Erdgegenstaende werden durch Material, Herkunft und Weltkosten umgedeutet."]})
     bible["linguistics"]["race_languages"].update(fallback_race_languages(setup, roots))
     bible["tone_and_style"].update({"narration_rules": [setup["tone"] or "konkret, koerperlich, weltgebunden"], "forbidden_words": GENERIC_FORBIDDEN_TERMS, "preferred_motifs": [setup["theme"], setup["central_conflict"], resource], "sensory_palette": {"sights": [resource, roots[0]], "sounds": ["Klicken", "Atem"], "smells": [], "textures": ["kaltes Metall"]}})
+
+
+def _infer_root_cause_type(text: str) -> str:
+    lowered = text.lower()
+    keyword_map = (
+        ("ecological", ("hunger", "ernte", "fisch", "duerre", "seuche", "oekolog", "ressource", "wasser", "klima")),
+        ("political", ("krieg", "eid", "macht", "thron", "fraktion", "verrat", "grenz", "politik", "herrsch")),
+        ("metaphysical", ("magie", "fluch", "ritual", "metaphys", "gott", "geist", "erinnerung", "seele")),
+        ("divine", ("gott", "goetter", "heilig", "tempel", "divin", "prophet")),
+        ("technological", ("maschine", "technolog", "quirk", "akademie", "industrie", "experiment")),
+    )
+    for cause_type, needles in keyword_map:
+        if any(needle in lowered for needle in needles):
+            return cause_type
+    return "mundane" if text else "unknown"
+
+
+def _apply_fallback_living_world(bible: WorldBible, roots: List[str], resource: str, setup: Dict[str, Any]) -> None:
+    theme = setup["theme"] or "Unbenannte Spannung"
+    conflict = setup["central_conflict"] or theme
+    structure = setup["world_structure"]
+    taboos = _list(setup["taboos"])
+    factions = [line for line in re.split(r"[\n;]+", setup["factions_raw"] or "") if line.strip()]
+    living = bible["living_world"]
+    living["theme_engine"].update(
+        {
+            "primary_theme": theme,
+            "secondary_themes": _unique_strings([structure, resource]),
+            "theme_questions": [
+                f"Wie zeigt sich {theme} koerperlich und sozial im Alltag?",
+                "Welche Spuren, Geruechte und Kosten macht der Druck sichtbar?",
+            ],
+            "theme_antipatterns": _unique_strings(taboos + ["isolierte Lore ohne Ursache", "Lore-Dump statt Spuren"]),
+        }
+    )
+    living["root_cause"].update(
+        {
+            "type": _infer_root_cause_type(f"{theme} {conflict}"),
+            "public_surface": conflict,
+            "hidden_truth": f"Hinter '{conflict}' liegt eine aeltere, unbezahlte Ursache.",
+            "scale": living["root_cause"].get("scale", "regional"),
+            "known_to_players": False,
+        }
+    )
+    living["world_wound"].update(
+        {
+            "old_break": f"Ein frueherer Bruch um {theme} wurde nie geheilt.",
+            "current_echoes": _unique_strings([conflict, resource and f"{resource} bleibt knapp und umkaempft"]),
+            "false_explanations": ["bequeme Schuldzuweisung an Aussenseiter oder Schicksal"],
+            "visible_traces": _unique_strings([structure, "Ruinen, alte Namen und ungeloeste Schulden"]),
+        }
+    )
+    living["world_laws_extended"] = [
+        {
+            "id": f"law_{index + 1}",
+            "principle": _string(law),
+            "cost": f"Wirkung verbraucht {resource}, Zeit oder Vertrauen.",
+            "limit": "Begrenzt durch Quelle, Ort, Material oder Eid.",
+            "social_effect": "Wer das Gesetz nutzt, traegt sichtbaren Status oder Verdacht.",
+            "failure_mode": "Bei Missbrauch entstehen Spuren, Schuld oder Korruption.",
+        }
+        for index, law in enumerate(_list(setup["world_laws"]))
+    ]
+    primary_ripple = {
+        "cause": conflict,
+        "primary_ripple": f"{resource}-Knappheit und Misstrauen breiten sich entlang {structure or 'der Handelswege'} aus.",
+        "secondary_ripple": "Wer Mangel verwaltet, gewinnt Macht; Schwaechere weichen aus oder radikalisieren sich.",
+        "local_symptom": "Ein konkreter Ort zeigt das Problem zuerst: Preise, Wachen, Geruechte.",
+        "quest_hooks": [f"Spuren von {conflict} an einem lokalen Ort untersuchen"],
+        "clues": _unique_strings([resource and f"Reste von {resource}", "alte Namen, Schulden, widerspruechliche Aussagen"]),
+        "if_players_do_nothing": "Der Druck eskaliert eine Stufe: aus Mangel wird Gewalt oder Flucht.",
+    }
+    living["ripple_engine"].update(
+        {
+            "root_to_ripples": [primary_ripple],
+            "active_pressure_points": _unique_strings([factions[0] if factions else "", structure]),
+            "escalation_style": setup["tone"] or "langsam, koerperlich, konsequent",
+        }
+    )
+    living["settlement_logic"]["settlement_rules"] = _unique_strings(
+        [
+            structure and f"Orte folgen der Struktur: {structure}.",
+            "Jeder Ort braucht Existenzgrund, Ressource, Machtzentrum, Mangel, Geruecht und Zukunft ohne Spieler.",
+        ]
+    )
+    living["settlement_logic"]["institution_rules"] = ["Institutionen, Gilden, Religion und Ordnung pruegen den Alltag."]
+    living["faction_logic"]["pressure_rules"] = _unique_strings(
+        [f"{line.strip()} handelt aus Besitz, Angst, Status und begrenztem Wissen." for line in factions[:3]]
+    ) or ["Fraktionen handeln aus Ressourcen, Angst, Status und internen Widerspruechen."]
+    living["faction_logic"]["reaction_rules"] = ["Fraktionen reagieren auf Spieleraktionen mit naechstem plausiblem Schritt."]
+    living["plot_logic"].update(
+        {
+            "quest_design_rules": ["Quests entstehen aus lokalen Symptomen groesserer Druckwellen."],
+            "clue_rules": ["Ursache ueber Spuren, Geruechte und Konsequenzen zeigen, nicht ueber Lore-Dump."],
+            "anti_railroad_rules": [
+                "Lokale Probleme sollen aus Ripple Effects entstehen; keine singulaere Hauptquest aufzwingen, wenn Spieler andere Spuren verfolgen.",
+            ],
+            "consequence_rules": ["Untaetigkeit eskaliert; Orte und Fraktionen haben Gedaechtnis."],
+        }
+    )
 
 
 def _normalize_world_element_ids(bible: WorldBible, world: Any) -> None:

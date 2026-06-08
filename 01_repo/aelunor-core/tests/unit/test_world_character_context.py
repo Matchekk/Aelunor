@@ -99,6 +99,18 @@ def test_style_consistency_guard_protects_world_bible_and_player_control():
     assert "Keine grosse Entscheidung" in block
 
 
+def test_style_consistency_guard_includes_living_world_and_character_rules():
+    block = build_style_consistency_guard_block(_campaign(), "slot_1")
+
+    assert "Ripple Effects" in block
+    assert "Ressource, Angst, Status" in block
+    assert "Emotionen ueber Koerper" in block
+    assert "strikt trennen" in block
+    assert "keine Spezies-Stereotype" in block
+    # player control guard must remain intact
+    assert "Spielercharaktere duerfen nicht" in block
+
+
 def test_world_character_context_packet_combines_and_respects_max_length():
     packet = build_world_character_context_packet(_campaign(), "slot_1", max_chars=900)
 

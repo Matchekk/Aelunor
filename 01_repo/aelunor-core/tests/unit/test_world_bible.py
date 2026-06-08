@@ -184,6 +184,66 @@ def test_prompt_summary_contains_core_contract_parts():
     assert "Forbidden:" in summary
 
 
+def test_normalize_world_bible_sets_living_world_default():
+    bible = normalize_world_bible({"identity": {"world_name": "Veyrhal"}})
+
+    living = bible["living_world"]
+    assert living["root_cause"]["type"] == "unknown"
+    assert living["root_cause"]["known_to_players"] is False
+    assert living["settlement_logic"]["default_questions"]
+    assert living["faction_logic"]["default_questions"]
+    assert living["world_laws_extended"] == []
+    assert living["ripple_engine"]["root_to_ripples"] == []
+
+
+def test_minimal_legacy_bible_without_living_world_stays_compatible():
+    legacy = {"version": 1, "identity": {"world_name": "AltVeyr"}, "metaphysics": {"main_power_name": "Veyr"}}
+
+    bible = normalize_world_bible(copy.deepcopy(legacy))
+
+    assert bible["identity"]["world_name"] == "AltVeyr"
+    assert "living_world" in bible
+    assert bible["living_world"]["theme_engine"]["primary_theme"] == ""
+
+
+def test_fallback_world_bible_derives_living_world_from_setup():
+    bible = generate_world_bible_fallback(_setup_summary())
+    living = bible["living_world"]
+
+    assert living["theme_engine"]["primary_theme"] == _setup_summary()["theme"]
+    assert living["root_cause"]["public_surface"] == _setup_summary()["central_conflict"]
+    assert living["root_cause"]["known_to_players"] is False
+    assert [law["principle"] for law in living["world_laws_extended"]] == _setup_summary()["world_laws"]
+    assert living["ripple_engine"]["root_to_ripples"]
+    assert living["plot_logic"]["anti_railroad_rules"]
+    # taboos flow into theme antipatterns / boundaries
+    assert any("Toten" in entry or "nachts" in entry for entry in living["theme_engine"]["theme_antipatterns"])
+
+
+def test_world_bible_summary_includes_living_world_without_spoiling_hidden_root():
+    bible = generate_world_bible_fallback(_setup_summary())
+    # ensure there is a hidden truth that must never leak into the prompt summary
+    assert bible["living_world"]["root_cause"]["hidden_truth"]
+    summary = build_world_bible_prompt_summary(bible)
+
+    assert "Living World: Theme=" in summary
+    assert "hidden pressure" in summary
+    assert "Quest Logic:" in summary
+    assert bible["living_world"]["root_cause"]["hidden_truth"] not in summary
+    # compact: only a few extra lines, not a JSON dump
+    assert summary.count("\n") < 24
+    assert "{" not in summary
+
+
+def test_world_bible_summary_names_root_cause_only_when_known_to_players():
+    bible = generate_world_bible_fallback(_setup_summary())
+    bible["living_world"]["root_cause"]["known_to_players"] = True
+    summary = build_world_bible_prompt_summary(bible)
+
+    assert "Root Cause (bekannt):" in summary
+    assert "hidden pressure" not in summary
+
+
 def test_campaign_normalize_roundtrip_preserves_generated_bible():
     state_engine.configure_dependencies(StateEngineDependencies())
     campaign = {

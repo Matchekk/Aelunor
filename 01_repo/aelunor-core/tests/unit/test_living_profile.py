@@ -108,6 +108,93 @@ def test_prompt_summary_contains_core_contract_parts():
     assert "Spielerentscheidungen nicht ueberschreiben" in summary
 
 
+def test_normalize_living_profile_sets_living_engine_blocks():
+    profile = normalize_living_profile({"identity": {"name": "Aria"}})
+
+    for block in ("embodiment_model", "needs_model", "expectation_model", "attachment_model", "body_state", "behavior_policy", "dialogue_policy"):
+        assert block in profile
+    assert profile["body_state"]["energy"] == "normal"
+    assert profile["body_state"]["hunger"] == "unknown"
+    weights = profile["behavior_policy"]["decision_weights"]
+    assert set(weights) == {"need_relief", "threat_reduction", "value_fit", "relationship_protection", "role_compliance", "identity_consistency"}
+    assert all(isinstance(value, float) and 0.0 <= value <= 1.0 for value in weights.values())
+    assert profile["dialogue_policy"]["forbidden_shortcuts"]
+
+
+def test_legacy_profile_without_living_engine_stays_compatible():
+    legacy = {"version": 1, "identity": {"name": "Old"}, "behavior_model": {"typical_patterns": []}}
+
+    profile = normalize_living_profile(copy.deepcopy(legacy))
+
+    assert profile["identity"]["name"] == "Old"
+    assert profile["body_state"]["energy"] == "normal"
+    assert profile["roleplay_rules"]["ai_may_not_override_major_choices"] is True
+
+
+def test_behavior_policy_coerces_non_numeric_weights():
+    profile = normalize_living_profile({"identity": {"name": "X"}, "behavior_policy": {"decision_weights": {"need_relief": "0.4", "threat_reduction": "kaputt", "value_fit": 1.9}}})
+
+    weights = profile["behavior_policy"]["decision_weights"]
+    assert weights["need_relief"] == 0.4
+    assert weights["threat_reduction"] == 0.0
+    assert weights["value_fit"] == 1.0
+
+
+def test_fallback_living_engine_derives_body_state_from_isekai_price():
+    character = _character()
+    character["bio"]["isekai_price"] = "verlorene Stimme"
+
+    profile = generate_living_profile_fallback(character, world_bible=_world_bible())
+
+    assert profile["body_state"]["energy"] == "erschoepft"
+    assert profile["body_state"]["notes"]
+    assert any("Ankunftspreis" in note for note in profile["body_state"]["notes"])
+    # never leak the english setup key name into player-facing state
+    assert "isekai" not in json.dumps(profile, ensure_ascii=False).lower()
+
+
+def test_fallback_weakness_paranoia_yields_cautious_hints_not_diagnosis():
+    character = _character()
+    character["bio"]["weakness"] = "Paranoia"
+
+    profile = generate_living_profile_fallback(character, world_bible=_world_bible())
+
+    threats = profile["expectation_model"]["threat_interpretations"]
+    assert threats
+    assert any("Gefahr" in entry for entry in threats)
+    payload = json.dumps(profile, ensure_ascii=False).lower()
+    for clinical in ("diagnose", "stoerung", "ptsd", "krankheit", "syndrom"):
+        assert clinical not in payload
+
+
+def test_fallback_living_engine_is_deterministic():
+    character = _character()
+    character["bio"]["isekai_price"] = "verlorene Stimme"
+
+    first = generate_living_profile_fallback(character, world_bible=_world_bible())
+    second = generate_living_profile_fallback(copy.deepcopy(character), world_bible=copy.deepcopy(_world_bible()))
+
+    assert first == second
+
+
+def test_summary_contains_living_engine_lines_but_stays_compact():
+    profile = generate_living_profile_fallback(_character(), world_bible=_world_bible())
+    summary = build_living_profile_prompt_summary(profile)
+
+    assert "Body/Needs:" in summary
+    assert "Expectations:" in summary
+    assert "Stress/Voice:" in summary
+    assert summary.count("\n") < 24
+    assert "{" not in summary
+
+
+def test_roleplay_rules_protect_major_choices_after_engine_normalization():
+    profile = generate_living_profile_fallback(_character(), world_bible=_world_bible())
+
+    assert profile["roleplay_rules"]["ai_may_not_override_major_choices"] is True
+    assert "keine grosse Spielerentscheidung ueberschreiben" in profile["dialogue_policy"]["forbidden_shortcuts"]
+
+
 def test_character_normalization_adds_living_profile_and_roundtrip_is_stable():
     character = normalization.normalize_character_state(
         _character(),

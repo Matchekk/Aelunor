@@ -178,6 +178,79 @@ def default_living_profile() -> LivingProfile:
             "profile_confidence": "medium",
             "needs_player_confirmation": [],
         },
+        "embodiment_model": {
+            "species_id": "",
+            "body_baseline": {
+                "energy_pattern": "",
+                "pain_response": "",
+                "sleep_or_rest_need": "",
+                "temperature_comfort": "",
+                "injury_vulnerability": "",
+                "comfort_conditions": [],
+                "stress_body_signals": [],
+            },
+            "sensory_profile": {
+                "dominant_senses": [],
+                "salience_biases": [],
+                "aversive_cues": [],
+                "comfort_cues": [],
+            },
+        },
+        "needs_model": {
+            "physiological_needs": [],
+            "psychological_needs": [],
+            "social_motives": [],
+            "current_pressure": "",
+        },
+        "expectation_model": {
+            "learned_priors": [],
+            "threat_interpretations": [],
+            "trust_interpretations": [],
+            "prediction_error_notes": [],
+        },
+        "attachment_model": {
+            "self_expectation": "",
+            "other_expectation": "",
+            "closeness_strategy": "",
+            "conflict_strategy": "",
+            "trust_gain_triggers": [],
+            "betrayal_triggers": [],
+            "repair_conditions": [],
+        },
+        "body_state": {
+            "energy": "normal",
+            "hunger": "unknown",
+            "sleep_debt": "unknown",
+            "pain": "none",
+            "arousal": "baseline",
+            "muscle_tension": "",
+            "breath_pattern": "",
+            "temperature_state": "",
+            "notes": [],
+        },
+        "behavior_policy": {
+            "decision_weights": {
+                "need_relief": 0.0,
+                "threat_reduction": 0.0,
+                "value_fit": 0.0,
+                "relationship_protection": 0.0,
+                "role_compliance": 0.0,
+                "identity_consistency": 0.0,
+            },
+            "default_strategies": [],
+            "override_conditions": [],
+        },
+        "dialogue_policy": {
+            "surface_rule": "Emotionen ueber Koerper, Handlung, Register, Auslassung und Subtext zeigen; nicht nur labeln.",
+            "stress_modulation": [],
+            "safety_modulation": [],
+            "deception_notes": [],
+            "forbidden_shortcuts": [
+                "keine Catchphrase-Spam",
+                "keine Spezies-Stereotype als Stimme",
+                "keine grosse Spielerentscheidung ueberschreiben",
+            ],
+        },
         "revision": {"revision_id": 1, "created_turn": 0, "last_updated_turn": 0, "change_log": []},
     }
 
@@ -198,6 +271,7 @@ def normalize_living_profile(
     _normalize_typical_patterns(profile)
     _normalize_speech_languages(profile)
     _normalize_controls(profile)
+    _normalize_living_engine(profile)
     return profile
 
 
@@ -272,6 +346,18 @@ def generate_living_profile_fallback(character: Any, world_bible: Any = None, se
     profile["world_resonance"].update(_fallback_world_resonance(world_identity, metaphysics, character, bio))
     profile["roleplay_rules"]["protected_character_facts"] = _unique_strings([name, class_name, strength, weakness])
     profile["consistency_controls"]["core_traits_locked"] = _unique_strings([primary_trait, strength, weakness])[:5]
+    _apply_fallback_living_engine(
+        profile,
+        bio=bio,
+        setup=setup,
+        personality=personality,
+        strength=strength,
+        weakness=weakness,
+        focus=focus,
+        goal=goal,
+        primary_trait=primary_trait,
+        public_role=public_role,
+    )
     return normalize_living_profile(profile)
 
 
@@ -297,9 +383,36 @@ def build_living_profile_prompt_summary(profile: Any, character: Any = None) -> 
             f"Fear/Shame: {', '.join(normalized['conflict_model'].get('shame_points') or normalized['personality_model'].get('fears') or []) or 'noch offen'}.",
             f"Boundaries: {', '.join(normalized['personality_model'].get('boundaries') or normalized['roleplay_rules'].get('protected_character_facts') or []) or 'Spielerfakten respektieren'}.",
             f"Anti-Patterns: {', '.join(normalized['behavior_model'].get('anti_patterns') or []) or 'keine beliebige Persoenlichkeitsdrift'}.",
+            *_living_engine_summary_lines(normalized),
             "AI Control: Spielerentscheidungen nicht ueberschreiben; nur Mikroreaktionen, Stimmung und typische Impulse andeuten.",
         ]
     )
+
+
+def _living_engine_summary_lines(normalized: LivingProfile) -> List[str]:
+    body = _dict(normalized.get("body_state"))
+    needs = _dict(normalized.get("needs_model"))
+    embodiment = _dict(normalized.get("embodiment_model"))
+    baseline = _dict(embodiment.get("body_baseline"))
+    expectation = _dict(normalized.get("expectation_model"))
+    dialogue = _dict(normalized.get("dialogue_policy"))
+    body_bits = [
+        body.get("energy") and f"Energie {body.get('energy')}",
+        body.get("pain") not in ("none", "") and f"Schmerz {body.get('pain')}",
+    ]
+    body_line = ", ".join(part for part in body_bits if part) or "stabil"
+    need_line = needs.get("current_pressure") or ", ".join(_list(needs.get("psychological_needs"))[:2]) or "noch offen"
+    threats = _list(expectation.get("threat_interpretations"))
+    trust = _list(expectation.get("trust_interpretations"))
+    expect_line = "; ".join(part.rstrip(".") for part in (threats[:1] + trust[:1])) or "Erwartungen entstehen aus Lage und Erfahrung"
+    stress = _list(dialogue.get("stress_modulation"))
+    stress_line = "; ".join(stress[:2]) or "unter Druck koerperlich lesbar"
+    lines = [f"Body/Needs: {body_line}; Druck/Bedarf: {need_line}."]
+    if _list(baseline.get("stress_body_signals")):
+        lines[0] = f"Body/Needs: {body_line}; Druck/Bedarf: {need_line}; Stress zeigt sich koerperlich."
+    lines.append(f"Expectations: {expect_line}.")
+    lines.append(f"Stress/Voice: {stress_line}.")
+    return lines
 
 
 def normalize_typical_pattern(raw: Any) -> Dict[str, Any]:
@@ -383,6 +496,142 @@ def _fallback_patterns(strength: str, weakness: str, personality: List[str], goa
     return [normalize_typical_pattern(pattern) for pattern in patterns[:5]]
 
 
+_FEAR_KEYS = ("angst", "paranoi", "misstrau", "flucht", "panik", "schreck", "trauma", "verrat", "scham")
+
+
+def _apply_fallback_living_engine(
+    profile: LivingProfile,
+    *,
+    bio: Dict[str, Any],
+    setup: Dict[str, Any],
+    personality: List[str],
+    strength: str,
+    weakness: str,
+    focus: str,
+    goal: str,
+    primary_trait: str,
+    public_role: str,
+) -> None:
+    age = _string(bio.get("age") or _value(setup, "char_age") or _value(setup, "age_bucket"))
+    earth_life = _string(bio.get("earth_life") or _value(setup, "earth_life"))
+    price = _string(bio.get("isekai_price") or _value(setup, "isekai_price"))
+    comfort_items = _unique_strings(_list(bio.get("earth_items") or _value(setup, "earth_items")) + [_string(bio.get("signature_item") or _value(setup, "signature_item"))])
+    protective = _contains([strength, goal], ("besch", "rett", "schutz", "helf", "loyal"))
+    fear_flavored = _contains([weakness], _FEAR_KEYS)
+
+    embodiment = profile["embodiment_model"]
+    embodiment["body_baseline"].update(
+        {
+            "energy_pattern": _energy_pattern(age, price),
+            "pain_response": "Schmerz verkuerzt den Zeithorizont und erhoeht die Reizbarkeit.",
+            "sleep_or_rest_need": "braucht verlaessliche Ruhe, um Druck abzubauen",
+            "stress_body_signals": _unique_strings(["Atem wird flacher", "Koerper wird stiller oder angespannter"] + (["scannt die Umgebung"] if fear_flavored else [])),
+            "comfort_conditions": _unique_strings(["vertraute Stimme", "verlaesslicher Ablauf"] + comfort_items[:2]),
+        }
+    )
+    embodiment["sensory_profile"].update(
+        {
+            "aversive_cues": _unique_strings(["ploetzliche Naehe von hinten", "Stille nach einer Frage"] if fear_flavored else ["ungeordnete, unvorhersehbare Lage"]),
+            "comfort_cues": _unique_strings(comfort_items[:3] + ["geteilter Handlungsrhythmus"]),
+        }
+    )
+
+    profile["needs_model"].update(
+        {
+            "physiological_needs": _unique_strings(["Ruhe" if price else "", "Sicherheit"]),
+            "psychological_needs": _unique_strings([strength and "Kompetenz beweisen", "Kontrolle", goal and "Sinn"]),
+            "social_motives": _unique_strings(["Schutz von Naehestehenden" if protective else "Zugehoerigkeit", "Selbstschutz"]),
+            "current_pressure": focus or goal,
+        }
+    )
+
+    profile["expectation_model"].update(
+        {
+            "learned_priors": _unique_strings([f"frueheres Leben praegt Erwartungen: {earth_life}" if earth_life else "", "verlaessliche Wiederholung schafft Vertrauen"]),
+            "threat_interpretations": _threat_interpretations(weakness, fear_flavored),
+            "trust_interpretations": ["Vertrauen waechst durch wiederholte, verlaessliche Handlungen, nicht durch Worte."],
+        }
+    )
+
+    profile["attachment_model"].update(
+        {
+            "self_expectation": "nuetzlich, solange kompetent; ungern beduerftig" if strength else "sucht einen sicheren Platz",
+            "other_expectation": "hilfreich, aber pruefbar" if fear_flavored else "grundsaetzlich zugewandt, aber nicht garantiert",
+            "closeness_strategy": "naehert sich vorsichtig und testet zuerst" if fear_flavored else "sucht gemeinsame Aufgaben",
+            "conflict_strategy": _pressure_behavior(weakness),
+            "trust_gain_triggers": ["wiederholte verlaessliche Hilfe", "Schutz in echter Gefahr"],
+            "betrayal_triggers": _unique_strings([weakness and "oeffentliche Beschaemung", "gebrochene Zusagen"]),
+            "repair_conditions": ["glaubwuerdiger Beweis ueber Zeit; Reparatur ist langsamer als Schaden"],
+        }
+    )
+
+    if price:
+        profile["body_state"].update(
+            {
+                "energy": "erschoepft",
+                "muscle_tension": "erhoeht",
+                "breath_pattern": "flach, kontrolliert",
+                "notes": _unique_strings([f"Ankunftspreis wirkt nach: {price}"]),
+            }
+        )
+
+    profile["behavior_policy"].update(
+        {
+            "decision_weights": _decision_weights(protective, fear_flavored, bool(strength), bool(goal)),
+            "default_strategies": _unique_strings(
+                [
+                    "Informationen sammeln, bevor entschieden wird" if fear_flavored else "auf bekannte Staerke zurueckgreifen",
+                    protective and "Schutz vor eigener Sicherheit stellen",
+                    strength and f"auf {strength} setzen",
+                ]
+            ),
+            "override_conditions": _unique_strings(
+                [
+                    protective and "wenn jemand akut in Gefahr ist: Formalitaet fallen lassen und schnell handeln",
+                    fear_flavored and "bei oeffentlicher Beschaemung: weniger preisgeben, mehr Regel-/Distanzsprache",
+                ]
+            ),
+        }
+    )
+
+    profile["dialogue_policy"].update(
+        {
+            "stress_modulation": _unique_strings(["unter Druck kuerzere Saetze", "Koerper wird stiller", _contains(personality, ("humor", "witz", "sarkas")) and "Humor als Schutz"]),
+            "safety_modulation": ["in Sicherheit waermer, laengere Saetze, mehr 'wir'-Sprache"],
+            "deception_notes": ["bei Luege keine Klischee-Cues; eher Auslassung, Umstellung und Selbstschutz"],
+        }
+    )
+
+
+def _energy_pattern(age: str, price: str) -> str:
+    base = "altersbedingt veraenderte Belastbarkeit" if age else "durchschnittliche Belastbarkeit"
+    if price:
+        return f"{base}; aktuell durch den Ankunftspreis gedaempft"
+    return base
+
+
+def _threat_interpretations(weakness: str, fear_flavored: bool) -> List[str]:
+    if fear_flavored:
+        return [
+            "liest Mehrdeutigkeit und Stille unter Druck eher als Gefahr",
+            "rechnet bei Autoritaet schneller mit Beschaemung",
+        ]
+    if weakness:
+        return [f"unter Druck wird '{weakness}' zur wunden Stelle und faerbt die Deutung der Lage"]
+    return ["unter Druck steigt die Wachsamkeit; neutrale Signale werden vorsichtiger gedeutet"]
+
+
+def _decision_weights(protective: bool, fear_flavored: bool, has_strength: bool, has_goal: bool) -> Dict[str, float]:
+    return {
+        "need_relief": 0.2 if has_goal else 0.15,
+        "threat_reduction": 0.3 if fear_flavored else 0.2,
+        "value_fit": 0.2 if has_strength else 0.1,
+        "relationship_protection": 0.25 if protective else 0.1,
+        "role_compliance": 0.15,
+        "identity_consistency": 0.1,
+    }
+
+
 def _normalize_profile_lists(profile: LivingProfile) -> None:
     list_keys = {
         "identity": ("aliases",),
@@ -427,6 +676,107 @@ def _normalize_controls(profile: LivingProfile) -> None:
     controls["last_profile_update_turn"] = max(0, int(controls.get("last_profile_update_turn", 0) or 0))
     if controls.get("profile_confidence") not in {"low", "medium", "high"}:
         controls["profile_confidence"] = "medium"
+
+
+DECISION_WEIGHT_KEYS = (
+    "need_relief",
+    "threat_reduction",
+    "value_fit",
+    "relationship_protection",
+    "role_compliance",
+    "identity_consistency",
+)
+
+
+def _normalize_living_engine(profile: LivingProfile) -> None:
+    embodiment = _dict(profile.get("embodiment_model"))
+    baseline = _dict(embodiment.get("body_baseline"))
+    sensory = _dict(embodiment.get("sensory_profile"))
+    profile["embodiment_model"] = {
+        "species_id": _string(embodiment.get("species_id")),
+        "body_baseline": {
+            "energy_pattern": _string(baseline.get("energy_pattern")),
+            "pain_response": _string(baseline.get("pain_response")),
+            "sleep_or_rest_need": _string(baseline.get("sleep_or_rest_need")),
+            "temperature_comfort": _string(baseline.get("temperature_comfort")),
+            "injury_vulnerability": _string(baseline.get("injury_vulnerability")),
+            "comfort_conditions": _list(baseline.get("comfort_conditions")),
+            "stress_body_signals": _list(baseline.get("stress_body_signals")),
+        },
+        "sensory_profile": {
+            "dominant_senses": _list(sensory.get("dominant_senses")),
+            "salience_biases": _list(sensory.get("salience_biases")),
+            "aversive_cues": _list(sensory.get("aversive_cues")),
+            "comfort_cues": _list(sensory.get("comfort_cues")),
+        },
+    }
+    needs = _dict(profile.get("needs_model"))
+    profile["needs_model"] = {
+        "physiological_needs": _list(needs.get("physiological_needs")),
+        "psychological_needs": _list(needs.get("psychological_needs")),
+        "social_motives": _list(needs.get("social_motives")),
+        "current_pressure": _string(needs.get("current_pressure")),
+    }
+    expectation = _dict(profile.get("expectation_model"))
+    profile["expectation_model"] = {
+        "learned_priors": _list(expectation.get("learned_priors")),
+        "threat_interpretations": _list(expectation.get("threat_interpretations")),
+        "trust_interpretations": _list(expectation.get("trust_interpretations")),
+        "prediction_error_notes": _list(expectation.get("prediction_error_notes")),
+    }
+    attachment = _dict(profile.get("attachment_model"))
+    profile["attachment_model"] = {
+        "self_expectation": _string(attachment.get("self_expectation")),
+        "other_expectation": _string(attachment.get("other_expectation")),
+        "closeness_strategy": _string(attachment.get("closeness_strategy")),
+        "conflict_strategy": _string(attachment.get("conflict_strategy")),
+        "trust_gain_triggers": _list(attachment.get("trust_gain_triggers")),
+        "betrayal_triggers": _list(attachment.get("betrayal_triggers")),
+        "repair_conditions": _list(attachment.get("repair_conditions")),
+    }
+    body = _dict(profile.get("body_state"))
+    profile["body_state"] = {
+        "energy": _string(body.get("energy"), "normal") or "normal",
+        "hunger": _string(body.get("hunger"), "unknown") or "unknown",
+        "sleep_debt": _string(body.get("sleep_debt"), "unknown") or "unknown",
+        "pain": _string(body.get("pain"), "none") or "none",
+        "arousal": _string(body.get("arousal"), "baseline") or "baseline",
+        "muscle_tension": _string(body.get("muscle_tension")),
+        "breath_pattern": _string(body.get("breath_pattern")),
+        "temperature_state": _string(body.get("temperature_state")),
+        "notes": _list(body.get("notes")),
+    }
+    policy = _dict(profile.get("behavior_policy"))
+    raw_weights = _dict(policy.get("decision_weights"))
+    profile["behavior_policy"] = {
+        "decision_weights": {key: _clamped_float(raw_weights.get(key)) for key in DECISION_WEIGHT_KEYS},
+        "default_strategies": _list(policy.get("default_strategies")),
+        "override_conditions": _list(policy.get("override_conditions")),
+    }
+    dialogue = _dict(profile.get("dialogue_policy"))
+    surface_rule = _string(dialogue.get("surface_rule")) or "Emotionen ueber Koerper, Handlung, Register, Auslassung und Subtext zeigen; nicht nur labeln."
+    forbidden = _list(dialogue.get("forbidden_shortcuts")) or [
+        "keine Catchphrase-Spam",
+        "keine Spezies-Stereotype als Stimme",
+        "keine grosse Spielerentscheidung ueberschreiben",
+    ]
+    profile["dialogue_policy"] = {
+        "surface_rule": surface_rule,
+        "stress_modulation": _list(dialogue.get("stress_modulation")),
+        "safety_modulation": _list(dialogue.get("safety_modulation")),
+        "deception_notes": _list(dialogue.get("deception_notes")),
+        "forbidden_shortcuts": forbidden,
+    }
+
+
+def _clamped_float(value: Any) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if number != number:  # NaN guard
+        return 0.0
+    return max(0.0, min(1.0, number))
 
 
 def _should_generate_fallback(raw: Dict[str, Any], character: Any, setup_answers: Any) -> bool:
