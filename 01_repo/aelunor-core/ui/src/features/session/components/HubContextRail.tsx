@@ -23,20 +23,6 @@ function formatUpdatedAt(value: string | null | undefined): string {
   }).format(date);
 }
 
-function ArcaneStatusWidget({ has_active_session }: { has_active_session: boolean }) {
-  return (
-    <div className="hub-arcane-widget" aria-label="Canon State">
-      <div className="hub-compass" aria-hidden="true">
-        <span className="hub-compass-star" />
-      </div>
-      <div className="hub-arcane-lines">
-        <span>Canon State</span>
-        <strong>{has_active_session ? "Stable" : "No active session"}</strong>
-      </div>
-    </div>
-  );
-}
-
 export function HubContextRail({
   session_count,
   has_active_session,
@@ -44,51 +30,63 @@ export function HubContextRail({
   active_campaign_id,
   active_join_code,
 }: HubContextRailProps) {
+  if (!has_active_session && session_count === 0) {
+    return (
+      <aside className="hub-context-rail is-empty" aria-label="Nächster Schritt">
+        <AelunorPanelFrame className="hub-context-panel hub-next-step-panel" variant="compact">
+          <div className="hub-context-head">
+            <span>Nächster Schritt</span>
+            <strong>Vom leeren Hub zum ersten Turn</strong>
+          </div>
+          <ol className="hub-next-steps">
+            <li>Kampagne erstellen</li>
+            <li>Party einrichten</li>
+            <li>Ersten Story-Turn starten</li>
+          </ol>
+        </AelunorPanelFrame>
+      </aside>
+    );
+  }
+
   return (
     <aside className="hub-context-rail" aria-label="Campaign Kontext">
       <AelunorPanelFrame className="hub-context-panel" variant="compact">
         <div className="hub-context-head">
-          <span>Campaign Status</span>
-          <strong>{has_active_session ? "Session Active" : "Standby"}</strong>
+          <span>{has_active_session ? "Spieler online" : "Gespeicherte Sessions"}</span>
+          <strong>{has_active_session ? "Lokale Session bereit" : `${session_count} Chronik${session_count === 1 ? "" : "en"}`}</strong>
         </div>
-        <div className="hub-context-stat">
-          <span>Saved Sessions</span>
-          <strong>{session_count}</strong>
-        </div>
-        <div className="hub-context-stat">
-          <span>Join Code</span>
-          <strong>{active_join_code || latest_entry?.join_code || "n/a"}</strong>
-        </div>
+        {active_join_code || latest_entry?.join_code ? (
+          <div className="hub-context-stat">
+            <span>Join Code</span>
+            <strong>{active_join_code || latest_entry?.join_code}</strong>
+          </div>
+        ) : null}
       </AelunorPanelFrame>
 
       <AelunorPanelFrame className="hub-context-panel" variant="compact">
         <div className="hub-context-head">
-          <span>Current Chronicle</span>
-          <strong>{latest_entry?.campaign_title ?? latest_entry?.label ?? "Noch keine Chronik"}</strong>
+          <span>{has_active_session ? "Active Objective" : "Letzte Chronik"}</span>
+          <strong>{has_active_session ? "Nächsten Story-Turn starten" : latest_entry?.campaign_title ?? latest_entry?.label}</strong>
         </div>
         <p className="status-muted">
           {latest_entry
             ? `Zuletzt lokal aktualisiert: ${formatUpdatedAt(latest_entry.updated_at)}`
-            : "Erstelle oder join eine Kampagne, um die Chronik zu starten."}
-        </p>
-        <div className="hub-mini-map" aria-hidden="true" />
-      </AelunorPanelFrame>
-
-      <AelunorPanelFrame className="hub-context-panel" variant="compact">
-        <div className="hub-context-head">
-          <span>Active Objective</span>
-          <strong>{active_campaign_id ? "Campaign State laden" : "Erste Kampagne erstellen"}</strong>
-        </div>
-        <p className="status-muted">
-          {has_active_session
-            ? "Lokale Zugangsdaten sind vorhanden. Fortsetzen prüft den Server-State vor dem Einstieg."
-            : "Der Hub wartet auf eine neue Host- oder Join-Aktion."}
+            : "Wähle eine gespeicherte Session und validiere den Server-State."}
         </p>
       </AelunorPanelFrame>
 
-      <AelunorPanelFrame className="hub-context-panel" variant="compact">
-        <ArcaneStatusWidget has_active_session={has_active_session} />
-      </AelunorPanelFrame>
+      {has_active_session ? (
+        <AelunorPanelFrame className="hub-context-panel" variant="compact">
+          <div className="hub-context-head">
+            <span>Canon State</span>
+            <strong>Bereit zur Prüfung</strong>
+          </div>
+          <p className="status-muted">
+            Fortsetzen lädt Campaign-State, Claims und Canon vor dem Einstieg neu.
+            {active_campaign_id ? ` Campaign ${active_campaign_id.slice(0, 8)}` : ""}
+          </p>
+        </AelunorPanelFrame>
+      ) : null}
     </aside>
   );
 }

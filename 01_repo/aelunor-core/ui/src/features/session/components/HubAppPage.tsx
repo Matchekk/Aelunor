@@ -143,7 +143,7 @@ export function HubAppPage({
         {hero}
         <section className="hub-overview-grid" aria-label="Hub Übersicht">
           <div className="hub-overview-main">
-            {features}
+            {has_active_session ? features : null}
             {continuation}
           </div>
           {context_rail}

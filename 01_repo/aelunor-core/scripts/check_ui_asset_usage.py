@@ -135,8 +135,12 @@ def analyze_source_files(
 
 
 def asset_path_exists(root: Path, asset_path: str) -> bool:
+    if asset_path.startswith("/static/icons/"):
+        return (root / "app" / "static" / "icons" / asset_path.removeprefix("/static/icons/")).exists()
     if asset_path.startswith("/static/brand/"):
         return (root / "app" / "static" / "brand" / asset_path.removeprefix("/static/brand/")).exists()
+    if asset_path.startswith("/icons/"):
+        return (root / "ui" / "public" / "icons" / asset_path.removeprefix("/icons/")).exists()
     if asset_path.startswith("/brand/"):
         return (root / "ui" / "public" / "brand" / asset_path.removeprefix("/brand/")).exists()
     return False
