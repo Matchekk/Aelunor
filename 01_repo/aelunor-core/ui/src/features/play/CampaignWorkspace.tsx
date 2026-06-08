@@ -321,18 +321,8 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
   }, [campaign.campaign_meta.campaign_id, closeContextStore, contextOpen, navigatePlayState, openContextStore, playRouteState]);
 
   return (
-    <main className="v1-app-shell campaign-play-shell aelunor-game-shell">
-      <GameSidebar
-        items={[
-          { id: "journal", label: "Journal", detail: "Story", active: true, on_select: openBoards },
-          { id: "quests", label: "Quests", detail: "Plot", on_select: openBoards },
-          { id: "party", label: "Party", detail: partySummary, active: rightRailOpen, on_select: () => setRightRailOpen(!rightRailOpen) },
-          { id: "map", label: "Map", detail: activeSceneLabel, on_select: openBoards },
-          { id: "codex", label: "Codex", detail: "Welt", on_select: openBoards },
-        ]}
-        footer={<StatusBadge label={phaseState.is_active_play ? "Session live" : phaseState.phase_display} tone={phaseState.is_active_play ? "success" : "arcane"} />}
-      />
-      <div className="game-shell-content">
+    <>
+      <main className="v1-app-shell campaign-play-shell aelunor-play-shell" data-location-theme="default">
         <TopBar
           campaign={campaign}
           session={session}
@@ -350,8 +340,18 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
             navigate(buildV1HubPath(), { replace: true });
           }}
         />
-        <section className={rightRailOpen ? "workspace-grid play-workspace-grid layout" : "workspace-grid play-workspace-grid layout no-rail"}>
-          <section className={`campaign-main-column story-workspace story-surface timeline-column${isPreplay ? " is-preplay" : " is-active-play"}`}>
+        <section className={rightRailOpen ? "play-main-grid" : "play-main-grid no-rail"}>
+          <GameSidebar
+            items={[
+              { id: "journal", label: "Journal", detail: "Story", active: true, on_select: openBoards },
+              { id: "quests", label: "Quests", detail: "Plot", on_select: openBoards },
+              { id: "party", label: "Party", detail: partySummary, active: rightRailOpen, on_select: () => setRightRailOpen(!rightRailOpen) },
+              { id: "map", label: "Map", detail: activeSceneLabel, on_select: openBoards },
+              { id: "codex", label: "Codex", detail: "Welt", on_select: openBoards },
+            ]}
+            footer={<StatusBadge label={phaseState.is_active_play ? "Session live" : phaseState.phase_display} tone={phaseState.is_active_play ? "success" : "arcane"} />}
+          />
+          <section className={`play-story-panel campaign-main-column story-workspace story-surface timeline-column${isPreplay ? " is-preplay" : " is-active-play"}`}>
             <section className="story-context-row">
               <div className="story-context-main">
                 <span className="status-pill">{phaseState.phase_display}</span>
@@ -418,11 +418,6 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
                 void continueTurnMutation.mutateAsync(buildContinueTurnPayload(claimedSlotId));
               }}
             />
-            {isPreplay ? (
-              <PrePlayComposerHint phase_display={phaseState.phase_display} />
-            ) : (
-              <Composer campaign={campaign} on_open_context={openContextModal} />
-            )}
           </section>
           {rightRailOpen ? (
             <RightRail
@@ -434,7 +429,14 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
             />
           ) : null}
         </section>
-      </div>
+        <section className={rightRailOpen ? "play-composer-row" : "play-composer-row no-rail"}>
+          {isPreplay ? (
+            <PrePlayComposerHint phase_display={phaseState.phase_display} />
+          ) : (
+            <Composer campaign={campaign} on_open_context={openContextModal} />
+          )}
+        </section>
+      </main>
       <BoardsModal
         campaign={campaign}
         session={session}
@@ -520,6 +522,6 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
           );
         }}
       />
-    </main>
+    </>
   );
 }

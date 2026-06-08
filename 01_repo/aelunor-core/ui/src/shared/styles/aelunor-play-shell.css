@@ -1,0 +1,265 @@
+.aelunor-play-shell {
+  --play-gap: 1rem;
+  --play-nav-width: 88px;
+  --play-rail-width: clamp(340px, 24vw, 380px);
+  --play-panel-bg: rgba(8, 14, 22, 0.94);
+  --play-panel-soft: rgba(16, 27, 40, 0.86);
+  --play-border: rgba(217, 184, 112, 0.28);
+  --play-border-strong: rgba(225, 196, 126, 0.46);
+  --play-text: #f2ead8;
+  --play-muted: rgba(232, 222, 198, 0.72);
+  --play-accent: #d8b66f;
+  --play-cyan: #8fd2e8;
+
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  min-height: 100dvh;
+  margin: 0;
+  padding: 0.75rem;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--play-gap);
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(2, 6, 11, 0.94), rgba(5, 11, 18, 0.82)),
+    var(--aelunor-wallpaper-hybrid) center / cover fixed;
+  color: var(--play-text);
+}
+
+.aelunor-play-shell::after {
+  display: none;
+}
+
+.aelunor-play-shell .play-main-grid {
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: var(--play-nav-width) minmax(0, 1fr) var(--play-rail-width);
+  gap: var(--play-gap);
+  overflow: hidden;
+}
+
+.aelunor-play-shell .play-main-grid.no-rail {
+  grid-template-columns: var(--play-nav-width) minmax(0, 1fr);
+}
+
+.aelunor-play-shell .v1-topbar.command-bar {
+  min-height: 0;
+  max-height: 88px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  overflow: hidden;
+  border: 1px solid var(--play-border);
+  border-radius: 0.75rem;
+  background: linear-gradient(180deg, rgba(12, 20, 31, 0.96), rgba(5, 9, 15, 0.94));
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.32);
+  backdrop-filter: none;
+}
+
+.aelunor-play-shell .v1-topbar-title {
+  margin: 0;
+  font-size: clamp(1.05rem, 1vw + 0.72rem, 1.45rem);
+  line-height: 1.12;
+  color: var(--play-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aelunor-play-shell .topbar-brand {
+  margin: 0 0 0.2rem;
+  color: var(--play-accent);
+}
+
+.aelunor-play-shell .command-bar-meta-line {
+  margin: 0.12rem 0 0;
+  color: var(--play-muted);
+  font-size: 0.7rem;
+  line-height: 1.25;
+}
+
+.aelunor-play-shell .topbar-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.aelunor-play-shell .topbar-utility-btn,
+.aelunor-play-shell .topbar-code-button,
+.aelunor-play-shell .menu-icon-button {
+  min-height: 2.25rem;
+  border-color: var(--play-border);
+  border-radius: 0.55rem;
+  background: rgba(18, 31, 46, 0.78);
+  color: var(--play-muted);
+  box-shadow: none;
+}
+
+.aelunor-play-shell .play-nav-rail {
+  position: static;
+  height: auto;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  padding: 0.7rem 0.45rem;
+  overflow: hidden;
+  border: 1px solid var(--play-border);
+  border-radius: 0.75rem;
+  background: linear-gradient(180deg, rgba(9, 16, 25, 0.96), rgba(4, 8, 14, 0.94));
+}
+
+.aelunor-play-shell .game-sidebar-brand {
+  font-size: 0.68rem;
+}
+
+.aelunor-play-shell .game-sidebar-brand img {
+  width: 2.3rem;
+  height: 2.3rem;
+}
+
+.aelunor-play-shell .game-sidebar-items {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+  overflow: hidden auto;
+}
+
+.aelunor-play-shell .game-sidebar-item {
+  min-width: 0;
+  min-height: 3.8rem;
+  padding: 0.45rem 0.25rem;
+  border-radius: 0.65rem;
+  border-color: rgba(217, 184, 112, 0.18);
+  background: rgba(5, 10, 17, 0.68);
+  box-shadow: none;
+}
+
+.aelunor-play-shell .game-sidebar-item.is-active,
+.aelunor-play-shell .game-sidebar-item:hover {
+  border-color: var(--play-border-strong);
+  background: rgba(24, 38, 52, 0.88);
+  color: var(--play-text);
+}
+
+.aelunor-play-shell .game-sidebar-copy > span {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+}
+
+.aelunor-play-shell .game-sidebar-copy small {
+  max-width: 4.8rem;
+  font-size: 0.58rem;
+}
+
+.aelunor-play-shell .play-story-panel {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--play-border-strong);
+  border-radius: 0.85rem;
+  background: linear-gradient(180deg, rgba(13, 23, 35, 0.95), rgba(5, 10, 17, 0.94));
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.34);
+}
+
+.aelunor-play-shell .story-context-row {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.55rem;
+  border: 1px solid rgba(217, 184, 112, 0.18);
+  border-radius: 0.65rem;
+  background: rgba(12, 22, 34, 0.78);
+}
+
+.aelunor-play-shell .story-timeline.timeline-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.85rem;
+  border: 1px solid rgba(217, 184, 112, 0.22);
+  border-radius: 0.75rem;
+  background: linear-gradient(180deg, rgba(10, 18, 29, 0.96), rgba(4, 8, 14, 0.95));
+  color: var(--play-text);
+  box-shadow: inset 0 1px 0 rgba(255, 246, 220, 0.04);
+}
+
+.aelunor-play-shell .story-timeline.timeline-panel::before {
+  display: none;
+}
+
+.aelunor-play-shell .timeline-head,
+.aelunor-play-shell .timeline-head .panelTitle,
+.aelunor-play-shell .timeline-head > span {
+  color: var(--play-text);
+}
+
+.aelunor-play-shell .timeline-list {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 78ch;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.aelunor-play-shell .timeline-item.story-turn-card {
+  margin: 0;
+  padding: 0.9rem;
+  border: 1px solid rgba(100, 77, 41, 0.32);
+  border-radius: 0.7rem;
+  background: linear-gradient(180deg, #d8c69f, #cbb486);
+  color: #21170c;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+}
+
+.aelunor-play-shell .story-turn-text,
+.aelunor-play-shell .timeline-item-title strong {
+  color: #21170c;
+}
+
+.aelunor-play-shell .story-turn-lead,
+.aelunor-play-shell .timeline-item-head {
+  color: #59472d;
+}
+
+.aelunor-play-shell .right-rail.sidebar-column {
+  position: static;
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+  overflow: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--play-border);
+  border-radius: 0.85rem;
+  background: linear-gradient(180deg, rgba(10, 18, 28, 0.96), rgba(4, 8, 14, 0.95));
+  color: var(--play-text);
+}
+
+.aelunor-play-shell .play-composer-row {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: var(--play-nav-width) minmax(0, 1fr) var(--play-rail-width);
+  gap: var(--play-gap);
+}
+
+.aelunor-play-shell .play-composer-row.no-rail {
+  grid-template-columns: var(--play-nav-width) minmax(0, 1fr);
+}
+
+.aelunor-play-shell .play-composer-row > * {
+  grid-column: 2;
+  min-width: 0;
+}

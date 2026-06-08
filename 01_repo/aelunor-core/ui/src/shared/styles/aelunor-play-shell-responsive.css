@@ -1,0 +1,147 @@
+@media (max-width: 1100px) {
+  .aelunor-play-shell {
+    height: auto;
+    min-height: 100dvh;
+    overflow: auto;
+  }
+
+  .aelunor-play-shell .play-main-grid,
+  .aelunor-play-shell .play-main-grid.no-rail,
+  .aelunor-play-shell .play-composer-row,
+  .aelunor-play-shell .play-composer-row.no-rail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .aelunor-play-shell .play-nav-rail {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto;
+  }
+
+  .aelunor-play-shell .game-sidebar-items {
+    display: flex;
+    flex-direction: row;
+    overflow: auto hidden;
+  }
+
+  .aelunor-play-shell .game-sidebar-item {
+    min-width: 7.2rem;
+    min-height: 3.2rem;
+    grid-template-columns: auto minmax(0, 1fr);
+    justify-items: start;
+    text-align: left;
+  }
+
+  .aelunor-play-shell .right-rail.sidebar-column {
+    max-height: 36dvh;
+  }
+
+  .aelunor-play-shell .play-composer-row > * {
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 760px) {
+  .aelunor-play-shell {
+    height: 100dvh;
+    min-height: 100dvh;
+    padding: 0.5rem;
+    gap: 0.65rem;
+    overflow: hidden;
+  }
+
+  .aelunor-play-shell .v1-topbar.command-bar {
+    max-height: none;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.55rem;
+  }
+
+  .aelunor-play-shell .topbar-actions {
+    justify-content: flex-start;
+  }
+
+  .aelunor-play-shell .topbar-utility-btn,
+  .aelunor-play-shell .topbar-code-button,
+  .aelunor-play-shell .menu-icon-button {
+    min-height: 2rem;
+  }
+
+  .aelunor-play-shell .command-bar-meta-line {
+    font-size: 0.66rem;
+  }
+
+  .aelunor-play-shell .play-main-grid,
+  .aelunor-play-shell .play-main-grid.no-rail {
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .aelunor-play-shell .play-nav-rail {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.45rem;
+  }
+
+  .aelunor-play-shell .game-sidebar-brand,
+  .aelunor-play-shell .game-sidebar-footer {
+    display: none;
+  }
+
+  .aelunor-play-shell .game-sidebar-item {
+    min-width: 6.5rem;
+    min-height: 2.9rem;
+  }
+
+  .aelunor-play-shell .play-story-panel,
+  .aelunor-play-shell .right-rail.sidebar-column,
+  .aelunor-play-shell .composer-dock.composer-panel {
+    border-radius: 0.7rem;
+  }
+
+  .aelunor-play-shell .play-story-panel {
+    min-height: 0;
+    padding: 0.55rem;
+  }
+
+  .aelunor-play-shell .story-context-row {
+    flex-direction: column;
+    max-height: 5.8rem;
+    overflow: auto;
+  }
+
+  .aelunor-play-shell .story-timeline.timeline-panel {
+    padding: 0.65rem;
+  }
+
+  .aelunor-play-shell .right-rail.sidebar-column {
+    display: none;
+  }
+
+  .aelunor-play-shell .composer-dock.composer-panel,
+  .aelunor-play-shell .preplay-composer-hint {
+    height: 240px;
+    padding: 0.55rem;
+  }
+
+  .aelunor-play-shell .composer-dock-head,
+  .aelunor-play-shell .composer-mode-hint,
+  .aelunor-play-shell .composer-helper {
+    display: none;
+  }
+
+  .aelunor-play-shell .composer-mode-tabs button,
+  .aelunor-play-shell .submit-bar button {
+    min-height: 2rem;
+  }
+
+  .aelunor-play-shell .composer-status-pills {
+    gap: 0.35rem;
+  }
+
+  .aelunor-play-shell .composer-status-pills .status-pill {
+    min-height: 1.65rem;
+  }
+
+  .aelunor-play-shell .composer-textarea-wrap textarea {
+    min-height: 3.35rem;
+  }
+}

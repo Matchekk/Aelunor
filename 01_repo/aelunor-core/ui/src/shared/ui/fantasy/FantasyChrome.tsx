@@ -15,7 +15,7 @@ interface GameSidebarProps {
 
 export function GameSidebar({ items, footer }: GameSidebarProps) {
   return (
-    <nav className="game-sidebar" aria-label="Aelunor Spielbereiche">
+    <nav className="game-sidebar play-nav-rail" aria-label="Aelunor Spielbereiche">
       <div className="game-sidebar-brand">
         <img src="/v1/brand/aelunor-icon-512x512.png" alt="" />
         <span>Aelunor</span>

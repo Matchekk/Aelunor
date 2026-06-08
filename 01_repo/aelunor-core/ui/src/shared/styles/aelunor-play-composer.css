@@ -1,0 +1,58 @@
+.aelunor-play-shell .composer-dock.composer-panel,
+.aelunor-play-shell .preplay-composer-hint {
+  position: relative;
+  bottom: auto;
+  height: clamp(250px, 30dvh, 320px);
+  max-height: none;
+  overflow: auto;
+  padding: 0.75rem;
+  border: 1px solid var(--play-border-strong);
+  border-radius: 0.85rem;
+  background: linear-gradient(180deg, rgba(13, 23, 35, 0.98), rgba(5, 10, 17, 0.96));
+  color: var(--play-text);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.32);
+}
+
+.aelunor-play-shell .composer-dock.composer-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+}
+
+.aelunor-play-shell .composer-dock-head {
+  margin: 0;
+}
+
+.aelunor-play-shell .composer-dock-head .panelTitle {
+  font-size: clamp(1rem, 0.7vw + 0.85rem, 1.32rem);
+}
+
+.aelunor-play-shell .composer-mode-tabs {
+  gap: 0.35rem;
+}
+
+.aelunor-play-shell .composer-mode-tabs button,
+.aelunor-play-shell .submit-bar button {
+  min-height: 2.15rem;
+  padding-block: 0.25rem;
+}
+
+.aelunor-play-shell .composer-status-bar,
+.aelunor-play-shell .composer-helper {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.aelunor-play-shell .composer-textarea-wrap {
+  display: grid;
+  gap: 0.22rem;
+  min-height: 0;
+}
+
+.aelunor-play-shell .composer-textarea-wrap textarea {
+  min-height: 3.6rem;
+  border-color: var(--play-border);
+  border-radius: 0.65rem;
+  background: rgba(2, 6, 12, 0.82);
+  color: var(--play-text);
+}
