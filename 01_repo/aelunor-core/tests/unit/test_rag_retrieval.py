@@ -94,6 +94,26 @@ class RetrievalTests(unittest.TestCase):
         # ...but only by a small, bounded margin (less than one keyword).
         self.assertLess(results[0].score - results[1].score, 1.0)
 
+    def test_unicode_german_fantasy_keywords_match(self):
+        chunks = [
+            _chunk("a#chunk-0", "Der König von Élarion bewacht die Sümpfe."),
+            _chunk("b#chunk-0", "Ein Händler verkauft Brot in der Stadt."),
+        ]
+        # Umlauts/accents must survive tokenization and match case-insensitively.
+        query = RetrievalQuery(text="könig sümpfe", campaign_id="camp-A")
+        results = retrieve_chunks(query, chunks)
+        self.assertEqual(results[0].chunk.id, "a#chunk-0")
+        self.assertTrue(any("keywords" in r for r in results[0].reasons))
+
+    def test_unicode_fantasy_name_is_a_single_token(self):
+        chunks = [
+            _chunk("a#chunk-0", "Der Fürst Thalûn reist nach Élarion."),
+            _chunk("b#chunk-0", "Nichts Besonderes geschieht hier."),
+        ]
+        query = RetrievalQuery(text="Élarion", campaign_id="camp-A")
+        results = retrieve_chunks(query, chunks)
+        self.assertEqual(results[0].chunk.id, "a#chunk-0")
+
     def test_empty_query_returns_no_wild_results(self):
         chunks = [_chunk("a#chunk-0", "dragon", salience=1.0, canonical=True)]
         query = RetrievalQuery(text="", campaign_id="camp-A")

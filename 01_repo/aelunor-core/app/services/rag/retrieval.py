@@ -11,7 +11,12 @@ from typing import Any, Optional, Sequence
 
 from .models import RAGChunk, RetrievalQuery, RetrievalResult
 
-_TOKEN_RE = re.compile(r"[a-z0-9]+")
+# Unicode-aware token rule: match runs of Unicode word characters (letters
+# and digits, incl. umlauts/accents like ä, ö, ü, é, û) but treat underscore
+# as a separator rather than a normal word character. Pure stdlib, fully
+# deterministic, no external dependency. Matching stays case-insensitive
+# because `normalize_text` lowercases the input first.
+_TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
 
 # Scoring weights. Entity > keyword > metadata; salience / canonical are
 # only light, stable tie-breakers and never produce a match on their own.
@@ -28,7 +33,7 @@ def normalize_text(text: Any) -> str:
 
 
 def tokenize(text: Any) -> list[str]:
-    """Split text into lowercase alphanumeric tokens."""
+    """Split text into lowercase Unicode-alphanumeric tokens."""
     return _TOKEN_RE.findall(normalize_text(text))
 
 
