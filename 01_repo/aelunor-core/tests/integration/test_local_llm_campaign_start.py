@@ -24,7 +24,9 @@ def test_local_ollama_campaign_start_and_three_playable_turns(tmp_path: Path, mo
     monkeypatch.setenv("LLM_PROVIDER", "ollama")
     monkeypatch.setenv("OLLAMA_URL", llm.OLLAMA_URL)
     monkeypatch.setenv("OLLAMA_MODEL", llm.OLLAMA_MODEL)
-    monkeypatch.setenv("OLLAMA_TIMEOUT_SEC", os.getenv("OLLAMA_TIMEOUT_SEC", "420"))
+    # Player turns carry the full history context; on consumer hardware gemma
+    # needs more than 420s per call once retries/rewrites kick in.
+    monkeypatch.setenv("OLLAMA_TIMEOUT_SEC", os.getenv("OLLAMA_TIMEOUT_SEC", "600"))
     monkeypatch.setenv("OLLAMA_NUM_CTX", os.getenv("AELUNOR_LOCAL_LLM_NUM_CTX", "32768"))
     monkeypatch.setenv("ENABLE_SETUP_AI_COPY", "0")
     monkeypatch.setenv("NO_PROXY", "127.0.0.1,localhost,::1")

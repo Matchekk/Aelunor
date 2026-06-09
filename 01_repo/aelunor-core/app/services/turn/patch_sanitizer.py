@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
@@ -51,6 +52,79 @@ def _deps() -> PatchSanitizerDependencies:
     if _DEPS is None:
         raise RuntimeError("patch sanitizer dependencies are not configured")
     return _DEPS
+
+
+def _initial_scene_name_from_id(scene_id: str, deps: PatchSanitizerDependencies) -> str:
+    raw = re.sub(r"^(?:scene|node|map)[_\-\s]+", "", str(scene_id or "").strip(), flags=re.IGNORECASE)
+    raw = re.sub(r"[_\-]+", " ", raw)
+    raw = re.sub(r"\b\d+\b", " ", raw)
+    name = deps.clean_scene_name(raw)
+    if not name:
+        return ""
+    name = " ".join(part[:1].upper() + part[1:] for part in name.split())
+    if not deps.is_plausible_scene_name(name):
+        return ""
+    if deps.is_generic_scene_identifier(scene_id, name):
+        return ""
+    return name[:80]
+
+
+def ensure_initial_scene_backing(
+    state: Dict[str, Any],
+    patch: Dict[str, Any],
+    *,
+    action_type: str,
+) -> Dict[str, Any]:
+    """Back a first-turn scene_id with a minimal map node so the patch validates.
+
+    Local models often open a campaign by setting characters.*.scene_id without
+    adding the matching map node. On the very first story turn of a campaign
+    that has no scenes and no map nodes yet, such a patch would always fail
+    schema validation ("Unknown scene id"). Only in exactly that start
+    situation a single conservative location node is synthesized from the
+    referenced scene id; implausible or generic identifiers are left alone so
+    validation (and the intro retry) still catches them.
+    """
+    deps = _deps()
+    if action_type != "story":
+        return patch
+    if not isinstance(patch, dict):
+        return patch
+    meta = (state.get("meta") or {})
+    if _safe_int(meta.get("turn"), 0) > 1:
+        return patch
+    if (state.get("scenes") or {}) or ((state.get("map") or {}).get("nodes") or {}):
+        return patch
+    referenced_scene_ids: List[str] = []
+    for upd in (patch.get("characters") or {}).values():
+        if not isinstance(upd, dict):
+            continue
+        scene_id = str(upd.get("scene_id") or "").strip()
+        if scene_id and scene_id not in referenced_scene_ids:
+            referenced_scene_ids.append(scene_id)
+    if not referenced_scene_ids:
+        return patch
+    existing_node_ids = {
+        str(node.get("id") or "").strip()
+        for node in (patch.get("map_add_nodes") or [])
+        if isinstance(node, dict)
+    }
+    for scene_id in referenced_scene_ids:
+        if scene_id in existing_node_ids:
+            continue
+        node_name = _initial_scene_name_from_id(scene_id, deps)
+        if not node_name:
+            continue
+        patch.setdefault("map_add_nodes", []).append(
+            {
+                "id": scene_id,
+                "name": node_name,
+                "type": "location",
+                "danger": 1,
+                "discovered": True,
+            }
+        )
+    return patch
 
 
 def sanitize_patch(state: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, Any]:

@@ -1127,8 +1127,11 @@ def repair_json_payload_with_model(
     broken_content: str,
     *,
     schema: Dict[str, Any],
-    timeout: int = 90,
+    timeout: Optional[int] = None,
 ) -> Dict[str, Any]:
+    # Local models routinely need far longer than a fixed 90s for the repair
+    # pass; without an explicit override the configured timeout must apply.
+    repair_timeout = max(90, int(timeout or OLLAMA_TIMEOUT_SEC))
     repair_user = (
         "Die folgende Modellantwort sollte JSON sein, ist aber kaputt oder unvollständig.\n"
         "Repariere sie zu einem einzelnen gültigen JSON-Objekt gemäß Schema.\n"
@@ -1147,7 +1150,7 @@ def repair_json_payload_with_model(
         system,
         repair_user,
         format_schema=schema,
-        timeout=timeout,
+        timeout=repair_timeout,
         temperature=0.05,
         repeat_penalty=1.05,
     )
@@ -1351,7 +1354,9 @@ def call_ollama_schema(system: str, user: str, schema: Dict[str, Any], *, timeou
     except RuntimeError as exc:
         if "Model returned non-JSON content" not in str(exc):
             raise
-        return repair_json_payload_with_model(system, content, schema=schema, timeout=min(schema_timeout, 120))
+        # The repair pass must get the same budget as the schema call itself;
+        # a 120s cap reliably times out on local models.
+        return repair_json_payload_with_model(system, content, schema=schema, timeout=schema_timeout)
 
 def setup_ai_copy_dependencies() -> setup_ai_copy.SetupAiCopyDependencies:
     from app.services import turn_engine as _turn_engine
@@ -1778,6 +1783,9 @@ INTRO_RETRYABLE_ERROR_CODES = frozenset({
     ERROR_CODE_NARRATOR_RESPONSE,
     ERROR_CODE_JSON_REPAIR,
     ERROR_CODE_SCHEMA_VALIDATION,
+    # Local models fail the canon/NPC extractor pass transiently (timeouts,
+    # malformed JSON); for the intro turn that class is worth one retry too.
+    ERROR_CODE_EXTRACTOR,
 })
 
 INTRO_RETRY_HARDENING = (
@@ -1787,6 +1795,8 @@ INTRO_RETRY_HARDENING = (
     "Setze keine scene_id auf Orte, die nicht im selben Patch als gültiger Map-Knoten angelegt werden."
 )
 
+INTRO_ERROR_DETAIL_MAX_CHARS = 400
+
 def _intro_error_code(exc: BaseException) -> str:
     code = str(getattr(exc, "error_code", "") or "").strip()
     if code:
@@ -1795,6 +1805,26 @@ def _intro_error_code(exc: BaseException) -> str:
     text = str(detail) if detail is not None else str(exc)
     match = re.search(r"\[E:([A-Z_]+)\]", text)
     return match.group(1) if match else ""
+
+def _intro_failure_diagnostics(exc: BaseException) -> Dict[str, str]:
+    cause_class = str(getattr(exc, "cause_class", "") or "") or exc.__class__.__name__
+    cause_message = str(getattr(exc, "cause_message", "") or "")
+    if not cause_message:
+        detail = getattr(exc, "detail", None)
+        cause_message = str(detail) if detail is not None else str(exc)
+    return {
+        "last_error_code": _intro_error_code(exc),
+        "last_error_class": cause_class,
+        "last_error_phase": str(getattr(exc, "phase", "") or ""),
+        "last_error_detail": cause_message[:INTRO_ERROR_DETAIL_MAX_CHARS],
+    }
+
+def _clear_intro_failure_diagnostics(intro: Dict[str, Any]) -> None:
+    intro["last_error"] = ""
+    intro["last_error_code"] = ""
+    intro["last_error_class"] = ""
+    intro["last_error_phase"] = ""
+    intro["last_error_detail"] = ""
 
 def try_generate_adventure_intro(campaign: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     normalize_campaign(campaign)
@@ -1813,7 +1843,8 @@ def try_generate_adventure_intro(campaign: Dict[str, Any]) -> Optional[Dict[str,
     names = [display_name_for_slot(campaign, slot_name) for slot_name in completed_slots]
     intro["status"] = "pending"
     intro["last_attempt_at"] = utc_now()
-    intro["last_error"] = ""
+    _clear_intro_failure_diagnostics(intro)
+    intro["attempt_count"] = 0
     base_content = (
         "Das Welt-Setup und die Charaktererstellung sind abgeschlossen. "
         f"Die aktiven Spielerfiguren dieses Runs sind: {', '.join(names)}. "
@@ -1823,6 +1854,7 @@ def try_generate_adventure_intro(campaign: Dict[str, Any]) -> Optional[Dict[str,
     turn: Optional[Dict[str, Any]] = None
     for attempt in range(1, INTRO_MAX_ATTEMPTS + 1):
         content = base_content if attempt == 1 else f"{base_content}\n\n{INTRO_RETRY_HARDENING}"
+        intro["attempt_count"] = attempt
         try:
             turn = turn_engine.create_turn_record(
                 campaign=campaign,
@@ -1835,6 +1867,7 @@ def try_generate_adventure_intro(campaign: Dict[str, Any]) -> Optional[Dict[str,
         except Exception as exc:
             intro["status"] = "failed"
             intro["last_error"] = str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
+            intro.update(_intro_failure_diagnostics(exc))
             if attempt < INTRO_MAX_ATTEMPTS and _intro_error_code(exc) in INTRO_RETRYABLE_ERROR_CODES:
                 continue
             return None
@@ -1842,7 +1875,7 @@ def try_generate_adventure_intro(campaign: Dict[str, Any]) -> Optional[Dict[str,
         return None
     intro["status"] = "generated"
     intro["generated_turn_id"] = turn["turn_id"]
-    intro["last_error"] = ""
+    _clear_intro_failure_diagnostics(intro)
     return turn
 
 def maybe_start_adventure(campaign: Dict[str, Any]) -> Optional[Dict[str, Any]]:

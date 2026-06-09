@@ -107,8 +107,11 @@ def repair_json_payload_with_model(
     broken_content: str,
     *,
     schema: Dict[str, Any],
-    timeout: int = 90,
+    timeout: Optional[int] = None,
 ) -> Dict[str, Any]:
+    # Local models routinely need far longer than a fixed 90s for the repair
+    # pass; without an explicit override the configured timeout must apply.
+    repair_timeout = max(90, int(timeout or settings.timeout_sec))
     repair_user = (
         "Die folgende Modellantwort sollte JSON sein, ist aber kaputt oder unvollständig.\n"
         "Repariere sie zu einem einzelnen gültigen JSON-Objekt gemäß Schema.\n"
@@ -129,7 +132,7 @@ def repair_json_payload_with_model(
         system,
         repair_user,
         format_schema=schema,
-        timeout=timeout,
+        timeout=repair_timeout,
         temperature=0.05,
         repeat_penalty=1.05,
     )
@@ -220,6 +223,7 @@ def call_ollama_json(
                 system,
                 content,
                 schema=settings.response_schema,
+                timeout=max(180, settings.timeout_sec),
             )
         except Exception as repair_exc:
             emit_turn_phase_event(
@@ -273,13 +277,15 @@ def call_ollama_schema(
     except RuntimeError as exc:
         if "Model returned non-JSON content" not in str(exc) and "Model returned empty content" not in str(exc):
             raise
+        # The repair pass must get the same budget as the schema call itself;
+        # a 120s cap reliably times out on local models.
         return repair_json_payload_with_model(
             adapter,
             settings,
             system,
             content,
             schema=schema,
-            timeout=min(schema_timeout, 120),
+            timeout=schema_timeout,
         )
 
 
