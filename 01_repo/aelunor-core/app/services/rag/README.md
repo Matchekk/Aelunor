@@ -84,10 +84,39 @@ In-Memory-Service: Mapper -> Chunking -> Retrieval -> Context Builder.
   max_results, max_items, max_chars)` — retrievt und rendert den bestehenden
   bounded `<RAG_MEMORY>`-Block; `""` ohne Treffer.
 
-Er persistiert nichts, liest keine Runtime-Dateien, mutiert den Input-State
-nicht und ist noch nicht an Router/API/Turn-Pipeline angeschlossen. Naechster
-Slice: Context-Preview-Service/API oder Contract-Alignment mit dem
-LLM-Kontext.
+Er persistiert nichts, liest keine Runtime-Dateien und mutiert den Input-State
+nicht. Den read-only Anschluss an Router/API uebernimmt der Context-Preview-
+Service (siehe unten); eine Turn-Pipeline-Integration gibt es noch nicht.
+
+## Context Preview Service / API
+
+`context_preview.py` macht den RAG-Kontext sichtbar und testbar, bevor RAG in
+die Turn-Pipeline integriert wird. Fuer eine Campaign und eine hypothetische
+Spieleraktion zeigt er, welche Dokumente/Chunks/Results und welcher bounded
+`<RAG_MEMORY>`-Block aktuell erzeugt wuerden — ganz ohne den Narrator zu
+beeinflussen.
+
+- Public Surface: `RagContextPreviewDependencies`,
+  `preview_campaign_rag_context(*, campaign_id, text, player_id, player_token,
+  deps, entities, source_types, max_results, max_items, max_chars)`.
+- Laedt die Campaign ueber `deps.load_campaign`, authentifiziert mit
+  `deps.authenticate_player(..., required=True)` und komponiert die bestehenden
+  Bausteine (`build_campaign_memory_index` -> `retrieve_campaign_memory` ->
+  `build_rag_context`) ueber `campaign["state"]`.
+- Mutiert weder Campaign noch State, persistiert nichts, macht keine LLM-/HTTP-/
+  Runtime-Zugriffe. Empty/malformed State liefert eine valide leere Preview mit
+  erklaerenden `warnings`.
+- Limits werden geclamped (nie 500): `max_results` -> [0, 20], `max_items` ->
+  [0, 10], `max_chars` -> [0, 8000]; `entities`/`source_types` werden normiert.
+- Response ist klein und bounded: `index` (counts + sortierte `source_types`),
+  `results` (Retrieval-Reihenfolge, kurzes `text_excerpt`), `context`
+  (bounded `<RAG_MEMORY>`), `warnings`. Keine Secrets, keine Runtime-Pfade.
+
+API: `POST /api/campaigns/{campaign_id}/context/rag-preview` (Router
+`app/routers/context.py`, Header `X-Player-Id`/`X-Player-Token`). Der Endpunkt
+zeigt RAG-Kontext, injiziert ihn aber noch nicht in Turns. Keine Persistenz,
+keine Vector-DB, keine Embeddings. Naechster Slice: LLM Context Contract
+Alignment oder guarded Turn-Context-Integration.
 
 ## Chunking
 

@@ -77,6 +77,15 @@ class ContextQueryIn(BaseModel):
     actor: Optional[str] = None
 
 
+class RagContextPreviewIn(BaseModel):
+    text: str = ""
+    entities: List[str] = Field(default_factory=list)
+    source_types: List[str] = Field(default_factory=list)
+    max_results: int = 5
+    max_items: int = 5
+    max_chars: int = 2500
+
+
 class PresenceActivityIn(BaseModel):
     kind: Literal["typing_turn", "editing_turn", "claiming_slot", "building_character", "building_world", "reviewing_choices"]
     slot_id: Optional[str] = None

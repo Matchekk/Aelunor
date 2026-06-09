@@ -302,6 +302,13 @@ def build_context_service_dependencies(runtime: Mapping[str, Any], *, context_se
     )
 
 
+def build_rag_context_preview_dependencies(runtime: Mapping[str, Any], *, rag_context_preview: Any) -> Any:
+    return rag_context_preview.RagContextPreviewDependencies(
+        load_campaign=_load_campaign(runtime),
+        authenticate_player=campaign_lifecycle.authenticate_player,
+    )
+
+
 def build_campaign_service_dependencies(runtime: Mapping[str, Any], *, campaign_service: Any, live_state_service: Any) -> Any:
     return campaign_service.CampaignServiceDependencies(
         ensure_campaign_storage=_ensure_campaign_storage(runtime, live_state_service=live_state_service),
