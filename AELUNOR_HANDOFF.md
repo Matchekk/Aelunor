@@ -103,9 +103,15 @@
   `retrieve_campaign_memory`, `build_campaign_memory_context`. Deterministisch,
   in-memory, keine Persistenz/Cache, keine globale Registry, mutiert State
   nicht; Retrieval immer ueber `index.campaign_id` (kein Cross-Campaign-Leak).
-  Noch keine API, keine Router, keine Turn-Pipeline-Integration.
+* Read-only Context Preview Service/API ergaenzt (`context_preview.py`):
+  zeigt fuer Campaign + hypothetische Aktion Index/Results und bounded
+  `<RAG_MEMORY>`-Block. Public Surface: `RagContextPreviewDependencies`,
+  `preview_campaign_rag_context`. Mutiert keinen State, persistiert nichts,
+  keine LLM-/HTTP-Aufrufe; Limits geclamped, Response bounded. Endpoint
+  `POST /api/campaigns/{id}/context/rag-preview` (duenner Router, Wiring ueber
+  `factories.build_rag_context_preview_dependencies` + `main.py`).
 * Noch nicht produktiv integriert: keine Vector-DB, keine Embeddings, keine
-  API-Endpunkte, keine Turn-Pipeline-Integration.
+  Turn-Pipeline-Integration; Preview injiziert nichts in echte Turns.
 * RAG ist unterstuetzende Erinnerung; strukturierter Campaign-/World-/Turn-State
   gewinnt bei Konflikt (Hinweis steht im erzeugten Context-Block).
 
@@ -131,8 +137,9 @@ Snapshot 2026-06-09; nur Lesezugriff. Details:
 2. `feat(rag)`: strukturierte Campaign-Memory auf `RAGDocument` mappen. (erledigt)
 3. `feat(rag)`: In-Memory Campaign-Memory-Index-Service. (erledigt)
 4. `feat(rag)`: Context-Preview-Service/API (nur Service-Aufruf im Router).
-   (naechster Slice; alternativ Contract-Alignment mit LLM-Kontext)
-5. `feat(rag)`: guarded Turn-Context-Integration (klar markierter Block).
+   (erledigt)
+5. `feat(rag)`: guarded Turn-Context-Integration (klar markierter Block) oder
+   LLM Context Contract Alignment (#39). (naechster Slice)
 6. `feat(rag)`: optional Hybrid-Retrieval/Embeddings (eigener Slice).
 
 ## Handoff-Pflege-Regeln

@@ -193,6 +193,7 @@ from app.dependencies.factories import (
     build_campaign_service_dependencies,
     build_claim_service_dependencies,
     build_context_service_dependencies,
+    build_rag_context_preview_dependencies,
     build_presence_service_dependencies,
     build_setup_service_dependencies,
     build_sheets_service_dependencies,
@@ -264,6 +265,7 @@ from app.schemas.api import (
     CampaignMetaPatchIn,
     ClassUnlockIn,
     ContextQueryIn,
+    RagContextPreviewIn,
     FactionJoinIn,
     JoinCampaignIn,
     PlotEssentialsPatchIn,
@@ -294,6 +296,7 @@ from app.services import boards_service
 from app.services import campaign_service
 from app.services import claim_service
 from app.services import context_service
+from app.services.rag import context_preview as rag_context_preview
 from app.services import live_state_service
 from app.services import presence_service
 from app.services import setup_service
@@ -414,6 +417,9 @@ def turn_service_dependencies() -> turn_service.TurnServiceDependencies:
 def context_service_dependencies() -> context_service.ContextServiceDependencies:
     return build_context_service_dependencies(state_engine_runtime(), context_service=context_service)
 
+def rag_context_preview_dependencies() -> rag_context_preview.RagContextPreviewDependencies:
+    return build_rag_context_preview_dependencies(state_engine_runtime(), rag_context_preview=rag_context_preview)
+
 def campaign_service_dependencies() -> campaign_service.CampaignServiceDependencies:
     return build_campaign_service_dependencies(state_engine_runtime(), campaign_service=campaign_service, live_state_service=live_state_service)
 
@@ -490,6 +496,8 @@ app.include_router(
     context_router_module.build_context_router(
         context_query_model=ContextQueryIn,
         context_service_dependencies=context_service_dependencies,
+        rag_context_preview_model=RagContextPreviewIn,
+        rag_context_preview_dependencies=rag_context_preview_dependencies,
     )
 )
 app.include_router(

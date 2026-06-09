@@ -22,6 +22,11 @@ Bereichsregeln fuer die RAG-Fachlogik. Ergaenzt Root-`AGENTS.md`,
   side-effect-free: keine globale mutable Registry, keine Persistenz/Cache
   ohne eigenen spaeteren Slice, kein Mutieren des Input-State. Retrieval immer
   ueber `index.campaign_id` scopen.
+- Context Preview Service (`context_preview.py`) ist read-only: darf keinen
+  State mutieren, keine Turn-Pipeline triggern, keine LLM-/HTTP-Aufrufe machen
+  und nichts persistieren. Authentifiziert immer mit `required=True`. Die
+  Response muss bounded bleiben (geclampte Limits, kurzes `text_excerpt`,
+  bounded `<RAG_MEMORY>`); keine Secrets, Runtime-Pfade oder Debug-Interna.
 
 ## Tests
 

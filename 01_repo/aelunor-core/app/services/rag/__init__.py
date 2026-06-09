@@ -8,6 +8,10 @@ from __future__ import annotations
 
 from .chunking import chunk_document
 from .context_builder import build_rag_context
+from .context_preview import (
+    RagContextPreviewDependencies,
+    preview_campaign_rag_context,
+)
 from .document_mapping import (
     build_rag_document_id,
     build_rag_documents_from_campaign_state,
@@ -35,4 +39,6 @@ __all__ = [
     "build_campaign_memory_index",
     "retrieve_campaign_memory",
     "build_campaign_memory_context",
+    "RagContextPreviewDependencies",
+    "preview_campaign_rag_context",
 ]
