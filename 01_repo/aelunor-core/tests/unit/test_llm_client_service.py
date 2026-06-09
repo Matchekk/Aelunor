@@ -121,10 +121,31 @@ class LlmClientServiceTests(unittest.TestCase):
         )
 
         self.assertEqual(result["story"], "Repariert")
-        self.assertEqual([event["extra"]["mode"] for event in events], ["parse_failed_repair_attempt", "repair_ok"])
-        self.assertIn("KAPUTTE_ANTWORT", adapter.calls[1]["user"])
-        self.assertEqual(adapter.calls[1]["temperature"], 0.05)
-        self.assertEqual(adapter.calls[1]["repeat_penalty"], 1.05)
+        self.assertEqual([event["extra"]["mode"] for event in events], ["parse_failed_repair_attempt", "formatless_retry_ok"])
+        self.assertIn("WICHTIG: Der vorherige schema-formatierte Aufruf", adapter.calls[1]["user"])
+        self.assertIsNone(adapter.calls[1]["format_schema"])
+        self.assertEqual(adapter.calls[1]["temperature"], 0.5)
+
+    def test_call_ollama_json_retries_empty_schema_response_without_format(self) -> None:
+        adapter = FakeAdapter([
+            "",
+            '{"story": "Formatlos repariert", "patch": {}, "requests": []}',
+        ])
+        events: list[Dict[str, Any]] = []
+
+        result = call_ollama_json(
+            adapter,
+            settings(),
+            "System",
+            "User",
+            trace_ctx={"trace_id": "trace_1"},
+            emit_turn_phase_event=lambda _ctx, **payload: events.append(payload),
+        )
+
+        self.assertEqual(result["story"], "Formatlos repariert")
+        self.assertEqual([event["extra"]["mode"] for event in events], ["parse_failed_repair_attempt", "formatless_retry_ok"])
+        self.assertIsNotNone(adapter.calls[0]["format_schema"])
+        self.assertIsNone(adapter.calls[1]["format_schema"])
 
     def test_call_ollama_json_wraps_repair_failure_when_trace_context_exists(self) -> None:
         adapter = FakeAdapter(["kein json", "immer noch kein json"])

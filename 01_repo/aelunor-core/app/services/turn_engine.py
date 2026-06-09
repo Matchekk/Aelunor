@@ -1223,6 +1223,7 @@ def rewrite_story_length_guard(
         max_story_compress_attempts=MAX_STORY_COMPRESS_ATTEMPTS,
         story_rewrite_schema=STORY_REWRITE_SCHEMA,
         ollama_temperature=OLLAMA_TEMPERATURE,
+        ollama_timeout_sec=OLLAMA_TIMEOUT_SEC,
         call_ollama_schema=call_ollama_schema,
         http_exception_type=HTTPException,
     )

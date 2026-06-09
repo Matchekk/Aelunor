@@ -1,5 +1,5 @@
 import json
-from typing import Any, Callable, Dict, List, Type
+from typing import Any, Callable, Dict, List, Optional, Type
 
 
 def rewrite_story_length_guard(
@@ -17,10 +17,13 @@ def rewrite_story_length_guard(
     ollama_temperature: float,
     call_ollama_schema: Callable[..., Dict[str, Any]],
     http_exception_type: Type[Exception],
+    ollama_timeout_sec: Optional[int] = None,
 ) -> str:
     story = str(story_text or "").strip()
     if not story:
         return story
+    rewrite_timeout = max(120, int(ollama_timeout_sec or 120))
+    compress_timeout = max(90, int(ollama_timeout_sec or 90))
     rewrite_instruction = (
         "REWRITE-AUFTRAG:\n"
         f"- Schreibe dieselbe Szene neu.\n"
@@ -48,7 +51,7 @@ def rewrite_story_length_guard(
             system_prompt,
             rewrite_user,
             story_rewrite_schema,
-            timeout=120,
+            timeout=rewrite_timeout,
             temperature=max(0.4, ollama_temperature - 0.05),
         )
         story = str((rewritten or {}).get("story", "") or "").strip()
@@ -70,7 +73,7 @@ def rewrite_story_length_guard(
             system_prompt,
             compress_user,
             story_rewrite_schema,
-            timeout=90,
+            timeout=compress_timeout,
             temperature=max(0.35, ollama_temperature - 0.1),
         )
         story = str((compressed or {}).get("story", "") or "").strip()

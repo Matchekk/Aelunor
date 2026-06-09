@@ -900,6 +900,38 @@ class TurnEngineTests(unittest.TestCase):
         self.assertEqual(calls[0][1]["timeout"], 90)
         self.assertIn("KOMPRIMIERUNGSAUFTRAG:", calls[0][0])
 
+    def test_story_length_guard_forwards_configured_ollama_timeout(self) -> None:
+        calls = []
+
+        def fake_call(_system, user, _schema, **kwargs):
+            calls.append((user, kwargs))
+            if "KOMPRIMIERUNGSAUFTRAG:" in user:
+                return {"story": "Kompakt und vollständig."}
+            return {"story": "Eine ausreichend lange neu geschriebene Szene mit klarer Plotbewegung."}
+
+        story = rewrite_story_length_guard_helper(
+            system_prompt="system",
+            user_prompt="user",
+            story_text="kurz",
+            patch={},
+            requests_payload=[],
+            min_story_chars=10,
+            max_story_chars=30,
+            min_story_rewrite_attempts=1,
+            max_story_compress_attempts=1,
+            story_rewrite_schema={"type": "object"},
+            ollama_temperature=0.7,
+            call_ollama_schema=fake_call,
+            http_exception_type=HTTPException,
+            ollama_timeout_sec=300,
+        )
+
+        self.assertEqual(story, "Kompakt und vollständig.")
+        rewrite_call = next(call for call in calls if "REWRITE-AUFTRAG:" in call[0])
+        compress_call = next(call for call in calls if "KOMPRIMIERUNGSAUFTRAG:" in call[0])
+        self.assertEqual(rewrite_call[1]["timeout"], 300)
+        self.assertEqual(compress_call[1]["timeout"], 300)
+
     def test_story_length_guard_raises_when_rewrite_stays_short(self) -> None:
         with self.assertRaises(HTTPException) as ctx:
             rewrite_story_length_guard_helper(
