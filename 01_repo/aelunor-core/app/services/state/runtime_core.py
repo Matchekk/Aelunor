@@ -1772,6 +1772,30 @@ def intro_state(campaign: Dict[str, Any]) -> Dict[str, Any]:
 def can_start_adventure(campaign: Dict[str, Any]) -> bool:
     return campaign_lifecycle.can_start_adventure(campaign)
 
+INTRO_MAX_ATTEMPTS = 2
+
+INTRO_RETRYABLE_ERROR_CODES = frozenset({
+    ERROR_CODE_NARRATOR_RESPONSE,
+    ERROR_CODE_JSON_REPAIR,
+    ERROR_CODE_SCHEMA_VALIDATION,
+})
+
+INTRO_RETRY_HARDENING = (
+    "WICHTIG FÜR DIESEN ZWEITEN VERSUCH: Der erste Versuch hat das erwartete Datenformat verletzt. "
+    "Erzähle die Story als sauberen Fließtext ohne Markdown und ohne JSON außerhalb des vereinbarten Formats. "
+    "Halte den Patch konservativ und minimal. Führe keine neuen ungeprüften Figuren ein. "
+    "Setze keine scene_id auf Orte, die nicht im selben Patch als gültiger Map-Knoten angelegt werden."
+)
+
+def _intro_error_code(exc: BaseException) -> str:
+    code = str(getattr(exc, "error_code", "") or "").strip()
+    if code:
+        return code
+    detail = getattr(exc, "detail", None)
+    text = str(detail) if detail is not None else str(exc)
+    match = re.search(r"\[E:([A-Z_]+)\]", text)
+    return match.group(1) if match else ""
+
 def try_generate_adventure_intro(campaign: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     normalize_campaign(campaign)
     intro = intro_state(campaign)
@@ -1790,26 +1814,31 @@ def try_generate_adventure_intro(campaign: Dict[str, Any]) -> Optional[Dict[str,
     intro["status"] = "pending"
     intro["last_attempt_at"] = utc_now()
     intro["last_error"] = ""
-    try:
-        turn = turn_engine.create_turn_record(
-            campaign=campaign,
-            actor=primary_actor,
-            player_id=campaign["claims"].get(primary_actor),
-            action_type="story",
-            content=(
-                "Das Welt-Setup und die Charaktererstellung sind abgeschlossen. "
-                f"Die aktiven Spielerfiguren dieses Runs sind: {', '.join(names)}. "
-                "Eröffne jetzt die Kampagne filmisch auf Basis des Setups, der aktiven Charaktere und des Worldbuildings. "
-                "Nutze ausschließlich diese aktive Party, setze die erste konkrete Szene und führe ohne ungebaute Slots in die Geschichte."
-            ),
-        )
-    except HTTPException as exc:
-        intro["status"] = "failed"
-        intro["last_error"] = str(exc.detail)
-        return None
-    except Exception as exc:
-        intro["status"] = "failed"
-        intro["last_error"] = str(exc)
+    base_content = (
+        "Das Welt-Setup und die Charaktererstellung sind abgeschlossen. "
+        f"Die aktiven Spielerfiguren dieses Runs sind: {', '.join(names)}. "
+        "Eröffne jetzt die Kampagne filmisch auf Basis des Setups, der aktiven Charaktere und des Worldbuildings. "
+        "Nutze ausschließlich diese aktive Party, setze die erste konkrete Szene und führe ohne ungebaute Slots in die Geschichte."
+    )
+    turn: Optional[Dict[str, Any]] = None
+    for attempt in range(1, INTRO_MAX_ATTEMPTS + 1):
+        content = base_content if attempt == 1 else f"{base_content}\n\n{INTRO_RETRY_HARDENING}"
+        try:
+            turn = turn_engine.create_turn_record(
+                campaign=campaign,
+                actor=primary_actor,
+                player_id=campaign["claims"].get(primary_actor),
+                action_type="story",
+                content=content,
+            )
+            break
+        except Exception as exc:
+            intro["status"] = "failed"
+            intro["last_error"] = str(exc.detail) if isinstance(exc, HTTPException) else str(exc)
+            if attempt < INTRO_MAX_ATTEMPTS and _intro_error_code(exc) in INTRO_RETRYABLE_ERROR_CODES:
+                continue
+            return None
+    if turn is None:
         return None
     intro["status"] = "generated"
     intro["generated_turn_id"] = turn["turn_id"]
