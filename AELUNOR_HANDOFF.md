@@ -97,6 +97,13 @@
   npc, quest, turn_summary). Stdlib-only, offline, mutiert State nicht, liest
   keine Rohlogs/Runtime-Dateien. Public Surface: `build_rag_documents_from_
   campaign_state`, `build_rag_document_id`.
+* In-Memory Campaign-Memory-Index-Service ergaenzt (`memory_index.py`):
+  verbindet Mapper -> Chunking -> Retrieval -> Context Builder. Public Surface:
+  `CampaignMemoryIndex`, `build_campaign_memory_index`,
+  `retrieve_campaign_memory`, `build_campaign_memory_context`. Deterministisch,
+  in-memory, keine Persistenz/Cache, keine globale Registry, mutiert State
+  nicht; Retrieval immer ueber `index.campaign_id` (kein Cross-Campaign-Leak).
+  Noch keine API, keine Router, keine Turn-Pipeline-Integration.
 * Noch nicht produktiv integriert: keine Vector-DB, keine Embeddings, keine
   API-Endpunkte, keine Turn-Pipeline-Integration.
 * RAG ist unterstuetzende Erinnerung; strukturierter Campaign-/World-/Turn-State
@@ -122,8 +129,9 @@ Snapshot 2026-06-09; nur Lesezugriff. Details:
 
 1. `chore(docs)`: Issue-Labels/Roadmap-Hygiene (#41), falls explizit erlaubt.
 2. `feat(rag)`: strukturierte Campaign-Memory auf `RAGDocument` mappen. (erledigt)
-3. `feat(rag)`: In-Memory Campaign-Memory-Index-Service. (naechster Slice)
+3. `feat(rag)`: In-Memory Campaign-Memory-Index-Service. (erledigt)
 4. `feat(rag)`: Context-Preview-Service/API (nur Service-Aufruf im Router).
+   (naechster Slice; alternativ Contract-Alignment mit LLM-Kontext)
 5. `feat(rag)`: guarded Turn-Context-Integration (klar markierter Block).
 6. `feat(rag)`: optional Hybrid-Retrieval/Embeddings (eigener Slice).
 
