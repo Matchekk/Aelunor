@@ -39,3 +39,7 @@ pnpm-debug.log*
 
 14_private/
 99_archive/legacy_data/
+
+# Agent / token-efficiency infra
+.agent_tmp/
+.agent_scripts/__pycache__/
