@@ -764,6 +764,10 @@ export interface LlmModelStatus {
 }
 
 export interface LlmStatusResponse {
+  provider?: string;
+  primary?: LlmStatusResponse;
+  fallback?: Record<string, unknown>;
+  llm_provider?: string;
   ollama_url: string;
   configured_model: string;
   request_timeout_sec: number;

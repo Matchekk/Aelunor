@@ -1223,6 +1223,7 @@ def rewrite_story_length_guard(
         max_story_compress_attempts=MAX_STORY_COMPRESS_ATTEMPTS,
         story_rewrite_schema=STORY_REWRITE_SCHEMA,
         ollama_temperature=OLLAMA_TEMPERATURE,
+        ollama_timeout_sec=OLLAMA_TIMEOUT_SEC,
         call_ollama_schema=call_ollama_schema,
         http_exception_type=HTTPException,
     )
@@ -1368,6 +1369,7 @@ def create_turn_record(
     else:
         out = None
         prompt_attempt_user = user_prompt
+        used_local_narrator_fallback = False
         for attempt in range(1, MAX_TURN_MODEL_ATTEMPTS + 1):
             attempt_temperature = OLLAMA_TEMPERATURE if attempt == 1 else min(0.9, OLLAMA_TEMPERATURE + 0.12 * (attempt - 1))
             attempt_repeat_penalty = OLLAMA_REPEAT_PENALTY if attempt == 1 else min(1.35, OLLAMA_REPEAT_PENALTY + 0.06 * (attempt - 1))
@@ -1395,6 +1397,37 @@ def create_turn_record(
                     message=(classified.cause_message or str(exc))[:240],
                     extra={"attempt": attempt},
                 )
+                empty_or_json_failure = (
+                    classified.error_code == ERROR_CODE_JSON_REPAIR
+                    or "Model returned empty content" in classified.cause_message
+                    or "Model returned non-JSON content" in classified.cause_message
+                )
+                if empty_or_json_failure:
+                    if attempt < MAX_TURN_MODEL_ATTEMPTS:
+                        prompt_attempt_user = (
+                            user_prompt
+                            + "\n\nDEINE LETZTE ANTWORT WAR LEER ODER KEIN JSON. "
+                            + "Antworte NUR als valides JSON mit genau den Feldern story (string), patch (object), requests (array). "
+                            + "Kein Markdown, kein Freitext außerhalb des JSON."
+                        )
+                        continue
+                    actor_name = display_name_for_slot(campaign, actor) if actor else "Die Figur"
+                    out = {
+                        "story": (
+                            f"{actor_name} tritt in die erste Szene dieser Chronik. "
+                            "Die Welt reagiert spürbar auf den abgeschlossenen Aufbau, und ein konkreter nächster Schritt liegt vor der Gruppe."
+                        ),
+                        "patch": blank_patch(),
+                        "requests": [{"type": "none", "actor": actor}],
+                    }
+                    used_local_narrator_fallback = True
+                    emit_turn_phase_event(
+                        trace_ctx,
+                        phase="narrator_call_finished",
+                        success=True,
+                        extra={"attempt": attempt, "mode": "local_fallback_after_empty_model"},
+                    )
+                    break
                 raise classified
             if not isinstance(out, dict) or "story" not in out or "patch" not in out or "requests" not in out:
                 if attempt < MAX_TURN_MODEL_ATTEMPTS:
@@ -1474,18 +1507,19 @@ def create_turn_record(
                 "requests": [{"type": "none", "actor": actor}],
             }
         requests_payload = normalize_requests_payload(out.get("requests", []), default_actor=actor)
-        try:
-            out["story"] = rewrite_story_length_guard(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                story_text=out.get("story", ""),
-                patch=out.get("patch") or blank_patch(),
-                requests_payload=requests_payload,
-                min_story_chars=min_story_chars,
-                max_story_chars=max_story_chars,
-            )
-        except Exception as exc:
-            raise classify_turn_exception(exc, phase="narrator_call_finished", trace_ctx=trace_ctx)
+        if not used_local_narrator_fallback:
+            try:
+                out["story"] = rewrite_story_length_guard(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    story_text=out.get("story", ""),
+                    patch=out.get("patch") or blank_patch(),
+                    requests_payload=requests_payload,
+                    min_story_chars=min_story_chars,
+                    max_story_chars=max_story_chars,
+                )
+            except Exception as exc:
+                raise classify_turn_exception(exc, phase="narrator_call_finished", trace_ctx=trace_ctx)
 
         narrator_patch = sanitize_patch_with_events(
             working_state,

@@ -41,36 +41,33 @@ URLs:
 
 - `http://localhost:8080/v1` fuer React/Vite-v1
 - `http://localhost:8080` leitet auf `/v1` weiter
-- `http://localhost:8080/api/llm/status` fuer LLM-Status (zeigt aktiven Provider + Fallback)
+- `http://localhost:8080/api/llm/status` fuer LLM-Status (zeigt aktiven Provider)
 
-## LLM-Provider (lokal Ollama, optional Claude-Cloud-Fallback)
+## LLM-Provider (lokal Ollama)
 
-Lokales Ollama bleibt der Standard und der zukuenftige Fokus. Auf Maschinen ohne
-lokales Modell kann optional die Anthropic-Claude-API als Cloud-Fallback genutzt
-werden. Der API-Key wird automatisch aus der Umgebung gelesen
-(`ANTHROPIC_API_KEY` bzw. `ANTHROPIC_AUTH_TOKEN`) — nichts wird hartcodiert.
+Lokales Ollama ist der Standard fuer den GM. Cloud-Provider werden nicht
+automatisch als Fallback genutzt; Anthropic/Claude ist nur aktiv, wenn
+`LLM_PROVIDER=anthropic` explizit gesetzt wird.
 
 Auswahl per `LLM_PROVIDER`:
 
-- `auto` (Default): lokal Ollama, faellt automatisch auf Claude zurueck, wenn
-  Ollama nicht erreichbar ist — aber nur, wenn ein Anthropic-Key gesetzt ist.
-  Ohne Key verhaelt es sich wie `ollama`.
-- `ollama`: nur lokal.
+- `ollama` (Default): nur lokal.
+- `auto`: Kompatibilitaetsalias fuer `ollama`, ebenfalls nur lokal.
 - `anthropic`: nur Cloud (Claude).
 
 Relevante Umgebungsvariablen:
 
 ```powershell
-$env:LLM_PROVIDER="auto"            # auto | ollama | anthropic
+$env:LLM_PROVIDER="ollama"          # ollama | auto | anthropic
+$env:OLLAMA_MODEL="gemma4:12b"
 $env:ANTHROPIC_API_KEY="<dein-key>" # bzw. systemweit gesetzt; wird automatisch gelesen
 $env:ANTHROPIC_MODEL="claude-opus-4-8"   # optional; z. B. claude-sonnet-4-6 fuer guenstiger
 $env:ANTHROPIC_MAX_TOKENS="8192"          # optional
 $env:ANTHROPIC_TIMEOUT_SEC="240"          # optional
 ```
 
-Der aktive Provider ist unter `/api/llm/status` (`llm_provider`, `provider`,
-`fallback`) sichtbar. Damit laesst sich der Stack auch ohne lokales Ollama
-starten und eine Kampagne ueber die Cloud-KI spielen.
+Der aktive Provider ist unter `/api/llm/status` (`llm_provider`, `provider`)
+sichtbar.
 
 ## Frontend
 
@@ -108,10 +105,10 @@ python -m pytest tests/integration -q
 | --- | --- | --- |
 | `DATA_DIR` | Docker: `/data` | Root fuer Campaign JSON und Legacy-State |
 | `OLLAMA_URL` | Compose: `http://host.docker.internal:11434` | Ollama-Server |
-| `OLLAMA_MODEL` | Compose: `gemma3:12b` | Modellname |
+| `OLLAMA_MODEL` | Compose: `gemma4:12b` | Modellname |
 | `OLLAMA_TIMEOUT_SEC` | Compose: `300` | Request-Timeout |
 | `OLLAMA_TEMPERATURE` | Compose: `0.6` | Sampling |
-| `OLLAMA_NUM_CTX` | Compose: `8192` | Kontextfenster |
+| `OLLAMA_NUM_CTX` | Compose: `32768` | Kontextfenster |
 | `OLLAMA_SEED` | leer | Optionaler deterministischer Seed |
 
 Automatisierte Tests duerfen keine echten Ollama-Aufrufe ausloesen. Nutze Fake Narrator, Stubs oder injizierte Dependencies.

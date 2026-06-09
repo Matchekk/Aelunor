@@ -1,4 +1,5 @@
 import unittest
+import json
 
 from app.services import memory
 
@@ -62,6 +63,55 @@ class MemoryServiceTests(unittest.TestCase):
         self.assertEqual(summary["updated_through_turn"], 3)
         self.assertEqual(summary["updated_at"], "2026-01-01T00:00:00Z")
         self.assertIn("Letzte Aktion von Aria", summary["content"])
+
+    def test_build_context_packet_compacts_large_world_and_setup_runtime_blocks(self) -> None:
+        campaign = {
+            "setup": {
+                "version": 4,
+                "world": {
+                    "completed": True,
+                    "question_queue": ["theme"] * 100,
+                    "answers": {"theme": {"selected": "Dark"}},
+                    "summary": {"premise": "Dunkel"},
+                    "question_runtime": {"theme": {"ai_copy": "x" * 10000}},
+                },
+                "characters": {
+                    "slot_1": {
+                        "completed": True,
+                        "question_queue": ["char_name"] * 100,
+                        "answers": {"char_name": "Aria"},
+                        "summary": {"display_name": "Aria"},
+                        "question_runtime": {"char_name": {"ai_copy": "x" * 10000}},
+                    }
+                },
+            },
+            "boards": {"memory_summary": {"content": "Noch nichts."}},
+            "turns": [],
+            "claims": {"slot_1": "player_1"},
+        }
+        state = {
+            "meta": {"turn": 1},
+            "world": {
+                "settings": {"resource_name": "Flux"},
+                "notes": "Start",
+                "bible": {"identity": {"world_name": "Myrufluxis"}, "metaphysics": {"rules": ["x" * 5000]}},
+                "elements": {f"element_{idx}": {"name": "x" * 2000} for idx in range(50)},
+                "element_class_paths": {f"path_{idx}": {"description": "x" * 2000} for idx in range(50)},
+            },
+            "map": {},
+            "characters": {"slot_1": {"bio": {"name": "Aria"}, "living_profile": {"sensory": "x" * 5000}}},
+            "items": {},
+        }
+
+        packet = json.loads(memory.build_context_packet(campaign, state, "slot_1", "do", ports=self._ports([])))
+
+        self.assertNotIn("question_queue", packet["setup"]["world"])
+        self.assertNotIn("question_runtime", packet["setup"]["characters"]["slot_1"])
+        self.assertNotIn("elements", packet["world"])
+        self.assertNotIn("element_class_paths", packet["world"])
+        self.assertNotIn("bible", packet["world"])
+        self.assertNotIn("living_profile", packet["characters"]["slot_1"])
+        self.assertEqual(packet["world_elements"], {})
 
 
 if __name__ == "__main__":

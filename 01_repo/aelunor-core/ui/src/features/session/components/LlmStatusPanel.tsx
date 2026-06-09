@@ -39,6 +39,8 @@ export function LlmStatusPanel() {
   }
 
   const data = statusQuery.data;
+  const primary = data.primary ?? data;
+  const availableModels = Array.isArray(primary.available_models) ? primary.available_models : [];
 
   return (
     <section className="v1-panel llm-status-panel">
@@ -48,26 +50,27 @@ export function LlmStatusPanel() {
       <dl className="meta-list">
         <div>
           <dt>ollama_ok</dt>
-          <dd>{data.ollama_ok ? "true" : "false"}</dd>
+          <dd>{primary.ollama_ok ? "true" : "false"}</dd>
         </div>
         <div>
           <dt>configured_model</dt>
-          <dd>{data.configured_model}</dd>
+          <dd>{primary.configured_model}</dd>
         </div>
         <div>
           <dt>configured_model_available</dt>
-          <dd>{data.configured_model_available ? "true" : "false"}</dd>
+          <dd>{primary.configured_model_available ? "true" : "false"}</dd>
         </div>
         <div>
           <dt>available_models</dt>
-          <dd>{data.available_models.length}</dd>
+          <dd>{availableModels.length}</dd>
         </div>
         <div>
           <dt>request_timeout_sec</dt>
-          <dd>{data.request_timeout_sec}</dd>
+          <dd>{primary.request_timeout_sec}</dd>
         </div>
       </dl>
-      {data.error ? <p className="status-muted">error: {data.error}</p> : null}
+      {data.llm_provider ? <p className="status-muted">provider: {data.llm_provider}</p> : null}
+      {primary.error ? <p className="status-muted">error: {primary.error}</p> : null}
     </section>
   );
 }

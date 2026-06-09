@@ -12,7 +12,7 @@ import requests
 ROOT = Path(__file__).resolve().parents[1]
 BASE_URL = os.environ.get("ISEKAI_BASE_URL", "http://localhost:8080").rstrip("/")
 DOCKER_COMPOSE_FILE = ROOT / "docker-compose.yml"
-DEFAULT_MODELS = ["gemma3:12b", "gemma3:8b"]
+DEFAULT_MODELS = ["gemma4:12b"]
 STARTUP_TIMEOUT_SECONDS = 180
 
 

@@ -1,4 +1,5 @@
 import unittest
+from dataclasses import replace
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
@@ -135,6 +136,43 @@ class TurnServiceTests(unittest.TestCase):
         self.assertEqual(result["trace_id"], "trace_123")
         self.assertIn("turn_created", calls["saved"])
 
+    def test_create_turn_retries_retryable_turn_flow_error_twice(self) -> None:
+        class RetryableTurnFlowError(DummyTurnFlowError):
+            def __init__(self) -> None:
+                super().__init__()
+                self.error_code = "NARRATOR_RESPONSE_ERROR"
+
+        campaign = make_campaign()
+        deps, calls = self.build_deps(campaign)
+        attempts = []
+
+        def create_turn_record(**kwargs: Any) -> Dict[str, Any]:
+            attempts.append(kwargs)
+            if len(attempts) <= 2:
+                raise RetryableTurnFlowError()
+            return {"turn_id": "turn_retry_ok", "input_text_display": "x"}
+
+        deps = replace(
+            deps,
+            create_turn_record=create_turn_record,
+            turn_flow_error_cls=RetryableTurnFlowError,
+        )
+
+        result = turn_service.create_turn(
+            campaign_id="cmp_1",
+            actor="slot_aria",
+            action_type="do",
+            content="Aktion",
+            player_id="player_1",
+            player_token="token",
+            deps=deps,
+        )
+
+        self.assertEqual(result["turn_id"], "turn_retry_ok")
+        self.assertEqual(len(attempts), 3)
+        self.assertEqual(calls["saved"], ["turn_created"])
+        self.assertEqual(sum(1 for event in calls["events"] if (event.get("extra") or {}).get("retrying")), 2)
+
     def test_create_turn_invalid_phase(self) -> None:
         campaign = make_campaign()
         campaign["state"]["meta"]["phase"] = "world_setup"
@@ -154,4 +192,3 @@ class TurnServiceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -3,8 +3,11 @@ import unittest
 from typing import Any, Dict, List
 from unittest.mock import patch
 
+from fastapi import HTTPException
+
 from app.services import state_engine
 from app.services import state_basics
+from app.services.state import runtime_core
 from app.services.world import appearance
 from app.services.world import attribute_influence
 from app.services.world import combat
@@ -434,6 +437,39 @@ class StateEngineTests(unittest.TestCase):
                 "generated_turn_id": "",
             },
         )
+
+    def test_try_generate_adventure_intro_retries_transient_turn_failure(self) -> None:
+        campaign = {
+            "claims": {"slot_1": "player_1"},
+            "turns": [],
+            "state": {"meta": {"intro_state": state_engine.default_intro_state()}},
+        }
+        calls = []
+
+        def fake_create_turn_record(**kwargs: Any) -> Dict[str, Any]:
+            calls.append(kwargs)
+            if len(calls) == 1:
+                raise HTTPException(status_code=500, detail="transient schema failure")
+            return {"turn_id": "turn_intro"}
+
+        with (
+            patch.object(runtime_core, "normalize_campaign", lambda _campaign: None),
+            patch.object(runtime_core, "intro_state", lambda current: current["state"]["meta"]["intro_state"]),
+            patch.object(runtime_core, "active_turns", lambda current: current.get("turns", [])),
+            patch.object(runtime_core, "can_start_adventure", lambda _campaign: True),
+            patch.object(runtime_core, "active_party", lambda _campaign: ["slot_1"]),
+            patch.object(runtime_core, "display_name_for_slot", lambda _campaign, _slot: "Kian"),
+            patch.object(runtime_core, "utc_now", lambda: "now"),
+            patch.object(runtime_core.turn_engine, "create_turn_record", fake_create_turn_record),
+        ):
+            turn = runtime_core.try_generate_adventure_intro(campaign)
+
+        self.assertEqual(turn, {"turn_id": "turn_intro"})
+        self.assertEqual(len(calls), 2)
+        self.assertIn("strukturell unbrauchbar", calls[1]["content"])
+        self.assertEqual(campaign["state"]["meta"]["intro_state"]["status"], "generated")
+        self.assertEqual(campaign["state"]["meta"]["intro_state"]["generated_turn_id"], "turn_intro")
+        self.assertEqual(campaign["state"]["meta"]["intro_state"]["last_error"], "")
 
     def test_state_engine_format_appearance_message_wrapper_preserves_contract(self) -> None:
         self.assertEqual(

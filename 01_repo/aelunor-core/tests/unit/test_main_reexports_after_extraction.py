@@ -89,6 +89,7 @@ class MainReexportsAfterExtractionTests(unittest.TestCase):
             self.assertIs(getattr(main, name), getattr(ollama_config, name), name)
 
         settings = main.OLLAMA_ADAPTER.settings
+        self.assertEqual(ollama_config.DEFAULT_OLLAMA_MODEL, "gemma4:12b")
         self.assertEqual(settings.url, main.OLLAMA_URL)
         self.assertEqual(settings.model, main.OLLAMA_MODEL)
         self.assertEqual(settings.timeout_sec, main.OLLAMA_TIMEOUT_SEC)

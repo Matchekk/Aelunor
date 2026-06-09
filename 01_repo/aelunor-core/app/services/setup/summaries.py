@@ -88,7 +88,7 @@ def apply_character_summary_to_state(campaign: Dict[str, Any], slot_name: str, *
     character["progression"]["resource_max"] = int(character.get("res_max", 5) or 5)
     class_start_mode = deps.normalized_eval_text(summary.get("class_start_mode", ""))
     if "ki" in class_start_mode:
-        seed = summary.get("class_seed") or summary.get("current_focus") or summary.get("strength") or "Ãœberlebender"
+        seed = summary.get("class_seed") or summary.get("current_focus") or summary.get("strength") or "Überlebender"
         character["class_current"] = deps.normalize_class_current(
             {
                 "id": f"class_{re.sub(r'[^a-z0-9]+', '_', deps.normalized_eval_text(seed)).strip('_') or 'wanderer'}",
@@ -99,7 +99,7 @@ def apply_character_summary_to_state(campaign: Dict[str, Any], slot_name: str, *
                 "xp": 0,
                 "xp_next": 100,
                 "affinity_tags": [str(summary.get("strength") or "").strip().split("/", 1)[0].lower().replace(" ", "_"), str(summary.get("current_focus") or "").strip().split("/", 1)[0].lower().replace(" ", "_")],
-                "description": f"Eine frÃ¼he Klasse, geformt aus {summary.get('strength', 'Ãœberleben')} und dem Fokus {summary.get('current_focus', 'Unbekannt')}.",
+                "description": f"Eine frühe Klasse, geformt aus {summary.get('strength', 'Überleben')} und dem Fokus {summary.get('current_focus', 'Unbekannt')}.",
                 "ascension": {"status": "none", "quest_id": None, "requirements": [], "result_hint": None},
             }
         )

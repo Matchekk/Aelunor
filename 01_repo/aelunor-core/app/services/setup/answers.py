@@ -55,7 +55,7 @@ def split_creator_item_blocks(value: str) -> List[str]:
     lines = [line.strip() for line in text.split("\n") if line.strip()]
     blocks: List[str] = []
     current = ""
-    bullet_pattern = re.compile(r"^\s*(?:\d+[\.\)]|[-*â€¢])\s+")
+    bullet_pattern = re.compile(r"^\s*(?:\d+[\.\)]|[-*•])\s+")
     for line in lines:
         if bullet_pattern.match(line):
             if current:
@@ -101,12 +101,12 @@ def split_creator_item_blocks(value: str) -> List[str]:
 
 def summarize_creator_item_name(raw_name: str) -> str:
     text = str(raw_name or "").replace("\n", " ").strip()
-    text = re.sub(r"^\s*(?:\d+[\.\)]|[-*â€¢])\s+", "", text)
+    text = re.sub(r"^\s*(?:\d+[\.\)]|[-*•])\s+", "", text)
     text = re.sub(r"\s+", " ", text).strip(" ,-")
     text = re.sub(r"\((.*?)\)", "", text).strip(" ,-")
     text = re.sub(r"\s+(?:der|die|das)\s+in\s+dieser\s+welt\b.*$", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\s+(?:welche|welcher|welches)\b.*$", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s+(?:fÃ¼r|fuer)\s+.*$", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+(?:für|fuer)\s+.*$", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\s+", " ", text).strip(" ,-.")
     text = re.sub(r"^(?:ein|eine|einen|einem|einer)\s+", "", text, flags=re.IGNORECASE)
     text = text[:72].strip(" ,-.\"'")
@@ -173,7 +173,7 @@ def legacy_select_answer_payload(question: Dict[str, Any], raw_value: Any) -> Di
         if 26 <= inferred_age <= 35:
             return {"selected": "Erwachsen (26-35)", "other_text": ""}
         if inferred_age >= 36:
-            return {"selected": "Ã„lter (36+)", "other_text": ""}
+            return {"selected": "Älter (36+)", "other_text": ""}
 
     if normalized_options:
         closest_key, closest_value = max(

@@ -110,14 +110,14 @@ def repair_json_payload_with_model(
     timeout: int = 90,
 ) -> Dict[str, Any]:
     repair_user = (
-        "Die folgende Modellantwort sollte JSON sein, ist aber kaputt oder unvollstÃ¤ndig.\n"
-        "Repariere sie zu einem einzelnen gÃ¼ltigen JSON-Objekt gemÃ¤ÃŸ Schema.\n"
+        "Die folgende Modellantwort sollte JSON sein, ist aber kaputt oder unvollständig.\n"
+        "Repariere sie zu einem einzelnen gültigen JSON-Objekt gemäß Schema.\n"
         "Regeln:\n"
         "- Keine Markdown-Fences\n"
-        "- Keine ErklÃ¤rung\n"
-        "- Fehlende optionale Felder mit leeren Standardwerten fÃ¼llen\n"
-        "- Wenn ein Feld im Schema ein Objekt erwartet, gib kein Array zurÃ¼ck\n"
-        "- Halte vorhandene Inhalte so gut wie mÃ¶glich inhaltlich stabil\n\n"
+        "- Keine Erklärung\n"
+        "- Fehlende optionale Felder mit leeren Standardwerten füllen\n"
+        "- Wenn ein Feld im Schema ein Objekt erwartet, gib kein Array zurück\n"
+        "- Halte vorhandene Inhalte so gut wie möglich inhaltlich stabil\n\n"
         "SCHEMA:\n"
         + json.dumps(schema, ensure_ascii=False)
         + "\n\nKAPUTTE_ANTWORT:\n"
@@ -179,6 +179,40 @@ def call_ollama_json(
             message=str(exc)[:240],
             extra={"mode": "parse_failed_repair_attempt"},
         )
+        retry_user = (
+            user
+            + "\n\nWICHTIG: Der vorherige schema-formatierte Aufruf war leer oder kein JSON. "
+            + schema_fallback_instruction(settings.response_schema)
+        )
+        try:
+            retry_content = call_ollama_chat(
+                adapter,
+                settings,
+                system,
+                retry_user,
+                format_schema=None,
+                timeout=max(180, settings.timeout_sec),
+                temperature=max(0.35, settings.temperature - 0.1),
+                repeat_penalty=repeat_penalty,
+            )
+            parsed_retry = extract_json_payload(retry_content)
+            emit_turn_phase_event(
+                trace_ctx,
+                phase="narrator_json_parse_repair",
+                success=True,
+                extra={"mode": "formatless_retry_ok"},
+            )
+            return parsed_retry
+        except Exception as retry_exc:
+            emit_turn_phase_event(
+                trace_ctx,
+                phase="narrator_json_parse_repair",
+                success=False,
+                error_code=settings.error_code_json_repair,
+                error_class=retry_exc.__class__.__name__,
+                message=str(retry_exc)[:240],
+                extra={"mode": "formatless_retry_failed"},
+            )
         try:
             repaired = repair_json_payload_with_model(
                 adapter,

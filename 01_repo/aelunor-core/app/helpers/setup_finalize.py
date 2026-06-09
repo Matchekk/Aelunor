@@ -34,7 +34,7 @@ def build_world_summary(campaign: CampaignState, *, deps: Any) -> Dict[str, Any]
     tone = deps.extract_text_answer(answers.get("tone"))
     difficulty = deps.extract_text_answer(answers.get("difficulty"))
     death_possible = bool(answers.get("death_possible", True))
-    death_policy = "Charaktertod mÃ¶glich" if death_possible else "Kein permanenter Charaktertod"
+    death_policy = "Charaktertod möglich" if death_possible else "Kein permanenter Charaktertod"
     world_structure = deps.extract_text_answer(answers.get("world_structure"))
     world_laws = []
     laws_answer = answers.get("world_laws")

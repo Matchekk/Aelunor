@@ -51,6 +51,7 @@ from app.services.setup import finalization as setup_finalization
 from app.services.setup import payloads as setup_payloads
 from app.services.setup import randomizer as setup_randomizer
 from app.services.setup import summaries as setup_summaries
+from app.services import turn_engine
 from app.adapters.llm import OllamaAdapter, OllamaSettings
 from app.adapters.ollama_config import (
     OLLAMA_ADAPTER,
@@ -743,6 +744,8 @@ def ordered_slots(keys: List[str]) -> List[str]:
 
 
 def generate_world_elements_with_llm(summary: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if str(os.getenv("ENABLE_LLM_WORLD_ELEMENTS", "")).strip().lower() not in {"1", "true", "yes", "on"}:
+        return []
     return _generate_world_elements_with_llm(
         summary,
         call_ollama_schema=call_ollama_schema,
@@ -1026,6 +1029,8 @@ def normalize_meta_migrations(meta: Dict[str, Any]) -> Dict[str, Any]:
     return migrations
 
 def generate_character_attribute_weights(campaign: Dict[str, Any], slot_name: str, summary: Dict[str, Any]) -> Dict[str, Any]:
+    if str(os.getenv("ENABLE_LLM_CHARACTER_ATTRIBUTES", "")).strip().lower() not in {"1", "true", "yes", "on"}:
+        return {"weights": fallback_character_attribute_weights(summary), "source": "fallback"}
     return setup_attributes.generate_character_attribute_weights(
         campaign, slot_name, summary, call_ollama_schema=call_ollama_schema
     )
@@ -1786,29 +1791,43 @@ def try_generate_adventure_intro(campaign: Dict[str, Any]) -> Optional[Dict[str,
     completed_slots = active_party(campaign)
     primary_actor = completed_slots[0]
     names = [display_name_for_slot(campaign, slot_name) for slot_name in completed_slots]
-    intro["status"] = "pending"
-    intro["last_attempt_at"] = utc_now()
-    intro["last_error"] = ""
-    try:
-        turn = create_turn_record(
-            campaign=campaign,
-            actor=primary_actor,
-            player_id=campaign["claims"].get(primary_actor),
-            action_type="story",
-            content=(
-                "Das Welt-Setup und die Charaktererstellung sind abgeschlossen. "
-                f"Die aktiven Spielerfiguren dieses Runs sind: {', '.join(names)}. "
-                "Eröffne jetzt die Kampagne filmisch auf Basis des Setups, der aktiven Charaktere und des Worldbuildings. "
-                "Nutze ausschließlich diese aktive Party, setze die erste konkrete Szene und führe ohne ungebaute Slots in die Geschichte."
-            ),
-        )
-    except HTTPException as exc:
+    intro_content = (
+        "Das Welt-Setup und die Charaktererstellung sind abgeschlossen. "
+        f"Die aktiven Spielerfiguren dieses Runs sind: {', '.join(names)}. "
+        "Eröffne jetzt die Kampagne filmisch auf Basis des Setups, der aktiven Charaktere und des Worldbuildings. "
+        "Nutze ausschließlich diese aktive Party, setze die erste konkrete Szene und führe ohne ungebaute Slots in die Geschichte."
+    )
+    last_error = ""
+    for attempt in range(1, 3):
+        intro["status"] = "pending"
+        intro["last_attempt_at"] = utc_now()
+        intro["last_error"] = ""
+        try:
+            turn = turn_engine.create_turn_record(
+                campaign=campaign,
+                actor=primary_actor,
+                player_id=campaign["claims"].get(primary_actor),
+                action_type="story",
+                content=(
+                    intro_content
+                    if attempt == 1
+                    else intro_content
+                    + " Der vorherige Startversuch war strukturell unbrauchbar. "
+                    + "Halte story sauber von JSON-/Prompt-Fragmenten und nutze einen konservativen validen Patch."
+                ),
+            )
+        except HTTPException as exc:
+            last_error = str(exc.detail)
+            intro["last_error"] = last_error
+            continue
+        except Exception as exc:
+            last_error = str(exc)
+            intro["last_error"] = last_error
+            continue
+        break
+    else:
         intro["status"] = "failed"
-        intro["last_error"] = str(exc.detail)
-        return None
-    except Exception as exc:
-        intro["status"] = "failed"
-        intro["last_error"] = str(exc)
+        intro["last_error"] = last_error
         return None
     intro["status"] = "generated"
     intro["generated_turn_id"] = turn["turn_id"]
