@@ -8,6 +8,10 @@ from __future__ import annotations
 
 from .chunking import chunk_document
 from .context_builder import build_rag_context
+from .document_mapping import (
+    build_rag_document_id,
+    build_rag_documents_from_campaign_state,
+)
 from .models import RAGChunk, RAGDocument, RetrievalQuery, RetrievalResult
 from .retrieval import retrieve_chunks
 
@@ -19,4 +23,6 @@ __all__ = [
     "chunk_document",
     "retrieve_chunks",
     "build_rag_context",
+    "build_rag_documents_from_campaign_state",
+    "build_rag_document_id",
 ]

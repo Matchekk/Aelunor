@@ -43,6 +43,28 @@ Stabile, kleine Oberflaeche (siehe `__init__.py`):
 - `chunk_document(document, *, max_chars=900, overlap_chars=120)`
 - `retrieve_chunks(query, chunks)`
 - `build_rag_context(results, *, max_items=5, max_chars=2500)`
+- `build_rag_documents_from_campaign_state(campaign_id, state, *, max_text_chars=4000)`
+- `build_rag_document_id(campaign_id, source_type, stable_key)`
+
+## Structured Memory Mapper
+
+`document_mapping.py` (mit privaten Helfern in `_mapping_utils.py`) macht aus
+strukturiertem Campaign-State `RAGDocument`-Objekte. Eingabe: `campaign_id` +
+ein `state`-Mapping; Ausgabe: deterministische `RAGDocument`-Liste.
+
+- Unterstuetzte `source_type`-Werte: `campaign_summary`, `world_summary`,
+  `lore`, `location`, `npc`, `quest`, `turn_summary`.
+- Rein stdlib, offline: keine File-/Runtime-/LLM-/HTTP-Zugriffe, kein Mutieren
+  des Input-State, keine Zufalls-IDs, keine Timestamps.
+- Robust gegen fehlende Keys, `None` und falsche Typen; unbekannte Shapes
+  werden ignoriert statt zu crashen. Leere Dokumente entstehen nie.
+- Mappt nur strukturierte Fakten/Summaries — keine Rohlogs, keine
+  Runtime-Dateien. Text ist knapp gerendert und durch `max_text_chars`
+  begrenzt. Metadata bleibt klein und serialisierbar.
+- `campaign_id` ist Pflicht und fliesst in jede `RAGDocument.id` ein.
+
+Noch kein Index-Service, keine API, keine Turn-Integration. Naechster Slice:
+In-Memory Campaign-Memory-Index-Service.
 
 ## Chunking
 

@@ -15,6 +15,9 @@ Bereichsregeln fuer die RAG-Fachlogik. Ergaenzt Root-`AGENTS.md`,
   `max_chars` strikt einhalten, nie mitten im Tag abschneiden.
 - Public Surface (`__init__.py`) klein und stabil halten; kein Wildcard-Export.
 - Keine Datei ueber 300 Zeilen.
+- Structured Memory Mapper (`document_mapping.py`) darf den Input-State nie
+  mutieren; `campaign_id` bleibt Pflicht. Keine raw logs, keine Runtime-Daten,
+  keine File-/HTTP-Zugriffe; nur strukturierte Fakten -> `RAGDocument`.
 
 ## Tests
 

@@ -91,6 +91,12 @@
 * Retrieval ist rein lexical/deterministisch; `campaign_id` ist harter Filter
   (kein Cross-Campaign-Leak); Context Builder haelt `max_items`/`max_chars`
   strikt ein.
+* Structured Memory Mapper ergaenzt (`document_mapping.py` +
+  `_mapping_utils.py`): mappt strukturierten Campaign-State deterministisch zu
+  `RAGDocument` (source_types: campaign_summary, world_summary, lore, location,
+  npc, quest, turn_summary). Stdlib-only, offline, mutiert State nicht, liest
+  keine Rohlogs/Runtime-Dateien. Public Surface: `build_rag_documents_from_
+  campaign_state`, `build_rag_document_id`.
 * Noch nicht produktiv integriert: keine Vector-DB, keine Embeddings, keine
   API-Endpunkte, keine Turn-Pipeline-Integration.
 * RAG ist unterstuetzende Erinnerung; strukturierter Campaign-/World-/Turn-State
@@ -115,8 +121,8 @@ Snapshot 2026-06-09; nur Lesezugriff. Details:
 ## Empfohlene naechste Slices
 
 1. `chore(docs)`: Issue-Labels/Roadmap-Hygiene (#41), falls explizit erlaubt.
-2. `feat(rag)`: strukturierte Campaign-Memory auf `RAGDocument` mappen.
-3. `feat(rag)`: In-Memory Campaign-Memory-Index-Service.
+2. `feat(rag)`: strukturierte Campaign-Memory auf `RAGDocument` mappen. (erledigt)
+3. `feat(rag)`: In-Memory Campaign-Memory-Index-Service. (naechster Slice)
 4. `feat(rag)`: Context-Preview-Service/API (nur Service-Aufruf im Router).
 5. `feat(rag)`: guarded Turn-Context-Integration (klar markierter Block).
 6. `feat(rag)`: optional Hybrid-Retrieval/Embeddings (eigener Slice).
