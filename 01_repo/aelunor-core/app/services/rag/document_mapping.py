@@ -174,7 +174,7 @@ _TURN_CFG = {"source_type": SOURCE_TURN_SUMMARY, "source_path": "timeline",
     "containers": (("timeline",), ("turns",), ("turn_summaries",),
                    ("chronicle", "turns"), ("chronicle", "timeline")),
     "id_keys": ("turn_id", "id", "index"), "id_field": "turn_id", "index_field": True,
-    "name_keys": (), "title_prefix": "Turn", "summary_keys": ("summary", "text", "recap"),
+    "name_keys": (), "title_prefix": "Turn", "summary_keys": ("summary", "recap"),
     "facts_keys": ("events", "objectives", "consequences", "outcomes"),
     "relations": {"NPCs": ("npcs", "characters"), "Locations": ("location", "locations")},
     "location_keys": ("location_id", "location"), "salience": 0.45}

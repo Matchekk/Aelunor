@@ -109,6 +109,24 @@ class SectionMappingTests(unittest.TestCase):
         self.assertEqual(turn.metadata.get("index"), 1)
         self.assertTrue(turn.id.endswith("turn_summary:t-1"))
 
+    def test_turn_summary_ignores_raw_text_field(self):
+        state = {
+            "timeline": [
+                {"turn_id": "t-raw", "text": "Roher Narrations-/Chatlog-Text."},
+                {"turn_id": "t-good", "summary": "Die Gruppe schlägt ein Lager auf."},
+                {"turn_id": "t-events", "events": ["Hinterhalt", "Flucht"]},
+            ]
+        }
+        docs = build_rag_documents_from_campaign_state("camp-A", state)
+        turns = _by_source(docs).get("turn_summary", [])
+        turn_ids = {doc.metadata.get("turn_id") for doc in turns}
+        # Raw `text` must NOT produce a turn_summary document...
+        self.assertNotIn("t-raw", turn_ids)
+        # ...but structured summary/events still map.
+        self.assertEqual(turn_ids, {"t-good", "t-events"})
+        for doc in turns:
+            self.assertNotIn("Roher Narrations", doc.text)
+
     def test_ignores_missing_or_malformed_sections(self):
         state = {
             "title": "Nur ein Titel",
