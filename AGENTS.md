@@ -22,7 +22,7 @@ Aelunor ist ein lokales, UI-getriebenes Fantasy-/Storytelling-RPG mit FastAPI-Ba
 
 Vor groesserer Arbeit in einem Bereich die naechstliegende Regel-/Kontextdatei lesen:
 
-- Backend: `app/AGENTS.md`, `app/services/AGENTS.md`, `app/README.md`, `app/services/README.md`, `app/routers/README.md`.
+- Backend: `app/AGENTS.md`, `app/services/AGENTS.md`, `app/routers/AGENTS.md`, `app/README.md`, `app/services/README.md`, `app/routers/README.md`.
 - UI: `ui/AGENTS.md`, `ui/src/shared/design/AGENTS.md`.
 - Tests: `tests/AGENTS.md`, `tests/README.md`.
 - Scripts: `scripts/README.md`. Core-Setup: `01_repo/aelunor-core/README.md`.
