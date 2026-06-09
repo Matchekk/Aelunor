@@ -28,7 +28,7 @@ Wichtige Pfade:
 - `01_repo/aelunor-core/scripts/`: technische Repo-Checks und Wartungsskripte.
 - `02_docs/`: Produkt- und Architektur-Dokumentation.
 - `05_prompts/`: Prompt-Bibliothek.
-- `07_runtime/`: lokale Runtime-Daten. Nicht fuer Tests oder Experimente beschreiben, ausser der Nutzer fordert es explizit.
+- `01_repo/aelunor-core/.runtime/` und `.runtime-verify/`: lokale Runtime-/Verifikationsdaten (Default-`DATA_DIR`). `07_runtime/` (Repo-Root) ist das Docker-Bind-Mount-Datenverzeichnis aus `docker-compose.yml`. Beide nicht fuer Tests oder Experimente beschreiben, ausser der Nutzer fordert es explizit.
 
 Kontext-READMEs fuer Agents:
 
@@ -38,6 +38,23 @@ Kontext-READMEs fuer Agents:
 - `01_repo/aelunor-core/app/routers/README.md`: Router-Konventionen und Dependency-Factories.
 - `01_repo/aelunor-core/tests/README.md`: Teststruktur, Offline-Regeln, relevante Smoke-Checks.
 - `01_repo/aelunor-core/scripts/README.md`: technische Check-Scripts und wann sie laufen sollen.
+
+## Token-Effizienz und Agent-Infrastruktur
+
+Pflicht fuer alle Agent-Sessions. Ziel: ohne Full-Repo-Neuerkundung arbeiten.
+
+- Zuerst `AELUNOR_HANDOFF.md` lesen (kompakter Fortsetzungskontext). Bei groesseren Aenderungen am Ende aktualisieren (Goal, Architektur, Tests, Next Steps).
+- Nur Dateien oeffnen, die fuer die konkrete Aufgabe noetig sind. Keine Full-Repo-Scans ohne Grund.
+- Repo-Map statt Datei-fuer-Datei-Exploration: `python .agent_scripts/repo_map.py`.
+- Grosse oder unbekannte Befehlsausgaben NIE ungecappt in Antwort oder Chat kippen.
+  - Muster: `<cmd> > .agent_tmp/out.txt 2>&1`, dann nur begrenzten Ausschnitt ansehen (`head -c 6000`, `Get-Content -TotalCount 120`, `Select-Object -First N`).
+  - Fehlerlogs kompakt: `python .agent_scripts/scan_errors.py .agent_tmp/out.txt`.
+  - Testausgaben kompakt: `... > .agent_tmp/pytest.txt 2>&1`, dann `python .agent_scripts/compact_test_output.py .agent_tmp/pytest.txt`.
+- Keine vollstaendigen grossen Dateien, Logs oder generierten Dateien in Antworten kopieren. Nur relevante Snippets oder Zeilen-Ranges.
+- Nicht ungeprueft oeffnen: `node_modules/`, `.venv/`, `dist/`, `build/`, `.runtime*/`, `.pytest_cache/`, Caches, Logs, Binary-/Asset-Dateien, sowie der Schwester-Worktree `Aelunor-push-worktree/`.
+- Grosse Zwischenergebnisse nach `.agent_tmp/` schreiben (git-ignored) und nur Ausschnitte inspizieren.
+- Bevorzugte sichere Kommandos: `rg`/Grep, `git status --porcelain`, `git diff --name-only`, `git diff --stat`, gezielte Datei-Ranges (`sed -n`/`Get-Content`).
+- Geaenderte Dateien immer mit ungefaehrer Zeilendifferenz berichten, z.B. `app/main.py (+12/-3)`.
 
 ## Arbeitsweise fuer Agents
 
@@ -116,7 +133,7 @@ Kontext-READMEs fuer Agents:
 - Bei nicht ausfuehrbaren Tests ehrlich sagen, warum sie nicht liefen.
 - Neue Logik nach Moeglichkeit mit Tests absichern.
 - Bugfixes sollen Regressionstests bekommen, wenn der Aufwand vertretbar ist.
-- Tests duerfen nur temporaere Datenpfade oder In-Memory-/Temp-Stores nutzen; `07_runtime/` bleibt unberuehrt.
+- Tests duerfen nur temporaere Datenpfade oder In-Memory-/Temp-Stores nutzen; `01_repo/aelunor-core/.runtime/` und `07_runtime/` bleiben unberuehrt.
 
 ## 8. Testing-Regeln
 
@@ -124,7 +141,7 @@ Kontext-READMEs fuer Agents:
 - Backend-Tests liegen unter `01_repo/aelunor-core/tests/`.
 - Kein Docker-Start fuer normale Tests.
 - Kein echter Ollama-Call in Tests. Verwende Fake Narrator, Stub-Funktionen oder injizierte Service-Dependencies.
-- Tests duerfen nur temporaere Daten schreiben. `07_runtime/` bleibt unberuehrt.
+- Tests duerfen nur temporaere Daten schreiben. `.runtime/` und `07_runtime/` bleiben unberuehrt.
 - Bei Turn-/Canon-/State-Aenderungen pruefen: Phase, Turn-Zaehler, Timeline, aktiver Turn-Status, Claims, State vor/nach Reload.
 - Bei Frontend-Aenderungen passende Node-/Type-/Build-Checks ausfuehren, soweit verfuegbar.
 - Wenn ein Check nicht laeuft, dokumentiere Befehl, Fehler, wahrscheinliche Ursache und naechsten Fix.
@@ -215,7 +232,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build-windows.ps1
 
 Abschlussberichte bei Codeaenderungen enthalten:
 
-- geaenderte Dateien
+- geaenderte Dateien mit ungefaehrer Zeilendifferenz pro Datei
 - was geaendert wurde
 - welche Tests/Checks liefen
 - welche Risiken oder offenen Punkte bleiben
