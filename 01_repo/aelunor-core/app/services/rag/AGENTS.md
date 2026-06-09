@@ -18,6 +18,10 @@ Bereichsregeln fuer die RAG-Fachlogik. Ergaenzt Root-`AGENTS.md`,
 - Structured Memory Mapper (`document_mapping.py`) darf den Input-State nie
   mutieren; `campaign_id` bleibt Pflicht. Keine raw logs, keine Runtime-Daten,
   keine File-/HTTP-Zugriffe; nur strukturierte Fakten -> `RAGDocument`.
+- Memory Index Service (`memory_index.py`) bleibt in-memory und
+  side-effect-free: keine globale mutable Registry, keine Persistenz/Cache
+  ohne eigenen spaeteren Slice, kein Mutieren des Input-State. Retrieval immer
+  ueber `index.campaign_id` scopen.
 
 ## Tests
 

@@ -12,6 +12,12 @@ from .document_mapping import (
     build_rag_document_id,
     build_rag_documents_from_campaign_state,
 )
+from .memory_index import (
+    CampaignMemoryIndex,
+    build_campaign_memory_context,
+    build_campaign_memory_index,
+    retrieve_campaign_memory,
+)
 from .models import RAGChunk, RAGDocument, RetrievalQuery, RetrievalResult
 from .retrieval import retrieve_chunks
 
@@ -25,4 +31,8 @@ __all__ = [
     "build_rag_context",
     "build_rag_documents_from_campaign_state",
     "build_rag_document_id",
+    "CampaignMemoryIndex",
+    "build_campaign_memory_index",
+    "retrieve_campaign_memory",
+    "build_campaign_memory_context",
 ]

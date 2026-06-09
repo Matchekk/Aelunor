@@ -63,8 +63,31 @@ ein `state`-Mapping; Ausgabe: deterministische `RAGDocument`-Liste.
   begrenzt. Metadata bleibt klein und serialisierbar.
 - `campaign_id` ist Pflicht und fliesst in jede `RAGDocument.id` ein.
 
-Noch kein Index-Service, keine API, keine Turn-Integration. Naechster Slice:
-In-Memory Campaign-Memory-Index-Service.
+Keine API, keine Turn-Integration. Der Mapper liefert nur die `RAGDocument`-
+Liste; das Zusammenstecken uebernimmt der Index-Service (siehe unten).
+
+## In-Memory Campaign Memory Index Service
+
+`memory_index.py` verbindet die Bausteine zu einem kleinen, deterministischen
+In-Memory-Service: Mapper -> Chunking -> Retrieval -> Context Builder.
+
+- `CampaignMemoryIndex` — immutable Bundle (`campaign_id`, `documents`,
+  `chunks`); kein Cache, keine I/O.
+- `build_campaign_memory_index(campaign_id, state, *, document_max_text_chars,
+  chunk_max_chars, chunk_overlap_chars)` — mappt State zu Dokumenten und
+  chunkt jedes Dokument. Leerer/malformed State ergibt einen leeren Index;
+  leerer `campaign_id` wirft `ValueError`.
+- `retrieve_campaign_memory(index, *, text, entities, source_types,
+  max_results)` — baut eine `RetrievalQuery` mit `index.campaign_id` (vom
+  Caller nicht ueberschreibbar) und nutzt `retrieve_chunks`.
+- `build_campaign_memory_context(index, *, text, entities, source_types,
+  max_results, max_items, max_chars)` — retrievt und rendert den bestehenden
+  bounded `<RAG_MEMORY>`-Block; `""` ohne Treffer.
+
+Er persistiert nichts, liest keine Runtime-Dateien, mutiert den Input-State
+nicht und ist noch nicht an Router/API/Turn-Pipeline angeschlossen. Naechster
+Slice: Context-Preview-Service/API oder Contract-Alignment mit dem
+LLM-Kontext.
 
 ## Chunking
 
