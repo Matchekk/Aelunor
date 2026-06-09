@@ -5,7 +5,7 @@ Bereichsregeln fuer das FastAPI-Backend. Ergaenzt die Root-`AGENTS.md` (nicht er
 ## Schichten (kurz)
 
 - `main.py`: App-Wiring/Composition und kleine Public-Fassade. Keine Fachlogik.
-- `routers/`: duenne HTTP-Adapter. Keine Fachlogik.
+- `routers/`: duenne HTTP-Adapter. Keine Fachlogik (siehe `routers/AGENTS.md`).
 - `services/`: Domain- und Workflow-Logik (siehe `services/AGENTS.md`).
 - `repositories/`: Persistenzadapter. `adapters/`: externe Systeme (z. B. Ollama).
 - `schemas/`, `serializers/`, `dependencies/`: Schnittstellen und Wiring.
