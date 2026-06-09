@@ -18,7 +18,6 @@ import { clearBoardNovelty, trackCampaignNovelty } from "./novelty";
 import { readSessionLibrary, deleteSessionLibraryEntry } from "../session/sessionLibrary";
 import { useLayoutStore } from "../../state/layoutStore";
 import { useUserSettingsStore } from "../../entities/settings/store";
-import { RightRail } from "./components/RightRail";
 import { StoryTimeline } from "./components/StoryTimeline";
 import { TopBar } from "./components/TopBar";
 import { Composer } from "./components/Composer";
@@ -31,7 +30,10 @@ import { useUnclaimSlotMutation } from "../claim/mutations";
 import { PrePlayOverview } from "./components/PrePlayOverview";
 import { PrePlayComposerHint } from "./components/PrePlayComposerHint";
 import { readPlayUiMemory, writePlayUiMemory } from "./uiMemory";
-import { GameSidebar, StatusBadge } from "../../shared/ui/fantasy/FantasyChrome";
+import { AelunorSceneBackground } from "../../shared/ui/aelunorAssets";
+import { WorldRail } from "./components/WorldRail";
+import { ActorDock } from "./components/ActorDock";
+import { resolveSelectedActorId } from "./actorDockModel";
 
 interface CampaignWorkspaceProps {
   campaign: CampaignSnapshot;
@@ -57,6 +59,7 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
   const [editTurnReturnFocus, setEditTurnReturnFocus] = useState<HTMLElement | null>(null);
   const [sessionRenameValue, setSessionRenameValue] = useState(campaign.campaign_meta.title || "");
   const [noveltyVersion, setNoveltyVersion] = useState(0);
+  const [selectedActorId, setSelectedActorId] = useState<string | null>(null);
   const previousCampaignRef = useRef<CampaignSnapshot | null>(null);
   const rememberedUiHydratedRef = useRef<string | null>(null);
   const drawerReturnFocusRef = useRef<HTMLElement | null>(null);
@@ -111,6 +114,17 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
     () => deriveSceneMembership(campaign, selectedSceneId).slice(0, 5),
     [campaign, selectedSceneId],
   );
+  const selectedActorSlotId = useMemo(() => resolveSelectedActorId(campaign, selectedActorId), [campaign, selectedActorId]);
+  const selectedActorLabel = useMemo(() => {
+    if (!selectedActorSlotId) {
+      return "Kein Akteur";
+    }
+    return (
+      campaign.party_overview.find((entry) => entry.slot_id === selectedActorSlotId)?.display_name ??
+      campaign.display_party.find((entry) => entry.slot_id === selectedActorSlotId)?.display_name ??
+      selectedActorSlotId
+    );
+  }, [campaign.display_party, campaign.party_overview, selectedActorSlotId]);
   const viewerSummary = useMemo(() => deriveViewerSummary(campaign), [campaign.viewer_context]);
   const isPreplay = !phaseState.is_active_play;
   const activeSceneLabel = selectedScene?.scene_name ?? (selectedSceneId === "all" ? "Alle Szenen" : selectedSceneId);
@@ -205,6 +219,12 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
     });
   }, [campaign.campaign_meta.campaign_id, rememberFilters, rightRailOpen, selectedSceneId]);
 
+  useEffect(() => {
+    if (selectedActorSlotId !== selectedActorId) {
+      setSelectedActorId(selectedActorSlotId);
+    }
+  }, [selectedActorId, selectedActorSlotId]);
+
   const openCharacterDrawer = useCallback(
     (slot_id: string, tab_id?: string) => {
       setActiveDrawerTab(tab_id ?? "overview");
@@ -235,13 +255,13 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
     },
     [location.pathname, location.search, navigatePlayState, playRouteState, setActiveDrawerTab],
   );
-  const openBoards = useCallback(() => {
-    if (boardsOpen) {
+  const openBoards = useCallback((tab_id: BoardTabId = activeBoardTab) => {
+    if (boardsOpen && activeBoardTab === tab_id) {
       return;
     }
     setBoardsReturnFocus(activeElement());
     setBoardsDeleteConfirmOpen(false);
-    navigatePlayState(withBoardsRouteState(playRouteState, activeBoardTab), {
+    navigatePlayState(withBoardsRouteState(playRouteState, tab_id), {
       state: buildSurfaceHistoryState("boards", location.pathname, location.search),
     });
   }, [activeBoardTab, boardsOpen, location.pathname, location.search, navigatePlayState, playRouteState]);
@@ -322,23 +342,19 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
 
   return (
     <main className="v1-app-shell campaign-play-shell aelunor-game-shell">
-      <GameSidebar
-        items={[
-          { id: "journal", label: "Journal", detail: "Story", active: true, on_select: openBoards },
-          { id: "quests", label: "Quests", detail: "Plot", on_select: openBoards },
-          { id: "party", label: "Party", detail: partySummary, active: rightRailOpen, on_select: () => setRightRailOpen(!rightRailOpen) },
-          { id: "map", label: "Map", detail: activeSceneLabel, on_select: openBoards },
-          { id: "codex", label: "Codex", detail: "Welt", on_select: openBoards },
-        ]}
-        footer={<StatusBadge label={phaseState.is_active_play ? "Session live" : phaseState.phase_display} tone={phaseState.is_active_play ? "success" : "arcane"} />}
-      />
-      <div className="game-shell-content">
+      <AelunorSceneBackground wallpaper="wallpaper-ancient-temple-arcane" />
+      <div className="campaign-play-content">
         <TopBar
           campaign={campaign}
           session={session}
           active_scene_label={activeSceneLabel}
+          active_actor_label={selectedActorLabel}
           can_unclaim={Boolean(claimedSlotId)}
           unclaim_pending={unclaimMutation.isPending}
+          actor_dock_open={rightRailOpen}
+          on_toggle_actor_dock={() => setRightRailOpen(!rightRailOpen)}
+          on_open_codex={() => openBoards("world")}
+          on_open_notifications={() => openBoards("memory")}
           on_unclaim={() => {
             if (!claimedSlotId) {
               return;
@@ -350,30 +366,31 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
             navigate(buildV1HubPath(), { replace: true });
           }}
         />
-        <section className={rightRailOpen ? "workspace-grid play-workspace-grid layout" : "workspace-grid play-workspace-grid layout no-rail"}>
+        <section className={rightRailOpen ? "campaign-play-grid" : "campaign-play-grid is-actor-collapsed"}>
+          <WorldRail
+            campaign={campaign}
+            active_scene_label={activeSceneLabel}
+            selected_actor_id={selectedActorSlotId}
+            on_select_actor={setSelectedActorId}
+            on_open_scene={() => openBoards("world")}
+            on_open_quest={() => openBoards("plot")}
+            on_open_map={() => openBoards("world")}
+          />
           <section className={`campaign-main-column story-workspace story-surface timeline-column${isPreplay ? " is-preplay" : " is-active-play"}`}>
-            <section className="story-context-row">
+            <div className="story-context-row">
               <div className="story-context-main">
                 <span className="status-pill">{phaseState.phase_display}</span>
                 <span className="status-pill">Blickwinkel {viewerSummary}</span>
-                <span className="status-pill">
-                  Szene {activeSceneLabel}
-                </span>
                 <span className="status-pill">{partySummary}</span>
               </div>
               <div className="story-context-members">
-                {selectedSceneMembers.length === 0 ? (
-                  <span className="status-muted">Aktuell keine zugeordnete Szenenmitgliedschaft.</span>
-                ) : (
-                  selectedSceneMembers.map((entry) => (
-                    <span key={entry.slot_id} className="story-member-chip">
-                      {entry.display_name}
-                      {entry.scene_name ? <small>{entry.scene_name}</small> : null}
-                    </span>
-                  ))
-                )}
+                {selectedSceneMembers.map((entry) => (
+                  <button key={entry.slot_id} type="button" className="story-member-chip" onClick={() => setSelectedActorId(entry.slot_id)}>
+                    {entry.display_name}
+                  </button>
+                ))}
               </div>
-            </section>
+            </div>
             {isPreplay ? (
               <PrePlayOverview
                 campaign={campaign}
@@ -421,16 +438,19 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
             {isPreplay ? (
               <PrePlayComposerHint phase_display={phaseState.phase_display} />
             ) : (
-              <Composer campaign={campaign} on_open_context={openContextModal} />
+              <Composer
+                campaign={campaign}
+                selected_actor_id={selectedActorSlotId}
+                on_actor_select={setSelectedActorId}
+                on_open_context={openContextModal}
+              />
             )}
           </section>
           {rightRailOpen ? (
-            <RightRail
+            <ActorDock
               campaign={campaign}
-              selected_scene_id={selectedSceneId}
+              selected_slot_id={selectedActorSlotId}
               on_open_character={openCharacterDrawer}
-              on_open_npc={openNpcDrawer}
-              on_open_codex={openCodexDrawer}
             />
           ) : null}
         </section>

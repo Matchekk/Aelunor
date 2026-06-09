@@ -8,6 +8,7 @@ import "./shared/styles/legacy/legacy-vars.css";
 import "./shared/styles/legacy/legacy-shell.css";
 import "./shared/styles/legacy/legacy-play.css";
 import "./shared/styles/aelunor-main-screen.css";
+import "./features/play/campaignPlayV2.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

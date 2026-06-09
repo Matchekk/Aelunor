@@ -29,6 +29,8 @@ import { SubmitBar } from "./SubmitBar";
 
 interface ComposerProps {
   campaign: CampaignSnapshot;
+  selected_actor_id: string | null;
+  on_actor_select: (slot_id: string) => void;
   on_open_context: (payload: ContextQueryResponse, return_focus: HTMLElement | null) => void;
 }
 
@@ -47,7 +49,7 @@ function activeElement(): HTMLElement | null {
   return document.activeElement instanceof HTMLElement ? document.activeElement : null;
 }
 
-export function Composer({ campaign, on_open_context }: ComposerProps) {
+export function Composer({ campaign, selected_actor_id, on_actor_select, on_open_context }: ComposerProps) {
   const composerModePreference = useUserSettingsStore((state) => state.interaction.composer_mode_preference);
   const setComposerModePreference = useUserSettingsStore((state) => state.set_composer_mode_preference);
   const [currentMode, setCurrentMode] = useState<PlayModeId>(() => resolveInitialComposerMode(composerModePreference));
@@ -73,6 +75,7 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
   const currentDraft = drafts[currentMode];
   const submitPending = submitTurnMutation.isPending || contextQueryMutation.isPending;
   const access = deriveComposerAccessState(campaign, currentMode, blockingAction, submitPending, currentDraft);
+  const selectedActorMatchesClaim = !selected_actor_id || selected_actor_id === access.actor;
   const introMessage = deriveIntroBannerMessage(campaign);
   const latestRequests = deriveLatestRequests(campaign, access.actor);
   const modeConfig = getPlayModeConfig(currentMode);
@@ -149,7 +152,7 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
   };
 
   const submit = async () => {
-    if (!access.can_submit || !access.actor) {
+    if (!access.can_submit || !access.actor || !selectedActorMatchesClaim) {
       return;
     }
 
@@ -181,7 +184,7 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
   };
 
   return (
-    <section className="composer-dock hud-surface panel composer-panel">
+    <section className="composer-dock player-composer hud-surface panel composer-panel">
       <WaitingSurface target="composer" />
       <div className="v1-panel-head composer-dock-head">
         <h2 className="panelTitle">Dein Beitrag</h2>
@@ -210,64 +213,83 @@ export function Composer({ campaign, on_open_context }: ComposerProps) {
       />
       <WaitingInline target="composer" className="composer-waiting-inline" />
 
-      <label className="composer-textarea-wrap">
-        <span className="status-muted">Entwurf</span>
-        <textarea
-          value={currentDraft}
-          onChange={(event) => {
-            const nextValue = event.target.value;
-            setDraft(nextValue);
+      <div className="composer-input-grid">
+        <label className="composer-textarea-wrap">
+          <span className="status-muted">Entwurf</span>
+          <textarea
+            value={currentDraft}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setDraft(nextValue);
 
-            if (!access.actor || modeConfig.is_contextual) {
-              return;
-            }
+              if (!access.actor || modeConfig.is_contextual) {
+                return;
+              }
 
-            if (typingTimerRef.current) {
-              window.clearTimeout(typingTimerRef.current);
-              typingTimerRef.current = null;
-            }
+              if (typingTimerRef.current) {
+                window.clearTimeout(typingTimerRef.current);
+                typingTimerRef.current = null;
+              }
 
-            if (!nextValue.trim()) {
+              if (!nextValue.trim()) {
+                void presenceActivity.clear_activity();
+                return;
+              }
+
+              typingTimerRef.current = window.setTimeout(() => {
+                void presenceActivity.set_activity({
+                  kind: derivePresenceKindForContext("typing"),
+                  slot_id: access.actor,
+                });
+              }, 700);
+            }}
+            placeholder={modeConfig.id === "do" ? "Beschreibe, was dein Charakter als Naechstes tut ..." : modeConfig.placeholder}
+            rows={4}
+            disabled={submitPending}
+            onBlur={() => {
+              if (typingTimerRef.current) {
+                window.clearTimeout(typingTimerRef.current);
+                typingTimerRef.current = null;
+              }
               void presenceActivity.clear_activity();
-              return;
-            }
-
-            typingTimerRef.current = window.setTimeout(() => {
-              void presenceActivity.set_activity({
-                kind: derivePresenceKindForContext("typing"),
-                slot_id: access.actor,
-              });
-            }, 700);
-          }}
-          placeholder={modeConfig.placeholder}
-          rows={4}
-          disabled={submitPending}
-          onBlur={() => {
-            if (typingTimerRef.current) {
-              window.clearTimeout(typingTimerRef.current);
-              typingTimerRef.current = null;
-            }
-            void presenceActivity.clear_activity();
-          }}
-          onKeyDown={(event) => {
-            if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-              event.preventDefault();
+            }}
+            onKeyDown={(event) => {
+              if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+                event.preventDefault();
+                void submit();
+              }
+            }}
+          />
+        </label>
+        <div className="composer-actor-send">
+          <label>
+            <span>Akteur</span>
+            <select
+              value={selected_actor_id ?? access.actor ?? ""}
+              onChange={(event) => on_actor_select(event.target.value)}
+              disabled={submitPending || campaign.party_overview.length === 0}
+            >
+              {campaign.party_overview.map((entry) => (
+                <option key={entry.slot_id} value={entry.slot_id}>
+                  {entry.display_name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <SubmitBar
+            submit_label={access.submit_label}
+            pending={submitPending}
+            disabled={!access.can_submit || !selectedActorMatchesClaim}
+            error_message={mutationError}
+            on_submit={() => {
               void submit();
-            }
-          }}
-        />
-      </label>
-      <p className="status-muted composer-helper">{access.helper_text}</p>
-
-      <SubmitBar
-        submit_label={access.submit_label}
-        pending={submitPending}
-        disabled={!access.can_submit}
-        error_message={mutationError}
-        on_submit={() => {
-          void submit();
-        }}
-      />
+            }}
+          />
+        </div>
+      </div>
+      <p className="status-muted composer-helper">
+        {selectedActorMatchesClaim ? access.helper_text : "Waehle deinen geclaimten Akteur, um einen Zug zu senden."}
+      </p>
     </section>
   );
 }
