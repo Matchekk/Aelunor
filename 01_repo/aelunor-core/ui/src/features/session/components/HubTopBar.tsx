@@ -17,15 +17,7 @@ export function HubTopBar({
     <header className="hub-topbar" aria-label="Hub Status">
       <div className="hub-topbar-meta">
         <span className={`hub-status-badge${has_active_session ? " is-active" : ""}`}>
-          {has_active_session ? "Session Active" : "Keine aktive Session"}
-        </span>
-        <span className="hub-resource-pill">
-          <span aria-hidden="true" />
-          {session_count} Sessions
-        </span>
-        <span className="hub-resource-pill">
-          <span aria-hidden="true" />
-          Runestones
+          {has_active_session ? `Aktive Session · ${session_count} Sessions` : `Keine aktive Session · ${session_count} Sessions`}
         </span>
         <button type="button" className="hub-icon-button" aria-label="Benachrichtigungen">
           <span aria-hidden="true">N</span>

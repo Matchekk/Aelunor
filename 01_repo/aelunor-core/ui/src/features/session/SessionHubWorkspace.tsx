@@ -125,6 +125,7 @@ export function SessionHubWorkspace({
   const libraryEntries = useMemo(() => readSessionLibrary(), [libraryVersion]);
   const latestLibraryEntry = libraryEntries[0] ?? null;
   const currentSessionIsActive = hasActiveSession(active_session);
+  const hasSavedSessions = libraryEntries.length > 0;
   const suggestedDisplayName = useMemo(() => {
     if (latestLibraryEntry?.display_name) {
       return latestLibraryEntry.display_name;
@@ -430,6 +431,7 @@ export function SessionHubWorkspace({
           hero={
             <HubHero
               has_active_session={currentSessionIsActive}
+              has_saved_sessions={hasSavedSessions}
               active_campaign_id={active_session.campaign_id}
               latest_entry={latestLibraryEntry}
               resume_pending_campaign_id={resumePendingCampaignId}

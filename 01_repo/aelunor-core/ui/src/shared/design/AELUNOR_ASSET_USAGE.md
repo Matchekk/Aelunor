@@ -11,6 +11,8 @@ For new assets or new asset patterns, start with `AELUNOR_ASSET_PRODUCTION_PROTO
 | `03_brand` | Brand and design source. |
 | `ui/public/brand` | React/Vite frontend runtime assets. |
 | `app/static/brand` | Legacy/FastAPI runtime assets. |
+| `ui/public/icons` | React/Vite semantic navigation icon runtime assets. |
+| `app/static/icons` | Legacy/FastAPI mirror for semantic navigation icons. |
 
 ## Roles
 
@@ -45,6 +47,22 @@ Framed panels must use `position: relative` and `isolation: isolate`. Content si
 ## Accessibility
 
 Decorative assets must use `aria-hidden="true"` or `alt=""`, `pointer-events: none`, and `user-select: none`. Do not encode normal UI text into images. If an icon carries meaning, provide an accessible name on the semantic icon or wrapper; the frame remains decorative.
+
+## HubSidebar Icons
+
+The Campaign Hub sidebar icons live as individual semantic PNG files in `ui/public/icons` and are mirrored under `app/static/icons`. They are registered as `ui-kit` assets with role `icon`, intended component `HubSidebar`, and layer `content`.
+
+Use them only as HubSidebar navigation icons. The sidebar button must keep real text or an accessible name, so the image itself may use `alt=""`. Do not use filenames as alt text, do not use these icons as text replacement, and do not use them as decorative panel frames, button backgrounds, page backgrounds, or standalone brand logos.
+
+`icon-frame-circle.png` remains a separate decorative frame asset. Keep the semantic sidebar icon and the decorative frame separate.
+
+`characters_icon_png.png` is registered at its current runtime path to avoid breaking `/v1/icons/...`; rename candidate: `characters_icon_sidebar.png`.
+
+## Empty-State Illustrations
+
+`empty-chronicle-seal.webp` is a transparent decorative illustration for the Campaign Hub empty state. It lives under `ui/public/brand/illustrations` and is mirrored under `app/static/brand/illustrations`.
+
+Use it only where real surrounding text explains that no chronicle exists yet. Render it with `alt=""` and `aria-hidden="true"`. Do not use it as a navigation icon, frame, button background, page background, text replacement, or brand logo.
 
 ## Responsive Rules
 
