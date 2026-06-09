@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from app.services import state_engine
 from app.services import state_basics
+from app.services.state import runtime_core
 from app.services.world import appearance
 from app.services.world import attribute_influence
 from app.services.world import combat
@@ -2072,6 +2073,54 @@ class StateEngineTests(unittest.TestCase):
         self.assertEqual(state_engine.setup_phase_display("character_setup_open"), "Charakterwerdung")
         self.assertEqual(state_engine.setup_phase_display("ready_to_start"), "Bereit zum Start")
         self.assertEqual(state_engine.setup_phase_display("active"), "Aktive Spielphase")
+
+
+class AdventureIntroWiringTests(unittest.TestCase):
+    """Regression: try_generate_adventure_intro must wire the turn engine call.
+
+    Previously the function called the bare name ``create_turn_record`` which was
+    not in scope, so intro generation failed with ``NameError`` and the saved
+    intro_state ended up ``status == "failed"``.
+    """
+
+    def _startable_campaign(self) -> Dict[str, Any]:
+        return {
+            "setup": {
+                "world": {"completed": True, "summary": {"player_count": 1}},
+                "characters": {"slot_1": {"completed": True}},
+            },
+            "claims": {"slot_1": "player_1"},
+            "state": {
+                "characters": {"slot_1": {"bio": {"name": "Aria"}}},
+                "meta": {},
+            },
+            "turns": [],
+        }
+
+    def test_try_generate_adventure_intro_wires_turn_engine(self) -> None:
+        campaign = self._startable_campaign()
+        self.assertTrue(runtime_core.can_start_adventure(campaign))
+
+        calls: List[Dict[str, Any]] = []
+
+        def fake_create_turn_record(**kwargs: Any) -> Dict[str, Any]:
+            calls.append(kwargs)
+            return {"turn_id": "turn_intro_1"}
+
+        with patch.object(runtime_core, "normalize_campaign", lambda c: c), \
+                patch.object(runtime_core.turn_engine, "create_turn_record", fake_create_turn_record):
+            turn = runtime_core.try_generate_adventure_intro(campaign)
+
+        self.assertEqual(turn, {"turn_id": "turn_intro_1"})
+
+        intro = runtime_core.intro_state(campaign)
+        self.assertEqual(intro["status"], "generated")
+        self.assertEqual(intro["generated_turn_id"], "turn_intro_1")
+        self.assertEqual(intro["last_error"], "")
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["actor"], "slot_1")
+        self.assertEqual(calls[0]["action_type"], "story")
 
 
 if __name__ == "__main__":

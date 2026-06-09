@@ -309,6 +309,7 @@ from app.services.progression import application as _progression_application_ser
 from app.services.progression import classes as _progression_classes_service
 from app.services.progression import manifestation as _progression_manifestation_service
 from app.services.progression import skills as _progression_skills_service
+from app.services import turn_engine
 from app.services.turn_engine import emit_turn_phase_event, turn_flow_error
 from app.services.llm.json_repair import (
     extract_json_payload,
@@ -1790,7 +1791,7 @@ def try_generate_adventure_intro(campaign: Dict[str, Any]) -> Optional[Dict[str,
     intro["last_attempt_at"] = utc_now()
     intro["last_error"] = ""
     try:
-        turn = create_turn_record(
+        turn = turn_engine.create_turn_record(
             campaign=campaign,
             actor=primary_actor,
             player_id=campaign["claims"].get(primary_actor),
