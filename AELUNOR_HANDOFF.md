@@ -1,70 +1,130 @@
-# AELUNOR_HANDOFF.md
+# Aelunor Agent Handoff
 
-Compact continuation context for agents. Read first, then `AGENTS.md` (rules). Update dated sections after substantial changes. Paths relative to repo root unless noted.
+## Zweck
 
-> Repo root = `D:\Projekte\Aelunor-main\Aelunor-main` (has `.git`, `AGENTS.md`). A session may open the parent `D:\Projekte\Aelunor-main`, which also holds the sibling worktree `Aelunor-push-worktree/` — ignore it. Active code = `01_repo/aelunor-core/`.
+* Diese Datei ist der kompakte aktuelle Projektzustand fuer Coding-Agenten.
+* `AGENTS.md` bleibt massgeblich fuer Regeln.
+* README-Dateien bleiben massgeblich fuer Architekturdetails.
+* Code gewinnt bei Widerspruch.
+* Kein Tagebuch: nur langlebiger Stand, offene Risiken, naechste Schritte.
 
-## Current Goal
-- Durable: local UI-driven multiplayer story/RPG; stable architecture, clean campaign/claim/turn/canon/presence flows, story-first UX.
-- In flight (2026-06-09): agent/token infra set up (this file, `.agent_scripts/`, `.agent_tmp/`, AGENTS.md token section). No specific feature task on record — *assumption:* set per session.
+## Aktiver Arbeitsbereich
 
-## Current Architecture
-- Backend: FastAPI + Uvicorn (Py 3.13), JSON campaign persistence, HTTP + SSE, optional Ollama / Anthropic-Claude narrator. Entry `app/main.py` (~482, wiring only).
-- Frontend: React 18 + Vite 5 + TS strict, base `/v1`. State: Zustand (settings/theme/presence) + TanStack Query. Entry `ui/src/main.tsx`.
-- Layering: thin routers (9) -> services (15 + subdirs) -> state engine. `state_engine.py` (~67) facade; `EXPORTED_SYMBOLS = [public_turn, build_campaign_view]` only.
-- `deepaelunor/` — 15-task offline agent benchmark (dae-001..015), scored via `benchmark.toml`.
+* Sauberer Workspace: `D:\Projekte\Aelunor-main-clean`
+* Nicht verwenden: `D:\Projekte\Aelunor-main`
+* Keine alten kaputten lokalen Workspaces, kein `D:\Aelunor\07_runtime`.
+* Repository: `Matchekk/Aelunor`
+* Aktiver Code: `01_repo/aelunor-core/`
 
-## Important Files / Directories
-- `01_repo/aelunor-core/`:
-  - `app/main.py` (482) — app factory; `configure_dependencies(StateEngineDependencies(...))`.
-  - `app/routers/*.py` (9): campaigns, setup, claim, turns, boards, context, presence, sheets.
-  - `app/services/` (15): turn_service, `turn_engine.py` (~1645), `state_engine.py` (67), live_state_service, `llm/client.py`; subdirs `state/runtime_core.py` (~1629), `campaigns/`, `turn/dependencies.py` (ports).
-  - `app/static/` — LEGACY UI, do not revive. `tests/` unit(89)+integration(3). `scripts/` 22+ checks.
-  - `ui/src/` — features (play/boards/claim/setup/scenes/drawers/context/session), entities (campaign/settings/presence/theme), shared (ui/design/styles).
-- `02_docs/` docs · `03_brand/` assets (no code) · `05_prompts/` · `10_tools/` (car-hub, unrelated).
+## Architektur-Kurzbild
 
-## Core Data / State / Game Flow
-- Campaign JSON keys: campaign_meta, players, claims, state, turns[], boards, setup, board_revisions, legacy_migration.
-- Phases (`state.meta.phase`): lobby -> world_setup -> character_setup_open -> ready_to_start -> active.
-- Loop: Setup(World Q/A) -> Claim(player_id->slot) -> Character Setup -> Play(Turns) -> Persist/Reload.
-- Turn: HTTP create_turn -> turn_service -> `turn_engine.create_turn_record` -> LLM narrator -> patch (JSON delta) sanitize->validate->apply (fixed order) -> mutate -> save JSON -> SSE broadcast. Turn record carries patch + state_before/after + edit_history + retry_of_turn_id.
-- Subsystem ports (`turn/dependencies.py`): LLM, Extraction(canon/NPC), Progression(+canon gate), Codex(lore), Pacing, Attribute.
-- LLM: `ChatAdapter`; `LLM_PROVIDER`=auto|ollama|anthropic (default Ollama `gemma3:12b`; Claude fallback needs `ANTHROPIC_API_KEY`).
-- Persistence: `DATA_DIR` (default `.runtime/`, tests=tempdir) -> `campaigns/<ID>.json`. Presence/SSE = live sync, not truth.
+* FastAPI-Backend unter `app/` (Python 3.13, Uvicorn, HTTP + SSE).
+* React/Vite-UI unter `ui/` (TS strict, Base `/v1`). Neue UI-Arbeit hier.
+* Domain-/Workflow-Logik unter `app/services/`.
+* Router (`app/routers/`) sind duenne HTTP-Adapter ohne Fachlogik.
+* `app/main.py` ist Wiring/Composition, kein Ablageort fuer Fachlogik.
+* `state_engine.py` ist kleine Public-Fassade (`EXPORTED_SYMBOLS` =
+  `public_turn`, `build_campaign_view`); Kernlogik in `turn_engine.py`,
+  `state/runtime_core.py`, `campaigns/`, `turn/`.
+* Tests unter `tests/` (`unit/`, `integration/`), Pytest laeuft aus
+  `01_repo/aelunor-core/`.
+* Persistenz: JSON-Kampagnen unter `DATA_DIR` (Default `.runtime/`,
+  Tests = tempdir). Presence/SSE = Live-Sync, nicht persistente Wahrheit.
+* Runtime-Daten (`.runtime/`, `.runtime-verify/`, `07_runtime/`) nie als
+  Fixtures verwenden oder beschreiben.
 
-## UI / Theme / Asset Flow
-- main.tsx -> AppRoot (ErrorBoundary > QueryProvider > ThemeProvider > AppWorkspace + BrowserRouter) -> RouteGate `/v1/*` (pages hub/campaigns/characters/world/quests/inventory/codex; workspaces claim/setup/play).
-- Themes: 4 (arcane/tavern/glade/hybrid) via `data-theme` + `--aelunor-*`; settings persist localStorage `aelunorUserSettingsV1` (legacy isekai-* migrated).
-- Assets: NEVER use `public/brand/ui-kit` paths directly — wrap via `AelunorPanelFrame`/`AelunorDivider`/`AelunorIconFrame`/`AelunorSceneBackground` (`ui/src/shared/ui/aelunorAssets.tsx`). Registry `aelunor.asset-manifest.json` (637) enforces allowed/forbidden usage; new patterns need `AELUNOR_ASSET_PRODUCTION_PROTOCOL.md` + manifest/test update. Decorative: aria-hidden + pointer-events:none. See `ui/AGENTS.md`.
+## Kern-Game-Flow (kurz)
 
-## Known Constraints
-- Routers thin; logic in services; `main.py` wiring only. `EXPORTED_SYMBOLS` stays {public_turn, build_campaign_view}; `runtime_symbols()` internal only; no `state_engine.configure(globals())`.
-- Public contracts (Campaign JSON, Turn-Record, Setup-Catalog, UI snapshots) need versioning on shape change.
-- Tests offline only, NO real Ollama (fakes/injection), temp data only, no Docker. Code file <= ~300 lines unless justified. `.ps1`/`.bat` = PowerShell 5.1. No secrets committed.
+* Phasen: lobby -> world_setup -> character_setup_open -> ready_to_start ->
+  active.
+* Loop: Setup -> Claim -> Character Setup -> Play (Turns) -> Persist/Reload.
+* Turn: HTTP -> turn_service -> `turn_engine.create_turn_record` -> LLM-Narrator
+  -> Patch (sanitize -> validate -> apply) -> mutate -> save JSON -> SSE.
+* LLM: `LLM_PROVIDER` = auto|ollama|anthropic (Default Ollama; Claude-Fallback
+  braucht `ANTHROPIC_API_KEY`). In Tests nie echte Calls.
 
-## Known Issues
-- Runtime dirs: local default `DATA_DIR` = `01_repo/aelunor-core/.runtime/` (+ `.runtime-verify/`), both present. `07_runtime/` (repo root) is the Docker bind-mount data dir from `docker-compose.yml` (created on `docker compose up`; currently absent). `14_private/`, `99_archive/` = reserved gitignore guards (absent). None are stale.
-- `runtime_core.py`/`turn_engine.py` (~1.6k each) large — don't force-split.
-- Pre-existing uncommitted working-tree changes exist (asset manifest/docs; untracked app/static, ui/public, deepaelunor/) — not agent infra; leave them.
+## Agent-Kontextdateien
 
-## Do-Not-Reread / Do-Not-Touch
-- Skip: `node_modules/`, `.venv/`, `dist/`, `build/`, `.runtime*/`, `.pytest_cache/`, `.mypy_cache/`, binary assets, `Aelunor-push-worktree/`, `.agent_tmp/`.
-- Don't touch: runtime data, `app/static/` legacy UI, `deepaelunor/tasks/*/tests/hidden_verifier.py` (hidden scoring), `_analysis_for_chatgpt/`, `_tmp/`, `reports/`.
+* `AGENTS.md`
+* `01_repo/aelunor-core/app/AGENTS.md`
+* `01_repo/aelunor-core/app/services/AGENTS.md`
+* `01_repo/aelunor-core/app/routers/AGENTS.md`
+* `01_repo/aelunor-core/app/services/rag/AGENTS.md`
+* `01_repo/aelunor-core/tests/AGENTS.md`
+* `01_repo/aelunor-core/ui/AGENTS.md`
+* `01_repo/aelunor-core/ui/src/shared/design/AGENTS.md`
 
-## Useful Commands (from `01_repo/aelunor-core/`)
-- Map (repo root): `python .agent_scripts/repo_map.py`
-- Tests: `python -m pytest tests/unit -q` ; `tests/integration -q`. Compact: `... > .agent_tmp/p.txt 2>&1; python ../../.agent_scripts/compact_test_output.py .agent_tmp/p.txt`
-- Errors in a log: `python ../../.agent_scripts/scan_errors.py .agent_tmp/out.txt`
-- Checks: `python -m py_compile app/main.py`; `python scripts/check_progression_canon_gate.py` (+ check_codex_system / check_element_system); `python scripts/deepaelunor_validate.py`
-- Backend: `$env:DATA_DIR="$PWD\.runtime"; python -m uvicorn app.main:app --host 127.0.0.1 --port 8080`
-- UI: `cd ui; npm run dev|typecheck|test|build`. Win app: `scripts/build-windows.ps1`.
+## Erledigte Repo-Hygiene
 
-## Recent Test Status (2026-06-09)
-- `python -m pytest tests -q` (from aelunor-core): **PASS** — 640 passed in ~253s. Py 3.13.13 / pytest 9.0.3.
-- `npm run typecheck` (ui, `tsc --noEmit`): **PASS** — 0 errors.
-- `npm run test` (ui, `vitest run`): **PASS** — 18 files / 53 tests.
-- No `lint` script in `ui/package.json`. Raw logs: `.agent_tmp/{pytest,tsc,vitest}.{out,err}`.
+* Inventar-/Cleanup-Plan erstellt (siehe `02_docs/01_architecture/`).
+* Falsch getrackte `.runtime-verify`-Campaign-Datei entfernt (PR #43).
+* Root-`AGENTS.md` verschlankt (PR #44).
+* `app/AGENTS.md`, `app/services/AGENTS.md` ergaenzt (PR #44).
+* `app/routers/AGENTS.md` ergaenzt (PR #45).
+* Deterministische RAG-Foundation unter `app/services/rag/` ergaenzt (PR #46).
+* Unicode-freundliche Keyword-Tokenisierung im RAG-Retrieval ergaenzt.
+* `.agent_tmp/` fuer temporaere Agent-Ausgaben (git-ignored).
+* `.agent_scripts/` fuer kleine Agent-Hilfsskripte (Repo-Map, Log-Scan,
+  kompakte Testausgabe).
 
-## Next Recommended Steps
-- Re-run the baseline (above) after dependency or core-state changes (pytest ~4 min; cap output to `.agent_tmp/`).
-- Add `app/services/`/router/test context READMEs that root AGENTS.md references, if absent.
+## Aktuelle No-Gos
+
+* Keine Secrets/`.env` lesen, ausgeben oder committen.
+* Keine Runtime-Daten anfassen oder als Fixture nutzen.
+* Keine echten LLM-/Ollama-/Anthropic-Calls in Tests; Fakes/Stubs/Ports.
+* Keine Produktlogik in `main.py`.
+* Keine Fachlogik in Routern.
+* Keine Legacy-UI-Wiederbelebung (`app/static/`) ohne Auftrag.
+* Keine Vector-DB-/Embedding-Dependencies ohne eigenen Slice.
+* Keine neue externe Dependency ohne Begruendung.
+* Keine Datei ueber 300 Zeilen ohne sachlichen Grund.
+* Keine Co-authored-by-Zeilen in Commits.
+
+## RAG-Status
+
+* Deterministische Foundation vorhanden unter `app/services/rag/`.
+* Enthaelt `models.py`, `chunking.py`, `retrieval.py`, `context_builder.py`,
+  `__init__.py`, `README.md`, `AGENTS.md` und Unit-Tests
+  (`tests/unit/test_rag_*.py`).
+* Public Surface: `RAGDocument`, `RAGChunk`, `RetrievalQuery`,
+  `RetrievalResult`, `chunk_document`, `retrieve_chunks`, `build_rag_context`.
+* Retrieval ist rein lexical/deterministisch; `campaign_id` ist harter Filter
+  (kein Cross-Campaign-Leak); Context Builder haelt `max_items`/`max_chars`
+  strikt ein.
+* Noch nicht produktiv integriert: keine Vector-DB, keine Embeddings, keine
+  API-Endpunkte, keine Turn-Pipeline-Integration.
+* RAG ist unterstuetzende Erinnerung; strukturierter Campaign-/World-/Turn-State
+  gewinnt bei Konflikt (Hinweis steht im erzeugten Context-Block).
+
+## Offene GitHub-Issue-Landschaft
+
+Snapshot 2026-06-09; nur Lesezugriff. Details:
+`02_docs/01_architecture/GITHUB_ISSUE_TRIAGE.md`.
+
+* Architektur/Struktur-Audits: #35 (Context Map / modularer Monolith),
+  #36 (State-Versionierung/Migrationen), #37 (Patch -> Commands/Events),
+  #38 (Runtime-Wiring/DI), #42 (Stack Review; FastAPI bleibt).
+* RAG-/LLM-nahe Themen: #2 (geplante echte lokale RAG-Schicht),
+  #39 (LLM-Contracts/Schemas).
+* Test-/Replay-Themen: #40 (replaybare Turn-Pipeline, Golden Tests, Smokes).
+* Issue-Hygiene/Duplikate: #41 (Labels, Prioritaeten, Duplikatkontrolle).
+* Future Features (RAG-/State-relevant): #34 Map-Rehaul, #33 Karma/Ruf/Standing,
+  #32 Split-Party, #23 Waffen/Techniken, #18 Zeit-System, #15
+  Persoenlichkeitssystem; zusaetzlich offen #14, #10, #3.
+
+## Empfohlene naechste Slices
+
+1. `chore(docs)`: Issue-Labels/Roadmap-Hygiene (#41), falls explizit erlaubt.
+2. `feat(rag)`: strukturierte Campaign-Memory auf `RAGDocument` mappen.
+3. `feat(rag)`: In-Memory Campaign-Memory-Index-Service.
+4. `feat(rag)`: Context-Preview-Service/API (nur Service-Aufruf im Router).
+5. `feat(rag)`: guarded Turn-Context-Integration (klar markierter Block).
+6. `feat(rag)`: optional Hybrid-Retrieval/Embeddings (eigener Slice).
+
+## Handoff-Pflege-Regeln
+
+* Am Ende relevanter Slices aktualisieren.
+* Nur langlebige Entscheidungen, offene Risiken und naechste Schritte aufnehmen.
+* Keine Logs, keine langen Diffs, keine Testausgaben.
+* Bei Widerspruch Handoff vs. Code: Code pruefen, Handoff korrigieren.
+* Bei Widerspruch Handoff vs. `AGENTS.md`: `AGENTS.md` gewinnt.
