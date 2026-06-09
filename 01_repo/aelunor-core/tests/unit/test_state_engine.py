@@ -3,6 +3,7 @@ import unittest
 from typing import Any, Dict, List
 from unittest.mock import patch
 
+from app.config.errors import TURN_ERROR_USER_MESSAGES
 from app.services import state_engine
 from app.services import state_basics
 from app.services.state import runtime_core
@@ -2121,6 +2122,103 @@ class AdventureIntroWiringTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0]["actor"], "slot_1")
         self.assertEqual(calls[0]["action_type"], "story")
+
+
+class AdventureIntroRetryTests(unittest.TestCase):
+    """try_generate_adventure_intro retries exactly once on retryable turn errors.
+
+    Local models can fail the intro turn with SCHEMA_VALIDATION_ERROR (e.g. a
+    scene_id that is not backed by a valid map node). The intro flow allows one
+    hardened second attempt for retryable error codes and never loops beyond
+    two attempts.
+    """
+
+    def _startable_campaign(self) -> Dict[str, Any]:
+        return {
+            "setup": {
+                "world": {"completed": True, "summary": {"player_count": 1}},
+                "characters": {"slot_1": {"completed": True}},
+            },
+            "claims": {"slot_1": "player_1"},
+            "state": {
+                "characters": {"slot_1": {"bio": {"name": "Aria"}}},
+                "meta": {},
+            },
+            "turns": [],
+        }
+
+    def _turn_flow_error(self, error_code: str) -> Exception:
+        return runtime_core.turn_engine.TurnFlowError(
+            error_code=error_code,
+            phase="narrator_call_finished",
+            trace_id="trace_test",
+            user_message=TURN_ERROR_USER_MESSAGES[error_code],
+        )
+
+    def _run_intro(self, fake_create_turn_record: Any) -> Dict[str, Any]:
+        campaign = self._startable_campaign()
+        with patch.object(runtime_core, "normalize_campaign", lambda c: c), \
+                patch.object(runtime_core.turn_engine, "create_turn_record", fake_create_turn_record):
+            turn = runtime_core.try_generate_adventure_intro(campaign)
+        return {"campaign": campaign, "turn": turn}
+
+    def test_retries_once_on_schema_validation_error(self) -> None:
+        calls: List[Dict[str, Any]] = []
+
+        def fake_create_turn_record(**kwargs: Any) -> Dict[str, Any]:
+            calls.append(kwargs)
+            if len(calls) == 1:
+                raise self._turn_flow_error("SCHEMA_VALIDATION_ERROR")
+            return {"turn_id": "turn_intro_retry_1"}
+
+        result = self._run_intro(fake_create_turn_record)
+
+        self.assertEqual(result["turn"], {"turn_id": "turn_intro_retry_1"})
+        intro = runtime_core.intro_state(result["campaign"])
+        self.assertEqual(intro["status"], "generated")
+        self.assertEqual(intro["generated_turn_id"], "turn_intro_retry_1")
+        self.assertEqual(intro["last_error"], "")
+
+        self.assertEqual(len(calls), 2)
+        self.assertNotIn("ZWEITEN VERSUCH", calls[0]["content"])
+        self.assertIn("ZWEITEN VERSUCH", calls[1]["content"])
+        self.assertIn("scene_id", calls[1]["content"])
+
+    def test_does_not_retry_non_retryable_error(self) -> None:
+        calls: List[Dict[str, Any]] = []
+
+        def fake_create_turn_record(**kwargs: Any) -> Dict[str, Any]:
+            calls.append(kwargs)
+            raise self._turn_flow_error("TURN_INTERNAL_ERROR")
+
+        result = self._run_intro(fake_create_turn_record)
+
+        self.assertIsNone(result["turn"])
+        self.assertEqual(len(calls), 1)
+        intro = runtime_core.intro_state(result["campaign"])
+        self.assertEqual(intro["status"], "failed")
+        self.assertEqual(
+            intro["last_error"],
+            "Beim Verarbeiten des Zugs ist ein interner Fehler aufgetreten.",
+        )
+
+    def test_stops_after_two_attempts_on_repeated_retryable_error(self) -> None:
+        calls: List[Dict[str, Any]] = []
+
+        def fake_create_turn_record(**kwargs: Any) -> Dict[str, Any]:
+            calls.append(kwargs)
+            raise self._turn_flow_error("SCHEMA_VALIDATION_ERROR")
+
+        result = self._run_intro(fake_create_turn_record)
+
+        self.assertIsNone(result["turn"])
+        self.assertEqual(len(calls), 2)
+        intro = runtime_core.intro_state(result["campaign"])
+        self.assertEqual(intro["status"], "failed")
+        self.assertEqual(
+            intro["last_error"],
+            "Die KI-Antwort passte nicht zum erwarteten Datenformat.",
+        )
 
 
 if __name__ == "__main__":
