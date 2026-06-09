@@ -1,5 +1,4 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-
 import { shouldOpenTimelineDetails } from "../../../entities/settings/interaction";
 import { useUserSettingsStore } from "../../../entities/settings/store";
 import type { TimelineEntry } from "../selectors";
@@ -68,7 +67,7 @@ const TimelineItem = memo(function TimelineItem({
   const canRenderTurnActions = is_latest_turn && (entry.can_edit || entry.can_undo || entry.can_retry || can_continue_turn);
 
   return (
-    <li className="timeline-item story-turn-card">
+    <li className="timeline-item timeline-entry journal-entry-card story-turn-card">
       <div className="timeline-item-head">
         <div className="timeline-item-title">
           <strong>Zug {entry.turn_number ?? "?"}</strong>
@@ -214,9 +213,9 @@ export const StoryTimeline = memo(function StoryTimeline({
   }, [autoScroll, entries]);
 
   return (
-    <section ref={timelineRef} className="story-timeline panel timeline-panel">
+    <section ref={timelineRef} className="story-timeline journal-stage panel timeline-panel">
       <div className="v1-panel-head timeline-head">
-        <h2 className="panelTitle">{is_preplay ? "Verlauf" : "Geschichte"}</h2>
+        <h2 className="panelTitle">{is_preplay ? "Verlauf" : "Journal"}</h2>
         <span>{selected_scene_name ? `${selected_scene_name} • ${entries.length} Züge` : `${entries.length} Züge`}</span>
       </div>
       {scene_options.length > 1 ? (

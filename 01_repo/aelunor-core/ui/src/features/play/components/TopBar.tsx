@@ -3,81 +3,93 @@ import { memo, useMemo, useRef, useState } from "react";
 import type { CampaignSnapshot } from "../../../shared/api/contracts";
 import type { SessionBootstrap } from "../../../app/bootstrap/sessionStorage";
 import { SettingsDialog } from "../../../shared/ui/SettingsDialog";
-import { derivePlayPhaseState } from "../selectors";
 import { useUserSettingsStore } from "../../../entities/settings/store";
+import { derivePlayPhaseState } from "../selectors";
 
 interface TopBarProps {
   campaign: CampaignSnapshot;
   session: SessionBootstrap;
   active_scene_label: string;
+  active_actor_label: string;
   on_leave_session: () => void;
   can_unclaim: boolean;
   unclaim_pending: boolean;
+  actor_dock_open: boolean;
+  on_toggle_actor_dock: () => void;
+  on_open_codex: () => void;
+  on_open_notifications: () => void;
   on_unclaim: () => void;
+}
+
+function readRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function readString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function readNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 export const TopBar = memo(function TopBar({
   campaign,
   session,
   active_scene_label,
+  active_actor_label,
   on_leave_session,
   can_unclaim,
   unclaim_pending,
+  actor_dock_open,
+  on_toggle_actor_dock,
+  on_open_codex,
+  on_open_notifications,
   on_unclaim,
 }: TopBarProps) {
   const confirmLeave = useUserSettingsStore((state) => state.interaction.confirm_leave);
-
-  const title = campaign.campaign_meta.title || "Unbenannte Kampagne";
   const phaseState = derivePlayPhaseState(campaign);
-
   const [copyLabel, setCopyLabel] = useState("Code:");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const settingsButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const commandMetaLine = useMemo(() => {
-    const readRecord = (value: unknown): Record<string, unknown> =>
-      value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
-    const readString = (value: unknown): string => (typeof value === "string" ? value : "");
-    const readNumber = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : null);
-
-    const meta = readRecord(readRecord(campaign.state).meta);
-    const timing = readRecord(meta.timing);
+  const meta = useMemo(() => {
+    const stateMeta = readRecord(readRecord(campaign.state).meta);
+    const timing = readRecord(stateMeta.timing);
     const world = readRecord(readRecord(campaign.state).world);
     const settings = readRecord(world.settings);
-
-    const turn = readNumber(meta.turn) ?? 0;
+    const campaignLengthRaw = readString(settings.campaign_length).trim().toLowerCase();
     const day = readNumber(campaign.world_time.day);
     const timeOfDay = readString(campaign.world_time.time_of_day).trim();
-    const campaignLengthRaw = readString(settings.campaign_length).trim().toLowerCase();
     const cycleSec = readNumber(timing.cycle_ema_sec);
 
     let campaignLengthLabel = "Kampagne";
     if (campaignLengthRaw === "open") {
-      campaignLengthLabel = "Offene Kampagne";
+      campaignLengthLabel = "Offen";
     } else if (campaignLengthRaw === "medium") {
-      campaignLengthLabel = "Mittlere Kampagne";
+      campaignLengthLabel = "Mittel";
     } else if (campaignLengthRaw === "short") {
-      campaignLengthLabel = "Kurze Kampagne";
+      campaignLengthLabel = "Kurz";
     }
 
-    const parts = [`Turn ${turn}`, phaseState.phase_display || phaseState.phase];
-    if (day !== null) {
-      parts.push(`Tag ${day}`);
-    }
-    if (timeOfDay) {
-      parts.push(timeOfDay.toUpperCase());
-    }
-    parts.push(campaignLengthLabel);
-    if (cycleSec !== null) {
-      parts.push(`Ø Zyklus ${Math.round(cycleSec)}s`);
-    }
-
-    if (active_scene_label && active_scene_label !== "Alle Szenen") {
-      parts.push(`Szene ${active_scene_label}`);
-    }
-
-    return parts.join(" • ").toUpperCase();
-  }, [active_scene_label, campaign.state, campaign.world_time.day, campaign.world_time.time_of_day, phaseState.phase, phaseState.phase_display]);
+    return {
+      phase: phaseState.phase_display || phaseState.phase,
+      scene: active_scene_label && active_scene_label !== "Alle Szenen" ? active_scene_label : campaign.boards.plot_essentials.active_scene || "Alle Szenen",
+      actor: active_actor_label,
+      session: session.join_code ? "LIVE" : campaignLengthLabel,
+      detail: [day !== null ? `Tag ${day}` : "", timeOfDay, cycleSec !== null ? `${Math.round(cycleSec)}s` : ""].filter(Boolean).join(" · "),
+    };
+  }, [
+    active_actor_label,
+    active_scene_label,
+    campaign.boards.plot_essentials.active_scene,
+    campaign.state,
+    campaign.world_time.day,
+    campaign.world_time.time_of_day,
+    phaseState.phase,
+    phaseState.phase_display,
+    session.join_code,
+  ]);
 
   const copyJoinCode = async () => {
     if (!session.join_code || !navigator.clipboard) {
@@ -86,80 +98,80 @@ export const TopBar = memo(function TopBar({
     try {
       await navigator.clipboard.writeText(session.join_code);
       setCopyLabel("Kopiert:");
-      window.setTimeout(() => {
-        setCopyLabel("Code:");
-      }, 1200);
+      window.setTimeout(() => setCopyLabel("Code:"), 1200);
     } catch {
       setCopyLabel("Fehler:");
-      window.setTimeout(() => {
-        setCopyLabel("Code:");
-      }, 1200);
+      window.setTimeout(() => setCopyLabel("Code:"), 1200);
     }
   };
 
   return (
-    <header className="v1-topbar command-bar topbar">
-      <div className="v1-topbar-block command-bar-left">
-        <div className="v1-topbar-kicker topbar-brand">
-          <img className="topbar-brand-icon" src="/v1/brand/aelunor-icon-512x512.png" alt="Aelunor" />
-          <span>Aelunor</span>
-        </div>
-        <h1 className="v1-topbar-title title">{title}</h1>
-        <p className="command-bar-meta-line">{commandMetaLine}</p>
+    <header className="v1-topbar campaign-topbar command-bar topbar">
+      <div className="campaign-topbar-brand">
+        <img className="topbar-brand-icon" src="/v1/brand/aelunor-icon-512x512.png" alt="Aelunor" />
+        <strong>Aelunor</strong>
+      </div>
+
+      <div className="campaign-topbar-meta" aria-label={campaign.campaign_meta.title || "Aelunor Kampagne"}>
+        <div><span>Phase</span><strong>{meta.phase}</strong></div>
+        <div><span>Szene</span><strong>{meta.scene}</strong></div>
+        <div><span>Aktiver Slot</span><strong>{meta.actor}</strong></div>
+        <div><span>Session</span><strong>{meta.session}</strong><small>{meta.detail}</small></div>
       </div>
 
       <div className="command-bar-right topbar-actions">
+        <button type="button" className="topbar-icon-action" onClick={on_open_codex} aria-label="Codex oeffnen" title="Codex">
+          <span className="topbar-action-glyph is-book" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="topbar-icon-action"
+          onClick={on_open_notifications}
+          aria-label="Benachrichtigungen oeffnen"
+          title="Benachrichtigungen"
+        >
+          <span className="topbar-action-glyph is-bell" aria-hidden="true" />
+        </button>
+        {can_unclaim ? (
+          <button type="button" className="topbar-utility-btn" onClick={on_unclaim} disabled={unclaim_pending}>
+            {unclaim_pending ? "Loest..." : "Claim loesen"}
+          </button>
+        ) : null}
         {session.join_code ? (
           <button
             type="button"
-            className="status-pill join-chip topbar-code-button"
-            onClick={() => {
-              void copyJoinCode();
-            }}
+            className="topbar-utility-btn topbar-code-button"
+            onClick={() => void copyJoinCode()}
             title="Code kopieren"
           >
             {copyLabel} {session.join_code}
           </button>
         ) : null}
-        {can_unclaim ? (
-          <button type="button" className="topbar-utility-btn" onClick={on_unclaim} disabled={unclaim_pending}>
-            {unclaim_pending ? "Claim wird gelöst..." : "Claim lösen"}
-          </button>
-        ) : null}
+        <button type="button" className="topbar-utility-btn actor-dock-toggle" onClick={on_toggle_actor_dock} aria-pressed={actor_dock_open}>
+          Akteur
+        </button>
         <button
           type="button"
           className="topbar-utility-btn"
           onClick={() => {
-            if (!confirmLeave || window.confirm("Aktive Sitzung lokal verlassen und zum Hub zurückkehren?")) {
+            if (!confirmLeave || window.confirm("Aktive Sitzung lokal verlassen und zum Hub zurueckkehren?")) {
               on_leave_session();
             }
           }}
         >
-          Session verlassen
+          Hub
         </button>
         <button
           ref={settingsButtonRef}
           type="button"
-          className="menu-icon-button"
-          aria-label="Einstellungen öffnen"
-          onClick={() => {
-            setSettingsOpen(true);
-          }}
+          className="topbar-icon-action"
+          aria-label="Einstellungen oeffnen"
+          onClick={() => setSettingsOpen(true)}
         >
-          <span className="menu-icon-lines" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </span>
+          <span className="topbar-action-glyph is-gear" aria-hidden="true" />
         </button>
       </div>
-      <SettingsDialog
-        open={settingsOpen}
-        on_close={() => {
-          setSettingsOpen(false);
-        }}
-        return_focus_element={settingsButtonRef.current}
-      />
+      <SettingsDialog open={settingsOpen} on_close={() => setSettingsOpen(false)} return_focus_element={settingsButtonRef.current} />
     </header>
   );
 });
