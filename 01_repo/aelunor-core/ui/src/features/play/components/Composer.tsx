@@ -66,10 +66,10 @@ export function Composer({ campaign, selected_actor_id, on_actor_select, on_open
     () =>
       buildComposerDraftScope(
         campaign.campaign_meta.campaign_id,
-        campaign.viewer_context.claimed_slot_id,
-        campaign.viewer_context.player_id,
+        campaign.viewer_context?.claimed_slot_id,
+        campaign.viewer_context?.player_id,
       ),
-    [campaign.campaign_meta.campaign_id, campaign.viewer_context.claimed_slot_id, campaign.viewer_context.player_id],
+    [campaign.campaign_meta.campaign_id, campaign.viewer_context?.claimed_slot_id, campaign.viewer_context?.player_id],
   );
 
   const currentDraft = drafts[currentMode];
@@ -267,9 +267,9 @@ export function Composer({ campaign, selected_actor_id, on_actor_select, on_open
             <select
               value={selected_actor_id ?? access.actor ?? ""}
               onChange={(event) => on_actor_select(event.target.value)}
-              disabled={submitPending || campaign.party_overview.length === 0}
+              disabled={submitPending || (campaign.party_overview ?? []).length === 0}
             >
-              {campaign.party_overview.map((entry) => (
+              {(campaign.party_overview ?? []).map((entry) => (
                 <option key={entry.slot_id} value={entry.slot_id}>
                   {entry.display_name}
                 </option>

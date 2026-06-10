@@ -1,4 +1,9 @@
-import type { CampaignSnapshot, PartyOverviewEntry } from "../../shared/api/contracts";
+import type {
+  CampaignSnapshot,
+  CampaignTurn,
+  DisplayPartyEntry,
+  PartyOverviewEntry,
+} from "../../shared/api/contracts";
 
 export interface UiResourceValue {
   current: number | null;
@@ -48,8 +53,44 @@ function readRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
-function readArray(value: unknown): unknown[] {
-  return Array.isArray(value) ? value : [];
+function readArray<T = unknown>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
+// Fresh / not yet normalized campaign snapshots can miss whole top-level
+// fields; components must read arrays and nested records only through these.
+export function partyOverview(campaign: CampaignSnapshot): PartyOverviewEntry[] {
+  return readArray<PartyOverviewEntry>(campaign.party_overview);
+}
+
+export function displayParty(campaign: CampaignSnapshot): DisplayPartyEntry[] {
+  return readArray<DisplayPartyEntry>(campaign.display_party);
+}
+
+export function activeTurns(campaign: CampaignSnapshot): CampaignTurn[] {
+  return readArray<CampaignTurn>(campaign.active_turns);
+}
+
+export function characterSheetSlots(campaign: CampaignSnapshot): string[] {
+  return readArray<unknown>(campaign.character_sheet_slots).filter(
+    (entry): entry is string => typeof entry === "string",
+  );
+}
+
+export function viewerContext(campaign: CampaignSnapshot): Record<string, unknown> {
+  return readRecord(campaign.viewer_context);
+}
+
+export function viewerClaimedSlotId(campaign: CampaignSnapshot): string | null {
+  return readString(viewerContext(campaign).claimed_slot_id) || null;
+}
+
+export function plotEssentials(campaign: CampaignSnapshot): Record<string, unknown> {
+  return readRecord(readRecord(campaign.boards).plot_essentials);
+}
+
+export function worldTime(campaign: CampaignSnapshot): Record<string, unknown> {
+  return readRecord(campaign.world_time);
 }
 
 function readString(value: unknown): string {
@@ -159,32 +200,38 @@ export function deriveCharacterSummary(campaign: CampaignSnapshot, entry: PartyO
     scene_label: resolveSceneLabel(campaign, entry.scene_id, entry.scene_name),
     in_combat: entry.in_combat === true,
     injury_count: readNumber(entry.injury_count) ?? 0,
-    is_viewer: campaign.viewer_context.claimed_slot_id === entry.slot_id,
+    is_viewer: viewerClaimedSlotId(campaign) === entry.slot_id,
   };
 }
 
 function deriveSceneSummary(campaign: CampaignSnapshot): UiSceneSummary {
-  const activeScene = readString(campaign.boards.plot_essentials.active_scene);
-  const viewerSlot = campaign.viewer_context.claimed_slot_id;
-  const viewerEntry = viewerSlot ? campaign.party_overview.find((entry) => entry.slot_id === viewerSlot) : undefined;
-  const fallbackEntry = viewerEntry ?? campaign.party_overview[0];
+  const party = partyOverview(campaign);
+  const activeScene = readString(plotEssentials(campaign).active_scene);
+  const viewerSlot = viewerClaimedSlotId(campaign);
+  const viewerEntry = viewerSlot ? party.find((entry) => entry.slot_id === viewerSlot) : undefined;
+  const fallbackEntry = viewerEntry ?? party[0];
   const label = activeScene || (fallbackEntry ? resolveSceneLabel(campaign, fallbackEntry.scene_id, fallbackEntry.scene_name) : FALLBACK_SCENE);
   return {
     label,
-    time_label: readString(campaign.world_time.time_of_day) || "Zeit unbekannt",
-    weather_label: readString(campaign.world_time.weather) || "Wetter unbekannt",
+    time_label: readString(worldTime(campaign).time_of_day) || "Zeit unbekannt",
+    weather_label: readString(worldTime(campaign).weather) || "Wetter unbekannt",
   };
 }
 
 export function derivePartyHud(campaign: CampaignSnapshot): UiPartyHudState {
+  const party = partyOverview(campaign);
   const meta = readRecord(readRecord(campaign.state).meta);
   return {
-    characters: campaign.party_overview.map((entry) => deriveCharacterSummary(campaign, entry)),
+    characters: party.map((entry) => deriveCharacterSummary(campaign, entry)),
     scene: deriveSceneSummary(campaign),
-    party_count: campaign.party_overview.length,
+    party_count: party.length,
     phase_label:
-      firstString(campaign.setup_runtime.phase_display, meta.phase, campaign.viewer_context.phase, campaign.campaign_meta.status) ||
-      "Unbekannte Phase",
-    viewer_slot_id: campaign.viewer_context.claimed_slot_id ?? null,
+      firstString(
+        readRecord(campaign.setup_runtime).phase_display,
+        meta.phase,
+        viewerContext(campaign).phase,
+        readRecord(campaign.campaign_meta).status,
+      ) || "Unbekannte Phase",
+    viewer_slot_id: viewerClaimedSlotId(campaign),
   };
 }

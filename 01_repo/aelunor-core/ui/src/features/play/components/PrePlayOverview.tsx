@@ -12,7 +12,7 @@ interface PrePlayOverviewProps {
 }
 
 function deriveReadyCounter(campaign: CampaignSnapshot): { ready: number; total: number } {
-  const fromRuntime = campaign.setup_runtime.ready_counter;
+  const fromRuntime = campaign.setup_runtime?.ready_counter;
   if (fromRuntime && Number.isFinite(fromRuntime.ready) && Number.isFinite(fromRuntime.total)) {
     return {
       ready: Math.max(0, fromRuntime.ready),
@@ -20,7 +20,7 @@ function deriveReadyCounter(campaign: CampaignSnapshot): { ready: number; total:
     };
   }
 
-  const statuses = campaign.setup_runtime.slot_statuses ?? campaign.setup_runtime.world?.slot_statuses ?? [];
+  const statuses = campaign.setup_runtime?.slot_statuses ?? campaign.setup_runtime?.world?.slot_statuses ?? [];
   return {
     ready: statuses.filter((status) => status.completed || status.status === "ready").length,
     total: statuses.length,
@@ -32,10 +32,11 @@ export function PrePlayOverview({ campaign, on_open_boards, on_retry_intro, intr
   const readyCounter = useMemo(() => deriveReadyCounter(campaign), [campaign]);
   const introState = deriveIntroState(campaign);
   const hasIntro = campaignHasIntro(campaign);
-  const host = campaign.players.find((player) => player.player_id === campaign.campaign_meta.host_player_id) ?? null;
-  const claimedSlots = campaign.available_slots.filter((slot) => Boolean(slot.claimed_by)).length;
+  const players = campaign.players ?? [];
+  const host = players.find((player) => player.player_id === campaign.campaign_meta.host_player_id) ?? null;
+  const claimedSlots = (campaign.available_slots ?? []).filter((slot) => Boolean(slot.claimed_by)).length;
   const canStartSoon = readyCounter.total > 0 && readyCounter.ready >= readyCounter.total;
-  const canRetryIntro = campaign.viewer_context.is_host && phaseState.is_ready_to_start && !hasIntro;
+  const canRetryIntro = campaign.viewer_context?.is_host === true && phaseState.is_ready_to_start && !hasIntro;
 
   let nextStepTitle = phaseState.is_ready_to_start ? "Auf Eröffnungszug warten" : "Auf aktive Phase warten";
   let nextStepDescription =
@@ -72,7 +73,7 @@ export function PrePlayOverview({ campaign, on_open_boards, on_retry_intro, intr
         </article>
         <article className="preplay-card">
           <h3>Gruppe</h3>
-          <p className="preplay-highlight">{campaign.players.length} Spieler verbunden</p>
+          <p className="preplay-highlight">{players.length} Spieler verbunden</p>
           <p className="status-muted">
             {claimedSlots} belegte Slots
             {host ? ` • Host: ${host.display_name}` : ""}

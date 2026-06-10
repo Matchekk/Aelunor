@@ -66,7 +66,7 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
   const contextReturnFocusRef = useRef<HTMLElement | null>(null);
   const playRouteState = useMemo(() => normalizePlayRouteState(campaign, location.search), [campaign, location.search]);
   const selectedSceneId = playRouteState.scene_id as SceneFilterId;
-  const claimedSlotId = campaign.viewer_context.claimed_slot_id || null;
+  const claimedSlotId = campaign.viewer_context?.claimed_slot_id || null;
   const boardsOpen = playRouteState.boards_tab !== null;
   const activeBoardTab: BoardTabId = playRouteState.boards_tab ?? "plot";
   const openCharacter = useDrawerStore((state) => state.open_character);
@@ -120,8 +120,8 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
       return "Kein Akteur";
     }
     return (
-      campaign.party_overview.find((entry) => entry.slot_id === selectedActorSlotId)?.display_name ??
-      campaign.display_party.find((entry) => entry.slot_id === selectedActorSlotId)?.display_name ??
+      (campaign.party_overview ?? []).find((entry) => entry.slot_id === selectedActorSlotId)?.display_name ??
+      (campaign.display_party ?? []).find((entry) => entry.slot_id === selectedActorSlotId)?.display_name ??
       selectedActorSlotId
     );
   }, [campaign.display_party, campaign.party_overview, selectedActorSlotId]);
@@ -403,7 +403,7 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
             ) : null}
             <StoryTimeline
               entries={visibleTimelineEntries}
-              character_sheet_slots={campaign.character_sheet_slots}
+              character_sheet_slots={campaign.character_sheet_slots ?? []}
               selected_scene_id={selectedSceneId}
               selected_scene_name={selectedSceneId === "all" ? null : selectedScene?.scene_name ?? selectedSceneId}
               scene_options={sceneOptions}

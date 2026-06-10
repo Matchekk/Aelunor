@@ -7,6 +7,7 @@ import type {
 } from "../../shared/api/contracts";
 import { deriveUserFacingErrorMessage } from "../../shared/errors/userFacing";
 import { formatDateTime as formatLocaleDateTime } from "../../shared/formatting/locale";
+import { activeTurns, characterSheetSlots, displayParty, viewerClaimedSlotId, viewerContext } from "./partyHudModel";
 import type { PlayModeId } from "./modeConfig";
 import { getPlayModeConfig } from "./modeConfig";
 
@@ -113,7 +114,7 @@ function normalizePatchSummary(value: unknown): Record<string, number> {
 }
 
 export function deriveTimelineEntries(campaign: CampaignSnapshot): TimelineEntry[] {
-  return (campaign.active_turns ?? [])
+  return activeTurns(campaign)
     .map((turn) => {
       const patch_summary = normalizePatchSummary(turn.patch_summary);
       const patchChangeCount = sumPatchChanges(patch_summary);
@@ -169,14 +170,16 @@ export function deriveTurnDeltaRows(entry: TimelineEntry): TurnDeltaRow[] {
 }
 
 export function deriveViewerSummary(campaign: CampaignSnapshot): string {
+  const viewer = viewerContext(campaign);
   const parts: string[] = [];
-  const display_name = campaign.viewer_context.display_name;
+  const display_name = readString(viewer.display_name);
   if (display_name) {
     parts.push(display_name);
   }
-  parts.push(campaign.viewer_context.is_host ? "Spielleitung" : "Spieler");
-  if (campaign.viewer_context.claimed_slot_id) {
-    parts.push(`Slot ${campaign.viewer_context.claimed_slot_id}`);
+  parts.push(viewer.is_host === true ? "Spielleitung" : "Spieler");
+  const claimed = viewerClaimedSlotId(campaign);
+  if (claimed) {
+    parts.push(`Slot ${claimed}`);
   } else {
     parts.push("Kein Slot beansprucht");
   }
@@ -184,8 +187,8 @@ export function deriveViewerSummary(campaign: CampaignSnapshot): string {
 }
 
 export function derivePartySummary(campaign: CampaignSnapshot): string {
-  const party_count = campaign.display_party.length;
-  const total_slots = campaign.character_sheet_slots.length;
+  const party_count = displayParty(campaign).length;
+  const total_slots = characterSheetSlots(campaign).length;
   return `${party_count}/${total_slots} Slots aktiv`;
 }
 
@@ -227,7 +230,12 @@ export function deriveTurnOutcome(entry: TimelineEntry): string {
 
 function deriveCampaignPhase(campaign: CampaignSnapshot): string {
   const meta = readRecord(campaign.state).meta;
-  return readString(readRecord(meta).phase) || campaign.viewer_context.phase || campaign.campaign_meta.status || "unknown";
+  return (
+    readString(readRecord(meta).phase) ||
+    readString(viewerContext(campaign).phase) ||
+    readString(readRecord(campaign.campaign_meta).status) ||
+    "unknown"
+  );
 }
 
 export interface PlayPhaseState {
@@ -239,18 +247,24 @@ export interface PlayPhaseState {
 
 export function derivePlayPhaseState(campaign: CampaignSnapshot): PlayPhaseState {
   const phase = deriveCampaignPhase(campaign);
-  const phase_display = campaign.setup_runtime.phase_display || campaign.viewer_context.phase || campaign.campaign_meta.status || phase;
+  const setupRuntime = readRecord(campaign.setup_runtime);
+  const phase_display =
+    readString(setupRuntime.phase_display) ||
+    readString(viewerContext(campaign).phase) ||
+    readString(readRecord(campaign.campaign_meta).status) ||
+    phase;
   const normalized = phase.toLowerCase();
   return {
     phase,
     phase_display,
     is_active_play: normalized === "active",
-    is_ready_to_start: normalized === "ready_to_start" || campaign.setup_runtime.is_ready_to_start === true,
+    is_ready_to_start: normalized === "ready_to_start" || setupRuntime.is_ready_to_start === true,
   };
 }
 
 function latestTurn(campaign: CampaignSnapshot) {
-  return campaign.active_turns.length > 0 ? campaign.active_turns[campaign.active_turns.length - 1] : null;
+  const turns = activeTurns(campaign);
+  return turns.length > 0 ? turns[turns.length - 1] : null;
 }
 
 export function deriveIntroState(campaign: CampaignSnapshot): IntroStateSnapshot {
@@ -265,7 +279,7 @@ export function deriveIntroState(campaign: CampaignSnapshot): IntroStateSnapshot
 }
 
 export function campaignHasIntro(campaign: CampaignSnapshot): boolean {
-  return campaign.active_turns.length > 0;
+  return activeTurns(campaign).length > 0;
 }
 
 export function deriveLatestRequests(campaign: CampaignSnapshot, actor: string | null): TurnRequest[] {
@@ -292,7 +306,7 @@ export function deriveComposerAccessState(
   submit_pending: boolean,
   draft: string,
 ): ComposerAccessState {
-  const actor = campaign.viewer_context.claimed_slot_id ?? null;
+  const actor = viewerClaimedSlotId(campaign);
   const config = getPlayModeConfig(mode);
   const phaseState = derivePlayPhaseState(campaign);
   const intro = deriveIntroState(campaign);

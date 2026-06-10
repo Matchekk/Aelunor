@@ -129,6 +129,15 @@
   (0..max); kein `undefined`/`[object Object]` (Tests decken das ab:
   `partyHudModel.test.ts`).
 * `WorldRail` zeigt keinen erfundenen HP-Balken mehr, wenn HP-Daten fehlen.
+* Adapter/Komponenten lesen Snapshot-Arrays/-Records nur noch defensiv
+  (`partyOverview`, `displayParty`, `activeTurns`, `characterSheetSlots`,
+  `viewerContext`, `plotEssentials`, `worldTime` in `partyHudModel.ts`);
+  frisch erstellte/minimal normalisierte Snapshots crashen die UI nicht mehr.
+* Hub-Crash "Cannot read properties of undefined (reading 'length')" kam aus
+  `LlmStatusPanel`: `/api/llm/status` liefert seit den Local-LLM-PRs eine
+  verschachtelte Shape (`{provider, primary, fallback}`) statt flach; Panel
+  liest jetzt beide Shapes defensiv. UI-Contract `LlmStatusResponse` in
+  `contracts.ts` ist veraltet (bewusst nicht migriert, eigener Slice).
 * `ui/src/features/play/components/RightRail.tsx` ist toter Code (nirgends
   importiert); der echte HUD ist WorldRail (links) + ActorDock (rechts).
 * Offene UI-State-Risiken: Karma/Ruf ist nur `journal.reputation`-Text

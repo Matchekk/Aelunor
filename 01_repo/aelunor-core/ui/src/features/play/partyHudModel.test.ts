@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 
+import type { CampaignSnapshot } from "../../shared/api/contracts";
 import { createCampaignFixture } from "../../test/campaignFixture";
-import { deriveActorDockView } from "./actorDockModel";
+import { deriveActorDockView, resolveSelectedActorId } from "./actorDockModel";
+import { derivePartySummary, derivePlayPhaseState, deriveViewerSummary } from "./selectors";
 import {
   FALLBACK_CLASS,
   FALLBACK_KARMA,
@@ -145,6 +147,51 @@ describe("derivePartyHud", () => {
       expect(text).not.toContain("undefined");
       expect(text).not.toContain("[object Object]");
     }
+  });
+});
+
+describe("fresh campaign snapshots", () => {
+  function createMinimalSnapshot(): CampaignSnapshot {
+    return {
+      campaign_meta: {
+        campaign_id: "cmp_fresh",
+        title: "Frische Kampagne",
+        status: "lobby",
+      },
+    } as unknown as CampaignSnapshot;
+  }
+
+  it("does not crash on a freshly created minimal campaign snapshot", () => {
+    const campaign = createMinimalSnapshot();
+
+    const hud = derivePartyHud(campaign);
+
+    expect(hud.party_count).toBe(0);
+    expect(hud.characters).toEqual([]);
+    expect(hud.scene.label).toBe(FALLBACK_SCENE);
+    expect(hud.phase_label).toBe("lobby");
+    expect(hud.viewer_slot_id).toBeNull();
+  });
+
+  it("keeps the empty state readable without undefined or [object Object]", () => {
+    const rendered = collectStrings(derivePartyHud(createMinimalSnapshot()));
+    expect(rendered.length).toBeGreaterThan(0);
+    for (const text of rendered) {
+      expect(text).not.toContain("undefined");
+      expect(text).not.toContain("[object Object]");
+    }
+  });
+
+  it("keeps companion selectors crash-free on minimal snapshots", () => {
+    const campaign = createMinimalSnapshot();
+
+    expect(resolveSelectedActorId(campaign, null)).toBeNull();
+    expect(derivePartySummary(campaign)).toBe("0/0 Slots aktiv");
+    expect(deriveViewerSummary(campaign)).toContain("Kein Slot beansprucht");
+    expect(derivePlayPhaseState(campaign).is_active_play).toBe(false);
+    const view = deriveActorDockView(campaign, "slot_1", null);
+    expect(view.display_name).toBe(FALLBACK_NAME);
+    expect(view.scene_label).toBe(FALLBACK_SCENE);
   });
 });
 

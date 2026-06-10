@@ -34,8 +34,8 @@ export function deriveContextSourceKinds(sources: ContextQueryResultSource[]): s
 
 export function deriveContextActorLabel(payload: ContextQueryResponse, campaign: CampaignSnapshot): string {
   if (payload.actor) {
-    const partyEntry = campaign.party_overview.find((entry) => entry.slot_id === payload.actor);
+    const partyEntry = (campaign.party_overview ?? []).find((entry) => entry.slot_id === payload.actor);
     return partyEntry?.display_name || payload.actor;
   }
-  return campaign.viewer_context.display_name || "Unknown actor";
+  return campaign.viewer_context?.display_name || "Unknown actor";
 }

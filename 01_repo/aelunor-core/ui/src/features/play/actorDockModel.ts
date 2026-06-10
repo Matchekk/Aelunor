@@ -1,5 +1,12 @@
 import type { CampaignSnapshot, CharacterSheetResponse, PartyOverviewEntry } from "../../shared/api/contracts";
-import { deriveKarmaLabel, resolveSceneLabel, FALLBACK_NAME } from "./partyHudModel";
+import {
+  characterSheetSlots,
+  deriveKarmaLabel,
+  partyOverview,
+  resolveSceneLabel,
+  viewerClaimedSlotId,
+  FALLBACK_NAME,
+} from "./partyHudModel";
 
 export type ActorPanelSection =
   | "overview"
@@ -88,21 +95,23 @@ function livingProfile(campaign: CampaignSnapshot, slot_id: string): Record<stri
 }
 
 function asFallbackPartyEntry(campaign: CampaignSnapshot, slot_id: string | null): PartyOverviewEntry | null {
+  const party = partyOverview(campaign);
   if (!slot_id) {
-    return campaign.party_overview[0] ?? null;
+    return party[0] ?? null;
   }
-  return campaign.party_overview.find((entry) => entry.slot_id === slot_id) ?? null;
+  return party.find((entry) => entry.slot_id === slot_id) ?? null;
 }
 
 export function resolveSelectedActorId(campaign: CampaignSnapshot, selected_slot_id: string | null): string | null {
-  if (selected_slot_id && campaign.character_sheet_slots.includes(selected_slot_id)) {
+  const sheetSlots = characterSheetSlots(campaign);
+  if (selected_slot_id && sheetSlots.includes(selected_slot_id)) {
     return selected_slot_id;
   }
-  const claimed = campaign.viewer_context.claimed_slot_id;
-  if (claimed && campaign.character_sheet_slots.includes(claimed)) {
+  const claimed = viewerClaimedSlotId(campaign);
+  if (claimed && sheetSlots.includes(claimed)) {
     return claimed;
   }
-  return campaign.party_overview[0]?.slot_id ?? campaign.character_sheet_slots[0] ?? null;
+  return partyOverview(campaign)[0]?.slot_id ?? sheetSlots[0] ?? null;
 }
 
 function resourceMeters(sheet: CharacterSheetResponse | null, party: PartyOverviewEntry | null): ResourceMeter[] {
@@ -218,7 +227,7 @@ export function deriveActorDockView(
     level: readNumber(progression?.level) ?? readNumber(classCurrent?.level) ?? readNumber(party?.level) ?? readNumber(party?.class_level),
     xp_current: readNumber(progression?.xp_current) ?? readNumber(classCurrent?.xp),
     xp_to_next: readNumber(progression?.xp_to_next) ?? readNumber(classCurrent?.xp_next),
-    active: campaign.viewer_context.claimed_slot_id === slot_id,
+    active: viewerClaimedSlotId(campaign) === slot_id,
     karma_label: deriveKarmaLabel(campaign, slot_id),
     scene_label: resolveSceneLabel(
       campaign,
