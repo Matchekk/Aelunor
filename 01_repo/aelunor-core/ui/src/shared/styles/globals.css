@@ -769,6 +769,15 @@ summary::-webkit-details-marker {
   background: var(--v1-surface-backdrop-strong);
 }
 
+/* Must stay clickable above .setup-waiting-overlay (z-index 14), otherwise
+   waiting non-host players have no way back to the session hub. */
+.setup-overlay-leave {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.95rem;
+  z-index: 15;
+}
+
 .session-dialog,
 .settings-dialog,
 .boards-modal,

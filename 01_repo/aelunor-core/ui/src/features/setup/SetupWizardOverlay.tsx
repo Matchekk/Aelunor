@@ -35,6 +35,7 @@ import { SetupQuestionRenderer } from "./components/SetupQuestionRenderer";
 
 interface SetupWizardOverlayProps {
   campaign: CampaignSnapshot;
+  on_leave_session: () => void;
 }
 
 function asErrorMessage(error: unknown): string {
@@ -132,7 +133,7 @@ function buildTurboFallbackAnswer(question: SetupQuestionPayload): SetupAnswerPa
   };
 }
 
-export function SetupWizardOverlay({ campaign }: SetupWizardOverlayProps) {
+export function SetupWizardOverlay({ campaign, on_leave_session }: SetupWizardOverlayProps) {
   const dialogRef = useRef<HTMLElement | null>(null);
   const gate = useMemo(() => deriveSetupGateState(campaign), [campaign]);
   const blockingAction = usePresenceStore((state) => state.blockingAction);
@@ -392,6 +393,9 @@ export function SetupWizardOverlay({ campaign }: SetupWizardOverlayProps) {
     <div className="setup-overlay-backdrop" role="presentation">
       <section ref={dialogRef} className="setup-overlay" role="dialog" aria-modal="true" aria-label="Setup wizard">
         <WaitingSectionOverlay target="setup_overlay" className="setup-waiting-overlay" />
+        <button type="button" className="setup-overlay-leave" onClick={on_leave_session}>
+          Zur Session-Übersicht
+        </button>
         <SetupHeader
           title={gate.title}
           subtitle={gate.subtitle}
