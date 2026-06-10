@@ -1,6 +1,10 @@
 import type { ClaimSlotViewModel } from "../selectors";
 import { SlotPresenceChip } from "./SlotPresenceChip";
 
+function slotInitial(name: string): string {
+  return name.trim().charAt(0).toUpperCase() || "?";
+}
+
 interface SlotCardProps {
   slot: ClaimSlotViewModel;
   disabled: boolean;
@@ -14,7 +18,8 @@ export function SlotCard({ slot, disabled, pending_action, on_claim, on_takeover
   return (
     <article className={`claim-slot-card${slot.is_mine ? " is-self" : ""}${slot.is_free ? " is-free" : ""}`}>
       <div className="claim-slot-card-head">
-        <div>
+        <span className="claim-slot-avatar" aria-hidden="true">{slotInitial(slot.display_name)}</span>
+        <div className="claim-slot-identity">
           <h3>{slot.display_name}</h3>
           <div className="status-muted">{slot.slot_id.toUpperCase()}</div>
         </div>

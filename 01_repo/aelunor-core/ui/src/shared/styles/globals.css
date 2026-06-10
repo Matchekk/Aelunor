@@ -671,6 +671,181 @@ summary::-webkit-details-marker {
   margin: 0;
 }
 
+/* ============================================================
+   Premium dark-fantasy claim ("Kampagnen-Zugang") screen.
+   Uses the shared --ael-* tokens so it matches the play HUD.
+   ============================================================ */
+.claim-workspace-shell {
+  max-width: 1100px;
+  gap: clamp(0.85rem, 1.4vw, 1.3rem);
+  padding: clamp(0.85rem, 1.6vw, 1.6rem);
+}
+.claim-workspace-shell::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 50% -10%, color-mix(in srgb, var(--ael-glow, #527fb8) 40%, transparent), transparent 30rem),
+    radial-gradient(circle at 12% 110%, color-mix(in srgb, var(--ael-accent-soft, rgba(215,180,109,0.16)) 80%, transparent), transparent 26rem);
+}
+
+/* Hero header */
+.claim-workspace-shell .claim-header {
+  position: relative;
+  isolation: isolate;
+  padding: clamp(1.1rem, 1.8vw, 1.9rem);
+  border: 1px solid color-mix(in srgb, var(--ael-gold, #caa763) 42%, transparent);
+  border-radius: 1.1rem;
+  background:
+    radial-gradient(circle at 88% -20%, color-mix(in srgb, var(--ael-gold, #caa763) 16%, transparent), transparent 50%),
+    linear-gradient(180deg, color-mix(in srgb, var(--ael-surface-soft, #15202f) 82%, transparent), color-mix(in srgb, var(--ael-surface, #0e1826) 96%, black));
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.4);
+}
+.claim-workspace-shell .claim-header::after {
+  content: "";
+  position: absolute;
+  left: clamp(1.1rem, 1.8vw, 1.9rem);
+  right: clamp(1.1rem, 1.8vw, 1.9rem);
+  bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ael-gold, #caa763) 64%, transparent), transparent);
+}
+.claim-workspace-shell .session-hero-kicker {
+  color: var(--ael-gold, #caa763);
+  font-family: var(--v1-font-display);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+}
+.claim-workspace-shell .claim-header h1 {
+  font-family: var(--v1-font-display);
+  letter-spacing: 0.02em;
+  color: var(--ael-text, #f3ead8);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.5);
+}
+.claim-workspace-shell .claim-header-copy p {
+  color: var(--ael-text-muted, rgba(231, 219, 195, 0.7));
+}
+.claim-workspace-shell .claim-header-actions { gap: 0.6rem; }
+.claim-workspace-shell .claim-header-actions .status-pill {
+  border-color: color-mix(in srgb, var(--ael-gold, #caa763) 50%, transparent);
+  background: color-mix(in srgb, var(--ael-gold, #caa763) 12%, transparent);
+  color: var(--ael-gold, #caa763);
+  font-family: var(--v1-font-display);
+  letter-spacing: 0.08em;
+}
+.claim-workspace-shell .claim-header-actions button {
+  min-height: 2.5rem;
+  border-radius: 0.6rem;
+  border-color: color-mix(in srgb, var(--ael-border, #44546d) 80%, transparent);
+  background: color-mix(in srgb, var(--ael-surface-soft, #15202f) 64%, transparent);
+  color: var(--ael-text-muted, #cdd7e6);
+}
+.claim-workspace-shell .claim-header-actions button:hover {
+  border-color: var(--ael-gold, #caa763);
+  color: var(--ael-gold, #caa763);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--ael-gold, #caa763) 24%, transparent);
+}
+
+/* Status bar */
+.claim-workspace-shell .claim-status-bar {
+  border: 1px solid color-mix(in srgb, var(--ael-border, #44546d) 64%, transparent);
+  border-radius: 1rem;
+  padding: clamp(0.8rem, 1.2vw, 1.1rem);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ael-surface, #0e1826) 90%, transparent), color-mix(in srgb, var(--ael-bg-depth, #060b12) 88%, transparent));
+}
+.claim-workspace-shell .claim-status-pills .status-pill {
+  border-color: color-mix(in srgb, var(--ael-gold, #caa763) 38%, transparent);
+  background: color-mix(in srgb, var(--ael-surface-soft, #15202f) 60%, transparent);
+  color: color-mix(in srgb, var(--ael-gold, #caa763) 86%, var(--ael-text, white));
+  font-family: var(--v1-font-display);
+  letter-spacing: 0.08em;
+}
+.claim-workspace-shell .claim-status-bar > .status-muted { color: var(--ael-text-muted, rgba(231, 219, 195, 0.72)); }
+
+/* Slot cards: centered, comfortably sized, ornate */
+.claim-workspace-shell .claim-slot-grid {
+  grid-template-columns: repeat(auto-fill, minmax(300px, 360px));
+  justify-content: center;
+  gap: clamp(0.85rem, 1.4vw, 1.3rem);
+}
+.claim-workspace-shell .claim-slot-card {
+  border: 1px solid color-mix(in srgb, var(--ael-gold, #caa763) 30%, transparent);
+  border-radius: 1rem;
+  padding: 1.15rem 1.2rem 1.25rem;
+  gap: 0.95rem;
+  background:
+    radial-gradient(circle at 50% -30%, color-mix(in srgb, var(--ael-glow, #527fb8) 18%, transparent), transparent 60%),
+    linear-gradient(180deg, color-mix(in srgb, var(--ael-surface-soft, #15202f) 88%, transparent), color-mix(in srgb, var(--ael-surface, #0e1826) 97%, black));
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.38);
+}
+.claim-workspace-shell .claim-slot-card.is-free {
+  border-color: color-mix(in srgb, var(--ael-green, #86d59f) 44%, transparent);
+  background:
+    radial-gradient(circle at 50% -30%, color-mix(in srgb, var(--ael-green, #86d59f) 14%, transparent), transparent 60%),
+    linear-gradient(180deg, color-mix(in srgb, var(--ael-surface-soft, #15202f) 88%, transparent), color-mix(in srgb, var(--ael-surface, #0e1826) 97%, black));
+}
+.claim-workspace-shell .claim-slot-card.is-self {
+  border-color: color-mix(in srgb, var(--ael-gold, #caa763) 64%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ael-gold, #caa763) 22%, transparent), 0 18px 44px rgba(0, 0, 0, 0.4);
+}
+.claim-workspace-shell .claim-slot-card-head { align-items: center; gap: 0.8rem; flex-wrap: nowrap; }
+.claim-workspace-shell .claim-slot-avatar {
+  flex: 0 0 auto;
+  width: 3rem;
+  height: 3rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--ael-gold, #caa763) 55%, transparent);
+  background: radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--ael-glow, #527fb8) 30%, transparent), transparent 46%), linear-gradient(180deg, #152234, #050910);
+  color: var(--ael-gold, #caa763);
+  font-family: var(--v1-font-display);
+  font-size: 1.3rem;
+  box-shadow: 0 0 16px color-mix(in srgb, var(--ael-glow, #527fb8) 26%, transparent);
+}
+.claim-workspace-shell .claim-slot-identity { flex: 1 1 auto; min-width: 0; }
+.claim-workspace-shell .claim-slot-card-head h3 {
+  font-family: var(--v1-font-display);
+  color: var(--ael-text, #f3ead8);
+}
+.claim-workspace-shell .claim-slot-summary { color: var(--ael-text, #eaf0fb); }
+.claim-workspace-shell .claim-slot-card .status-pill {
+  border-color: color-mix(in srgb, var(--ael-border, #44546d) 70%, transparent);
+  background: color-mix(in srgb, var(--ael-surface-soft, #15202f) 56%, transparent);
+  color: var(--ael-text-muted, #cdd7e6);
+}
+.claim-workspace-shell .claim-slot-actions { margin-top: 0.15rem; }
+.claim-workspace-shell .claim-slot-actions button {
+  flex: 1 1 auto;
+  min-height: 2.5rem;
+  border-radius: 0.6rem;
+  font-family: var(--v1-font-display);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.82rem;
+  border-color: color-mix(in srgb, var(--ael-border, #44546d) 74%, transparent);
+  background: color-mix(in srgb, var(--ael-surface-soft, #15202f) 58%, transparent);
+  color: var(--ael-text-muted, #cdd7e6);
+}
+.claim-workspace-shell .claim-slot-card.is-free .claim-slot-actions button,
+.claim-workspace-shell .claim-slot-actions button:hover {
+  border-color: color-mix(in srgb, var(--ael-gold, #caa763) 62%, transparent);
+  color: var(--ael-gold, #caa763);
+  background: color-mix(in srgb, var(--ael-gold, #caa763) 12%, transparent);
+}
+.claim-workspace-shell .claim-empty-state {
+  border: 1px dashed color-mix(in srgb, var(--ael-border, #44546d) 72%, transparent);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--ael-surface-soft, #15202f) 40%, transparent);
+}
+
+@media (max-width: 640px) {
+  .claim-workspace-shell .claim-slot-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
 .session-library-panel details {
   width: 100%;
 }
