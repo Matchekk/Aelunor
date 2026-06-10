@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createCampaignFixture } from "../../test/campaignFixture";
 import type { TimelineEntry } from "./selectors";
-import { deriveTimelineEntries, deriveTurnKindLabel, deriveTurnLead, deriveTurnOutcome } from "./selectors";
+import { deriveShowModePill, deriveTimelineEntries, deriveTurnKindLabel, deriveTurnLead, deriveTurnOutcome } from "./selectors";
 
 function entryWith(overrides: Partial<TimelineEntry>): TimelineEntry {
   return {
@@ -35,6 +35,15 @@ describe("deriveTurnKindLabel", () => {
   });
 });
 
+describe("deriveShowModePill", () => {
+  it("hides the mode pill when it would duplicate the kind badge", () => {
+    expect(deriveShowModePill(entryWith({ actor_id: "gm", mode: "STORY" }), [])).toBe(false);
+    expect(deriveShowModePill(entryWith({ actor_id: "gm", mode: "story" }), [])).toBe(false);
+    expect(deriveShowModePill(entryWith({ actor_id: "aria", mode: "TUN" }), ["aria"])).toBe(true);
+    expect(deriveShowModePill(entryWith({ actor_id: "gm", mode: "" }), [])).toBe(false);
+  });
+});
+
 describe("journal entry rendering data", () => {
   it("renders one card model per turn and keeps fallbacks readable", () => {
     const campaign = createCampaignFixture();
@@ -46,7 +55,7 @@ describe("journal entry rendering data", () => {
   it("provides controlled fallback texts for empty content", () => {
     const empty = entryWith({ input_text_display: "", gm_text_display: "" });
     expect(deriveTurnLead(empty)).toBe("Kein sichtbarer Spielerbeitrag.");
-    expect(deriveTurnOutcome(empty)).toBe("Noch keine GM-Antwort.");
+    expect(deriveTurnOutcome(empty)).toBe("Noch kein sichtbarer Chroniktext.");
   });
 
   it("never produces undefined or [object Object] in card fields", () => {

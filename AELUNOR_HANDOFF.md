@@ -160,6 +160,20 @@
   ("Noch keine Chronik-Einträge."), leerer Spieler-Lead wird ausgeblendet.
   Tests: `journalView.test.ts`. WorldRail/ActorDock/TopBar/Composer-Logik
   unangetastet. Kein LLM-Call im Smoke.
+* Play-HUD Premium-Pass (Branch `polish/ui-play-hud-premium-pass`):
+  gemeinsame Chrome-Sprache fuer die Play-Shell in `campaignPlayV2.css`
+  (dunkle Scrollbars, Gold-Panel-Linien, --ael-Tokens statt Farbduplikate).
+  Journal: Karten-Lesespalte repariert — Root Cause war ein Relikt
+  `margin-left: 50%` auf `.story-turn-card` in `aelunor-premium-layout.css`
+  (altes Split-Layout); Karte jetzt ~76% Center-Breite, Kopfzeile mit
+  Hairline, kein doppelter Story/Mode-Badge (`deriveShowModePill`),
+  Empty-Text "Noch kein sichtbarer Chroniktext.". Composer: RPG-Action-Tabs,
+  Gold-Fokus, integrierter Disabled-Send. ActorDock: gerahmtes Portrait,
+  ruhige Pill-Navigation mit aria-labels, Meter mit Track, absichtliche
+  Empty-States. WorldRail: Karten-Padding (PARTY nicht mehr abgeschnitten),
+  Quest-Line-Clamp (nur visuell), dunklere Fantasy-Map mit Goldpfaden.
+  Topbar: Status-Segmente, ruhigere Utilities. Tests 76/76, Build gruen,
+  Smoke 1920x1080 ohne Fehler. Keine LLM-Calls.
 * LLM-Status-Contract-Drift behoben (Branch `fix/ui-llm-status-contract`,
   gestackt auf `fix/ui-campaign-state-hud`): `LlmStatusResponse` ist jetzt die
   ehrliche Union der drei Backend-Shapes (flat Ollama, flat Anthropic, nested

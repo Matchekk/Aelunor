@@ -107,5 +107,73 @@
 .party-hud-meter.is-essence i { background: var(--v1-accent); }
 .party-hud-meta { margin: 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.4rem; color: var(--v1-text-muted); font-size: 0.74rem; }
 .party-hud-conditions { margin: 0; display: flex; flex-wrap: wrap; gap: 0.3rem; }
+/* ============================================================
+   Premium play-HUD pass. Scoped to .campaign-play-shell; uses the
+   theme tokens from aelunor-main-screen.css (--ael-*) everywhere
+   instead of duplicating colors.
+   ============================================================ */
+
+/* 1. Shared chrome: dark integrated scrollbars + panel language. */
+.campaign-play-shell * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ael-gold, #caa763) 32%, transparent) transparent; }
+.campaign-play-shell *::-webkit-scrollbar { width: 8px; height: 8px; }
+.campaign-play-shell *::-webkit-scrollbar-thumb { border-radius: 999px; background: color-mix(in srgb, var(--ael-gold, #caa763) 28%, rgba(8, 15, 24, 0.9)); }
+.campaign-play-shell *::-webkit-scrollbar-track { background: transparent; }
+.campaign-play-shell .play-panel-kicker, .campaign-play-shell .actor-dock-kicker { letter-spacing: 0.2em; }
+
+/* 2. Center journal: chronicle cards instead of raw debug blocks. */
+.campaign-play-shell .timeline-item::before { content: none; }
+.campaign-play-shell .timeline-head { padding-bottom: 0.45rem; border-bottom: 1px solid color-mix(in srgb, var(--ael-gold, #caa763) 34%, transparent); margin-bottom: 0.75rem; align-items: baseline; }
+.campaign-play-shell .timeline-item.story-turn-card { padding: 1.1rem 1.35rem 1.15rem; }
+.campaign-play-shell .story-turn-card .timeline-item-head { margin-bottom: 0.55rem; padding-bottom: 0.5rem; border-bottom: 1px solid color-mix(in srgb, var(--ael-story-muted, #6f5e43) 24%, transparent); }
+.campaign-play-shell .timeline-item-title strong { font-family: var(--v1-font-display); letter-spacing: 0.05em; font-size: 1.02rem; }
+.campaign-play-shell .timeline-item-actor { margin-bottom: 0.35rem; }
+
+/* 3. Composer: RPG action dock instead of a heavy gray form. */
+.campaign-play-shell .player-composer.composer-panel { padding: 0.8rem 1rem 0.95rem; }
+.campaign-play-shell .composer-input-grid .composer-textarea-wrap textarea { min-height: 5.8rem; border-radius: 0.7rem; transition: border-color 120ms ease, box-shadow 120ms ease; }
+.campaign-play-shell .composer-textarea-wrap textarea:focus { outline: none; border-color: color-mix(in srgb, var(--ael-gold, #caa763) 62%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ael-gold, #caa763) 38%, transparent), inset 0 1px 18px rgba(0, 0, 0, 0.3); }
+.campaign-play-shell .composer-mode-tabs button, .campaign-play-shell .composer-tools-tabs button { border-radius: 0.55rem; font-family: var(--v1-font-display); font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.campaign-play-shell .composer-mode-tabs button.is-active { border-color: color-mix(in srgb, var(--ael-gold, #caa763) 66%, transparent); color: var(--ael-gold, #caa763); background: color-mix(in srgb, var(--ael-gold, #caa763) 12%, transparent); box-shadow: 0 0 14px color-mix(in srgb, var(--ael-gold, #caa763) 18%, transparent); }
+.campaign-play-shell .composer-actor-send select { border-radius: 0.55rem; border-color: color-mix(in srgb, var(--ael-border, #44546d) 80%, transparent); background: color-mix(in srgb, var(--ael-bg-depth, #060b12) 70%, transparent); color: var(--ael-text, #dce5f1); }
+.campaign-play-shell .submit-bar button[disabled] { opacity: 0.6; border-color: color-mix(in srgb, var(--ael-gold, #caa763) 26%, transparent); background: color-mix(in srgb, var(--ael-surface-soft, #15202f) 55%, transparent); color: var(--ael-text-muted, #93a3b8); }
+
+/* 4. Right actor HUD: calm sections, framed portrait, real meters. */
+.campaign-play-shell .actor-dock { padding: 0.85rem 0.95rem; }
+.campaign-play-shell .actor-portrait-slot { box-shadow: 0 0 0 1px color-mix(in srgb, var(--ael-gold, #caa763) 40%, transparent), 0 0 22px color-mix(in srgb, var(--ael-glow, #527fb8) 30%, transparent); }
+.campaign-play-shell .actor-header-copy h2 { font-family: var(--v1-font-display); letter-spacing: 0.03em; text-wrap: balance; }
+.campaign-play-shell .actor-header-copy p { overflow-wrap: break-word; }
+.campaign-play-shell .actor-section-nav { gap: 0.32rem; }
+.campaign-play-shell .actor-section-nav button { min-height: 1.8rem; border-radius: 999px; border-color: color-mix(in srgb, var(--ael-border, #44546d) 52%, transparent); background: transparent; font-size: 0.72rem; color: color-mix(in srgb, var(--ael-text-muted, #93a3b8) 80%, transparent); }
+.campaign-play-shell .actor-section-nav button.is-active { border-color: color-mix(in srgb, var(--ael-gold, #caa763) 64%, transparent); background: color-mix(in srgb, var(--ael-gold, #caa763) 12%, transparent); color: var(--ael-gold, #caa763); }
+.campaign-play-shell .actor-dock-section { padding: 0.7rem 0; border-top-color: color-mix(in srgb, var(--ael-gold, #caa763) 22%, transparent); }
+.campaign-play-shell .resource-meter { padding-bottom: 0.6rem; font-size: 0.84rem; }
+.campaign-play-shell .resource-meter::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 0.3rem; border-radius: 999px; background: rgba(0, 0, 0, 0.4); }
+.campaign-play-shell .resource-meter i { height: 0.3rem; z-index: 1; }
+.campaign-play-shell .status-chips span { min-height: 1.7rem; border-radius: 999px; padding: 0.18rem 0.6rem; justify-content: center; text-align: center; font-size: 0.74rem; }
+.campaign-play-shell .body-pressure-panel div { padding: 0.22rem 0; border-bottom: 1px dashed color-mix(in srgb, var(--ael-border, #44546d) 38%, transparent); }
+.campaign-play-shell .body-pressure-panel div:last-child { border-bottom: 0; }
+.campaign-play-shell .top-skills-panel p, .campaign-play-shell .equipment-preview p, .campaign-play-shell .important-items-panel p, .campaign-play-shell .bonds-preview-panel p { padding: 0.55rem 0.65rem; border: 1px dashed color-mix(in srgb, var(--ael-border, #44546d) 58%, transparent); border-radius: 0.6rem; text-align: center; font-style: italic; }
+.campaign-play-shell .party-hud-card { border-radius: 0.7rem; }
+
+/* 5. Left world rail: scene, quest, party and map as fantasy panels. */
+.campaign-play-shell .scene-card, .campaign-play-shell .current-quest-card, .campaign-play-shell .party-mini-panel, .campaign-play-shell .map-preview-card { padding: 0.75rem 0.85rem; }
+.campaign-play-shell .scene-card-button strong, .campaign-play-shell .quest-card-button strong { font-family: var(--v1-font-display); letter-spacing: 0.03em; }
+.campaign-play-shell .quest-card-button strong { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.campaign-play-shell .quest-card-button small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.campaign-play-shell .scene-image-slot { border-radius: 0.55rem; border-color: color-mix(in srgb, var(--ael-gold, #caa763) 38%, transparent); }
+.campaign-play-shell .scene-meta-row span { padding: 0.1rem 0.5rem; border: 1px solid color-mix(in srgb, var(--ael-border, #44546d) 46%, transparent); border-radius: 999px; font-size: 0.74rem; }
+.campaign-play-shell .map-placeholder { border-radius: 0.55rem; border-color: color-mix(in srgb, var(--ael-gold, #caa763) 32%, transparent); background: radial-gradient(circle at 30% 22%, color-mix(in srgb, var(--ael-gold, #caa763) 10%, transparent), transparent 5rem), radial-gradient(circle at 78% 64%, color-mix(in srgb, var(--ael-glow, #527fb8) 12%, transparent), transparent 6rem), linear-gradient(150deg, #0a1320, #050a12); }
+.campaign-play-shell .map-route { border-top-color: color-mix(in srgb, var(--ael-gold, #caa763) 42%, transparent); opacity: 0.85; }
+.campaign-play-shell .map-river { border-left-color: color-mix(in srgb, var(--ael-glow, #527fb8) 36%, transparent); }
+.campaign-play-shell .map-node { width: 0.42rem; background: color-mix(in srgb, var(--ael-gold, #caa763) 78%, transparent); box-shadow: 0 0 8px color-mix(in srgb, var(--ael-gold, #caa763) 45%, transparent); }
+.campaign-play-shell .map-current { box-shadow: 0 0 14px color-mix(in srgb, var(--ael-glow, #527fb8) 70%, transparent); }
+
+/* 6. Topbar: status segments instead of admin rows. */
+.campaign-play-shell .campaign-topbar { min-height: 3.9rem; padding: 0.42rem 0.8rem; }
+.campaign-play-shell .campaign-topbar-meta { gap: 0.5rem; }
+.campaign-play-shell .campaign-topbar-meta div { border: 1px solid color-mix(in srgb, var(--ael-border, #44546d) 44%, transparent); border-left-width: 1px; border-radius: 0.6rem; background: color-mix(in srgb, var(--ael-surface-soft, #15202f) 36%, transparent); padding: 0.28rem 0.6rem; }
+.campaign-play-shell .topbar-utility-btn { min-height: 2.45rem; border-radius: 0.55rem; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.campaign-play-shell .topbar-icon-action { width: 2.7rem; min-height: 2.45rem; border-radius: 0.55rem; }
+
 @media (max-width: 1200px) { .campaign-play-grid { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); } .actor-dock { display: none; } .campaign-topbar { grid-template-columns: auto minmax(0, 1fr); } .topbar-actions { grid-column: 1 / -1; } }
 @media (max-width: 900px) { .campaign-play-shell { height: auto; overflow: auto; } .campaign-play-content, .campaign-play-grid { display: flex; flex-direction: column; } .campaign-topbar-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); } .world-rail, .actor-dock { overflow: visible; } .composer-input-grid { grid-template-columns: minmax(0, 1fr); } }

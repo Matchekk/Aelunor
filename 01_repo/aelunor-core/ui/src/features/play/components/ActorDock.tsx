@@ -120,6 +120,7 @@ export const ActorDock = memo(function ActorDock({ campaign, selected_slot_id, o
             className={selectedCharacterPanelSection === section.id ? "is-active" : ""}
             onClick={() => setSelectedCharacterPanelSection(section.id)}
             title={section.label}
+            aria-label={section.label}
           >
             {section.label.slice(0, 1)}
           </button>
