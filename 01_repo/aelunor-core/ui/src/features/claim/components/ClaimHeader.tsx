@@ -9,14 +9,14 @@ export function ClaimHeader({ title, meta_line, join_code, on_leave_session }: C
   return (
     <section className="v1-panel claim-header">
       <div className="claim-header-copy">
-        <div className="session-hero-kicker">Campaign Gate</div>
+        <div className="session-hero-kicker">Kampagnen-Zugang</div>
         <h1>{title}</h1>
         <p className="status-muted">{meta_line}</p>
       </div>
       <div className="claim-header-actions">
         {join_code ? <span className="status-pill">Code {join_code}</span> : null}
         <button type="button" onClick={on_leave_session}>
-          Leave to Session Hub
+          Zur Session-Übersicht
         </button>
       </div>
     </section>

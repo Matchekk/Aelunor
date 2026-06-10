@@ -123,6 +123,12 @@ def apply_character_summary_to_state(campaign: Dict[str, Any], slot_name: str, *
     deps.reconcile_creator_inventory_items(campaign["state"], character)
     deps.refresh_skill_progression(character)
     deps.rebuild_character_derived(character, campaign["state"].get("items", {}), world_time)
+    # Frisch erstellte Charaktere starten mit vollen Ressourcen: vor der
+    # Attributvergabe clampen Normalisierungslaeufe die Default-Currents auf
+    # die noch niedrigen Maxima (z.B. 8/18 Leben) und lassen sie dort haengen.
+    character["hp_current"] = int(character.get("hp_max", 10) or 10)
+    character["sta_current"] = int(character.get("sta_max", 10) or 10)
+    character["res_current"] = int(character.get("res_max", 5) or 5)
     deps.reconcile_canonical_resources(character, world_settings)
     deps.strip_legacy_shadow_fields(character, world_settings)
     if deps.enable_legacy_shadow_writeback:

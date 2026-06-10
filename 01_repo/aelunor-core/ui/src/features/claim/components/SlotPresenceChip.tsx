@@ -10,7 +10,7 @@ export function SlotPresenceChip({ slot_id, owner_player_id }: SlotPresenceChipP
   const label = usePresenceStore((state) => deriveSlotPresenceLabel(slot_id, owner_player_id, state.activities));
 
   if (!label) {
-    return <span className="status-pill claim-presence-chip idle">Idle</span>;
+    return <span className="status-pill claim-presence-chip idle">Inaktiv</span>;
   }
 
   return <span className="status-pill claim-presence-chip">{label}</span>;

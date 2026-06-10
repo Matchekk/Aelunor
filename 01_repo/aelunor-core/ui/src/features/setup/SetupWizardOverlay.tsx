@@ -42,7 +42,7 @@ function asErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
   }
-  return "Unexpected setup error.";
+  return "Unerwarteter Setup-Fehler.";
 }
 
 function samePrompt(left: SetupPromptState | null, right: SetupPromptState | null): boolean {
@@ -274,7 +274,7 @@ export function SetupWizardOverlay({ campaign, on_leave_session }: SetupWizardOv
     ? waitingMessage
     : gate.current_question
       ? deriveSetupProgressSummary(currentPrompt?.progress ?? gate.progress)
-      : "Load the current setup step to continue.";
+      : "Lade den aktuellen Setup-Schritt, um fortzufahren.";
 
   usePresenceActivityHeartbeat({
     active: gate.requires_overlay && gate.can_interact && !gate.is_waiting && !submitPending && !randomPending && !applyPending,
@@ -299,7 +299,7 @@ export function SetupWizardOverlay({ campaign, on_leave_session }: SetupWizardOv
           : buildSetupAnswerPayload(currentPrompt.question, draft as SetupDraftState);
 
     if (!skip && !reviewActive && currentPrompt.question.required && !draftHasAnswer(currentPrompt.question, draft as SetupDraftState)) {
-      setLocalError("Answer this question before continuing.");
+      setLocalError("Beantworte diese Frage, um fortzufahren.");
       return;
     }
 
@@ -391,7 +391,7 @@ export function SetupWizardOverlay({ campaign, on_leave_session }: SetupWizardOv
 
   return (
     <div className="setup-overlay-backdrop" role="presentation">
-      <section ref={dialogRef} className="setup-overlay" role="dialog" aria-modal="true" aria-label="Setup wizard">
+      <section ref={dialogRef} className="setup-overlay" role="dialog" aria-modal="true" aria-label="Setup-Assistent">
         <WaitingSectionOverlay target="setup_overlay" className="setup-waiting-overlay" />
         <button type="button" className="setup-overlay-leave" onClick={on_leave_session}>
           Zur Session-Übersicht
@@ -417,7 +417,7 @@ export function SetupWizardOverlay({ campaign, on_leave_session }: SetupWizardOv
             <section className="v1-panel setup-question-panel">
               <WaitingSurface target="setup_question" />
               <div className="v1-panel-head">
-                <h2>{reviewActive ? "Review" : "Current Step"}</h2>
+                <h2>{reviewActive ? "Überprüfung" : "Aktueller Schritt"}</h2>
                 <span>{gate.phase_display}</span>
               </div>
               <WaitingInline target="setup_question" className="hub-waiting-inline" />
@@ -437,7 +437,7 @@ export function SetupWizardOverlay({ campaign, on_leave_session }: SetupWizardOv
                   <p>No setup question is currently loaded for this step.</p>
                   <div className="setup-inline-actions">
                     <button type="button" onClick={() => void loadCurrentStep()} disabled={submitPending || sharedBlocked}>
-                      {nextMutation.isPending ? "Loading..." : "Load current setup question"}
+                      {nextMutation.isPending ? "Lade..." : "Aktuelle Setup-Frage laden"}
                     </button>
                   </div>
                 </div>
@@ -493,14 +493,14 @@ export function SetupWizardOverlay({ campaign, on_leave_session }: SetupWizardOv
             {!randomOpen ? (
               <section className="v1-panel setup-side-note">
                 <div className="v1-panel-head">
-                  <h2>Summary</h2>
+                  <h2>Zusammenfassung</h2>
                 </div>
                 <p className="status-muted">
                   {gate.is_waiting
                     ? waitingMessage
                     : reviewEntries.length > 0
                       ? `${reviewEntries.length} summary item${reviewEntries.length === 1 ? "" : "s"} available for review.`
-                      : "The backend has not exposed a review summary for this step yet."}
+                      : "Für diesen Schritt liegt noch keine Zusammenfassung vor."}
                 </p>
                 {reviewEntries.length > 0 ? (
                   <div className="setup-review-grid compact">
@@ -531,7 +531,7 @@ export function SetupWizardOverlay({ campaign, on_leave_session }: SetupWizardOv
             turbo_pending={turboPending}
             blocking_hint={disabledByBlocking ? blockingAction?.label ?? "A shared action is still running." : null}
             disabled_reason={!canInteractWithPrompt ? disabledReason : null}
-            submit_label={reviewActive ? "Confirm and save" : "Submit answer"}
+            submit_label={reviewActive ? "Bestätigen und speichern" : "Antwort senden"}
             on_prev={() => {
               setLocalError(null);
               setRandomOpen(false);

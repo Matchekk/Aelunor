@@ -54,7 +54,7 @@ export function RandomSuggestionPanel({
             disabled={loading || apply_pending}
             onChange={() => on_mode_change("all")}
           />
-          Remaining chapter
+          Restliches Kapitel
         </label>
       </div>
       {preview?.preview_answers.length ? (
@@ -62,23 +62,23 @@ export function RandomSuggestionPanel({
           {preview.preview_answers.map((entry) => (
             <article key={`${entry.question_id}-${entry.preview_text}`} className="setup-random-item">
               <strong>{entry.label || entry.question_id}</strong>
-              <p>{entry.preview_text || "No preview text returned."}</p>
+              <p>{entry.preview_text || "Keine Vorschau erhalten."}</p>
             </article>
           ))}
         </div>
       ) : (
-        <div className="setup-empty-state">No random preview is loaded yet.</div>
+        <div className="setup-empty-state">Noch keine Zufalls-Vorschau geladen.</div>
       )}
       <div className="setup-inline-actions">
         <button type="button" onClick={on_refresh} disabled={disabled || loading || apply_pending}>
-          {loading ? "Generating..." : "Refresh preview"}
+          {loading ? "Würfle..." : "Vorschau neu würfeln"}
         </button>
         <button
           type="button"
           onClick={on_apply}
           disabled={disabled || apply_pending || !preview || preview.preview_answers.length === 0}
         >
-          {apply_pending ? "Applying..." : "Apply suggestion"}
+          {apply_pending ? "Übernehme..." : "Vorschlag übernehmen"}
         </button>
       </div>
     </section>
