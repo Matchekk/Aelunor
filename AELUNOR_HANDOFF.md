@@ -197,6 +197,14 @@
   Composer-Default 340px / min 240 (Gap 0.55rem) — alle Controls ohne
   internen Scroll (scrollHeight<=clientHeight verifiziert), Overflow nur
   als Notfall bei manuell kleiner Hoehe. Tests 88/88, Smoke gruen.
+* Responsive-Pass Play-Shell (auf `polish/ui-play-hud-premium-pass`):
+  geprueft 1920/1366/1100/960/820/768/390 — kein horizontaler Overflow.
+  >1200 3-spaltig, 901-1200 2-spaltig (Actor-Dock + Griff ausgeblendet),
+  <=900 gestapelt. Fix: im Stack ist die Center-Spalte (Journal+Composer)
+  jetzt story-first vor der WorldRail (`order` in der 900px-Media), Map-
+  Platzhalter auf 150px gedeckelt, WorldRail wird simpler Flex-Stack,
+  Composer-Basis 300px. Composer-Inhalte sind flex (kein interner Scroll),
+  obere Gruppe (Header->Tabs) eng. Journal-Schriftrolle bis 76rem breit.
 * Center-Density-/Lesbarkeits-Fix (auf `polish/ui-play-hud-premium-pass`):
   JOURNAL-/DEIN-BEITRAG-Titel ~30% kleiner, Paddings/Gaps im Center
   reduziert (campaignPlayV2.css Abschnitt 2c). Pergament-Lesbarkeit: Text
