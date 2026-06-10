@@ -438,13 +438,13 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
           </section>
           <button
             type="button"
-            className="actor-rail-handle"
+            className="actor-rail-drawer-handle"
             aria-label={rightRailOpen ? "Akteurleiste ausblenden" : "Akteurleiste einblenden"}
             aria-expanded={rightRailOpen}
             title={rightRailOpen ? "Akteurleiste ausblenden" : "Akteurleiste einblenden"}
             onClick={() => setRightRailOpen(!rightRailOpen)}
           >
-            <span aria-hidden="true">{rightRailOpen ? "›" : "‹"}</span>
+            <span className="actor-rail-drawer-grip" aria-hidden="true">{rightRailOpen ? "}" : "{"}</span>
           </button>
           {rightRailOpen ? (
             <ActorDock
