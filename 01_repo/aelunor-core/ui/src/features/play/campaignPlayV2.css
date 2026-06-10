@@ -128,6 +128,18 @@
 .campaign-play-shell .timeline-item-title strong { font-family: var(--v1-font-display); letter-spacing: 0.05em; font-size: 1.02rem; }
 .campaign-play-shell .timeline-item-actor { margin-bottom: 0.35rem; }
 
+/* 2b. Resizable journal/composer split: the composer height comes from
+   --play-composer-height (persisted in localStorage), the journal keeps
+   the remaining space and never collapses. */
+.campaign-play-shell .story-workspace.is-active-play .story-timeline.timeline-panel { min-height: 220px; }
+.campaign-play-shell .story-workspace.is-active-play .player-composer.composer-panel { flex: 0 0 var(--play-composer-height, 300px); height: var(--play-composer-height, 300px); min-height: 220px; overflow: auto; }
+.campaign-play-shell .composer-resize-handle { flex: 0 0 12px; display: grid; place-items: center; margin: -0.3rem 0; cursor: row-resize; touch-action: none; }
+.campaign-play-shell .composer-resize-handle i { display: block; width: 7rem; height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--ael-gold, #caa763) 34%, transparent); transition: background 120ms ease, width 120ms ease; }
+.campaign-play-shell .composer-resize-handle:hover i, .campaign-play-shell .composer-resize-handle:focus-visible i { width: 9rem; background: color-mix(in srgb, var(--ael-gold, #caa763) 62%, transparent); }
+.campaign-play-shell .composer-resize-handle:focus-visible { outline: 1px solid color-mix(in srgb, var(--ael-gold, #caa763) 55%, transparent); outline-offset: 2px; border-radius: 999px; }
+body.is-resizing-composer { cursor: row-resize; user-select: none; }
+body.is-resizing-composer * { user-select: none; }
+
 /* 3. Composer: RPG action dock instead of a heavy gray form. */
 .campaign-play-shell .player-composer.composer-panel { padding: 0.8rem 1rem 0.95rem; }
 .campaign-play-shell .composer-input-grid .composer-textarea-wrap textarea { min-height: 5.8rem; border-radius: 0.7rem; transition: border-color 120ms ease, box-shadow 120ms ease; }

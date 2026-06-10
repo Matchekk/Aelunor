@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useLocation, useNavigate, type NavigateOptions } from "react-router-dom";
 
 import { buildCampaignPath, buildSurfaceHistoryState, buildV1HubPath, normalizePlayRouteState, serializePlayRouteState, withBoardsRouteState, withContextRouteState, withDrawerRouteState, withSceneRouteState } from "../../app/routing/routes";
@@ -34,6 +34,7 @@ import { AelunorSceneBackground } from "../../shared/ui/aelunorAssets";
 import { WorldRail } from "./components/WorldRail";
 import { ActorDock } from "./components/ActorDock";
 import { resolveSelectedActorId } from "./actorDockModel";
+import { useResizableComposerHeight } from "./composerResize";
 
 interface CampaignWorkspaceProps {
   campaign: CampaignSnapshot;
@@ -64,6 +65,8 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
   const rememberedUiHydratedRef = useRef<string | null>(null);
   const drawerReturnFocusRef = useRef<HTMLElement | null>(null);
   const contextReturnFocusRef = useRef<HTMLElement | null>(null);
+  const centerColumnRef = useRef<HTMLElement | null>(null);
+  const { composer_height, handle_props } = useResizableComposerHeight(centerColumnRef);
   const playRouteState = useMemo(() => normalizePlayRouteState(campaign, location.search), [campaign, location.search]);
   const selectedSceneId = playRouteState.scene_id as SceneFilterId;
   const claimedSlotId = campaign.viewer_context?.claimed_slot_id || null;
@@ -376,7 +379,11 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
             on_open_quest={() => openBoards("plot")}
             on_open_map={() => openBoards("world")}
           />
-          <section className={`campaign-main-column story-workspace story-surface timeline-column${isPreplay ? " is-preplay" : " is-active-play"}`}>
+          <section
+            ref={centerColumnRef}
+            className={`campaign-main-column story-workspace story-surface timeline-column${isPreplay ? " is-preplay" : " is-active-play"}`}
+            style={{ "--play-composer-height": `${composer_height}px` } as CSSProperties}
+          >
             <div className="story-context-row">
               <div className="story-context-main">
                 <span className="status-pill">{phaseState.phase_display}</span>
@@ -438,12 +445,17 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
             {isPreplay ? (
               <PrePlayComposerHint phase_display={phaseState.phase_display} />
             ) : (
-              <Composer
-                campaign={campaign}
-                selected_actor_id={selectedActorSlotId}
-                on_actor_select={setSelectedActorId}
-                on_open_context={openContextModal}
-              />
+              <>
+                <div className="composer-resize-handle" {...handle_props}>
+                  <i aria-hidden="true" />
+                </div>
+                <Composer
+                  campaign={campaign}
+                  selected_actor_id={selectedActorSlotId}
+                  on_actor_select={setSelectedActorId}
+                  on_open_context={openContextModal}
+                />
+              </>
             )}
           </section>
           {rightRailOpen ? (

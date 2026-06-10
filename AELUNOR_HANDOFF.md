@@ -174,6 +174,17 @@
   Quest-Line-Clamp (nur visuell), dunklere Fantasy-Map mit Goldpfaden.
   Topbar: Status-Segmente, ruhigere Utilities. Tests 76/76, Build gruen,
   Smoke 1920x1080 ohne Fehler. Keine LLM-Calls.
+* Resizable Composer (auf `polish/ui-play-hud-premium-pass`): vertikaler
+  Split Journal/Composer mit Drag-Handle (`composerResize.ts` +
+  `composer-resize-handle` in `CampaignWorkspace`), Hoehe via CSS-Variable
+  `--play-composer-height`. Persistenz in localStorage-Key
+  `aelunor.play.composerHeight.v1` (Pixel, beim Laden geclamped). Regeln:
+  min 220px, Default 300px, max 55% der Center-Hoehe bzw. Journal-Guard
+  (Journal min 220px). Tastatur: Pfeile (+Shift), Enter/Doppelklick =
+  Default; role=separator mit aria-Werten. Pure Clamp-/Storage-Tests
+  (`composerResize.test.ts`); kein DOM-Drag-Test (keine Testing-Library im
+  Projekt). Smoke: Default 298px, Drag 448px, Reload persistiert. Keine
+  LLM-Calls; Backend/Turn/Provider/Runtime/Campaign-State unveraendert.
 * LLM-Status-Contract-Drift behoben (Branch `fix/ui-llm-status-contract`,
   gestackt auf `fix/ui-campaign-state-hud`): `LlmStatusResponse` ist jetzt die
   ehrliche Union der drei Backend-Shapes (flat Ollama, flat Anthropic, nested
