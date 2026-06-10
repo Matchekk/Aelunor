@@ -174,6 +174,22 @@
   Quest-Line-Clamp (nur visuell), dunklere Fantasy-Map mit Goldpfaden.
   Topbar: Status-Segmente, ruhigere Utilities. Tests 76/76, Build gruen,
   Smoke 1920x1080 ohne Fehler. Keine LLM-Calls.
+* Debug-Chrome-Cleanup (auf `polish/ui-play-hud-premium-pass`): Center-
+  Status-Pills (Phase/Blickwinkel/Slots) und Member-Chips entfernt (Infos
+  leben in Topbar/ActorDock/Composer-Dropdown); Composer-Pills "Modus X"/
+  "Akteur slot_x" entfernt (keine rohen Slot-IDs mehr sichtbar);
+  `PartyStatusPanel` rechts geloescht (Party bleibt links; Modell
+  `partyHudModel` bleibt fuer Adapter/Accessors); Einbuchstaben-Sektions-Nav
+  (U R S K F A G B = Anfangsbuchstaben der Sektionen, rein kosmetisch)
+  entfernt. ActorRail hat jetzt einen Drawer-Griff an der Leiste
+  (`actor-rail-handle`, CSS-Glyph, aria-expanded; Persistenz weiter ueber
+  bestehendes uiMemory `right_rail_open`, kein neuer Key); "Akteur"-Button
+  aus der Topbar entfernt, Reihenfolge rechts: Claim loesen, Code, Hub,
+  Icon-Utilities. Play-Topbar nutzt keine SVGs (CSS-Glyphen + PNG-Logo;
+  einzige SVG-Nutzung im UI ist das Drawer-Attributradar, unangetastet).
+  Composer-Default 340px / min 240 (Gap 0.55rem) — alle Controls ohne
+  internen Scroll (scrollHeight<=clientHeight verifiziert), Overflow nur
+  als Notfall bei manuell kleiner Hoehe. Tests 88/88, Smoke gruen.
 * Center-Density-/Lesbarkeits-Fix (auf `polish/ui-play-hud-premium-pass`):
   JOURNAL-/DEIN-BEITRAG-Titel ~30% kleiner, Paddings/Gaps im Center
   reduziert (campaignPlayV2.css Abschnitt 2c). Pergament-Lesbarkeit: Text

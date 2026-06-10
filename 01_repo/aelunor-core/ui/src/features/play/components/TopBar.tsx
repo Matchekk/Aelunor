@@ -14,8 +14,6 @@ interface TopBarProps {
   on_leave_session: () => void;
   can_unclaim: boolean;
   unclaim_pending: boolean;
-  actor_dock_open: boolean;
-  on_toggle_actor_dock: () => void;
   on_open_codex: () => void;
   on_open_notifications: () => void;
   on_unclaim: () => void;
@@ -41,8 +39,6 @@ export const TopBar = memo(function TopBar({
   on_leave_session,
   can_unclaim,
   unclaim_pending,
-  actor_dock_open,
-  on_toggle_actor_dock,
   on_open_codex,
   on_open_notifications,
   on_unclaim,
@@ -120,18 +116,6 @@ export const TopBar = memo(function TopBar({
       </div>
 
       <div className="command-bar-right topbar-actions">
-        <button type="button" className="topbar-icon-action" onClick={on_open_codex} aria-label="Codex oeffnen" title="Codex">
-          <span className="topbar-action-glyph is-book" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="topbar-icon-action"
-          onClick={on_open_notifications}
-          aria-label="Benachrichtigungen oeffnen"
-          title="Benachrichtigungen"
-        >
-          <span className="topbar-action-glyph is-bell" aria-hidden="true" />
-        </button>
         {can_unclaim ? (
           <button type="button" className="topbar-utility-btn" onClick={on_unclaim} disabled={unclaim_pending}>
             {unclaim_pending ? "Loest..." : "Claim loesen"}
@@ -147,9 +131,6 @@ export const TopBar = memo(function TopBar({
             {copyLabel} {session.join_code}
           </button>
         ) : null}
-        <button type="button" className="topbar-utility-btn actor-dock-toggle" onClick={on_toggle_actor_dock} aria-pressed={actor_dock_open}>
-          Akteur
-        </button>
         <button
           type="button"
           className="topbar-utility-btn"
@@ -160,6 +141,18 @@ export const TopBar = memo(function TopBar({
           }}
         >
           Hub
+        </button>
+        <button type="button" className="topbar-icon-action" onClick={on_open_codex} aria-label="Codex oeffnen" title="Codex">
+          <span className="topbar-action-glyph is-book" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="topbar-icon-action"
+          onClick={on_open_notifications}
+          aria-label="Benachrichtigungen oeffnen"
+          title="Benachrichtigungen"
+        >
+          <span className="topbar-action-glyph is-bell" aria-hidden="true" />
         </button>
         <button
           ref={settingsButtonRef}

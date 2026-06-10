@@ -19,8 +19,8 @@
 .topbar-action-glyph.is-bell::after { left: 0.56rem; bottom: 0; width: 0.28rem; height: 0.28rem; border-radius: 50%; background: currentColor; }
 .topbar-action-glyph.is-gear::before { inset: 0.17rem; border-radius: 50%; }
 .topbar-action-glyph.is-gear::after { inset: 0.52rem; border-radius: 50%; }
-.campaign-play-grid { display: grid; grid-template-columns: clamp(300px, 20vw, 340px) minmax(0, 1fr) clamp(310px, 21vw, 360px); gap: 0.45rem; min-height: 0; }
-.campaign-play-grid.is-actor-collapsed { grid-template-columns: clamp(300px, 20vw, 340px) minmax(0, 1fr); }
+.campaign-play-grid { display: grid; grid-template-columns: clamp(300px, 20vw, 340px) minmax(0, 1fr) 1.15rem clamp(310px, 21vw, 360px); gap: 0.45rem; min-height: 0; }
+.campaign-play-grid.is-actor-collapsed { grid-template-columns: clamp(300px, 20vw, 340px) minmax(0, 1fr) 1.15rem; }
 .world-rail, .actor-dock { min-height: 0; overflow: auto; scrollbar-width: thin; }
 .world-rail { display: grid; grid-template-rows: auto auto auto minmax(210px, 1fr); gap: 0.45rem; }
 .scene-card, .current-quest-card, .party-mini-panel, .map-preview-card, .actor-dock { border: 1px solid rgba(215, 178, 108, 0.28); background: linear-gradient(180deg, rgba(6, 16, 25, 0.9), rgba(3, 8, 13, 0.94)); box-shadow: var(--v1-shadow-sm); }
@@ -91,22 +91,10 @@
 .top-skills-panel p, .equipment-preview p, .important-items-panel p, .bonds-preview-panel p, .actor-dock-note { margin: 0; color: var(--v1-text-muted); }
 .bonds-preview-panel small { color: var(--v1-text-muted); }
 .actor-header-copy p.actor-scene-line { color: var(--v1-text-muted); font-size: 0.78rem; }
-.party-hud-panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
-.party-hud-panel-head small, .party-hud-scene { margin: 0; color: var(--v1-text-muted); }
-.party-hud-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.5rem; }
-.party-hud-card { display: grid; gap: 0.3rem; padding: 0.45rem 0.5rem; border: 1px solid rgba(215, 178, 108, 0.2); background: rgba(6, 13, 20, 0.56); }
-.party-hud-card.is-selected { border-color: var(--v1-accent-strong); }
-.party-hud-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
-.party-hud-name { min-height: auto; padding: 0; border: 0; background: transparent; box-shadow: none; color: var(--v1-gold); font-family: var(--v1-font-display); text-align: left; }
-.party-hud-name small { color: var(--v1-text-muted); font-family: var(--v1-font-base, inherit); }
-.party-hud-class { margin: 0; color: var(--v1-text-muted-strong); font-size: 0.78rem; }
-.party-hud-meter { position: relative; display: flex; justify-content: space-between; gap: 0.4rem; padding-bottom: 0.3rem; color: var(--v1-text-muted-strong); font-size: 0.78rem; }
-.party-hud-meter i { position: absolute; left: 0; bottom: 0; height: 0.18rem; border-radius: 999px; }
-.party-hud-meter.is-hp i { background: #9b3f3c; }
-.party-hud-meter.is-stamina i { background: var(--v1-gold); }
-.party-hud-meter.is-essence i { background: var(--v1-accent); }
-.party-hud-meta { margin: 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.4rem; color: var(--v1-text-muted); font-size: 0.74rem; }
-.party-hud-conditions { margin: 0; display: flex; flex-wrap: wrap; gap: 0.3rem; }
+/* Drawer handle for the right actor rail (no SVG; plain glyph). */
+.campaign-play-shell .actor-rail-handle { align-self: stretch; min-height: 0; width: 1.15rem; padding: 0; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--ael-gold, #caa763) 30%, transparent); border-radius: 0.55rem; background: color-mix(in srgb, var(--ael-surface-soft, #15202f) 55%, transparent); color: color-mix(in srgb, var(--ael-gold, #caa763) 75%, transparent); cursor: pointer; }
+.campaign-play-shell .actor-rail-handle span { font-size: 1.05rem; line-height: 1; }
+.campaign-play-shell .actor-rail-handle:hover, .campaign-play-shell .actor-rail-handle:focus-visible { border-color: color-mix(in srgb, var(--ael-gold, #caa763) 62%, transparent); color: var(--ael-gold, #caa763); box-shadow: 0 0 14px color-mix(in srgb, var(--ael-gold, #caa763) 22%, transparent); }
 /* ============================================================
    Premium play-HUD pass. Scoped to .campaign-play-shell; uses the
    theme tokens from aelunor-main-screen.css (--ael-*) everywhere
@@ -132,7 +120,7 @@
    --play-composer-height (persisted in localStorage), the journal keeps
    the remaining space and never collapses. */
 .campaign-play-shell .story-workspace.is-active-play .story-timeline.timeline-panel { min-height: 260px; }
-.campaign-play-shell .story-workspace.is-active-play .player-composer.composer-panel { flex: 0 0 var(--play-composer-height, 260px); height: var(--play-composer-height, 260px); min-height: 220px; overflow: auto; }
+.campaign-play-shell .story-workspace.is-active-play .player-composer.composer-panel { flex: 0 0 var(--play-composer-height, 340px); height: var(--play-composer-height, 340px); min-height: 240px; gap: 0.55rem; overflow: auto; }
 .campaign-play-shell .composer-resize-handle { flex: 0 0 12px; display: grid; place-items: center; margin: -0.3rem 0; cursor: row-resize; touch-action: none; }
 .campaign-play-shell .composer-resize-handle i { display: block; width: 5rem; height: 3px; border-radius: 999px; background: color-mix(in srgb, var(--ael-gold, #caa763) 28%, transparent); transition: background 120ms ease, width 120ms ease; }
 .campaign-play-shell .composer-resize-handle:hover i, .campaign-play-shell .composer-resize-handle:focus-visible i { width: 7rem; background: color-mix(in srgb, var(--ael-gold, #caa763) 58%, transparent); }
@@ -191,7 +179,6 @@ body.is-resizing-composer * { user-select: none; }
 .campaign-play-shell .body-pressure-panel div { padding: 0.22rem 0; border-bottom: 1px dashed color-mix(in srgb, var(--ael-border, #44546d) 38%, transparent); }
 .campaign-play-shell .body-pressure-panel div:last-child { border-bottom: 0; }
 .campaign-play-shell .top-skills-panel p, .campaign-play-shell .equipment-preview p, .campaign-play-shell .important-items-panel p, .campaign-play-shell .bonds-preview-panel p { padding: 0.55rem 0.65rem; border: 1px dashed color-mix(in srgb, var(--ael-border, #44546d) 58%, transparent); border-radius: 0.6rem; text-align: center; font-style: italic; }
-.campaign-play-shell .party-hud-card { border-radius: 0.7rem; }
 
 /* 5. Left world rail: scene, quest, party and map as fantasy panels. */
 .campaign-play-shell .scene-card, .campaign-play-shell .current-quest-card, .campaign-play-shell .party-mini-panel, .campaign-play-shell .map-preview-card { padding: 0.75rem 0.85rem; }
@@ -213,5 +200,5 @@ body.is-resizing-composer * { user-select: none; }
 .campaign-play-shell .topbar-utility-btn { min-height: 2.45rem; border-radius: 0.55rem; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; }
 .campaign-play-shell .topbar-icon-action { width: 2.7rem; min-height: 2.45rem; border-radius: 0.55rem; }
 
-@media (max-width: 1200px) { .campaign-play-grid { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); } .actor-dock { display: none; } .campaign-topbar { grid-template-columns: auto minmax(0, 1fr); } .topbar-actions { grid-column: 1 / -1; } }
+@media (max-width: 1200px) { .campaign-play-grid, .campaign-play-grid.is-actor-collapsed { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); } .actor-dock, .campaign-play-shell .actor-rail-handle { display: none; } .campaign-topbar { grid-template-columns: auto minmax(0, 1fr); } .topbar-actions { grid-column: 1 / -1; } }
 @media (max-width: 900px) { .campaign-play-shell { height: auto; overflow: auto; } .campaign-play-content, .campaign-play-grid { display: flex; flex-direction: column; } .campaign-topbar-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); } .world-rail, .actor-dock { overflow: visible; } .composer-input-grid { grid-template-columns: minmax(0, 1fr); } }

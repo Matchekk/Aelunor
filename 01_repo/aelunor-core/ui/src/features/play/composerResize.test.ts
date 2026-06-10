@@ -44,9 +44,9 @@ describe("clampComposerHeight", () => {
     expect(clampComposerHeight(450, 958)).toBe(422);
   });
 
-  it("uses the lower default of 260px", () => {
-    expect(COMPOSER_DEFAULT_HEIGHT).toBe(260);
-    expect(clampComposerHeight(undefined, 1000)).toBe(260);
+  it("uses a default that fits all composer controls without scrolling", () => {
+    expect(COMPOSER_DEFAULT_HEIGHT).toBe(340);
+    expect(clampComposerHeight(undefined, 1000)).toBe(340);
   });
 
   it("falls back to the default for invalid values", () => {

@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, RefObject } from "react";
 
 export const COMPOSER_HEIGHT_STORAGE_KEY = "aelunor.play.composerHeight.v1";
-export const COMPOSER_MIN_HEIGHT = 220;
-export const COMPOSER_DEFAULT_HEIGHT = 260;
+export const COMPOSER_MIN_HEIGHT = 240;
+export const COMPOSER_DEFAULT_HEIGHT = 340;
 export const COMPOSER_MAX_RATIO = 0.44;
 export const JOURNAL_MIN_HEIGHT = 260;
 export const RESIZE_HANDLE_HEIGHT = 12;

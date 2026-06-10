@@ -13,7 +13,7 @@ import { readContextCache, writeContextCache } from "../context/cache";
 import { useContextStore } from "../context/contextStore";
 import { DrawerHost } from "../drawers/DrawerHost";
 import { useDrawerStore } from "../drawers/drawerStore";
-import { deriveFilteredTimelineEntries, deriveSceneMembership, deriveSceneOptions, type SceneFilterId } from "../scenes/selectors";
+import { deriveFilteredTimelineEntries, deriveSceneOptions, type SceneFilterId } from "../scenes/selectors";
 import { clearBoardNovelty, trackCampaignNovelty } from "./novelty";
 import { readSessionLibrary, deleteSessionLibraryEntry } from "../session/sessionLibrary";
 import { useLayoutStore } from "../../state/layoutStore";
@@ -22,7 +22,7 @@ import { StoryTimeline } from "./components/StoryTimeline";
 import { TopBar } from "./components/TopBar";
 import { Composer } from "./components/Composer";
 import { TurnEditModal } from "./components/TurnEditModal";
-import { derivePartySummary, derivePlayPhaseState, deriveViewerSummary } from "./selectors";
+import { derivePlayPhaseState } from "./selectors";
 import type { TimelineEntry } from "./selectors";
 import { useEditTurnMutation, useRetryIntroMutation, useRetryTurnMutation, useSubmitTurnMutation, useUndoTurnMutation } from "./mutations";
 import { buildContinueTurnPayload, shouldShowContinueAction } from "./turnActions";
@@ -52,7 +52,6 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
   const rightRailOpen = useLayoutStore((state) => state.rightRailOpen);
   const setRightRailOpen = useLayoutStore((state) => state.setRightRailOpen);
   const rememberFilters = useUserSettingsStore((state) => state.interaction.remember_filters);
-  const partySummary = derivePartySummary(campaign);
   const phaseState = useMemo(() => derivePlayPhaseState(campaign), [campaign]);
   const [boardsDeleteConfirmOpen, setBoardsDeleteConfirmOpen] = useState(false);
   const [boardsReturnFocus, setBoardsReturnFocus] = useState<HTMLElement | null>(null);
@@ -113,10 +112,6 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
     () => sceneOptions.find((entry) => entry.scene_id === selectedSceneId) ?? null,
     [sceneOptions, selectedSceneId],
   );
-  const selectedSceneMembers = useMemo(
-    () => deriveSceneMembership(campaign, selectedSceneId).slice(0, 5),
-    [campaign, selectedSceneId],
-  );
   const selectedActorSlotId = useMemo(() => resolveSelectedActorId(campaign, selectedActorId), [campaign, selectedActorId]);
   const selectedActorLabel = useMemo(() => {
     if (!selectedActorSlotId) {
@@ -128,7 +123,6 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
       selectedActorSlotId
     );
   }, [campaign.display_party, campaign.party_overview, selectedActorSlotId]);
-  const viewerSummary = useMemo(() => deriveViewerSummary(campaign), [campaign.viewer_context]);
   const isPreplay = !phaseState.is_active_play;
   const activeSceneLabel = selectedScene?.scene_name ?? (selectedSceneId === "all" ? "Alle Szenen" : selectedSceneId);
   const visibleTimelineEntries = useMemo(
@@ -354,8 +348,6 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
           active_actor_label={selectedActorLabel}
           can_unclaim={Boolean(claimedSlotId)}
           unclaim_pending={unclaimMutation.isPending}
-          actor_dock_open={rightRailOpen}
-          on_toggle_actor_dock={() => setRightRailOpen(!rightRailOpen)}
           on_open_codex={() => openBoards("world")}
           on_open_notifications={() => openBoards("memory")}
           on_unclaim={() => {
@@ -384,20 +376,6 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
             className={`campaign-main-column story-workspace story-surface timeline-column${isPreplay ? " is-preplay" : " is-active-play"}`}
             style={{ "--play-composer-height": `${composer_height}px` } as CSSProperties}
           >
-            <div className="story-context-row">
-              <div className="story-context-main">
-                <span className="status-pill">{phaseState.phase_display}</span>
-                <span className="status-pill">Blickwinkel {viewerSummary}</span>
-                <span className="status-pill">{partySummary}</span>
-              </div>
-              <div className="story-context-members">
-                {selectedSceneMembers.map((entry) => (
-                  <button key={entry.slot_id} type="button" className="story-member-chip" onClick={() => setSelectedActorId(entry.slot_id)}>
-                    {entry.display_name}
-                  </button>
-                ))}
-              </div>
-            </div>
             {isPreplay ? (
               <PrePlayOverview
                 campaign={campaign}
@@ -458,6 +436,16 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
               </>
             )}
           </section>
+          <button
+            type="button"
+            className="actor-rail-handle"
+            aria-label={rightRailOpen ? "Akteurleiste ausblenden" : "Akteurleiste einblenden"}
+            aria-expanded={rightRailOpen}
+            title={rightRailOpen ? "Akteurleiste ausblenden" : "Akteurleiste einblenden"}
+            onClick={() => setRightRailOpen(!rightRailOpen)}
+          >
+            <span aria-hidden="true">{rightRailOpen ? "›" : "‹"}</span>
+          </button>
           {rightRailOpen ? (
             <ActorDock
               campaign={campaign}
