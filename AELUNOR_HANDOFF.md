@@ -115,6 +115,29 @@
 * RAG ist unterstuetzende Erinnerung; strukturierter Campaign-/World-/Turn-State
   gewinnt bei Konflikt (Hinweis steht im erzeugten Context-Block).
 
+## UI-State-HUD-Status
+
+* Play-HUD rendert Campaign-State ueber Adapter statt Roh-Zugriffe:
+  `ui/src/features/play/partyHudModel.ts` (UiCharacterSummary/UiSceneSummary/
+  UiPartyHudState) + `actorDockModel.ts` (Karma-/Szene-Label, Bond-Fix).
+* Sichtbar pro Charakter (rechtes Dock, `PartyStatusPanel` im `ActorDock`):
+  Name, Klasse/Rang/Level, Leben, Ausdauer, Ressource (Mana/Aether-Name aus
+  Backend), Ruf/Karma (aus `journal.reputation`), Conditions, Verletzungen,
+  Szene/Ort, Kampf-Flag; global Party-Anzahl, Phase, aktive Szene.
+* Kontrollierte Fallbacks statt kaputter Anzeige: `Unbenannte Figur`,
+  `Unbekannte Klasse`, `Unbekannter Ort`, `Neutral`, `—`; Werte geclamped
+  (0..max); kein `undefined`/`[object Object]` (Tests decken das ab:
+  `partyHudModel.test.ts`).
+* `WorldRail` zeigt keinen erfundenen HP-Balken mehr, wenn HP-Daten fehlen.
+* `ui/src/features/play/components/RightRail.tsx` ist toter Code (nirgends
+  importiert); der echte HUD ist WorldRail (links) + ActorDock (rechts).
+* Offene UI-State-Risiken: Karma/Ruf ist nur `journal.reputation`-Text
+  (echtes Karma-System = Issue #33); `journal.reputation`-Eintragsform ist
+  nicht typisiert (UI liest defensiv); Party-Panel zeigt max. Backend-Daten,
+  keine Pagination bei grossen Parties.
+* Naechster sinnvoller UI-Slice: RightRail.tsx entfernen oder reaktivieren
+  (Entscheidung noetig), danach Szenen-/Karten-Panel mit echten Map-Nodes.
+
 ## Offene GitHub-Issue-Landschaft
 
 Snapshot 2026-06-09; nur Lesezugriff. Details:

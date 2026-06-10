@@ -1,4 +1,19 @@
-# Aelunor UI Asset Rules
+# Aelunor UI Rules
+
+## State Rendering Rules
+
+- Render campaign state in the play HUD through adapters/selectors
+  (`src/features/play/partyHudModel.ts`, `actorDockModel.ts`); do not reach
+  deep into `campaign.state...` from components.
+- Never render `undefined`, `[object Object]`, or invented values; missing
+  fields get controlled fallbacks (`Unbenannte Figur`, `Unbekannte Klasse`,
+  `Unbekannter Ort`, `Neutral`, `—`).
+- Backend state (`CampaignSnapshot`) stays the source of truth; no parallel
+  frontend truth for campaign/claim/turn/canon data.
+- After UI state slices, update `AELUNOR_HANDOFF.md`; work token-efficiently
+  (open only relevant files).
+
+## Asset Rules
 
 - Do not use files from `public/brand/ui-kit` directly unless the asset manifest or an approved wrapper component allows it.
 - Use `AelunorPanelFrame` for panel frames and panel corners.

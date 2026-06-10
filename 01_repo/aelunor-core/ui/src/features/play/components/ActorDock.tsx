@@ -7,6 +7,7 @@ import { endpoints } from "../../../shared/api/endpoints";
 import { getJson } from "../../../shared/api/httpClient";
 import { AelunorPanelFrame } from "../../../shared/ui/aelunorAssets";
 import { deriveActorDockView, type ActorPanelSection, type ResourceMeter } from "../actorDockModel";
+import { PartyStatusPanel } from "./PartyStatusPanel";
 
 interface ActorDockProps {
   campaign: CampaignSnapshot;
@@ -82,6 +83,7 @@ export const ActorDock = memo(function ActorDock({ campaign, selected_slot_id, o
     return (
       <AelunorPanelFrame as="aside" className="actor-dock" variant="compact" texture>
         <p className="status-muted">Noch kein Akteur ausgewaehlt.</p>
+        <PartyStatusPanel campaign={campaign} selected_slot_id={null} on_open_character={on_open_character} />
       </AelunorPanelFrame>
     );
   }
@@ -106,6 +108,7 @@ export const ActorDock = memo(function ActorDock({ campaign, selected_slot_id, o
             Level {view.level ?? 1}
             {view.xp_current !== null || view.xp_to_next !== null ? ` · ${view.xp_current ?? 0}/${view.xp_to_next ?? "?"} XP` : ""}
           </p>
+          <p className="actor-scene-line">{view.scene_label}</p>
         </div>
       </header>
 
@@ -143,6 +146,7 @@ export const ActorDock = memo(function ActorDock({ campaign, selected_slot_id, o
             <span key={condition}>{condition}</span>
           ))}
           <span>{view.can_act_label}</span>
+          <span>Ruf: {view.karma_label}</span>
           <span>{view.injury_count} Verletzungen</span>
           <span>{view.scar_count} Narben</span>
           {view.effects_count > 0 ? <span>{view.effects_count} Effekte</span> : null}
@@ -206,6 +210,8 @@ export const ActorDock = memo(function ActorDock({ campaign, selected_slot_id, o
       </DockSection>
 
       {query.isError ? <p className="actor-dock-note">Detaildaten nicht geladen; zeige Gruppenstatus.</p> : null}
+
+      <PartyStatusPanel campaign={campaign} selected_slot_id={selected_slot_id} on_open_character={on_open_character} />
     </AelunorPanelFrame>
   );
 });

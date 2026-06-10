@@ -96,17 +96,17 @@ export const WorldRail = memo(function WorldRail({
             const slotId = entry.slot_id;
             const hpCurrent = "hp_current" in entry && typeof entry.hp_current === "number" ? entry.hp_current : null;
             const hpMax = "hp_max" in entry && typeof entry.hp_max === "number" ? entry.hp_max : null;
-            const percent = hpMax && hpCurrent !== null ? Math.max(0, Math.min(100, (hpCurrent / hpMax) * 100)) : 72;
+            const percent = hpMax && hpMax > 0 && hpCurrent !== null ? Math.max(0, Math.min(100, (hpCurrent / hpMax) * 100)) : null;
             return (
               <button
                 key={slotId}
                 type="button"
                 className={selected_actor_id === slotId ? "party-avatar is-selected" : "party-avatar"}
                 onClick={() => on_select_actor(slotId)}
-                title={entry.display_name}
+                title={percent !== null ? `${entry.display_name} · ${hpCurrent}/${hpMax} Leben` : entry.display_name}
               >
                 <span>{firstInitial(entry.display_name)}</span>
-                <i style={{ width: `${percent}%` }} aria-hidden="true" />
+                {percent !== null ? <i style={{ width: `${percent}%` }} aria-hidden="true" /> : null}
               </button>
             );
           })}

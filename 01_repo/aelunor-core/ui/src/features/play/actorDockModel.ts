@@ -1,4 +1,5 @@
 import type { CampaignSnapshot, CharacterSheetResponse, PartyOverviewEntry } from "../../shared/api/contracts";
+import { deriveKarmaLabel, resolveSceneLabel, FALLBACK_NAME } from "./partyHudModel";
 
 export type ActorPanelSection =
   | "overview"
@@ -28,6 +29,8 @@ export interface ActorDockView {
   xp_current: number | null;
   xp_to_next: number | null;
   active: boolean;
+  karma_label: string;
+  scene_label: string;
   resources: ResourceMeter[];
   conditions: string[];
   injury_count: number;
@@ -181,7 +184,8 @@ function bondPreview(campaign: CampaignSnapshot, slot_id: string): ActorDockView
     return bonds;
   }
   return readArray(social.relationship_patterns)
-    .map((value, index) => ({ id: `pattern-${index}`, name: String(value), detail: "Muster" }))
+    .map((value, index) => ({ id: `pattern-${index}`, name: readString(value), detail: "Muster" }))
+    .filter((entry) => entry.name)
     .slice(0, 3);
 }
 
@@ -207,7 +211,7 @@ export function deriveActorDockView(
 
   return {
     slot_id,
-    display_name: sheet?.display_name || party?.display_name || slot_id,
+    display_name: sheet?.display_name || party?.display_name || FALLBACK_NAME,
     species: firstString(bio.species, bio.race, bio.volk) || "Volk unbekannt",
     class_name: classCurrent?.name || party?.class_name || "Rolle unbekannt",
     class_rank: classCurrent?.rank || party?.class_rank || "Rang F",
@@ -215,6 +219,12 @@ export function deriveActorDockView(
     xp_current: readNumber(progression?.xp_current) ?? readNumber(classCurrent?.xp),
     xp_to_next: readNumber(progression?.xp_to_next) ?? readNumber(classCurrent?.xp_next),
     active: campaign.viewer_context.claimed_slot_id === slot_id,
+    karma_label: deriveKarmaLabel(campaign, slot_id),
+    scene_label: resolveSceneLabel(
+      campaign,
+      sheet?.scene_id ?? party?.scene_id,
+      sheet?.scene_name ?? party?.scene_name,
+    ),
     resources: resourceMeters(sheet, party),
     conditions,
     injury_count: readNumber(overview?.injury_count) ?? sheet?.sheet.injuries_scars.injuries.length ?? party?.injury_count ?? 0,
