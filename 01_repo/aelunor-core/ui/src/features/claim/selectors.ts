@@ -84,16 +84,16 @@ function deriveReadyCounter(campaign: CampaignSnapshot): SetupReadyCounter {
 
 function deriveBlockingReason(gate: ClaimGateState): string | null {
   if (gate.needs_world_setup) {
-    return "World setup is not complete yet. Slot claiming stays blocked until the world is ready.";
+    return "Das Welt-Setup ist noch nicht abgeschlossen. Slots können erst beansprucht werden, wenn die Welt bereit ist.";
   }
   if (gate.needs_claim) {
-    return "Choose a slot to continue into the campaign.";
+    return "Wähle einen Slot, um in die Kampagne zu wechseln.";
   }
   if (gate.needs_character_setup) {
-    return "You have a claimed slot, but character setup still needs to be completed before play opens.";
+    return "Du hast einen Slot beansprucht, aber das Charakter-Setup muss noch abgeschlossen werden.";
   }
   if (!gate.can_enter_play) {
-    return "This session is not ready to enter the campaign workspace yet.";
+    return "Diese Session ist noch nicht bereit für den Kampagnen-Bereich.";
   }
   return null;
 }
@@ -101,7 +101,7 @@ function deriveBlockingReason(gate: ClaimGateState): string | null {
 function deriveSlotSummary(slot: AvailableSlotSnapshot): string {
   const focus = readString(readRecord(slot.summary).current_focus);
   if (slot.completed) {
-    const classBits = [slot.class_name || "No class"];
+    const classBits = [slot.class_name || "Keine Klasse"];
     if (slot.class_rank) {
       classBits.push(`(${slot.class_rank})`);
     }
@@ -110,7 +110,7 @@ function deriveSlotSummary(slot: AvailableSlotSnapshot): string {
     }
     return classBits.join(" ");
   }
-  return "No finished character build in this slot yet.";
+  return "Noch kein fertiger Charakter in diesem Slot.";
 }
 
 function deriveSlotStatusLabel(
@@ -118,12 +118,12 @@ function deriveSlotStatusLabel(
   is_mine: boolean,
 ): string {
   if (is_mine) {
-    return slot.completed ? "Your claimed slot • ready" : "Your claimed slot";
+    return slot.completed ? "Dein Slot • bereit" : "Dein Slot";
   }
   if (!slot.claimed_by) {
-    return "Free";
+    return "Frei";
   }
-  return `Occupied by ${slot.claimed_by_name || "another player"}`;
+  return `Besetzt von ${slot.claimed_by_name || "anderem Spieler"}`;
 }
 
 function deriveReadinessLabel(
@@ -132,17 +132,17 @@ function deriveReadinessLabel(
   gate: ClaimGateState,
 ): string {
   if (gate.needs_world_setup) {
-    return "World setup must finish before any slot can be claimed.";
+    return "Das Welt-Setup muss abgeschlossen sein, bevor Slots beansprucht werden können.";
   }
 
   const normalized_status = setup_status?.status ?? (slot.completed ? "ready" : slot.claimed_by ? "in_progress" : "unclaimed");
   if (normalized_status === "ready") {
-    return "Character setup complete.";
+    return "Charakter-Setup abgeschlossen.";
   }
   if (normalized_status === "in_progress") {
-    return "Character setup in progress.";
+    return "Charakter-Setup läuft.";
   }
-  return "Waiting for a player claim.";
+  return "Wartet auf einen Spieler.";
 }
 
 export function deriveClaimGateState(campaign: CampaignSnapshot): ClaimGateState {
@@ -215,20 +215,20 @@ export function deriveClaimSlots(campaign: CampaignSnapshot): ClaimSlotViewModel
 export function deriveReadyProgressSummary(campaign: CampaignSnapshot): string {
   const ready_counter = deriveClaimGateState(campaign).ready_counter;
   if (ready_counter.total <= 0) {
-    return "Readiness progress is not available yet.";
+    return "Bereitschaft noch nicht verfügbar.";
   }
-  return `Ready ${ready_counter.ready}/${ready_counter.total}`;
+  return `Bereit ${ready_counter.ready}/${ready_counter.total}`;
 }
 
 export function deriveClaimMetaLine(campaign: CampaignSnapshot): string {
   const ready_counter = deriveClaimGateState(campaign).ready_counter;
   const parts = [
     `Session ${campaign.campaign_meta.campaign_id}`,
-    `${campaign.players.length} players`,
-    `Phase ${campaign.setup_runtime.phase_display || campaign.viewer_context.phase || campaign.campaign_meta.status}`,
+    `${(campaign.players ?? []).length} Spieler`,
+    `Phase ${campaign.setup_runtime?.phase_display || campaign.viewer_context?.phase || campaign.campaign_meta.status}`,
   ];
   if (ready_counter.total > 0) {
-    parts.push(`Ready ${ready_counter.ready}/${ready_counter.total}`);
+    parts.push(`Bereit ${ready_counter.ready}/${ready_counter.total}`);
   }
   return parts.join(" • ");
 }
@@ -242,7 +242,7 @@ export function deriveClaimStatusMessage(campaign: CampaignSnapshot): string {
   if (gate.blocking_reason) {
     return gate.blocking_reason;
   }
-  return "Claim a slot or continue into the campaign workspace.";
+  return "Beanspruche einen Slot oder wechsle in den Kampagnen-Bereich.";
 }
 
 export function deriveSlotPresenceLabel(

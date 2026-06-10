@@ -53,21 +53,21 @@ export function SetupActionBar({
           className="setup-turbo-button"
           onClick={on_turbo}
           disabled={!can_turbo || disabled || busy}
-          title="Turbo random apply for the current setup mode"
+          title="Turbo: alle restlichen Fragen automatisch zufällig beantworten"
         >
           {turbo_pending ? "Turbo..." : "Turbo"}
         </button>
         <button type="button" onClick={on_prev} disabled={!can_go_prev || busy}>
-          Previous
+          Zurück
         </button>
         <button type="button" onClick={on_skip} disabled={!can_skip || disabled || busy}>
-          Skip
+          Überspringen
         </button>
         <button type="button" onClick={on_randomize} disabled={!can_randomize || disabled || busy}>
-          {random_pending ? "Generating..." : "Randomize"}
+          {random_pending ? "Würfle..." : "Würfeln"}
         </button>
         <button type="button" onClick={on_submit} disabled={!can_submit || disabled || busy}>
-          {submit_pending ? "Saving..." : submit_label}
+          {submit_pending ? "Speichere..." : submit_label}
         </button>
       </div>
     </footer>

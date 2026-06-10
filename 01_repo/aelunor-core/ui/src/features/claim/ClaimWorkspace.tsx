@@ -21,7 +21,7 @@ function asErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message) {
     return error.message;
   }
-  return "Unexpected error";
+  return "Unerwarteter Fehler";
 }
 
 interface ClaimWorkspaceProps {
@@ -87,11 +87,11 @@ export function ClaimWorkspace({ campaign, join_code, on_leave_session }: ClaimW
         {slots.length === 0 ? (
           <section className="v1-panel claim-empty-state">
             <div className="v1-panel-head">
-              <h2>No Claimable Slots</h2>
+              <h2>Keine Slots verfügbar</h2>
             </div>
             <p className="status-muted">
-              This campaign snapshot does not currently expose any slot entries. You can return to Session Hub or wait
-              for the campaign configuration to change.
+              Diese Kampagne stellt aktuell keine Charakter-Slots bereit. Du kannst zur Session-Übersicht zurückkehren
+              oder warten, bis sich die Kampagnen-Konfiguration ändert.
             </p>
           </section>
         ) : (

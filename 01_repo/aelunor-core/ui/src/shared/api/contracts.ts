@@ -763,18 +763,51 @@ export interface LlmModelStatus {
   family: string | null;
 }
 
-export interface LlmStatusResponse {
-  ollama_url: string;
-  configured_model: string;
-  request_timeout_sec: number;
-  seed: number | null;
-  temperature: number;
-  num_ctx: number;
-  ollama_ok: boolean;
-  configured_model_available: boolean;
-  available_models: LlmModelStatus[];
-  error: string;
+// /api/llm/status mirrors the adapter status payloads: a flat Ollama shape
+// (LLM_PROVIDER=ollama), a flat Anthropic shape (LLM_PROVIDER=anthropic), or
+// a nested auto shape with primary/fallback blocks (LLM_PROVIDER=auto).
+export interface LlmOllamaStatus {
+  name?: string;
+  ollama_url?: string;
+  configured_model?: string;
+  request_timeout_sec?: number;
+  seed?: number | null;
+  temperature?: number;
+  num_ctx?: number;
+  ollama_ok?: boolean;
+  configured_model_available?: boolean;
+  available_models?: LlmModelStatus[];
+  error?: string;
 }
+
+export interface LlmAnthropicStatus {
+  name?: string;
+  provider?: "anthropic";
+  configured_model?: string;
+  request_timeout_sec?: number;
+  max_tokens?: number;
+  api_key_present?: boolean;
+  anthropic_ok?: boolean;
+  error?: string;
+}
+
+export interface LlmAutoStatusResponse {
+  provider: "auto";
+  primary?: LlmOllamaStatus;
+  fallback?: LlmAnthropicStatus;
+  llm_provider?: string;
+}
+
+export interface LlmOllamaStatusResponse extends LlmOllamaStatus {
+  llm_provider?: string;
+}
+
+export interface LlmAnthropicStatusResponse extends LlmAnthropicStatus {
+  provider: "anthropic";
+  llm_provider?: string;
+}
+
+export type LlmStatusResponse = LlmAutoStatusResponse | LlmOllamaStatusResponse | LlmAnthropicStatusResponse;
 
 export interface SessionLibraryEntry {
   campaign_id: string;

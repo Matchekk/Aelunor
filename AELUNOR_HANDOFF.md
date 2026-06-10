@@ -147,10 +147,102 @@
   (echtes Karma-System = Issue #33); `journal.reputation`-Eintragsform ist
   nicht typisiert (UI liest defensiv); Party-Panel zeigt max. Backend-Daten,
   keine Pagination bei grossen Parties.
-* Folge-Slice: `LlmStatusResponse`-Contract sauber typisieren und API-/UI-Shape
-  von `/api/llm/status` dauerhaft vereinheitlichen.
-* Naechster sinnvoller UI-Slice: RightRail.tsx entfernen oder reaktivieren
-  (Entscheidung noetig), danach Szenen-/Karten-Panel mit echten Map-Nodes.
+* Frische Charaktere starten mit vollen Ressourcen (Fix in
+  `app/services/setup/summaries.py`: Currents wurden vor der Attributvergabe
+  auf niedrige Maxima geclampt, z.B. 8/18 Leben). Claim-/Setup-UI ist jetzt
+  durchgehend deutsch. Umlaut-Mojibake in 8 Backend-Dateien wird durch den
+  offenen PR #51 (Heim-PC) gefixt — hier bewusst nicht dupliziert.
+* Play-Journal Center poliert (Branch `polish/ui-play-journal-center`):
+  Panel ist dunkles Navy statt Beige-Block (`aelunor-main-screen.css`),
+  Eintraege als Pergamentkarten mit vertikaler Gold-Chronik-Linie und
+  Typ-Badge (Story/System/Spieler via `deriveTurnKindLabel`), Lesespalte
+  zentriert (max 58rem), kontrollierter Empty-State
+  ("Noch keine Chronik-Einträge."), leerer Spieler-Lead wird ausgeblendet.
+  Tests: `journalView.test.ts`. WorldRail/ActorDock/TopBar/Composer-Logik
+  unangetastet. Kein LLM-Call im Smoke.
+* Play-HUD Premium-Pass (Branch `polish/ui-play-hud-premium-pass`):
+  gemeinsame Chrome-Sprache fuer die Play-Shell in `campaignPlayV2.css`
+  (dunkle Scrollbars, Gold-Panel-Linien, --ael-Tokens statt Farbduplikate).
+  Journal: Karten-Lesespalte repariert — Root Cause war ein Relikt
+  `margin-left: 50%` auf `.story-turn-card` in `aelunor-premium-layout.css`
+  (altes Split-Layout); Karte jetzt ~76% Center-Breite, Kopfzeile mit
+  Hairline, kein doppelter Story/Mode-Badge (`deriveShowModePill`),
+  Empty-Text "Noch kein sichtbarer Chroniktext.". Composer: RPG-Action-Tabs,
+  Gold-Fokus, integrierter Disabled-Send. ActorDock: gerahmtes Portrait,
+  ruhige Pill-Navigation mit aria-labels, Meter mit Track, absichtliche
+  Empty-States. WorldRail: Karten-Padding (PARTY nicht mehr abgeschnitten),
+  Quest-Line-Clamp (nur visuell), dunklere Fantasy-Map mit Goldpfaden.
+  Topbar: Status-Segmente, ruhigere Utilities. Tests 76/76, Build gruen,
+  Smoke 1920x1080 ohne Fehler. Keine LLM-Calls.
+* Debug-Chrome-Cleanup (auf `polish/ui-play-hud-premium-pass`): Center-
+  Status-Pills (Phase/Blickwinkel/Slots) und Member-Chips entfernt (Infos
+  leben in Topbar/ActorDock/Composer-Dropdown); Composer-Pills "Modus X"/
+  "Akteur slot_x" entfernt (keine rohen Slot-IDs mehr sichtbar);
+  `PartyStatusPanel` rechts geloescht (Party bleibt links; Modell
+  `partyHudModel` bleibt fuer Adapter/Accessors); Einbuchstaben-Sektions-Nav
+  (U R S K F A G B = Anfangsbuchstaben der Sektionen, rein kosmetisch)
+  entfernt. ActorRail hat jetzt einen Drawer-Griff an der Leiste
+  (`actor-rail-handle`, CSS-Glyph, aria-expanded; Persistenz weiter ueber
+  bestehendes uiMemory `right_rail_open`, kein neuer Key); "Akteur"-Button
+  aus der Topbar entfernt, Reihenfolge rechts: Claim loesen, Code, Hub,
+  Icon-Utilities. ActorRail-Griff ist jetzt ornamental und ueberlappt die
+  Panelkante wie ein eingelassener Beschlag: keine separate Grid-Spalte mehr,
+  sondern relativer Wrapper `.actor-rail-shell` (3. Grid-Spalte; collapsed
+  0px) mit absolut positioniertem Griff (left 0, top 50%,
+  translate(-45%,-50%); collapsed translate(-100%,-50%)), 34x132px-Kapsel mit
+  `{`/`}`-Glyph, Gold-Border/Glow, Finial-Rauten — reiner CSS-Placeholder,
+  spaeter durch `.webp`-Asset ersetzbar; A11y/State/Persistenz (uiMemory
+  `right_rail_open`) unveraendert. Play-Topbar nutzt keine SVGs (CSS-Glyphen + PNG-Logo;
+  einzige SVG-Nutzung im UI ist das Drawer-Attributradar, unangetastet).
+  Composer-Default 340px / min 240 (Gap 0.55rem) — alle Controls ohne
+  internen Scroll (scrollHeight<=clientHeight verifiziert), Overflow nur
+  als Notfall bei manuell kleiner Hoehe. Tests 88/88, Smoke gruen.
+* Responsive-Pass Play-Shell (auf `polish/ui-play-hud-premium-pass`):
+  geprueft 1920/1366/1100/960/820/768/390 — kein horizontaler Overflow.
+  >1200 3-spaltig, 901-1200 2-spaltig (Actor-Dock + Griff ausgeblendet),
+  <=900 gestapelt. Fix: im Stack ist die Center-Spalte (Journal+Composer)
+  jetzt story-first vor der WorldRail (`order` in der 900px-Media), Map-
+  Platzhalter auf 150px gedeckelt, WorldRail wird simpler Flex-Stack,
+  Composer-Basis 300px. Composer-Inhalte sind flex (kein interner Scroll),
+  obere Gruppe (Header->Tabs) eng. Journal-Schriftrolle bis 76rem breit.
+* Center-Density-/Lesbarkeits-Fix (auf `polish/ui-play-hud-premium-pass`):
+  JOURNAL-/DEIN-BEITRAG-Titel ~30% kleiner, Paddings/Gaps im Center
+  reduziert (campaignPlayV2.css Abschnitt 2c). Pergament-Lesbarkeit: Text
+  auf `.story-turn-card` wird per hoher Spezifitaet auf
+  `var(--ael-story-ink)` gezwungen (globals `.timeline-item p` und
+  premium-layout `#f4ead9` hatten hellen Text auf heller Karte erzeugt);
+  Token-basiert, damit Theme arcane (dunkle Karte, helle Tinte) intakt
+  bleibt. Composer-Grenzen neu: min 220 / Default 260 / max 44% der
+  Center-Hoehe (Journal-Guard 260); localStorage-Key bleibt
+  `aelunor.play.composerHeight.v1`, alte Werte werden nach Mount gegen die
+  echte Center-Hoehe geclamped und zurueckgeschrieben (450 -> 422 bei
+  1080p). Smoke: Default 258px, Karte vollstaendig sichtbar, Ink
+  rgb(32,24,15). Tests 88/88.
+* Resizable Composer (auf `polish/ui-play-hud-premium-pass`): vertikaler
+  Split Journal/Composer mit Drag-Handle (`composerResize.ts` +
+  `composer-resize-handle` in `CampaignWorkspace`), Hoehe via CSS-Variable
+  `--play-composer-height`. Persistenz in localStorage-Key
+  `aelunor.play.composerHeight.v1` (Pixel, beim Laden geclamped). Regeln:
+  min 220px, Default 300px, max 55% der Center-Hoehe bzw. Journal-Guard
+  (Journal min 220px). Tastatur: Pfeile (+Shift), Enter/Doppelklick =
+  Default; role=separator mit aria-Werten. Pure Clamp-/Storage-Tests
+  (`composerResize.test.ts`); kein DOM-Drag-Test (keine Testing-Library im
+  Projekt). Smoke: Default 298px, Drag 448px, Reload persistiert. Keine
+  LLM-Calls; Backend/Turn/Provider/Runtime/Campaign-State unveraendert.
+* LLM-Status-Contract-Drift behoben (Branch `fix/ui-llm-status-contract`,
+  gestackt auf `fix/ui-campaign-state-hud`): `LlmStatusResponse` ist jetzt die
+  ehrliche Union der drei Backend-Shapes (flat Ollama, flat Anthropic, nested
+  auto mit `primary`/`fallback`; Quelle: `app/adapters/llm.py` +
+  `anthropic_adapter.py`, read-only verifiziert). Neuer Normalizer
+  `normalizeLlmStatusResponse` in `ui/src/features/session/llmStatusModel.ts`;
+  `LlmStatusPanel` rendert nur noch normalisierte Daten (inkl. Provider- und
+  Fallback-Zeile), keine rohen Shape-Zugriffe. Tests:
+  `llmStatusModel.test.ts` (alle Shapes, kaputte Payloads, kein
+  `undefined`/`[object Object]`). Keine LLM-Calls, keine Backend-Aenderung.
+* Naechste UI-Slices: 1) Right Actor HUD polish, 2) Left WorldRail/Party/Map
+  polish, 3) Topbar enttechnisieren, 4) Mojibake/Encoding separat pruefen
+  (PR #51 abwarten); ausserdem RightRail.tsx entfernen oder reaktivieren
+  (Entscheidung noetig).
 * Nicht erneut untersuchen: keine Cloud-LLM-Intro-Flows im Smoke (Setup nie
   bis zum Intro abschliessen), keine Runtime-Daten, keine Backend-/Turn-/
   LLM-Dateien in diesem PR.

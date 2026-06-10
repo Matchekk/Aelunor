@@ -66,7 +66,7 @@ function coercePromptState(value: unknown): SetupPromptState | null {
   return {
     question: {
       question_id: readString(question.question_id),
-      label: readString(question.label) || "Untitled question",
+      label: readString(question.label) || "Unbenannte Frage",
       type: (readString(question.type) || "text") as SetupQuestionPayload["type"],
       required: question.required === true,
       options: Array.isArray(question.options)
@@ -115,7 +115,7 @@ function deriveReadyCounter(campaign: CampaignSnapshot): SetupReadyCounter {
 
 function deriveSlotLabel(campaign: CampaignSnapshot, slot_id: string | null): string {
   if (!slot_id) {
-    return "Character Setup";
+    return "Charakter-Setup";
   }
 
   const matchingAvailable = (campaign.available_slots ?? []).find((slot) => slot.slot_id === slot_id);
@@ -169,19 +169,19 @@ export function deriveSetupGateState(campaign: CampaignSnapshot): SetupGateState
     is_waiting,
     can_interact,
     phase_display,
-    title: mode === "world" ? "World Setup" : `Character Setup: ${deriveSlotLabel(campaign, slot_id)}`,
+    title: mode === "world" ? "Welt-Setup" : `Charakter-Setup: ${deriveSlotLabel(campaign, slot_id)}`,
     subtitle:
       mode === "world"
         ? is_waiting
-          ? "The host is defining the campaign frame. You can watch readiness progress here while the world is prepared."
-          : "Define the campaign frame before slot claims and story play can begin."
-        : "Finish the claimed character before the campaign can advance into playable story turns.",
+          ? "Der Host legt gerade den Rahmen der Kampagne fest. Du kannst hier den Fortschritt verfolgen, bis die Welt bereit ist."
+          : "Lege den Rahmen der Kampagne fest, bevor Slots beansprucht und Story-Züge gespielt werden können."
+        : "Schließe den beanspruchten Charakter ab, bevor die Kampagne in spielbare Story-Züge wechselt.",
     current_prompt,
     current_question: current_prompt?.question ?? null,
     progress,
     chapter_progress,
     global_progress,
-    chapter_label: runtime?.chapter_label || (mode === "world" ? "World" : "Character"),
+    chapter_label: runtime?.chapter_label || (mode === "world" ? "Welt" : "Charakter"),
     chapter_index: readNumber(runtime?.chapter_index) || 1,
     chapter_total: readNumber(runtime?.chapter_total) || 1,
     ready_counter,
@@ -197,9 +197,9 @@ export function canSkipQuestion(question: SetupQuestionPayload | null): boolean 
 
 export function deriveSetupProgressSummary(progress: SetupProgressPayload | null): string {
   if (!progress || progress.total <= 0) {
-    return "Progress data is not available yet.";
+    return "Fortschrittsdaten noch nicht verfügbar.";
   }
-  return `Question ${progress.step}/${progress.total}`;
+  return `Frage ${progress.step}/${progress.total}`;
 }
 
 export function deriveSetupReviewEntries(summary_preview: Record<string, unknown>): Array<{ label: string; value: string }> {

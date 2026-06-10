@@ -34,15 +34,15 @@ export function SetupProgress({
   return (
     <section className="v1-panel setup-progress-panel">
       <div className="v1-panel-head">
-        <h2>Progress</h2>
-        <span>{summary(global_progress, "No totals yet")}</span>
+        <h2>Fortschritt</h2>
+        <span>{summary(global_progress, "Noch keine Daten")}</span>
       </div>
       <div className="setup-progress-grid">
         <div className="setup-progress-row">
           <div className="setup-progress-copy">
             <strong>{chapter_label}</strong>
             <span className="status-muted">
-              Chapter {chapter_index}/{chapter_total} • {summary(chapter_progress, "No chapter totals")}
+              Kapitel {chapter_index}/{chapter_total} • {summary(chapter_progress, "Keine Kapiteldaten")}
             </span>
           </div>
           <div className="setup-progress-track">
@@ -51,8 +51,8 @@ export function SetupProgress({
         </div>
         <div className="setup-progress-row">
           <div className="setup-progress-copy">
-            <strong>Global</strong>
-            <span className="status-muted">{summary(global_progress, "No global totals")}</span>
+            <strong>Gesamt</strong>
+            <span className="status-muted">{summary(global_progress, "Keine Gesamtdaten")}</span>
           </div>
           <div className="setup-progress-track">
             <div className="setup-progress-fill is-global" style={{ width: `${percent(global_progress)}%` }} />
@@ -60,7 +60,7 @@ export function SetupProgress({
         </div>
         <div className="setup-progress-ready">
           <span className="status-pill">
-            Ready {ready_counter.ready}/{ready_counter.total}
+            Bereit {ready_counter.ready}/{ready_counter.total}
           </span>
         </div>
       </div>

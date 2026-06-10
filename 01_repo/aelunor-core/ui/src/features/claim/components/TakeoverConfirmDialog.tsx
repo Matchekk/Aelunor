@@ -40,21 +40,21 @@ export function TakeoverConfirmDialog({
     <div className="session-dialog-backdrop" role="presentation" onClick={on_close}>
       <section ref={dialogRef} className="session-dialog" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <div className="v1-panel-head">
-          <h2>Confirm Takeover</h2>
+          <h2>Übernahme bestätigen</h2>
         </div>
         <p>
-          Take over <strong>{slot.display_name}</strong> ({slot.slot_id.toUpperCase()})?
+          <strong>{slot.display_name}</strong> ({slot.slot_id.toUpperCase()}) übernehmen?
         </p>
         <p className="status-muted">
-          This uses the existing backend takeover flow. If you already hold another claim, the backend will switch it.
+          Hältst du bereits einen anderen Slot, wechselt dein Claim auf diesen Charakter.
         </p>
         {error_message ? <div className="session-feedback error">{error_message}</div> : null}
         <div className="session-dialog-actions">
           <button type="button" onClick={() => on_confirm(slot.slot_id)} disabled={pending}>
-            {pending ? "Taking over..." : "Confirm takeover"}
+            {pending ? "Übernehme..." : "Übernahme bestätigen"}
           </button>
           <button type="button" onClick={on_close} disabled={pending}>
-            Cancel
+            Abbrechen
           </button>
         </div>
       </section>

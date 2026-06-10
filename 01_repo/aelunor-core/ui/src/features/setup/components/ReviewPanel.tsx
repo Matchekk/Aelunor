@@ -7,11 +7,11 @@ export function ReviewPanel({ mode, entries }: ReviewPanelProps) {
   return (
     <section className="setup-review-panel">
       <div className="v1-panel-head">
-        <h2>{mode === "world" ? "World Review" : "Character Review"}</h2>
-        <span>Final check</span>
+        <h2>{mode === "world" ? "Welt-Überprüfung" : "Charakter-Überprüfung"}</h2>
+        <span>Letzte Kontrolle</span>
       </div>
       <p className="status-muted">
-        Confirm the current setup summary before the last answer is committed to the backend.
+        Prüfe die Zusammenfassung, bevor die letzte Antwort endgültig gespeichert wird.
       </p>
       <div className="setup-review-grid">
         {entries.length > 0 ? (
@@ -23,7 +23,7 @@ export function ReviewPanel({ mode, entries }: ReviewPanelProps) {
           ))
         ) : (
           <article className="setup-review-item">
-            <p>No review summary is available for this step yet.</p>
+            <p>Für diesen Schritt liegt noch keine Zusammenfassung vor.</p>
           </article>
         )}
       </div>

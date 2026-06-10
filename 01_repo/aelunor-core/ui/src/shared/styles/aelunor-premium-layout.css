@@ -336,7 +336,8 @@ button:hover {
 }
 
 .story-turn-card {
-  margin-left: 50%;
+  /* margin-left: 50% stammte aus dem alten Split-Layout (Karten rechts neben
+     beiger Flaeche) und drueckte die Chronik-Karten aus der Lesespalte. */
   border-radius: 0.95rem;
   border-color: rgba(215, 178, 108, 0.18);
   background:

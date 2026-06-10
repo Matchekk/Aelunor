@@ -205,12 +205,7 @@ export function Composer({ campaign, selected_actor_id, on_actor_select, on_open
         }}
       />
 
-      <ComposerStatusBar
-        actor={access.actor}
-        mode_label={modeConfig.label}
-        helper_text={modeConfig.hint}
-        disabled_reason={access.disabled_reason}
-      />
+      <ComposerStatusBar helper_text={modeConfig.hint} disabled_reason={access.disabled_reason} />
       <WaitingInline target="composer" className="composer-waiting-inline" />
 
       <div className="composer-input-grid">

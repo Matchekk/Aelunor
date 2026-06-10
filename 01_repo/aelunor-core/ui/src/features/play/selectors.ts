@@ -214,6 +214,21 @@ export function formatTimelineTimestamp(value: string): string {
   return formatDateTime(value) ?? "Unbekannte Zeit";
 }
 
+export function deriveTurnKindLabel(entry: TimelineEntry, character_sheet_slots: string[]): string {
+  if (entry.actor_id && character_sheet_slots.includes(entry.actor_id)) {
+    return "Spieler";
+  }
+  if (entry.mode && entry.mode.toLowerCase() === "system") {
+    return "System";
+  }
+  return "Story";
+}
+
+export function deriveShowModePill(entry: TimelineEntry, character_sheet_slots: string[]): boolean {
+  const kind = deriveTurnKindLabel(entry, character_sheet_slots);
+  return Boolean(entry.mode) && entry.mode.toLowerCase() !== kind.toLowerCase();
+}
+
 export function deriveTurnLead(entry: TimelineEntry): string {
   if (entry.input_text_display) {
     return entry.input_text_display;
@@ -225,7 +240,7 @@ export function deriveTurnOutcome(entry: TimelineEntry): string {
   if (entry.gm_text_display) {
     return entry.gm_text_display;
   }
-  return "Noch keine GM-Antwort.";
+  return "Noch kein sichtbarer Chroniktext.";
 }
 
 function deriveCampaignPhase(campaign: CampaignSnapshot): string {

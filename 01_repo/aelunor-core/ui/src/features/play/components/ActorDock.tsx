@@ -7,24 +7,12 @@ import { endpoints } from "../../../shared/api/endpoints";
 import { getJson } from "../../../shared/api/httpClient";
 import { AelunorPanelFrame } from "../../../shared/ui/aelunorAssets";
 import { deriveActorDockView, type ActorPanelSection, type ResourceMeter } from "../actorDockModel";
-import { PartyStatusPanel } from "./PartyStatusPanel";
 
 interface ActorDockProps {
   campaign: CampaignSnapshot;
   selected_slot_id: string | null;
   on_open_character: (slot_id: string, tab_id?: string) => void;
 }
-
-const SECTIONS: Array<{ id: ActorPanelSection; label: string }> = [
-  { id: "overview", label: "Uebersicht" },
-  { id: "resources", label: "Ressourcen" },
-  { id: "status", label: "Status" },
-  { id: "body", label: "Koerper" },
-  { id: "skills", label: "Fertigkeiten" },
-  { id: "equipment", label: "Ausrüstung" },
-  { id: "inventory", label: "Gegenstände" },
-  { id: "bonds", label: "Bindungen" },
-];
 
 function initials(name: string): string {
   return name
@@ -83,7 +71,6 @@ export const ActorDock = memo(function ActorDock({ campaign, selected_slot_id, o
     return (
       <AelunorPanelFrame as="aside" className="actor-dock" variant="compact" texture>
         <p className="status-muted">Noch kein Akteur ausgewaehlt.</p>
-        <PartyStatusPanel campaign={campaign} selected_slot_id={null} on_open_character={on_open_character} />
       </AelunorPanelFrame>
     );
   }
@@ -111,20 +98,6 @@ export const ActorDock = memo(function ActorDock({ campaign, selected_slot_id, o
           <p className="actor-scene-line">{view.scene_label}</p>
         </div>
       </header>
-
-      <nav className="actor-section-nav" aria-label="Akteurdetails">
-        {SECTIONS.map((section) => (
-          <button
-            key={section.id}
-            type="button"
-            className={selectedCharacterPanelSection === section.id ? "is-active" : ""}
-            onClick={() => setSelectedCharacterPanelSection(section.id)}
-            title={section.label}
-          >
-            {section.label.slice(0, 1)}
-          </button>
-        ))}
-      </nav>
 
       <DockSection id="resources" label="Ressourcen" active={selectedCharacterPanelSection === "resources"} on_select={setSelectedCharacterPanelSection}>
         <div className="resource-meters">
@@ -210,8 +183,6 @@ export const ActorDock = memo(function ActorDock({ campaign, selected_slot_id, o
       </DockSection>
 
       {query.isError ? <p className="actor-dock-note">Detaildaten nicht geladen; zeige Gruppenstatus.</p> : null}
-
-      <PartyStatusPanel campaign={campaign} selected_slot_id={selected_slot_id} on_open_character={on_open_character} />
     </AelunorPanelFrame>
   );
 });

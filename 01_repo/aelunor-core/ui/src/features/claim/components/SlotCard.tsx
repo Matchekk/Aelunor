@@ -28,22 +28,22 @@ export function SlotCard({ slot, disabled, pending_action, on_claim, on_takeover
       <div className="claim-slot-actions">
         {slot.can_claim ? (
           <button type="button" onClick={() => on_claim(slot.slot_id)} disabled={disabled}>
-            {pending_action === "claim" ? "Claiming..." : "Claim"}
+            {pending_action === "claim" ? "Beanspruche..." : "Beanspruchen"}
           </button>
         ) : null}
         {slot.can_take_over ? (
           <button type="button" onClick={() => on_takeover(slot)} disabled={disabled}>
-            {pending_action === "takeover" ? "Taking over..." : "Take over"}
+            {pending_action === "takeover" ? "Übernehme..." : "Übernehmen"}
           </button>
         ) : null}
         {slot.can_unclaim ? (
           <button type="button" onClick={() => on_unclaim(slot.slot_id)} disabled={disabled}>
-            {pending_action === "unclaim" ? "Releasing..." : "Unclaim"}
+            {pending_action === "unclaim" ? "Gebe frei..." : "Freigeben"}
           </button>
         ) : null}
         {!slot.can_claim && !slot.can_take_over && !slot.can_unclaim ? (
           <button type="button" disabled>
-            Unavailable
+            Nicht verfügbar
           </button>
         ) : null}
       </div>

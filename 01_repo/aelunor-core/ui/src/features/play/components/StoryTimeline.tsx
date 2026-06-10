@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { shouldOpenTimelineDetails } from "../../../entities/settings/interaction";
 import { useUserSettingsStore } from "../../../entities/settings/store";
 import type { TimelineEntry } from "../selectors";
-import { deriveTurnDeltaRows, deriveTurnLead, deriveTurnOutcome, formatTimelineTimestamp } from "../selectors";
+import { deriveShowModePill, deriveTurnDeltaRows, deriveTurnKindLabel, deriveTurnLead, deriveTurnOutcome, formatTimelineTimestamp } from "../selectors";
 import { WaitingInline } from "../../../shared/waiting/components";
 import type { SceneFilterId, SceneOption } from "../../scenes/selectors";
 import {
@@ -62,6 +62,8 @@ const TimelineItem = memo(function TimelineItem({
   on_continue_turn,
 }: TimelineItemProps) {
   const deltaRows = useMemo(() => deriveTurnDeltaRows(entry), [entry]);
+  const kindLabel = deriveTurnKindLabel(entry, character_sheet_slots);
+  const showModePill = deriveShowModePill(entry, character_sheet_slots);
   const detailsProps = details_open_by_default ? { open: true } : {};
   const isPendingTurnAction = Boolean(turn_action_pending_id && turn_action_pending_id === entry.turn_id);
   const canRenderTurnActions = is_latest_turn && (entry.can_edit || entry.can_undo || entry.can_retry || can_continue_turn);
@@ -71,7 +73,8 @@ const TimelineItem = memo(function TimelineItem({
       <div className="timeline-item-head">
         <div className="timeline-item-title">
           <strong>Zug {entry.turn_number ?? "?"}</strong>
-          <span className="timeline-mode-pill">{entry.mode}</span>
+          <span className="timeline-kind-pill">{kindLabel}</span>
+          {showModePill ? <span className="timeline-mode-pill">{entry.mode}</span> : null}
           {entry.scene_name ? <span className="timeline-scene-pill">{entry.scene_name}</span> : null}
         </div>
         <span>{formatTimelineTimestamp(entry.created_at)}</span>
@@ -85,7 +88,7 @@ const TimelineItem = memo(function TimelineItem({
           entry.actor_display
         )}
       </div>
-      <p className="timeline-item-input story-turn-lead">{deriveTurnLead(entry)}</p>
+      {entry.input_text_display ? <p className="timeline-item-input story-turn-lead">{deriveTurnLead(entry)}</p> : null}
       <p className="story-turn-text">{deriveTurnOutcome(entry)}</p>
       {deltaRows.length > 0 ? (
         <details
@@ -246,7 +249,7 @@ export const StoryTimeline = memo(function StoryTimeline({
       ) : null}
       {entries.length === 0 ? (
         <div className="timeline-empty">
-          <p className="status-muted">{selected_scene_name ? "Für diese Szene sind noch keine Züge sichtbar." : "Noch keine Story-Züge vorhanden."}</p>
+          <p className="status-muted">{selected_scene_name ? "Für diese Szene sind noch keine Züge sichtbar." : "Noch keine Chronik-Einträge."}</p>
           <p className="status-muted">
             {selected_scene_name
               ? "Wechsle zu „Alle Szenen“, um auch Einträge ohne Szenenmarker zu sehen."

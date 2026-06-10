@@ -178,7 +178,7 @@ export function RouteGate({
             on_clear_active_session={on_clear_active_session}
           />
         )}
-        {routeState.show_setup_overlay ? <SetupWizardOverlay campaign={campaign} /> : null}
+        {routeState.show_setup_overlay ? <SetupWizardOverlay campaign={campaign} on_leave_session={on_clear_active_session} /> : null}
       </>
     </PresenceProvider>
   );

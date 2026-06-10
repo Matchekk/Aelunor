@@ -13,7 +13,7 @@ export function SetupQuestionRenderer({ question, draft, disabled, on_change }: 
   const QuestionComponent = setupQuestionRegistry[question.type];
 
   if (!QuestionComponent) {
-    return <div className="session-feedback error">This setup question type is not supported in v1 yet.</div>;
+    return <div className="session-feedback error">Dieser Fragetyp wird in v1 noch nicht unterstützt.</div>;
   }
 
   return <QuestionComponent question={question} draft={draft} disabled={disabled} on_change={on_change} />;
