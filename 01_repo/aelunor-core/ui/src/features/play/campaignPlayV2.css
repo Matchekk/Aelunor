@@ -132,7 +132,7 @@
 /* The composer keeps its (resizable) block height, but its contents flex to
    fit: the input row fills the remaining space and the textarea shrinks with
    it, so the block itself never needs an internal scrollbar. */
-.campaign-play-shell .story-workspace.is-active-play .player-composer.composer-panel { flex: 0 0 var(--play-composer-height, 340px); height: var(--play-composer-height, 340px); min-height: 240px; display: flex; flex-direction: column; gap: 0.5rem; overflow: hidden; }
+.campaign-play-shell .story-workspace.is-active-play .player-composer.composer-panel { flex: 0 0 var(--play-composer-height, 340px); height: var(--play-composer-height, 340px); min-height: 240px; display: flex; flex-direction: column; justify-content: flex-start; gap: 0.32rem; overflow: hidden; }
 .campaign-play-shell .player-composer.composer-panel .composer-input-grid { flex: 1 1 auto; min-height: 0; align-items: stretch; }
 .campaign-play-shell .player-composer.composer-panel .composer-textarea-wrap { display: flex; flex-direction: column; gap: 0.3rem; min-height: 0; }
 .campaign-play-shell .player-composer.composer-panel .composer-textarea-wrap textarea { flex: 1 1 auto; min-height: 3rem; height: 100%; resize: none; }
@@ -175,7 +175,8 @@ body.is-resizing-composer * { user-select: none; }
 .campaign-play-shell .story-turn-card .story-turn-lead { color: color-mix(in srgb, var(--ael-story-ink, #2b2118) 78%, transparent); }
 .campaign-play-shell .story-turn-card .timeline-item-actor, .campaign-play-shell .story-turn-card .timeline-actor-button { color: color-mix(in srgb, var(--ael-story-ink, #2b2118) 82%, transparent); }
 .campaign-play-shell .story-turn-card .timeline-delta-block, .campaign-play-shell .story-turn-card .timeline-delta-block summary, .campaign-play-shell .story-turn-card .timeline-delta-block li { color: color-mix(in srgb, var(--ael-story-ink, #2b2118) 80%, transparent); }
-.campaign-play-shell .composer-dock-head { margin-bottom: 0.3rem; }
+.campaign-play-shell .composer-dock-head { margin-bottom: 0; }
+.campaign-play-shell .player-composer.composer-panel .composer-mode-cluster { margin-top: 0; }
 .campaign-play-shell .composer-dock-head .panelTitle { font-size: clamp(0.98rem, 0.35vw + 0.8rem, 1.28rem); letter-spacing: 0.1em; }
 .campaign-play-shell .composer-input-grid { gap: 0.6rem; }
 .campaign-play-shell .composer-helper, .campaign-play-shell .composer-status-bar { font-size: 0.74rem; }
