@@ -110,7 +110,7 @@ body { background: radial-gradient(circle at 18% 4%, color-mix(in srgb, var(--ae
    entry cards, never as a full-panel background block. */
 .story-timeline.timeline-panel { position: relative; flex: 1 1 auto; min-height: 0; padding: clamp(1rem, 1.35vw, 1.4rem); border: 1px solid color-mix(in srgb, var(--ael-border-strong) 78%, transparent); border-radius: 1.1rem; background: radial-gradient(circle at 50% 0, color-mix(in srgb, var(--ael-glow) 22%, transparent), transparent 26rem), linear-gradient(180deg, color-mix(in srgb, var(--ael-surface-soft) 64%, transparent), color-mix(in srgb, var(--ael-surface) 96%, black)); box-shadow: 0 22px 70px rgba(0, 0, 0, 0.36); overflow: auto; color: var(--ael-text); }
 .story-timeline.timeline-panel::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at 76% 45%, color-mix(in srgb, var(--ael-glow) 32%, transparent), transparent 22rem); opacity: 0.55; }
-.timeline-head, .timeline-scene-switcher, .timeline-list, .timeline-empty, .timeline-window-status, .timeline-window-actions, .timeline-waiting-inline { width: 100%; max-width: 58rem; margin-inline: auto; }
+.timeline-head, .timeline-scene-switcher, .timeline-list, .timeline-empty, .timeline-window-status, .timeline-window-actions, .timeline-waiting-inline { width: 100%; max-width: 78rem; margin-inline: auto; }
 .timeline-head { position: relative; z-index: 1; margin-bottom: 1rem; color: var(--ael-text); }
 .timeline-head .panelTitle { color: var(--ael-gold); font-size: clamp(1.4rem, 1.25vw + 0.9rem, 2.15rem); }
 .timeline-head > span, .timeline-window-status .status-muted, .timeline-empty .status-muted { color: var(--ael-text-muted); }

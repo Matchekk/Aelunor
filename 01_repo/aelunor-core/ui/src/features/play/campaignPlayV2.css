@@ -129,7 +129,20 @@
    --play-composer-height (persisted in localStorage), the journal keeps
    the remaining space and never collapses. */
 .campaign-play-shell .story-workspace.is-active-play .story-timeline.timeline-panel { min-height: 260px; }
-.campaign-play-shell .story-workspace.is-active-play .player-composer.composer-panel { flex: 0 0 var(--play-composer-height, 340px); height: var(--play-composer-height, 340px); min-height: 240px; gap: 0.55rem; overflow: auto; }
+/* The composer keeps its (resizable) block height, but its contents flex to
+   fit: the input row fills the remaining space and the textarea shrinks with
+   it, so the block itself never needs an internal scrollbar. */
+.campaign-play-shell .story-workspace.is-active-play .player-composer.composer-panel { flex: 0 0 var(--play-composer-height, 340px); height: var(--play-composer-height, 340px); min-height: 240px; display: flex; flex-direction: column; gap: 0.5rem; overflow: hidden; }
+.campaign-play-shell .player-composer.composer-panel .composer-input-grid { flex: 1 1 auto; min-height: 0; align-items: stretch; }
+.campaign-play-shell .player-composer.composer-panel .composer-textarea-wrap { display: flex; flex-direction: column; gap: 0.3rem; min-height: 0; }
+.campaign-play-shell .player-composer.composer-panel .composer-textarea-wrap textarea { flex: 1 1 auto; min-height: 3rem; height: 100%; resize: none; }
+.campaign-play-shell .player-composer.composer-panel .composer-helper { margin-top: 0; }
+/* Compact the action column so the input row's floor is low — leaves slack at
+   the block height and keeps every control on-screen at smaller heights too. */
+.campaign-play-shell .composer-actor-send { gap: 0.4rem; }
+.campaign-play-shell .composer-actor-send select { min-height: 2.1rem; padding-block: 0.2rem; }
+.campaign-play-shell .composer-actor-send .submit-bar button { min-height: 2.6rem; font-size: 0.95rem; letter-spacing: 0.12em; }
+.campaign-play-shell .composer-mode-tabs button, .campaign-play-shell .composer-tools-tabs button { min-height: 1.85rem; }
 .campaign-play-shell .composer-resize-handle { flex: 0 0 12px; display: grid; place-items: center; margin: -0.3rem 0; cursor: row-resize; touch-action: none; }
 .campaign-play-shell .composer-resize-handle i { display: block; width: 5rem; height: 3px; border-radius: 999px; background: color-mix(in srgb, var(--ael-gold, #caa763) 28%, transparent); transition: background 120ms ease, width 120ms ease; }
 .campaign-play-shell .composer-resize-handle:hover i, .campaign-play-shell .composer-resize-handle:focus-visible i { width: 7rem; background: color-mix(in srgb, var(--ael-gold, #caa763) 58%, transparent); }
@@ -149,7 +162,11 @@ body.is-resizing-composer * { user-select: none; }
 .campaign-play-shell .timeline-head > span { font-size: 0.76rem; }
 .campaign-play-shell .timeline-scene-switcher { margin-bottom: 0.5rem; }
 .campaign-play-shell .command-scene-chip { min-height: 1.7rem; font-size: 0.72rem; }
-.campaign-play-shell .timeline-list { gap: 0.7rem; }
+/* Let the chronicle scroll use the available reading width (legacy-play.css
+   capped .campaign-play-shell .timeline-list at 900px); a wider cap means the
+   parchment grows, especially once the right actor rail is collapsed. */
+.campaign-play-shell .timeline-list { gap: 0.7rem; max-width: min(100%, 76rem); }
+.campaign-play-shell .timeline-head, .campaign-play-shell .timeline-scene-switcher, .campaign-play-shell .timeline-empty, .campaign-play-shell .timeline-window-status, .campaign-play-shell .timeline-window-actions { max-width: min(100%, 76rem); margin-inline: auto; }
 .campaign-play-shell .timeline-item.story-turn-card { padding: 0.85rem 1.05rem 0.95rem; }
 .campaign-play-shell .story-turn-card .timeline-item-head { margin-bottom: 0.45rem; padding-bottom: 0.4rem; }
 .campaign-play-shell .story-turn-card .story-turn-text { font-size: clamp(0.94rem, 0.15vw + 0.9rem, 1.04rem); line-height: 1.62; }
