@@ -147,8 +147,16 @@
   (echtes Karma-System = Issue #33); `journal.reputation`-Eintragsform ist
   nicht typisiert (UI liest defensiv); Party-Panel zeigt max. Backend-Daten,
   keine Pagination bei grossen Parties.
-* Folge-Slice: `LlmStatusResponse`-Contract sauber typisieren und API-/UI-Shape
-  von `/api/llm/status` dauerhaft vereinheitlichen.
+* LLM-Status-Contract-Drift behoben (Branch `fix/ui-llm-status-contract`,
+  gestackt auf `fix/ui-campaign-state-hud`): `LlmStatusResponse` ist jetzt die
+  ehrliche Union der drei Backend-Shapes (flat Ollama, flat Anthropic, nested
+  auto mit `primary`/`fallback`; Quelle: `app/adapters/llm.py` +
+  `anthropic_adapter.py`, read-only verifiziert). Neuer Normalizer
+  `normalizeLlmStatusResponse` in `ui/src/features/session/llmStatusModel.ts`;
+  `LlmStatusPanel` rendert nur noch normalisierte Daten (inkl. Provider- und
+  Fallback-Zeile), keine rohen Shape-Zugriffe. Tests:
+  `llmStatusModel.test.ts` (alle Shapes, kaputte Payloads, kein
+  `undefined`/`[object Object]`). Keine LLM-Calls, keine Backend-Aenderung.
 * Naechster sinnvoller UI-Slice: RightRail.tsx entfernen oder reaktivieren
   (Entscheidung noetig), danach Szenen-/Karten-Panel mit echten Map-Nodes.
 * Nicht erneut untersuchen: keine Cloud-LLM-Intro-Flows im Smoke (Setup nie
