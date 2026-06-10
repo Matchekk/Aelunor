@@ -1492,5 +1492,131 @@ class TurnEngineTests(unittest.TestCase):
         self.assertNotIn("aether", character)
 
 
+class NarratorCallJsonRepairRetryTests(unittest.TestCase):
+    """The narrator call loop regenerates once on JSON_REPAIR_ERROR.
+
+    Live diagnosis: a player turn died with HTTP 500 [E:JSON_REPAIR_ERROR]
+    because the narrator-loop exception handler raised immediately instead of
+    using its remaining model attempts. Repairable-JSON failures now retry with
+    a fresh seed and an explicit format instruction; transport timeouts do not
+    (they already consumed the full configured budget).
+    """
+
+    def setUp(self) -> None:
+        configure_engine_for_tests()
+
+    def test_json_repair_error_is_retryable_below_max_attempts(self) -> None:
+        self.assertTrue(
+            turn_engine.should_retry_narrator_call("json_repair", attempt=1, max_attempts=3)
+        )
+
+    def test_json_repair_error_is_not_retried_on_final_attempt(self) -> None:
+        self.assertFalse(
+            turn_engine.should_retry_narrator_call("json_repair", attempt=3, max_attempts=3)
+        )
+
+    def test_narrator_response_timeout_is_not_retried(self) -> None:
+        self.assertFalse(
+            turn_engine.should_retry_narrator_call("narrator_response", attempt=1, max_attempts=3)
+        )
+
+    def test_internal_error_is_not_retried(self) -> None:
+        self.assertFalse(
+            turn_engine.should_retry_narrator_call("turn_internal", attempt=1, max_attempts=3)
+        )
+
+    def test_retry_instruction_demands_pure_json_contract(self) -> None:
+        instruction = turn_engine.NARRATOR_JSON_RETRY_INSTRUCTION
+        self.assertIn("JSON", instruction)
+        self.assertIn("story", instruction)
+        self.assertIn("patch", instruction)
+        self.assertIn("requests", instruction)
+
+
+class IntroInitialSceneBackingSanitizerTests(unittest.TestCase):
+    """ensure_initial_scene_backing repairs the local-model intro scene edge.
+
+    Live diagnosis: Gemma opens the campaign with characters.*.scene_id set but
+    without the matching map_add_nodes entry. On a fresh campaign (no scenes,
+    no map nodes) the narrator patch then always failed schema validation with
+    "Unknown scene id". Only in exactly that first-turn start situation a
+    minimal location node is synthesized; everything else stays untouched.
+    """
+
+    def setUp(self) -> None:
+        configure_engine_for_tests()
+
+    def _start_state(self) -> dict:
+        return {
+            "meta": {"turn": 1},
+            "scenes": {},
+            "map": {"nodes": {}},
+            "characters": {"slot_1": {}},
+        }
+
+    def test_intro_scene_id_without_map_node_gets_backed(self) -> None:
+        patch = {"characters": {"slot_1": {"scene_id": "ruine_01"}}, "map_add_nodes": []}
+
+        result = turn_engine.ensure_initial_scene_backing(self._start_state(), patch, action_type="story")
+
+        self.assertEqual(len(result["map_add_nodes"]), 1)
+        node = result["map_add_nodes"][0]
+        self.assertEqual(node["id"], "ruine_01")
+        self.assertEqual(node["name"], "Ruine")
+        self.assertEqual(node["type"], "location")
+        self.assertTrue(node["discovered"])
+
+    def test_backed_intro_patch_passes_schema_validation(self) -> None:
+        state = self._start_state()
+        patch = {"characters": {"slot_1": {"scene_id": "ruine_01"}}, "map_add_nodes": []}
+
+        result = turn_engine.ensure_initial_scene_backing(state, patch, action_type="story")
+
+        turn_engine.validate_patch(state, result)
+
+    def test_no_backing_when_map_nodes_already_exist(self) -> None:
+        state = self._start_state()
+        state["map"]["nodes"]["scene_dorf"] = {"name": "Dorf am Hang"}
+        patch = {"characters": {"slot_1": {"scene_id": "ruine_01"}}, "map_add_nodes": []}
+
+        result = turn_engine.ensure_initial_scene_backing(state, patch, action_type="story")
+
+        self.assertEqual(result["map_add_nodes"], [])
+
+    def test_no_backing_for_non_story_action_type(self) -> None:
+        patch = {"characters": {"slot_1": {"scene_id": "ruine_01"}}, "map_add_nodes": []}
+
+        result = turn_engine.ensure_initial_scene_backing(self._start_state(), patch, action_type="do")
+
+        self.assertEqual(result["map_add_nodes"], [])
+
+    def test_no_backing_on_later_turns(self) -> None:
+        state = self._start_state()
+        state["meta"]["turn"] = 2
+        patch = {"characters": {"slot_1": {"scene_id": "ruine_01"}}, "map_add_nodes": []}
+
+        result = turn_engine.ensure_initial_scene_backing(state, patch, action_type="story")
+
+        self.assertEqual(result["map_add_nodes"], [])
+
+    def test_no_backing_for_generic_scene_identifier(self) -> None:
+        patch = {"characters": {"slot_1": {"scene_id": "scene_weg_01"}}, "map_add_nodes": []}
+
+        result = turn_engine.ensure_initial_scene_backing(self._start_state(), patch, action_type="story")
+
+        self.assertEqual(result["map_add_nodes"], [])
+
+    def test_model_supplied_node_is_not_duplicated(self) -> None:
+        patch = {
+            "characters": {"slot_1": {"scene_id": "ruine_01"}},
+            "map_add_nodes": [{"id": "ruine_01", "name": "Verfallene Ruine", "type": "location"}],
+        }
+
+        result = turn_engine.ensure_initial_scene_backing(self._start_state(), patch, action_type="story")
+
+        self.assertEqual(len(result["map_add_nodes"]), 1)
+        self.assertEqual(result["map_add_nodes"][0]["name"], "Verfallene Ruine")
+
+
 if __name__ == "__main__":
     unittest.main()

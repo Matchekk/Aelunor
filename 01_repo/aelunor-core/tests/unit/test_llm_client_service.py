@@ -7,6 +7,7 @@ from app.services.llm.client import (
     call_ollama_json,
     call_ollama_schema,
     call_ollama_text,
+    repair_json_payload_with_model,
 )
 
 
@@ -168,7 +169,72 @@ class LlmClientServiceTests(unittest.TestCase):
         self.assertEqual(events[-1]["extra"], {"mode": "repair_failed"})
         self.assertEqual(events[-1]["error_code"], "json_repair")
 
-    def test_call_ollama_schema_repairs_non_json_response_with_capped_timeout(self) -> None:
+    def test_call_ollama_json_repair_call_uses_configured_timeout(self) -> None:
+        """Regression: the narrator JSON-repair pass used a hardcoded 90s timeout.
+
+        Local models routinely exceed 90s, so the repair call timed out with
+        ReadTimeout and the intro turn died with NARRATOR_RESPONSE_ERROR even
+        though OLLAMA_TIMEOUT_SEC was configured much higher.
+        """
+        adapter = FakeAdapter([
+            "kein json",
+            "immer noch kein json",
+            '{"story": "Repariert", "patch": {}, "requests": []}',
+        ])
+        events: list[Dict[str, Any]] = []
+
+        result = call_ollama_json(
+            adapter,
+            settings(),
+            "System",
+            "User",
+            trace_ctx={"trace_id": "trace_1"},
+            emit_turn_phase_event=lambda _ctx, **payload: events.append(payload),
+        )
+
+        self.assertEqual(result["story"], "Repariert")
+        self.assertEqual(
+            [event["extra"]["mode"] for event in events],
+            ["parse_failed_repair_attempt", "formatless_retry_failed", "repair_ok"],
+        )
+        self.assertEqual(adapter.calls[2]["timeout"], 240)
+
+    def test_repair_json_payload_with_model_defaults_to_configured_timeout(self) -> None:
+        adapter = FakeAdapter(['{"ok": true}'])
+
+        result = repair_json_payload_with_model(
+            adapter,
+            settings(),
+            "System",
+            "kaputte antwort",
+            schema={"type": "object"},
+        )
+
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(adapter.calls[0]["timeout"], 240)
+
+    def test_repair_json_payload_with_model_keeps_explicit_timeout_with_floor(self) -> None:
+        adapter = FakeAdapter(['{"ok": true}'])
+
+        repair_json_payload_with_model(
+            adapter,
+            settings(),
+            "System",
+            "kaputte antwort",
+            schema={"type": "object"},
+            timeout=60,
+        )
+
+        self.assertEqual(adapter.calls[0]["timeout"], 90)
+
+    def test_call_ollama_schema_repairs_non_json_response_with_full_timeout(self) -> None:
+        """Regression: the schema-repair pass was capped at 120s.
+
+        The story-length-guard rewrite runs through call_ollama_schema; on
+        local models the capped repair call timed out (ReadTimeout 120s) and
+        killed the intro turn with NARRATOR_RESPONSE_ERROR. The repair pass now
+        gets the same budget as the schema call itself.
+        """
         adapter = FakeAdapter(["kein json", '{"ok": true}'])
 
         result = call_ollama_schema(
@@ -184,7 +250,7 @@ class LlmClientServiceTests(unittest.TestCase):
         self.assertEqual(result, {"ok": True})
         self.assertEqual(adapter.calls[0]["timeout"], 240)
         self.assertEqual(adapter.calls[0]["temperature"], 0.7)
-        self.assertEqual(adapter.calls[1]["timeout"], 120)
+        self.assertEqual(adapter.calls[1]["timeout"], 240)
 
 
 if __name__ == "__main__":

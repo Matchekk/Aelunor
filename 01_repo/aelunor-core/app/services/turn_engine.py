@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from app.services.turn.patch_sanitizer import (
     PatchSanitizerDependencies,
     configure as configure_patch_sanitizer,
+    ensure_initial_scene_backing,
     sanitize_patch,
 )
 from app.services.turn.attribute_context import build_turn_attribute_context
@@ -784,6 +785,28 @@ def classify_turn_exception(
         exc=exc,
     )
 
+NARRATOR_JSON_RETRY_INSTRUCTION = (
+    "\n\nDEIN LETZTER VERSUCH SCHEITERTE AN UNGÜLTIGEM ODER UNVOLLSTÄNDIGEM JSON. "
+    "Antworte NUR mit einem einzigen validen JSON-Objekt mit genau den Feldern story (string), patch (object), requests (array). "
+    "Kein Markdown, keine Erklärungen, kein Text außerhalb des JSON. Halte den Patch konservativ und minimal."
+)
+
+def narrator_call_retryable_error_codes() -> frozenset:
+    # Local models intermittently produce JSON that survives neither the
+    # formatless retry nor the model repair pass. That class is worth
+    # regenerating with a fresh seed instead of failing the whole turn;
+    # transport timeouts are excluded because they already consumed the full
+    # configured budget. ERROR_CODE_JSON_REPAIR is injected via configure(),
+    # so the set must be resolved lazily.
+    from app.config.errors import ERROR_CODE_JSON_REPAIR as default_json_repair
+
+    return frozenset({str(globals().get("ERROR_CODE_JSON_REPAIR", default_json_repair))})
+
+def should_retry_narrator_call(error_code: str, *, attempt: int, max_attempts: int) -> bool:
+    if attempt >= max_attempts:
+        return False
+    return str(error_code or "") in narrator_call_retryable_error_codes()
+
 def text_tokens(text: str) -> List[str]:
     return re.findall(r"[a-zA-ZäöüÄÖÜß]{2,}", str(text or "").lower())
 
@@ -1396,6 +1419,10 @@ def create_turn_record(
                     message=(classified.cause_message or str(exc))[:240],
                     extra={"attempt": attempt},
                 )
+                if should_retry_narrator_call(classified.error_code, attempt=attempt, max_attempts=MAX_TURN_MODEL_ATTEMPTS):
+                    out = None
+                    prompt_attempt_user = user_prompt + NARRATOR_JSON_RETRY_INSTRUCTION
+                    continue
                 raise classified
             if not isinstance(out, dict) or "story" not in out or "patch" not in out or "requests" not in out:
                 if attempt < MAX_TURN_MODEL_ATTEMPTS:
@@ -1528,6 +1555,7 @@ def create_turn_record(
             action_type=action_type,
         )
         narrator_patch = enforce_progression_set_mode_limits(narrator_patch, action_type=action_type)
+        narrator_patch = ensure_initial_scene_backing(working_state, narrator_patch, action_type=action_type)
         validate_patch_with_events(
             working_state,
             narrator_patch,
@@ -1583,6 +1611,7 @@ def create_turn_record(
                 action_type=action_type,
             )
             extractor_piece = enforce_progression_set_mode_limits(extractor_piece, action_type=action_type)
+            extractor_piece = ensure_initial_scene_backing(working_state, extractor_piece, action_type=action_type)
             validate_patch_with_events(
                 working_state,
                 extractor_piece,

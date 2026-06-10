@@ -2162,6 +2162,22 @@ class AdventureIntroRetryTests(unittest.TestCase):
             turn = runtime_core.try_generate_adventure_intro(campaign)
         return {"campaign": campaign, "turn": turn}
 
+    def test_retries_once_on_extractor_error(self) -> None:
+        calls: List[Dict[str, Any]] = []
+
+        def fake_create_turn_record(**kwargs: Any) -> Dict[str, Any]:
+            calls.append(kwargs)
+            if len(calls) == 1:
+                raise self._turn_flow_error("EXTRACTOR_ERROR")
+            return {"turn_id": "turn_intro_after_extractor_fail"}
+
+        result = self._run_intro(fake_create_turn_record)
+
+        self.assertEqual(result["turn"], {"turn_id": "turn_intro_after_extractor_fail"})
+        self.assertEqual(len(calls), 2)
+        intro = runtime_core.intro_state(result["campaign"])
+        self.assertEqual(intro["status"], "generated")
+
     def test_retries_once_on_schema_validation_error(self) -> None:
         calls: List[Dict[str, Any]] = []
 
@@ -2219,6 +2235,121 @@ class AdventureIntroRetryTests(unittest.TestCase):
             intro["last_error"],
             "Die KI-Antwort passte nicht zum erwarteten Datenformat.",
         )
+
+
+class AdventureIntroFailureDiagnosticsTests(unittest.TestCase):
+    """Intro failures must persist actionable diagnostics in intro_state.
+
+    A bare ``last_error`` with the generic user message is not enough to debug
+    local-LLM intro failures; error code, cause class, phase, a truncated
+    detail and the attempt count must survive in the campaign state.
+    """
+
+    def _startable_campaign(self) -> Dict[str, Any]:
+        return {
+            "setup": {
+                "world": {"completed": True, "summary": {"player_count": 1}},
+                "characters": {"slot_1": {"completed": True}},
+            },
+            "claims": {"slot_1": "player_1"},
+            "state": {
+                "characters": {"slot_1": {"bio": {"name": "Aria"}}},
+                "meta": {},
+            },
+            "turns": [],
+        }
+
+    def _run_intro(self, fake_create_turn_record: Any) -> Dict[str, Any]:
+        campaign = self._startable_campaign()
+        with patch.object(runtime_core, "normalize_campaign", lambda c: c), \
+                patch.object(runtime_core.turn_engine, "create_turn_record", fake_create_turn_record):
+            turn = runtime_core.try_generate_adventure_intro(campaign)
+        return {"campaign": campaign, "turn": turn}
+
+    def test_failed_intro_records_error_code_class_phase_detail_and_attempts(self) -> None:
+        def fake_create_turn_record(**kwargs: Any) -> Dict[str, Any]:
+            raise runtime_core.turn_engine.TurnFlowError(
+                error_code="NARRATOR_RESPONSE_ERROR",
+                phase="narrator_call_finished",
+                trace_id="trace_test",
+                user_message=TURN_ERROR_USER_MESSAGES["NARRATOR_RESPONSE_ERROR"],
+                cause_class="ReadTimeout",
+                cause_message="HTTPConnectionPool(host='127.0.0.1', port=11434): Read timed out. (read timeout=420)",
+            )
+
+        result = self._run_intro(fake_create_turn_record)
+
+        self.assertIsNone(result["turn"])
+        intro = runtime_core.intro_state(result["campaign"])
+        self.assertEqual(intro["status"], "failed")
+        self.assertEqual(intro["last_error"], "Die KI-Antwort konnte gerade nicht verarbeitet werden.")
+        self.assertEqual(intro["last_error_code"], "NARRATOR_RESPONSE_ERROR")
+        self.assertEqual(intro["last_error_class"], "ReadTimeout")
+        self.assertEqual(intro["last_error_phase"], "narrator_call_finished")
+        self.assertIn("Read timed out", intro["last_error_detail"])
+        self.assertEqual(intro["attempt_count"], 2)
+
+    def test_intro_error_detail_is_truncated_and_success_clears_diagnostics(self) -> None:
+        calls: List[Dict[str, Any]] = []
+
+        def fake_create_turn_record(**kwargs: Any) -> Dict[str, Any]:
+            calls.append(kwargs)
+            if len(calls) == 1:
+                raise runtime_core.turn_engine.TurnFlowError(
+                    error_code="JSON_REPAIR_ERROR",
+                    phase="narrator_json_parse_repair",
+                    trace_id="trace_test",
+                    user_message=TURN_ERROR_USER_MESSAGES["JSON_REPAIR_ERROR"],
+                    cause_class="RuntimeError",
+                    cause_message="x" * 5000,
+                )
+            return {"turn_id": "turn_intro_after_fail"}
+
+        result = self._run_intro(fake_create_turn_record)
+
+        self.assertEqual(result["turn"], {"turn_id": "turn_intro_after_fail"})
+        intro = runtime_core.intro_state(result["campaign"])
+        self.assertEqual(intro["status"], "generated")
+        self.assertEqual(intro["last_error"], "")
+        self.assertEqual(intro["last_error_code"], "")
+        self.assertEqual(intro["last_error_class"], "")
+        self.assertEqual(intro["last_error_phase"], "")
+        self.assertEqual(intro["last_error_detail"], "")
+        self.assertEqual(intro["attempt_count"], 2)
+
+    def test_failed_intro_without_turn_flow_error_still_records_class(self) -> None:
+        def fake_create_turn_record(**kwargs: Any) -> Dict[str, Any]:
+            raise ValueError("unerwarteter interner Fehler")
+
+        result = self._run_intro(fake_create_turn_record)
+
+        self.assertIsNone(result["turn"])
+        intro = runtime_core.intro_state(result["campaign"])
+        self.assertEqual(intro["status"], "failed")
+        self.assertEqual(intro["last_error_class"], "ValueError")
+        self.assertEqual(intro["last_error_code"], "")
+        self.assertIn("unerwarteter interner Fehler", intro["last_error_detail"])
+        self.assertEqual(intro["attempt_count"], 1)
+
+    def test_non_startable_campaign_gets_no_intro_attempt_and_no_diagnostics(self) -> None:
+        campaign = self._startable_campaign()
+        campaign["setup"]["characters"]["slot_1"]["completed"] = False
+        calls: List[Dict[str, Any]] = []
+
+        def fake_create_turn_record(**kwargs: Any) -> Dict[str, Any]:
+            calls.append(kwargs)
+            return {"turn_id": "turn_should_never_exist"}
+
+        with patch.object(runtime_core, "normalize_campaign", lambda c: c), \
+                patch.object(runtime_core.turn_engine, "create_turn_record", fake_create_turn_record):
+            turn = runtime_core.try_generate_adventure_intro(campaign)
+
+        self.assertIsNone(turn)
+        self.assertEqual(calls, [])
+        intro = campaign["state"]["meta"].get("intro_state") or {}
+        self.assertNotEqual(intro.get("status"), "failed")
+        self.assertNotIn("last_error_code", intro)
+        self.assertNotIn("attempt_count", intro)
 
 
 if __name__ == "__main__":
