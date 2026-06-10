@@ -222,9 +222,9 @@ export function deriveReadyProgressSummary(campaign: CampaignSnapshot): string {
 
 export function deriveClaimMetaLine(campaign: CampaignSnapshot): string {
   const ready_counter = deriveClaimGateState(campaign).ready_counter;
+  const player_count = (campaign.players ?? []).length;
   const parts = [
-    `Session ${campaign.campaign_meta.campaign_id}`,
-    `${(campaign.players ?? []).length} Spieler`,
+    `${player_count} ${player_count === 1 ? "Spieler" : "Spieler"} in der Runde`,
     `Phase ${campaign.setup_runtime?.phase_display || campaign.viewer_context?.phase || campaign.campaign_meta.status}`,
   ];
   if (ready_counter.total > 0) {

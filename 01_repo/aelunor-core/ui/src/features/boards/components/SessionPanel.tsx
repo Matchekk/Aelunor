@@ -43,31 +43,30 @@ export function SessionPanel({
   return (
     <section className="boards-panel">
       <div className="v1-panel-head">
-        <h2>Session</h2>
-        <span>{can_edit ? "Host controls" : "Read-only"}</span>
+        <h2>Sitzung</h2>
+        <span>{can_edit ? "Host-Steuerung" : "Nur Lesen"}</span>
       </div>
       <div className="boards-form-grid">
         <label>
-          Session title
+          Sitzungstitel
           <input value={rename_value} readOnly={!can_edit} onChange={(event) => on_rename_change(event.target.value)} />
         </label>
         <div className="boards-session-meta">
-          <div><strong>campaign_id:</strong> {session.campaign_id}</div>
-          <div><strong>join_code:</strong> {session.join_code ?? "n/a"}</div>
-          <div><strong>updated:</strong> {formatBoardTimestamp(updated_at)}</div>
-          {local_entry ? <div><strong>local label:</strong> {local_entry.label}</div> : null}
-          {!local_entry ? <div><strong>local session:</strong> not saved in library</div> : null}
+          <div><strong>Beitritts-Code:</strong> {session.join_code ?? "—"}</div>
+          <div><strong>Zuletzt aktualisiert:</strong> {formatBoardTimestamp(updated_at)}</div>
+          {local_entry ? <div><strong>Lokale Bezeichnung:</strong> {local_entry.label}</div> : null}
+          {!local_entry ? <div><strong>Lokal:</strong> nicht in der Bibliothek gespeichert</div> : null}
         </div>
       </div>
       {error_message ? <div className="session-feedback error">{error_message}</div> : null}
       <div className="session-inline-actions">
         {can_edit ? (
           <button type="button" onClick={on_save_rename} disabled={rename_pending}>
-            {rename_pending ? "Saving..." : "Save title"}
+            {rename_pending ? "Speichere..." : "Titel speichern"}
           </button>
         ) : null}
         <button type="button" onClick={on_export_campaign}>
-          Export campaign JSON
+          Kampagne exportieren (JSON)
         </button>
       </div>
       <SessionDangerZone
@@ -79,7 +78,7 @@ export function SessionPanel({
         on_delete_campaign={on_delete_campaign}
         on_remove_local_entry={on_remove_local_entry}
       />
-      <p className="status-muted">Current title: {campaign_title}</p>
+      <p className="status-muted">Aktueller Titel: {campaign_title}</p>
     </section>
   );
 }

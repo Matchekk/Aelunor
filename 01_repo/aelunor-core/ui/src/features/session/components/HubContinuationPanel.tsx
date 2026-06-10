@@ -35,7 +35,7 @@ export function HubContinuationPanel({
       <WaitingSectionOverlay target="hub_resume" />
       <div className="v1-panel-head">
         <h2>{has_active_session ? "Aktive Session" : latest_entry ? "Zuletzt gespielt" : "Noch keine gespeicherten Sessions"}</h2>
-        <span>{has_active_session ? "Bereit" : latest_entry ? "Chronik" : "Empty State"}</span>
+        <span>{has_active_session ? "Bereit" : latest_entry ? "Chronik" : "Noch leer"}</span>
       </div>
       <AelunorDivider variant="small" />
       <WaitingInline target="hub_resume" className="hub-waiting-inline" />
@@ -43,8 +43,7 @@ export function HubContinuationPanel({
         <div className="hub-continuation-block">
           <strong>{latest_entry?.campaign_title ?? latest_entry?.label ?? "Aktive lokale Session"}</strong>
           <p className="status-muted">
-            campaign_id: {active_campaign_id}
-            {active_join_code ? ` · Code ${active_join_code}` : ""}
+            {active_join_code ? `Code ${active_join_code}` : "Aktive Sitzung"}
           </p>
           <div className="hub-continuation-actions">
             <button type="button" className="hub-primary-cta aelunor-button-ornate" onClick={on_resume_current} disabled={activePending}>

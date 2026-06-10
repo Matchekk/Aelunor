@@ -21,7 +21,6 @@ export function SlotCard({ slot, disabled, pending_action, on_claim, on_takeover
         <span className="claim-slot-avatar" aria-hidden="true">{slotInitial(slot.display_name)}</span>
         <div className="claim-slot-identity">
           <h3>{slot.display_name}</h3>
-          <div className="status-muted">{slot.slot_id.toUpperCase()}</div>
         </div>
         <SlotPresenceChip slot_id={slot.slot_id} owner_player_id={slot.claimed_by} />
       </div>

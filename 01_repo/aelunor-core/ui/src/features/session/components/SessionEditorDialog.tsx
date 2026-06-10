@@ -41,10 +41,10 @@ export function SessionEditorDialog(props: SessionEditorDialogProps) {
     <div className="session-dialog-backdrop" role="presentation" onClick={props.on_close}>
       <section ref={dialogRef} className="session-dialog" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <div className="v1-panel-head">
-          <h2>Session Editor</h2>
+          <h2>Sitzung bearbeiten</h2>
         </div>
         <label>
-          Local label
+          Bezeichnung
           <input
             value={label}
             onChange={(event) => {
@@ -56,9 +56,8 @@ export function SessionEditorDialog(props: SessionEditorDialogProps) {
             maxLength={120}
           />
         </label>
-        <div className="session-dialog-meta status-muted">campaign_id: {props.entry.campaign_id}</div>
         {props.entry.campaign_title ? (
-          <div className="session-dialog-meta status-muted">campaign_title: {props.entry.campaign_title}</div>
+          <div className="session-dialog-meta status-muted">Kampagne: {props.entry.campaign_title}</div>
         ) : null}
         {localError ? <div className="session-feedback error">{localError}</div> : null}
         <div className="session-dialog-actions">
@@ -66,22 +65,22 @@ export function SessionEditorDialog(props: SessionEditorDialogProps) {
             type="button"
             onClick={() => {
               if (!label.trim()) {
-                setLocalError("Local label is required.");
+                setLocalError("Bitte eine Bezeichnung eingeben.");
                 return;
               }
               props.on_rename(campaign_id, label);
             }}
           >
-            Save label
+            Bezeichnung speichern
           </button>
           <button type="button" onClick={() => props.on_export(campaign_id)}>
-            Export JSON
+            JSON exportieren
           </button>
           <button type="button" onClick={() => props.on_delete(campaign_id)}>
-            Delete local entry
+            Lokalen Eintrag entfernen
           </button>
           <button type="button" onClick={props.on_close}>
-            Close
+            Schließen
           </button>
         </div>
       </section>

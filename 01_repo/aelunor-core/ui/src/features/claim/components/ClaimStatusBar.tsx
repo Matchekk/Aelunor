@@ -22,7 +22,7 @@ export function ClaimStatusBar({
       <div className="claim-status-pills">
         <span className="status-pill">{gate.phase_display}</span>
         <span className="status-pill">{ready_summary}</span>
-        {gate.current_slot_id ? <span className="status-pill">Dein Slot · {gate.current_slot_id.toUpperCase()}</span> : null}
+        {gate.current_slot_id ? <span className="status-pill">Dein Slot</span> : null}
       </div>
       <p className="status-muted">{message}</p>
       {!has_slots ? <div className="session-feedback error">Für diese Kampagne sind derzeit keine Slots verfügbar.</div> : null}

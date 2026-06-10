@@ -43,7 +43,7 @@ export function TakeoverConfirmDialog({
           <h2>Übernahme bestätigen</h2>
         </div>
         <p>
-          <strong>{slot.display_name}</strong> ({slot.slot_id.toUpperCase()}) übernehmen?
+          <strong>{slot.display_name}</strong> übernehmen?
         </p>
         <p className="status-muted">
           Hältst du bereits einen anderen Slot, wechselt dein Claim auf diesen Charakter.
