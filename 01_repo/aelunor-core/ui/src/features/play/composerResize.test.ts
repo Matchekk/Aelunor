@@ -11,15 +11,15 @@ import {
 } from "./composerResize";
 
 describe("deriveMaxComposerHeight", () => {
-  it("caps the composer at 55% of the available center height", () => {
-    expect(deriveMaxComposerHeight(1000)).toBe(550);
+  it("caps the composer at 44% of the available center height", () => {
+    expect(deriveMaxComposerHeight(1000)).toBe(440);
   });
 
   it("keeps the journal minimum on small viewports", () => {
-    // 600px available: 55% = 330, journal guard = 600 - 220 - 12 = 368 -> 330 wins
-    expect(deriveMaxComposerHeight(600)).toBe(330);
-    // 500px available: journal guard = 268, 55% = 275 -> guard wins
-    expect(deriveMaxComposerHeight(500)).toBe(268);
+    // 600px available: 44% = 264, journal guard = 600 - 260 - 12 = 328 -> ratio wins
+    expect(deriveMaxComposerHeight(600)).toBe(264);
+    // 500px available: 44% = 220, journal guard = 228 -> ratio wins, floor at min
+    expect(deriveMaxComposerHeight(500)).toBe(COMPOSER_MIN_HEIGHT);
   });
 
   it("never returns less than the composer minimum", () => {
@@ -36,7 +36,17 @@ describe("clampComposerHeight", () => {
   });
 
   it("clamps too-large values to the maximum", () => {
-    expect(clampComposerHeight(2000, 1000)).toBe(550);
+    expect(clampComposerHeight(2000, 1000)).toBe(440);
+  });
+
+  it("clamps a legacy 55%-era stored value down to the new 44% cap", () => {
+    // 450px stored under the old rules, center height ~958px at 1920x1080
+    expect(clampComposerHeight(450, 958)).toBe(422);
+  });
+
+  it("uses the lower default of 260px", () => {
+    expect(COMPOSER_DEFAULT_HEIGHT).toBe(260);
+    expect(clampComposerHeight(undefined, 1000)).toBe(260);
   });
 
   it("falls back to the default for invalid values", () => {

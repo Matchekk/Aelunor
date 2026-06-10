@@ -1,11 +1,11 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, RefObject } from "react";
 
 export const COMPOSER_HEIGHT_STORAGE_KEY = "aelunor.play.composerHeight.v1";
 export const COMPOSER_MIN_HEIGHT = 220;
-export const COMPOSER_DEFAULT_HEIGHT = 300;
-export const COMPOSER_MAX_RATIO = 0.55;
-export const JOURNAL_MIN_HEIGHT = 220;
+export const COMPOSER_DEFAULT_HEIGHT = 260;
+export const COMPOSER_MAX_RATIO = 0.44;
+export const JOURNAL_MIN_HEIGHT = 260;
 export const RESIZE_HANDLE_HEIGHT = 12;
 export const RESIZE_STEP = 16;
 export const RESIZE_STEP_LARGE = 64;
@@ -101,6 +101,16 @@ export function useResizableComposerHeight(container_ref: RefObject<HTMLElement 
   const persistCurrent = useCallback(() => {
     writeStoredComposerHeight(safeLocalStorage(), heightRef.current);
   }, []);
+
+  // The initial state can only clamp against the viewport; once the center
+  // column is measurable, re-clamp so stored legacy heights respect the
+  // current max rules (e.g. old 55%-era values shrink to the 44% cap).
+  useEffect(() => {
+    const clamped = applyHeight(heightRef.current);
+    if (clamped !== readStoredComposerHeight(safeLocalStorage())) {
+      writeStoredComposerHeight(safeLocalStorage(), clamped);
+    }
+  }, [applyHeight]);
 
   const onPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>) => {

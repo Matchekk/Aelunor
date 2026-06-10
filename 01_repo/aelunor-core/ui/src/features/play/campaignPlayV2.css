@@ -131,18 +131,44 @@
 /* 2b. Resizable journal/composer split: the composer height comes from
    --play-composer-height (persisted in localStorage), the journal keeps
    the remaining space and never collapses. */
-.campaign-play-shell .story-workspace.is-active-play .story-timeline.timeline-panel { min-height: 220px; }
-.campaign-play-shell .story-workspace.is-active-play .player-composer.composer-panel { flex: 0 0 var(--play-composer-height, 300px); height: var(--play-composer-height, 300px); min-height: 220px; overflow: auto; }
+.campaign-play-shell .story-workspace.is-active-play .story-timeline.timeline-panel { min-height: 260px; }
+.campaign-play-shell .story-workspace.is-active-play .player-composer.composer-panel { flex: 0 0 var(--play-composer-height, 260px); height: var(--play-composer-height, 260px); min-height: 220px; overflow: auto; }
 .campaign-play-shell .composer-resize-handle { flex: 0 0 12px; display: grid; place-items: center; margin: -0.3rem 0; cursor: row-resize; touch-action: none; }
-.campaign-play-shell .composer-resize-handle i { display: block; width: 7rem; height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--ael-gold, #caa763) 34%, transparent); transition: background 120ms ease, width 120ms ease; }
-.campaign-play-shell .composer-resize-handle:hover i, .campaign-play-shell .composer-resize-handle:focus-visible i { width: 9rem; background: color-mix(in srgb, var(--ael-gold, #caa763) 62%, transparent); }
+.campaign-play-shell .composer-resize-handle i { display: block; width: 5rem; height: 3px; border-radius: 999px; background: color-mix(in srgb, var(--ael-gold, #caa763) 28%, transparent); transition: background 120ms ease, width 120ms ease; }
+.campaign-play-shell .composer-resize-handle:hover i, .campaign-play-shell .composer-resize-handle:focus-visible i { width: 7rem; background: color-mix(in srgb, var(--ael-gold, #caa763) 58%, transparent); }
 .campaign-play-shell .composer-resize-handle:focus-visible { outline: 1px solid color-mix(in srgb, var(--ael-gold, #caa763) 55%, transparent); outline-offset: 2px; border-radius: 999px; }
 body.is-resizing-composer { cursor: row-resize; user-select: none; }
 body.is-resizing-composer * { user-select: none; }
 
+/* 2c. Center density + parchment readability: the center read "zoomed in";
+   tighter type scale and spacing, and ink-on-parchment forced via tokens so
+   higher-specificity base rules (.timeline-item p, legacy story-turn colors)
+   cannot leave light text on the light card. */
+.campaign-play-shell .campaign-main-column.story-workspace { gap: 0.55rem; padding: 0.65rem 0.75rem; }
+.campaign-play-shell .story-context-row { padding-bottom: 0.45rem; }
+.campaign-play-shell .story-timeline.timeline-panel { padding: 0.75rem 0.95rem 0.85rem; }
+.campaign-play-shell .timeline-head { margin-bottom: 0.55rem; padding-bottom: 0.35rem; }
+.campaign-play-shell .timeline-head .panelTitle { font-size: clamp(1.05rem, 0.45vw + 0.85rem, 1.45rem); letter-spacing: 0.08em; }
+.campaign-play-shell .timeline-head > span { font-size: 0.76rem; }
+.campaign-play-shell .timeline-scene-switcher { margin-bottom: 0.5rem; }
+.campaign-play-shell .command-scene-chip { min-height: 1.7rem; font-size: 0.72rem; }
+.campaign-play-shell .timeline-list { gap: 0.7rem; }
+.campaign-play-shell .timeline-item.story-turn-card { padding: 0.85rem 1.05rem 0.95rem; }
+.campaign-play-shell .story-turn-card .timeline-item-head { margin-bottom: 0.45rem; padding-bottom: 0.4rem; }
+.campaign-play-shell .story-turn-card .story-turn-text { font-size: clamp(0.94rem, 0.15vw + 0.9rem, 1.04rem); line-height: 1.62; }
+.campaign-play-shell .story-turn-card, .campaign-play-shell .story-turn-card .story-turn-text, .campaign-play-shell .story-turn-card p, .campaign-play-shell .story-turn-card .timeline-item-title strong { color: var(--ael-story-ink, #2b2118); }
+.campaign-play-shell .story-turn-card .timeline-item-head, .campaign-play-shell .story-turn-card .timeline-item-head > span:last-child { color: color-mix(in srgb, var(--ael-story-ink, #2b2118) 64%, transparent); }
+.campaign-play-shell .story-turn-card .story-turn-lead { color: color-mix(in srgb, var(--ael-story-ink, #2b2118) 78%, transparent); }
+.campaign-play-shell .story-turn-card .timeline-item-actor, .campaign-play-shell .story-turn-card .timeline-actor-button { color: color-mix(in srgb, var(--ael-story-ink, #2b2118) 82%, transparent); }
+.campaign-play-shell .story-turn-card .timeline-delta-block, .campaign-play-shell .story-turn-card .timeline-delta-block summary, .campaign-play-shell .story-turn-card .timeline-delta-block li { color: color-mix(in srgb, var(--ael-story-ink, #2b2118) 80%, transparent); }
+.campaign-play-shell .composer-dock-head { margin-bottom: 0.3rem; }
+.campaign-play-shell .composer-dock-head .panelTitle { font-size: clamp(0.98rem, 0.35vw + 0.8rem, 1.28rem); letter-spacing: 0.1em; }
+.campaign-play-shell .composer-input-grid { gap: 0.6rem; }
+.campaign-play-shell .composer-helper, .campaign-play-shell .composer-status-bar { font-size: 0.74rem; }
+
 /* 3. Composer: RPG action dock instead of a heavy gray form. */
-.campaign-play-shell .player-composer.composer-panel { padding: 0.8rem 1rem 0.95rem; }
-.campaign-play-shell .composer-input-grid .composer-textarea-wrap textarea { min-height: 5.8rem; border-radius: 0.7rem; transition: border-color 120ms ease, box-shadow 120ms ease; }
+.campaign-play-shell .player-composer.composer-panel { padding: 0.6rem 0.85rem 0.75rem; }
+.campaign-play-shell .composer-input-grid .composer-textarea-wrap textarea { min-height: 4.6rem; padding: 0.55rem 0.7rem; border-radius: 0.7rem; transition: border-color 120ms ease, box-shadow 120ms ease; }
 .campaign-play-shell .composer-textarea-wrap textarea:focus { outline: none; border-color: color-mix(in srgb, var(--ael-gold, #caa763) 62%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ael-gold, #caa763) 38%, transparent), inset 0 1px 18px rgba(0, 0, 0, 0.3); }
 .campaign-play-shell .composer-mode-tabs button, .campaign-play-shell .composer-tools-tabs button { border-radius: 0.55rem; font-family: var(--v1-font-display); font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; }
 .campaign-play-shell .composer-mode-tabs button.is-active { border-color: color-mix(in srgb, var(--ael-gold, #caa763) 66%, transparent); color: var(--ael-gold, #caa763); background: color-mix(in srgb, var(--ael-gold, #caa763) 12%, transparent); box-shadow: 0 0 14px color-mix(in srgb, var(--ael-gold, #caa763) 18%, transparent); }

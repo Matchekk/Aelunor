@@ -174,6 +174,19 @@
   Quest-Line-Clamp (nur visuell), dunklere Fantasy-Map mit Goldpfaden.
   Topbar: Status-Segmente, ruhigere Utilities. Tests 76/76, Build gruen,
   Smoke 1920x1080 ohne Fehler. Keine LLM-Calls.
+* Center-Density-/Lesbarkeits-Fix (auf `polish/ui-play-hud-premium-pass`):
+  JOURNAL-/DEIN-BEITRAG-Titel ~30% kleiner, Paddings/Gaps im Center
+  reduziert (campaignPlayV2.css Abschnitt 2c). Pergament-Lesbarkeit: Text
+  auf `.story-turn-card` wird per hoher Spezifitaet auf
+  `var(--ael-story-ink)` gezwungen (globals `.timeline-item p` und
+  premium-layout `#f4ead9` hatten hellen Text auf heller Karte erzeugt);
+  Token-basiert, damit Theme arcane (dunkle Karte, helle Tinte) intakt
+  bleibt. Composer-Grenzen neu: min 220 / Default 260 / max 44% der
+  Center-Hoehe (Journal-Guard 260); localStorage-Key bleibt
+  `aelunor.play.composerHeight.v1`, alte Werte werden nach Mount gegen die
+  echte Center-Hoehe geclamped und zurueckgeschrieben (450 -> 422 bei
+  1080p). Smoke: Default 258px, Karte vollstaendig sichtbar, Ink
+  rgb(32,24,15). Tests 88/88.
 * Resizable Composer (auf `polish/ui-play-hud-premium-pass`): vertikaler
   Split Journal/Composer mit Drag-Handle (`composerResize.ts` +
   `composer-resize-handle` in `CampaignWorkspace`), Hoehe via CSS-Variable
