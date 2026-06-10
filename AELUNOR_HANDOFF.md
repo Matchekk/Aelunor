@@ -147,6 +147,19 @@
   (echtes Karma-System = Issue #33); `journal.reputation`-Eintragsform ist
   nicht typisiert (UI liest defensiv); Party-Panel zeigt max. Backend-Daten,
   keine Pagination bei grossen Parties.
+* Frische Charaktere starten mit vollen Ressourcen (Fix in
+  `app/services/setup/summaries.py`: Currents wurden vor der Attributvergabe
+  auf niedrige Maxima geclampt, z.B. 8/18 Leben). Claim-/Setup-UI ist jetzt
+  durchgehend deutsch. Umlaut-Mojibake in 8 Backend-Dateien wird durch den
+  offenen PR #51 (Heim-PC) gefixt — hier bewusst nicht dupliziert.
+* Play-Journal Center poliert (Branch `polish/ui-play-journal-center`):
+  Panel ist dunkles Navy statt Beige-Block (`aelunor-main-screen.css`),
+  Eintraege als Pergamentkarten mit vertikaler Gold-Chronik-Linie und
+  Typ-Badge (Story/System/Spieler via `deriveTurnKindLabel`), Lesespalte
+  zentriert (max 58rem), kontrollierter Empty-State
+  ("Noch keine Chronik-Einträge."), leerer Spieler-Lead wird ausgeblendet.
+  Tests: `journalView.test.ts`. WorldRail/ActorDock/TopBar/Composer-Logik
+  unangetastet. Kein LLM-Call im Smoke.
 * LLM-Status-Contract-Drift behoben (Branch `fix/ui-llm-status-contract`,
   gestackt auf `fix/ui-campaign-state-hud`): `LlmStatusResponse` ist jetzt die
   ehrliche Union der drei Backend-Shapes (flat Ollama, flat Anthropic, nested
@@ -157,8 +170,10 @@
   Fallback-Zeile), keine rohen Shape-Zugriffe. Tests:
   `llmStatusModel.test.ts` (alle Shapes, kaputte Payloads, kein
   `undefined`/`[object Object]`). Keine LLM-Calls, keine Backend-Aenderung.
-* Naechster sinnvoller UI-Slice: RightRail.tsx entfernen oder reaktivieren
-  (Entscheidung noetig), danach Szenen-/Karten-Panel mit echten Map-Nodes.
+* Naechste UI-Slices: 1) Right Actor HUD polish, 2) Left WorldRail/Party/Map
+  polish, 3) Topbar enttechnisieren, 4) Mojibake/Encoding separat pruefen
+  (PR #51 abwarten); ausserdem RightRail.tsx entfernen oder reaktivieren
+  (Entscheidung noetig).
 * Nicht erneut untersuchen: keine Cloud-LLM-Intro-Flows im Smoke (Setup nie
   bis zum Intro abschliessen), keine Runtime-Daten, keine Backend-/Turn-/
   LLM-Dateien in diesem PR.
