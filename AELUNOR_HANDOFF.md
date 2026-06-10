@@ -117,6 +117,9 @@
 
 ## UI-State-HUD-Status
 
+* PR #57: Draft, nicht gemerged; Branch `fix/ui-campaign-state-hud`,
+  Head `2c47331`. Checks gruen: typecheck, `npm test` 64/64, build,
+  Browser-Smoke (Hub + Kampagne erstellen, kein UI-v1-Error).
 * Play-HUD rendert Campaign-State ueber Adapter statt Roh-Zugriffe:
   `ui/src/features/play/partyHudModel.ts` (UiCharacterSummary/UiSceneSummary/
   UiPartyHudState) + `actorDockModel.ts` (Karma-/Szene-Label, Bond-Fix).
@@ -144,8 +147,13 @@
   (echtes Karma-System = Issue #33); `journal.reputation`-Eintragsform ist
   nicht typisiert (UI liest defensiv); Party-Panel zeigt max. Backend-Daten,
   keine Pagination bei grossen Parties.
+* Folge-Slice: `LlmStatusResponse`-Contract sauber typisieren und API-/UI-Shape
+  von `/api/llm/status` dauerhaft vereinheitlichen.
 * Naechster sinnvoller UI-Slice: RightRail.tsx entfernen oder reaktivieren
   (Entscheidung noetig), danach Szenen-/Karten-Panel mit echten Map-Nodes.
+* Nicht erneut untersuchen: keine Cloud-LLM-Intro-Flows im Smoke (Setup nie
+  bis zum Intro abschliessen), keine Runtime-Daten, keine Backend-/Turn-/
+  LLM-Dateien in diesem PR.
 
 ## Offene GitHub-Issue-Landschaft
 

@@ -196,7 +196,7 @@ export function deriveCharacterSummary(campaign: CampaignSnapshot, entry: PartyO
     resource: formatResourceValue(entry.res_current, entry.res_max),
     resource_name: readString(entry.resource_name) || "Ressource",
     karma_label: deriveKarmaLabel(campaign, entry.slot_id),
-    conditions: (entry.conditions ?? []).map(readString).filter(Boolean).slice(0, 3),
+    conditions: readArray(entry.conditions).map(readString).filter(Boolean).slice(0, 3),
     scene_label: resolveSceneLabel(campaign, entry.scene_id, entry.scene_name),
     in_combat: entry.in_combat === true,
     injury_count: readNumber(entry.injury_count) ?? 0,

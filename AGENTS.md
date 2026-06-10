@@ -83,6 +83,8 @@ Pflicht fuer alle Agent-Sessions. Ziel: ohne Full-Repo-Neuerkundung arbeiten.
 - Nur task-relevante Dateien aendern. Keine unrelated formatting changes.
 - Keine neue Dependency ohne Begruendung; Installationsdateien bei Bedarf aktualisieren.
 - Keine Build-Artefakte, Logs, Caches oder generierte Dateien committen.
+- Kein Push auf `main`, kein Force-Push, kein Merge ohne explizite Freigabe;
+  Arbeit laeuft ueber Feature-Branches und Draft-PRs.
 - Keine Co-authored-by-Zeilen in Commits.
 
 ## Absolute No-Gos

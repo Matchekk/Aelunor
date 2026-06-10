@@ -211,7 +211,7 @@ export function deriveActorDockView(
   const needs = readRecord(profile.needs_model);
   const classCurrent = overview?.class_current ?? sheet?.sheet.class.current ?? null;
   const progression = overview?.character_progression;
-  const conditions = party?.conditions?.filter(Boolean) ?? [];
+  const conditions = readArray(party?.conditions).map(readString).filter(Boolean);
   const effectsCount = sheet?.sheet.effects?.length ?? 0;
   const factions = readArray(sheet?.sheet.meta?.faction_memberships)
     .map((entry) => firstString(readRecord(entry).name, readRecord(entry).faction_id))

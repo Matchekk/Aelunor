@@ -9,7 +9,7 @@ export function deriveContextScopeLabels(payload: ContextQueryResponse, campaign
   const labels: ScopeLabelDescriptor[] = [];
   const entityType = payload.result.entity_type || "unknown";
   const entityId = payload.result.entity_id || "";
-  const actor = payload.actor || campaign.viewer_context.claimed_slot_id || "";
+  const actor = payload.actor || campaign.viewer_context?.claimed_slot_id || "";
 
   if (entityType === "scene") {
     labels.push(sceneScopeLabel(payload.result.title || entityId, entityId));
