@@ -90,5 +90,22 @@
 .body-pressure-panel dd { margin: 0; color: var(--v1-text-strong); }
 .top-skills-panel p, .equipment-preview p, .important-items-panel p, .bonds-preview-panel p, .actor-dock-note { margin: 0; color: var(--v1-text-muted); }
 .bonds-preview-panel small { color: var(--v1-text-muted); }
+.actor-header-copy p.actor-scene-line { color: var(--v1-text-muted); font-size: 0.78rem; }
+.party-hud-panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; }
+.party-hud-panel-head small, .party-hud-scene { margin: 0; color: var(--v1-text-muted); }
+.party-hud-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.5rem; }
+.party-hud-card { display: grid; gap: 0.3rem; padding: 0.45rem 0.5rem; border: 1px solid rgba(215, 178, 108, 0.2); background: rgba(6, 13, 20, 0.56); }
+.party-hud-card.is-selected { border-color: var(--v1-accent-strong); }
+.party-hud-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.party-hud-name { min-height: auto; padding: 0; border: 0; background: transparent; box-shadow: none; color: var(--v1-gold); font-family: var(--v1-font-display); text-align: left; }
+.party-hud-name small { color: var(--v1-text-muted); font-family: var(--v1-font-base, inherit); }
+.party-hud-class { margin: 0; color: var(--v1-text-muted-strong); font-size: 0.78rem; }
+.party-hud-meter { position: relative; display: flex; justify-content: space-between; gap: 0.4rem; padding-bottom: 0.3rem; color: var(--v1-text-muted-strong); font-size: 0.78rem; }
+.party-hud-meter i { position: absolute; left: 0; bottom: 0; height: 0.18rem; border-radius: 999px; }
+.party-hud-meter.is-hp i { background: #9b3f3c; }
+.party-hud-meter.is-stamina i { background: var(--v1-gold); }
+.party-hud-meter.is-essence i { background: var(--v1-accent); }
+.party-hud-meta { margin: 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.4rem; color: var(--v1-text-muted); font-size: 0.74rem; }
+.party-hud-conditions { margin: 0; display: flex; flex-wrap: wrap; gap: 0.3rem; }
 @media (max-width: 1200px) { .campaign-play-grid { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); } .actor-dock { display: none; } .campaign-topbar { grid-template-columns: auto minmax(0, 1fr); } .topbar-actions { grid-column: 1 / -1; } }
 @media (max-width: 900px) { .campaign-play-shell { height: auto; overflow: auto; } .campaign-play-content, .campaign-play-grid { display: flex; flex-direction: column; } .campaign-topbar-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); } .world-rail, .actor-dock { overflow: visible; } .composer-input-grid { grid-template-columns: minmax(0, 1fr); } }

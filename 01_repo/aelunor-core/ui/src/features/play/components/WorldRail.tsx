@@ -2,6 +2,7 @@ import { memo, useMemo } from "react";
 
 import type { CampaignSnapshot } from "../../../shared/api/contracts";
 import { AelunorPanelFrame } from "../../../shared/ui/aelunorAssets";
+import { displayParty, partyOverview, plotEssentials, worldTime } from "../partyHudModel";
 
 interface WorldRailProps {
   campaign: CampaignSnapshot;
@@ -27,17 +28,16 @@ function firstInitial(value: string): string {
 
 function sceneMeta(campaign: CampaignSnapshot, active_scene_label: string) {
   const state = readRecord(campaign.state);
-  const plot = campaign.boards.plot_essentials;
-  const activeScene = readString(plot.active_scene);
+  const activeScene = readString(plotEssentials(campaign).active_scene);
   const sceneName = active_scene_label && active_scene_label !== "Alle Szenen" ? active_scene_label : activeScene || "Unbekannte Szene";
-  const sceneId = campaign.party_overview.find((entry) => entry.scene_name === sceneName)?.scene_id ?? "";
+  const sceneId = partyOverview(campaign).find((entry) => entry.scene_name === sceneName)?.scene_id ?? "";
   const scenes = readRecord(state.scenes);
   const scene = readRecord(scenes[sceneId]);
   return {
     name: sceneName,
     district: readString(scene.location) || readString(scene.region) || "Aktueller Schauplatz",
-    time: campaign.world_time.time_of_day || "Zeit unbekannt",
-    weather: campaign.world_time.weather || "Wetter unbekannt",
+    time: readString(worldTime(campaign).time_of_day) || "Zeit unbekannt",
+    weather: readString(worldTime(campaign).weather) || "Wetter unbekannt",
   };
 }
 
@@ -51,9 +51,14 @@ export const WorldRail = memo(function WorldRail({
   on_open_map,
 }: WorldRailProps) {
   const scene = useMemo(() => sceneMeta(campaign, active_scene_label), [active_scene_label, campaign]);
-  const plot = campaign.boards.plot_essentials;
-  const party = campaign.party_overview.length > 0 ? campaign.party_overview : campaign.display_party.map((entry) => ({ ...entry }));
-  const openLoops = plot.open_loops ?? [];
+  const plot = plotEssentials(campaign);
+  const currentGoal = readString(plot.current_goal);
+  const currentThreat = readString(plot.current_threat);
+  const overview = partyOverview(campaign);
+  const party = overview.length > 0 ? overview : displayParty(campaign).map((entry) => ({ ...entry }));
+  const openLoops = (Array.isArray(plot.open_loops) ? plot.open_loops : []).filter(
+    (entry): entry is string => typeof entry === "string" && entry.length > 0,
+  );
 
   return (
     <aside className="world-rail" aria-label="Welt und Szene">
@@ -75,8 +80,8 @@ export const WorldRail = memo(function WorldRail({
       <AelunorPanelFrame as="section" className="current-quest-card" variant="compact" texture>
         <button type="button" className="quest-card-button" onClick={on_open_quest}>
           <span className="play-panel-kicker">Aktuelle Quest</span>
-          <strong>{plot.current_goal || "Aktuelles Ziel noch offen"}</strong>
-          {plot.current_threat ? <small>{plot.current_threat}</small> : <small>Keine akute Bedrohung markiert</small>}
+          <strong>{currentGoal || "Aktuelles Ziel noch offen"}</strong>
+          {currentThreat ? <small>{currentThreat}</small> : <small>Keine akute Bedrohung markiert</small>}
           {openLoops.length > 0 ? (
             <span className="quest-loop-summary">{openLoops.slice(0, 2).join(" · ")}</span>
           ) : (
@@ -96,17 +101,17 @@ export const WorldRail = memo(function WorldRail({
             const slotId = entry.slot_id;
             const hpCurrent = "hp_current" in entry && typeof entry.hp_current === "number" ? entry.hp_current : null;
             const hpMax = "hp_max" in entry && typeof entry.hp_max === "number" ? entry.hp_max : null;
-            const percent = hpMax && hpCurrent !== null ? Math.max(0, Math.min(100, (hpCurrent / hpMax) * 100)) : 72;
+            const percent = hpMax && hpMax > 0 && hpCurrent !== null ? Math.max(0, Math.min(100, (hpCurrent / hpMax) * 100)) : null;
             return (
               <button
                 key={slotId}
                 type="button"
                 className={selected_actor_id === slotId ? "party-avatar is-selected" : "party-avatar"}
                 onClick={() => on_select_actor(slotId)}
-                title={entry.display_name}
+                title={percent !== null ? `${entry.display_name} · ${hpCurrent}/${hpMax} Leben` : entry.display_name}
               >
                 <span>{firstInitial(entry.display_name)}</span>
-                <i style={{ width: `${percent}%` }} aria-hidden="true" />
+                {percent !== null ? <i style={{ width: `${percent}%` }} aria-hidden="true" /> : null}
               </button>
             );
           })}

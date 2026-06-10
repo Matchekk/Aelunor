@@ -118,12 +118,12 @@ function deriveSlotLabel(campaign: CampaignSnapshot, slot_id: string | null): st
     return "Character Setup";
   }
 
-  const matchingAvailable = campaign.available_slots.find((slot) => slot.slot_id === slot_id);
+  const matchingAvailable = (campaign.available_slots ?? []).find((slot) => slot.slot_id === slot_id);
   if (matchingAvailable?.display_name) {
     return matchingAvailable.display_name;
   }
 
-  const matchingParty = campaign.party_overview.find((slot) => slot.slot_id === slot_id);
+  const matchingParty = (campaign.party_overview ?? []).find((slot) => slot.slot_id === slot_id);
   if (matchingParty?.display_name) {
     return matchingParty.display_name;
   }

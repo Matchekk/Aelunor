@@ -1,4 +1,12 @@
 import type { CampaignSnapshot, CharacterSheetResponse, PartyOverviewEntry } from "../../shared/api/contracts";
+import {
+  characterSheetSlots,
+  deriveKarmaLabel,
+  partyOverview,
+  resolveSceneLabel,
+  viewerClaimedSlotId,
+  FALLBACK_NAME,
+} from "./partyHudModel";
 
 export type ActorPanelSection =
   | "overview"
@@ -28,6 +36,8 @@ export interface ActorDockView {
   xp_current: number | null;
   xp_to_next: number | null;
   active: boolean;
+  karma_label: string;
+  scene_label: string;
   resources: ResourceMeter[];
   conditions: string[];
   injury_count: number;
@@ -85,21 +95,23 @@ function livingProfile(campaign: CampaignSnapshot, slot_id: string): Record<stri
 }
 
 function asFallbackPartyEntry(campaign: CampaignSnapshot, slot_id: string | null): PartyOverviewEntry | null {
+  const party = partyOverview(campaign);
   if (!slot_id) {
-    return campaign.party_overview[0] ?? null;
+    return party[0] ?? null;
   }
-  return campaign.party_overview.find((entry) => entry.slot_id === slot_id) ?? null;
+  return party.find((entry) => entry.slot_id === slot_id) ?? null;
 }
 
 export function resolveSelectedActorId(campaign: CampaignSnapshot, selected_slot_id: string | null): string | null {
-  if (selected_slot_id && campaign.character_sheet_slots.includes(selected_slot_id)) {
+  const sheetSlots = characterSheetSlots(campaign);
+  if (selected_slot_id && sheetSlots.includes(selected_slot_id)) {
     return selected_slot_id;
   }
-  const claimed = campaign.viewer_context.claimed_slot_id;
-  if (claimed && campaign.character_sheet_slots.includes(claimed)) {
+  const claimed = viewerClaimedSlotId(campaign);
+  if (claimed && sheetSlots.includes(claimed)) {
     return claimed;
   }
-  return campaign.party_overview[0]?.slot_id ?? campaign.character_sheet_slots[0] ?? null;
+  return partyOverview(campaign)[0]?.slot_id ?? sheetSlots[0] ?? null;
 }
 
 function resourceMeters(sheet: CharacterSheetResponse | null, party: PartyOverviewEntry | null): ResourceMeter[] {
@@ -181,7 +193,8 @@ function bondPreview(campaign: CampaignSnapshot, slot_id: string): ActorDockView
     return bonds;
   }
   return readArray(social.relationship_patterns)
-    .map((value, index) => ({ id: `pattern-${index}`, name: String(value), detail: "Muster" }))
+    .map((value, index) => ({ id: `pattern-${index}`, name: readString(value), detail: "Muster" }))
+    .filter((entry) => entry.name)
     .slice(0, 3);
 }
 
@@ -198,7 +211,7 @@ export function deriveActorDockView(
   const needs = readRecord(profile.needs_model);
   const classCurrent = overview?.class_current ?? sheet?.sheet.class.current ?? null;
   const progression = overview?.character_progression;
-  const conditions = party?.conditions?.filter(Boolean) ?? [];
+  const conditions = readArray(party?.conditions).map(readString).filter(Boolean);
   const effectsCount = sheet?.sheet.effects?.length ?? 0;
   const factions = readArray(sheet?.sheet.meta?.faction_memberships)
     .map((entry) => firstString(readRecord(entry).name, readRecord(entry).faction_id))
@@ -207,14 +220,20 @@ export function deriveActorDockView(
 
   return {
     slot_id,
-    display_name: sheet?.display_name || party?.display_name || slot_id,
+    display_name: sheet?.display_name || party?.display_name || FALLBACK_NAME,
     species: firstString(bio.species, bio.race, bio.volk) || "Volk unbekannt",
     class_name: classCurrent?.name || party?.class_name || "Rolle unbekannt",
     class_rank: classCurrent?.rank || party?.class_rank || "Rang F",
     level: readNumber(progression?.level) ?? readNumber(classCurrent?.level) ?? readNumber(party?.level) ?? readNumber(party?.class_level),
     xp_current: readNumber(progression?.xp_current) ?? readNumber(classCurrent?.xp),
     xp_to_next: readNumber(progression?.xp_to_next) ?? readNumber(classCurrent?.xp_next),
-    active: campaign.viewer_context.claimed_slot_id === slot_id,
+    active: viewerClaimedSlotId(campaign) === slot_id,
+    karma_label: deriveKarmaLabel(campaign, slot_id),
+    scene_label: resolveSceneLabel(
+      campaign,
+      sheet?.scene_id ?? party?.scene_id,
+      sheet?.scene_name ?? party?.scene_name,
+    ),
     resources: resourceMeters(sheet, party),
     conditions,
     injury_count: readNumber(overview?.injury_count) ?? sheet?.sheet.injuries_scars.injuries.length ?? party?.injury_count ?? 0,

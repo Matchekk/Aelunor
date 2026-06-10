@@ -9,7 +9,7 @@ export function deriveContextScopeLabels(payload: ContextQueryResponse, campaign
   const labels: ScopeLabelDescriptor[] = [];
   const entityType = payload.result.entity_type || "unknown";
   const entityId = payload.result.entity_id || "";
-  const actor = payload.actor || campaign.viewer_context.claimed_slot_id || "";
+  const actor = payload.actor || campaign.viewer_context?.claimed_slot_id || "";
 
   if (entityType === "scene") {
     labels.push(sceneScopeLabel(payload.result.title || entityId, entityId));
@@ -34,8 +34,8 @@ export function deriveContextSourceKinds(sources: ContextQueryResultSource[]): s
 
 export function deriveContextActorLabel(payload: ContextQueryResponse, campaign: CampaignSnapshot): string {
   if (payload.actor) {
-    const partyEntry = campaign.party_overview.find((entry) => entry.slot_id === payload.actor);
+    const partyEntry = (campaign.party_overview ?? []).find((entry) => entry.slot_id === payload.actor);
     return partyEntry?.display_name || payload.actor;
   }
-  return campaign.viewer_context.display_name || "Unknown actor";
+  return campaign.viewer_context?.display_name || "Unknown actor";
 }

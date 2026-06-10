@@ -1,4 +1,5 @@
 import type { CampaignSnapshot } from "../../shared/api/contracts";
+import { partyOverview } from "../play/partyHudModel";
 import { deriveTimelineEntries, type TimelineEntry } from "../play/selectors";
 
 export type SceneFilterId = "all" | string;
@@ -44,7 +45,7 @@ export function deriveSceneNameMap(campaign: CampaignSnapshot): Record<string, s
     }
   }
 
-  for (const entry of campaign.party_overview) {
+  for (const entry of partyOverview(campaign)) {
     if (entry.scene_id && entry.scene_name && !sceneNames[entry.scene_id]) {
       sceneNames[entry.scene_id] = entry.scene_name;
     }
@@ -63,7 +64,7 @@ export function deriveSceneOptions(campaign: CampaignSnapshot): SceneOption[] {
   const sceneNames = deriveSceneNameMap(campaign);
   const counts = new Map<string, number>();
 
-  for (const member of campaign.party_overview) {
+  for (const member of partyOverview(campaign)) {
     if (member.scene_id) {
       counts.set(member.scene_id, (counts.get(member.scene_id) ?? 0) + 1);
     }
@@ -92,14 +93,14 @@ export function deriveSceneOptions(campaign: CampaignSnapshot): SceneOption[] {
     {
       scene_id: "all",
       scene_name: "Alle Szenen",
-      member_count: campaign.party_overview.length,
+      member_count: partyOverview(campaign).length,
     },
     ...rows,
   ];
 }
 
 export function deriveSceneMembership(campaign: CampaignSnapshot, selected_scene_id: SceneFilterId): SceneMember[] {
-  const members = campaign.party_overview.map((entry) => ({
+  const members = partyOverview(campaign).map((entry) => ({
     slot_id: entry.slot_id,
     display_name: entry.display_name,
     class_name: entry.class_name || null,

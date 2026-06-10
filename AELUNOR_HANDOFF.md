@@ -115,6 +115,46 @@
 * RAG ist unterstuetzende Erinnerung; strukturierter Campaign-/World-/Turn-State
   gewinnt bei Konflikt (Hinweis steht im erzeugten Context-Block).
 
+## UI-State-HUD-Status
+
+* PR #57: Draft, nicht gemerged; Branch `fix/ui-campaign-state-hud`,
+  Head `2c47331`. Checks gruen: typecheck, `npm test` 64/64, build,
+  Browser-Smoke (Hub + Kampagne erstellen, kein UI-v1-Error).
+* Play-HUD rendert Campaign-State ueber Adapter statt Roh-Zugriffe:
+  `ui/src/features/play/partyHudModel.ts` (UiCharacterSummary/UiSceneSummary/
+  UiPartyHudState) + `actorDockModel.ts` (Karma-/Szene-Label, Bond-Fix).
+* Sichtbar pro Charakter (rechtes Dock, `PartyStatusPanel` im `ActorDock`):
+  Name, Klasse/Rang/Level, Leben, Ausdauer, Ressource (Mana/Aether-Name aus
+  Backend), Ruf/Karma (aus `journal.reputation`), Conditions, Verletzungen,
+  Szene/Ort, Kampf-Flag; global Party-Anzahl, Phase, aktive Szene.
+* Kontrollierte Fallbacks statt kaputter Anzeige: `Unbenannte Figur`,
+  `Unbekannte Klasse`, `Unbekannter Ort`, `Neutral`, `—`; Werte geclamped
+  (0..max); kein `undefined`/`[object Object]` (Tests decken das ab:
+  `partyHudModel.test.ts`).
+* `WorldRail` zeigt keinen erfundenen HP-Balken mehr, wenn HP-Daten fehlen.
+* Adapter/Komponenten lesen Snapshot-Arrays/-Records nur noch defensiv
+  (`partyOverview`, `displayParty`, `activeTurns`, `characterSheetSlots`,
+  `viewerContext`, `plotEssentials`, `worldTime` in `partyHudModel.ts`);
+  frisch erstellte/minimal normalisierte Snapshots crashen die UI nicht mehr.
+* Hub-Crash "Cannot read properties of undefined (reading 'length')" kam aus
+  `LlmStatusPanel`: `/api/llm/status` liefert seit den Local-LLM-PRs eine
+  verschachtelte Shape (`{provider, primary, fallback}`) statt flach; Panel
+  liest jetzt beide Shapes defensiv. UI-Contract `LlmStatusResponse` in
+  `contracts.ts` ist veraltet (bewusst nicht migriert, eigener Slice).
+* `ui/src/features/play/components/RightRail.tsx` ist toter Code (nirgends
+  importiert); der echte HUD ist WorldRail (links) + ActorDock (rechts).
+* Offene UI-State-Risiken: Karma/Ruf ist nur `journal.reputation`-Text
+  (echtes Karma-System = Issue #33); `journal.reputation`-Eintragsform ist
+  nicht typisiert (UI liest defensiv); Party-Panel zeigt max. Backend-Daten,
+  keine Pagination bei grossen Parties.
+* Folge-Slice: `LlmStatusResponse`-Contract sauber typisieren und API-/UI-Shape
+  von `/api/llm/status` dauerhaft vereinheitlichen.
+* Naechster sinnvoller UI-Slice: RightRail.tsx entfernen oder reaktivieren
+  (Entscheidung noetig), danach Szenen-/Karten-Panel mit echten Map-Nodes.
+* Nicht erneut untersuchen: keine Cloud-LLM-Intro-Flows im Smoke (Setup nie
+  bis zum Intro abschliessen), keine Runtime-Daten, keine Backend-/Turn-/
+  LLM-Dateien in diesem PR.
+
 ## Offene GitHub-Issue-Landschaft
 
 Snapshot 2026-06-09; nur Lesezugriff. Details:

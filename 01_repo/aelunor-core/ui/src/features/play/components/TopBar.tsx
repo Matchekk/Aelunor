@@ -59,8 +59,8 @@ export const TopBar = memo(function TopBar({
     const world = readRecord(readRecord(campaign.state).world);
     const settings = readRecord(world.settings);
     const campaignLengthRaw = readString(settings.campaign_length).trim().toLowerCase();
-    const day = readNumber(campaign.world_time.day);
-    const timeOfDay = readString(campaign.world_time.time_of_day).trim();
+    const day = readNumber(campaign.world_time?.day);
+    const timeOfDay = readString(campaign.world_time?.time_of_day).trim();
     const cycleSec = readNumber(timing.cycle_ema_sec);
 
     let campaignLengthLabel = "Kampagne";
@@ -74,7 +74,7 @@ export const TopBar = memo(function TopBar({
 
     return {
       phase: phaseState.phase_display || phaseState.phase,
-      scene: active_scene_label && active_scene_label !== "Alle Szenen" ? active_scene_label : campaign.boards.plot_essentials.active_scene || "Alle Szenen",
+      scene: active_scene_label && active_scene_label !== "Alle Szenen" ? active_scene_label : campaign.boards?.plot_essentials?.active_scene || "Alle Szenen",
       actor: active_actor_label,
       session: session.join_code ? "LIVE" : campaignLengthLabel,
       detail: [day !== null ? `Tag ${day}` : "", timeOfDay, cycleSec !== null ? `${Math.round(cycleSec)}s` : ""].filter(Boolean).join(" · "),
@@ -82,10 +82,10 @@ export const TopBar = memo(function TopBar({
   }, [
     active_actor_label,
     active_scene_label,
-    campaign.boards.plot_essentials.active_scene,
+    campaign.boards?.plot_essentials?.active_scene,
     campaign.state,
-    campaign.world_time.day,
-    campaign.world_time.time_of_day,
+    campaign.world_time?.day,
+    campaign.world_time?.time_of_day,
     phaseState.phase,
     phaseState.phase_display,
     session.join_code,
