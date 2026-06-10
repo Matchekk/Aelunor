@@ -436,23 +436,25 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
               </>
             )}
           </section>
-          <button
-            type="button"
-            className="actor-rail-drawer-handle"
-            aria-label={rightRailOpen ? "Akteurleiste ausblenden" : "Akteurleiste einblenden"}
-            aria-expanded={rightRailOpen}
-            title={rightRailOpen ? "Akteurleiste ausblenden" : "Akteurleiste einblenden"}
-            onClick={() => setRightRailOpen(!rightRailOpen)}
-          >
-            <span className="actor-rail-drawer-grip" aria-hidden="true">{rightRailOpen ? "}" : "{"}</span>
-          </button>
-          {rightRailOpen ? (
-            <ActorDock
-              campaign={campaign}
-              selected_slot_id={selectedActorSlotId}
-              on_open_character={openCharacterDrawer}
-            />
-          ) : null}
+          <div className={rightRailOpen ? "actor-rail-shell" : "actor-rail-shell is-collapsed"}>
+            <button
+              type="button"
+              className="actor-rail-drawer-handle"
+              aria-label={rightRailOpen ? "Akteurleiste ausblenden" : "Akteurleiste einblenden"}
+              aria-expanded={rightRailOpen}
+              title={rightRailOpen ? "Akteurleiste ausblenden" : "Akteurleiste einblenden"}
+              onClick={() => setRightRailOpen(!rightRailOpen)}
+            >
+              <span className="actor-rail-drawer-grip" aria-hidden="true">{rightRailOpen ? "}" : "{"}</span>
+            </button>
+            {rightRailOpen ? (
+              <ActorDock
+                campaign={campaign}
+                selected_slot_id={selectedActorSlotId}
+                on_open_character={openCharacterDrawer}
+              />
+            ) : null}
+          </div>
         </section>
       </div>
       <BoardsModal

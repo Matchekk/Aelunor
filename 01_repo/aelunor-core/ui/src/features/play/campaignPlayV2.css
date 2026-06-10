@@ -19,8 +19,8 @@
 .topbar-action-glyph.is-bell::after { left: 0.56rem; bottom: 0; width: 0.28rem; height: 0.28rem; border-radius: 50%; background: currentColor; }
 .topbar-action-glyph.is-gear::before { inset: 0.17rem; border-radius: 50%; }
 .topbar-action-glyph.is-gear::after { inset: 0.52rem; border-radius: 50%; }
-.campaign-play-grid { display: grid; grid-template-columns: clamp(300px, 20vw, 340px) minmax(0, 1fr) 1.15rem clamp(310px, 21vw, 360px); gap: 0.45rem; min-height: 0; }
-.campaign-play-grid.is-actor-collapsed { grid-template-columns: clamp(300px, 20vw, 340px) minmax(0, 1fr) 1.15rem; }
+.campaign-play-grid { display: grid; grid-template-columns: clamp(300px, 20vw, 340px) minmax(0, 1fr) clamp(310px, 21vw, 360px); gap: 0.45rem; min-height: 0; }
+.campaign-play-grid.is-actor-collapsed { grid-template-columns: clamp(300px, 20vw, 340px) minmax(0, 1fr) 0px; }
 .world-rail, .actor-dock { min-height: 0; overflow: auto; scrollbar-width: thin; }
 .world-rail { display: grid; grid-template-rows: auto auto auto minmax(210px, 1fr); gap: 0.45rem; }
 .scene-card, .current-quest-card, .party-mini-panel, .map-preview-card, .actor-dock { border: 1px solid rgba(215, 178, 108, 0.28); background: linear-gradient(180deg, rgba(6, 16, 25, 0.9), rgba(3, 8, 13, 0.94)); box-shadow: var(--v1-shadow-sm); }
@@ -91,11 +91,14 @@
 .top-skills-panel p, .equipment-preview p, .important-items-panel p, .bonds-preview-panel p, .actor-dock-note { margin: 0; color: var(--v1-text-muted); }
 .bonds-preview-panel small { color: var(--v1-text-muted); }
 .actor-header-copy p.actor-scene-line { color: var(--v1-text-muted); font-size: 0.78rem; }
-/* Ornate drawer handle for the right actor rail. Pure CSS placeholder for a
-   future .webp grip asset: full-height invisible click zone, the visible
-   brace grip sits centered on the rail edge. No SVG. */
-.campaign-play-shell .actor-rail-drawer-handle { position: relative; align-self: stretch; min-height: 0; width: 1.15rem; padding: 0; border: 0; background: transparent; box-shadow: none; cursor: pointer; user-select: none; }
-.campaign-play-shell .actor-rail-drawer-grip { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 32px; height: 124px; display: grid; place-items: center; border: 1px solid color-mix(in srgb, var(--ael-gold, #caa763) 52%, transparent); border-radius: 999px; background: radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--ael-glow, #527fb8) 22%, transparent), transparent 60%), linear-gradient(180deg, color-mix(in srgb, var(--ael-surface-soft, #15202f) 92%, transparent), color-mix(in srgb, var(--ael-surface, #0e1826) 96%, black)); box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.5), 0 0 12px color-mix(in srgb, var(--ael-gold, #caa763) 14%, transparent); color: color-mix(in srgb, var(--ael-gold, #caa763) 82%, transparent); font-family: var(--v1-font-display); font-size: 1.55rem; line-height: 1; text-shadow: 0 0 8px color-mix(in srgb, var(--ael-gold, #caa763) 35%, transparent); transition: color 130ms ease, border-color 130ms ease, box-shadow 130ms ease; }
+/* Ornate drawer handle, mounted ON the actor rail like an inset fitting:
+   the shell is the rail wrapper, the handle overlaps the panel's left frame
+   (half on, half off). Pure CSS placeholder for a future .webp grip; no SVG. */
+.campaign-play-shell .actor-rail-shell { position: relative; min-height: 0; display: flex; }
+.campaign-play-shell .actor-rail-shell > .actor-dock { flex: 1 1 auto; min-width: 0; }
+.campaign-play-shell .actor-rail-drawer-handle { position: absolute; left: 0; top: 50%; transform: translate(-45%, -50%); z-index: 6; width: 34px; height: 132px; padding: 0; border: 0; background: transparent; box-shadow: none; cursor: pointer; user-select: none; }
+.campaign-play-shell .actor-rail-shell.is-collapsed .actor-rail-drawer-handle { transform: translate(-100%, -50%); }
+.campaign-play-shell .actor-rail-drawer-grip { display: grid; place-items: center; width: 100%; height: 100%; border: 1px solid color-mix(in srgb, var(--ael-gold, #caa763) 52%, transparent); border-radius: 999px; background: radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--ael-glow, #527fb8) 22%, transparent), transparent 60%), linear-gradient(180deg, color-mix(in srgb, var(--ael-surface-soft, #15202f) 96%, transparent), color-mix(in srgb, var(--ael-surface, #0e1826) 98%, black)); box-shadow: inset 0 0 16px rgba(0, 0, 0, 0.5), 0 0 12px color-mix(in srgb, var(--ael-gold, #caa763) 14%, transparent), 6px 0 14px rgba(0, 0, 0, 0.35); color: color-mix(in srgb, var(--ael-gold, #caa763) 82%, transparent); font-family: var(--v1-font-display); font-size: 1.55rem; line-height: 1; text-shadow: 0 0 8px color-mix(in srgb, var(--ael-gold, #caa763) 35%, transparent); transition: color 130ms ease, border-color 130ms ease, box-shadow 130ms ease; }
 .campaign-play-shell .actor-rail-drawer-grip::before, .campaign-play-shell .actor-rail-drawer-grip::after { content: ""; position: absolute; left: 50%; width: 7px; height: 7px; transform: translateX(-50%) rotate(45deg); border: 1px solid color-mix(in srgb, var(--ael-gold, #caa763) 60%, transparent); background: color-mix(in srgb, var(--ael-gold, #caa763) 22%, transparent); }
 .campaign-play-shell .actor-rail-drawer-grip::before { top: 9px; }
 .campaign-play-shell .actor-rail-drawer-grip::after { bottom: 9px; }
@@ -206,5 +209,5 @@ body.is-resizing-composer * { user-select: none; }
 .campaign-play-shell .topbar-utility-btn { min-height: 2.45rem; border-radius: 0.55rem; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; }
 .campaign-play-shell .topbar-icon-action { width: 2.7rem; min-height: 2.45rem; border-radius: 0.55rem; }
 
-@media (max-width: 1200px) { .campaign-play-grid, .campaign-play-grid.is-actor-collapsed { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); } .actor-dock, .campaign-play-shell .actor-rail-drawer-handle { display: none; } .campaign-topbar { grid-template-columns: auto minmax(0, 1fr); } .topbar-actions { grid-column: 1 / -1; } }
+@media (max-width: 1200px) { .campaign-play-grid, .campaign-play-grid.is-actor-collapsed { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); } .campaign-play-shell .actor-rail-shell { display: none; } .campaign-topbar { grid-template-columns: auto minmax(0, 1fr); } .topbar-actions { grid-column: 1 / -1; } }
 @media (max-width: 900px) { .campaign-play-shell { height: auto; overflow: auto; } .campaign-play-content, .campaign-play-grid { display: flex; flex-direction: column; } .campaign-topbar-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); } .world-rail, .actor-dock { overflow: visible; } .composer-input-grid { grid-template-columns: minmax(0, 1fr); } }

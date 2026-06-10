@@ -185,11 +185,14 @@
   (`actor-rail-handle`, CSS-Glyph, aria-expanded; Persistenz weiter ueber
   bestehendes uiMemory `right_rail_open`, kein neuer Key); "Akteur"-Button
   aus der Topbar entfernt, Reihenfolge rechts: Claim loesen, Code, Hub,
-  Icon-Utilities. ActorRail-Griff ist jetzt ornamental
-  (`actor-rail-drawer-handle`/`-grip`): mittig zentrierte 32x124px-Kapsel an
-  der Rail-Kante mit `{`/`}`-Glyph, Gold-Border/Glow und Finial-Rauten —
-  reiner CSS-Placeholder, spaeter durch `.webp`-Asset ersetzbar; A11y/State/
-  Persistenz unveraendert. Play-Topbar nutzt keine SVGs (CSS-Glyphen + PNG-Logo;
+  Icon-Utilities. ActorRail-Griff ist jetzt ornamental und ueberlappt die
+  Panelkante wie ein eingelassener Beschlag: keine separate Grid-Spalte mehr,
+  sondern relativer Wrapper `.actor-rail-shell` (3. Grid-Spalte; collapsed
+  0px) mit absolut positioniertem Griff (left 0, top 50%,
+  translate(-45%,-50%); collapsed translate(-100%,-50%)), 34x132px-Kapsel mit
+  `{`/`}`-Glyph, Gold-Border/Glow, Finial-Rauten — reiner CSS-Placeholder,
+  spaeter durch `.webp`-Asset ersetzbar; A11y/State/Persistenz (uiMemory
+  `right_rail_open`) unveraendert. Play-Topbar nutzt keine SVGs (CSS-Glyphen + PNG-Logo;
   einzige SVG-Nutzung im UI ist das Drawer-Attributradar, unangetastet).
   Composer-Default 340px / min 240 (Gap 0.55rem) — alle Controls ohne
   internen Scroll (scrollHeight<=clientHeight verifiziert), Overflow nur
