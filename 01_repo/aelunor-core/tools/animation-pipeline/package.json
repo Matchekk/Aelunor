@@ -1,0 +1,35 @@
+{
+  "name": "@aelunor/animation-pipeline",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Agent-friendly Motion Canvas animation pipeline for Aelunor UI assets (no diffusion models, no ComfyUI).",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "render": "node scripts/render-headless.mjs",
+    "package": "node scripts/package-assets.mjs",
+    "verify": "node scripts/verify-frames.mjs",
+    "preview:mp4": "node scripts/preview-mp4.mjs",
+    "smooth": "node scripts/smooth.mjs",
+    "compress": "node scripts/compress.mjs",
+    "sheet": "node scripts/contact-sheet.mjs",
+    "logo": "node scripts/render-headless.mjs --project logoProject && node scripts/package-animation.mjs --frames output/logoProject --name aelunor-logo-reveal --fuzz 0.4 --mp4",
+    "animate": "node scripts/animate.mjs",
+    "watch": "node scripts/watch.mjs",
+    "publish-asset": "node scripts/publish-asset.mjs",
+    "refine": "python scripts/refine_edges.py",
+    "refine:watch": "python scripts/refine_watch.py",
+    "build:assets": "node scripts/build-assets.mjs"
+  },
+  "dependencies": {
+    "@motion-canvas/2d": "^3.17.2",
+    "@motion-canvas/core": "^3.17.2",
+    "@motion-canvas/ui": "^3.17.2",
+    "@motion-canvas/vite-plugin": "^3.17.1",
+    "ffmpeg-static": "^5.3.0",
+    "playwright-core": "^1.49.0",
+    "sharp": "^0.34.1",
+    "typescript": "^5.5.0",
+    "vite": "^4.5.5"
+  }
+}

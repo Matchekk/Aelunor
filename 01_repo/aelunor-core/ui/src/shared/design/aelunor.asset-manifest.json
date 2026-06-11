@@ -23,8 +23,15 @@
       "mirroredPath": "/static/brand/aelunor-icon-512x512.png",
       "category": "brand",
       "role": "logo",
-      "allowedUsage": ["app mark", "brand identity", "decorative watermark with alt empty"],
-      "forbiddenUsage": ["normal UI text replacement", "panel ornament fallback"],
+      "allowedUsage": [
+        "app mark",
+        "brand identity",
+        "decorative watermark with alt empty"
+      ],
+      "forbiddenUsage": [
+        "normal UI text replacement",
+        "panel ornament fallback"
+      ],
       "intendedComponent": "AelunorIconFrame when framed; plain img only for brand identity",
       "layer": "content or ornament",
       "accessibility": "Use alt=\"Aelunor\" for brand identity, alt=\"\" and aria-hidden for decorative use.",
@@ -37,8 +44,13 @@
       "mirroredPath": null,
       "category": "reference",
       "role": "unknown",
-      "allowedUsage": ["design reference only"],
-      "forbiddenUsage": ["runtime UI rendering", "cropped CSS sprites without manifest update"],
+      "allowedUsage": [
+        "design reference only"
+      ],
+      "forbiddenUsage": [
+        "runtime UI rendering",
+        "cropped CSS sprites without manifest update"
+      ],
       "intendedComponent": "none",
       "layer": "none",
       "accessibility": "Do not expose in runtime UI.",
@@ -51,8 +63,15 @@
       "mirroredPath": "/static/brand/ui-kit/frame-card.png",
       "category": "ui-kit",
       "role": "frame",
-      "allowedUsage": ["AelunorPanelFrame variant card", "AelunorPanelFrame variant compact"],
-      "forbiddenUsage": ["blind background-size 100% 100% stretching", "page background", "button texture"],
+      "allowedUsage": [
+        "AelunorPanelFrame variant card",
+        "AelunorPanelFrame variant compact"
+      ],
+      "forbiddenUsage": [
+        "blind background-size 100% 100% stretching",
+        "page background",
+        "button texture"
+      ],
       "intendedComponent": "AelunorPanelFrame",
       "layer": "surface",
       "accessibility": "Decorative: aria-hidden, pointer-events none, user-select none.",
@@ -65,8 +84,14 @@
       "mirroredPath": "/static/brand/ui-kit/frame-hero.png",
       "category": "ui-kit",
       "role": "frame",
-      "allowedUsage": ["AelunorPanelFrame variant hero"],
-      "forbiddenUsage": ["blind background-size 100% 100% stretching", "small card frame", "page background"],
+      "allowedUsage": [
+        "AelunorPanelFrame variant hero"
+      ],
+      "forbiddenUsage": [
+        "blind background-size 100% 100% stretching",
+        "small card frame",
+        "page background"
+      ],
       "intendedComponent": "AelunorPanelFrame",
       "layer": "surface",
       "accessibility": "Decorative: aria-hidden, pointer-events none, user-select none.",
@@ -79,8 +104,14 @@
       "mirroredPath": "/static/brand/ui-kit/frame-button-primary.png",
       "category": "ui-kit",
       "role": "frame",
-      "allowedUsage": ["aelunor-button-ornate pseudo-element"],
-      "forbiddenUsage": ["content image", "panel background", "corner substitute"],
+      "allowedUsage": [
+        "aelunor-button-ornate pseudo-element"
+      ],
+      "forbiddenUsage": [
+        "content image",
+        "panel background",
+        "corner substitute"
+      ],
       "intendedComponent": "button class aelunor-button-ornate",
       "layer": "ornament",
       "accessibility": "Decorative pseudo-element only.",
@@ -93,8 +124,14 @@
       "mirroredPath": "/static/brand/ui-kit/frame-button-secondary.png",
       "category": "ui-kit",
       "role": "frame",
-      "allowedUsage": ["aelunor-button-ornate is-secondary pseudo-element"],
-      "forbiddenUsage": ["content image", "panel background", "corner substitute"],
+      "allowedUsage": [
+        "aelunor-button-ornate is-secondary pseudo-element"
+      ],
+      "forbiddenUsage": [
+        "content image",
+        "panel background",
+        "corner substitute"
+      ],
       "intendedComponent": "button class aelunor-button-ornate is-secondary",
       "layer": "ornament",
       "accessibility": "Decorative pseudo-element only.",
@@ -107,8 +144,15 @@
       "mirroredPath": "/static/brand/ui-kit/panel-corner-tl.png",
       "category": "ui-kit",
       "role": "corner",
-      "allowedUsage": ["absolute TL overlay in AelunorPanelFrame"],
-      "forbiddenUsage": ["parent background-image", "background-size 100% 100%", "wallpaper", "inline content image"],
+      "allowedUsage": [
+        "absolute TL overlay in AelunorPanelFrame"
+      ],
+      "forbiddenUsage": [
+        "parent background-image",
+        "background-size 100% 100%",
+        "wallpaper",
+        "inline content image"
+      ],
       "intendedComponent": "AelunorPanelFrame",
       "layer": "ornament",
       "accessibility": "Decorative: aria-hidden, pointer-events none, user-select none.",
@@ -121,8 +165,15 @@
       "mirroredPath": "/static/brand/ui-kit/panel-corner-tr.png",
       "category": "ui-kit",
       "role": "corner",
-      "allowedUsage": ["absolute TR overlay in AelunorPanelFrame"],
-      "forbiddenUsage": ["parent background-image", "background-size 100% 100%", "wallpaper", "inline content image"],
+      "allowedUsage": [
+        "absolute TR overlay in AelunorPanelFrame"
+      ],
+      "forbiddenUsage": [
+        "parent background-image",
+        "background-size 100% 100%",
+        "wallpaper",
+        "inline content image"
+      ],
       "intendedComponent": "AelunorPanelFrame",
       "layer": "ornament",
       "accessibility": "Decorative: aria-hidden, pointer-events none, user-select none.",
@@ -135,8 +186,15 @@
       "mirroredPath": "/static/brand/ui-kit/panel-corner-bl.png",
       "category": "ui-kit",
       "role": "corner",
-      "allowedUsage": ["absolute BL overlay in AelunorPanelFrame"],
-      "forbiddenUsage": ["parent background-image", "background-size 100% 100%", "wallpaper", "inline content image"],
+      "allowedUsage": [
+        "absolute BL overlay in AelunorPanelFrame"
+      ],
+      "forbiddenUsage": [
+        "parent background-image",
+        "background-size 100% 100%",
+        "wallpaper",
+        "inline content image"
+      ],
       "intendedComponent": "AelunorPanelFrame",
       "layer": "ornament",
       "accessibility": "Decorative: aria-hidden, pointer-events none, user-select none.",
@@ -149,8 +207,15 @@
       "mirroredPath": "/static/brand/ui-kit/panel-corner-br.png",
       "category": "ui-kit",
       "role": "corner",
-      "allowedUsage": ["absolute BR overlay in AelunorPanelFrame"],
-      "forbiddenUsage": ["parent background-image", "background-size 100% 100%", "wallpaper", "inline content image"],
+      "allowedUsage": [
+        "absolute BR overlay in AelunorPanelFrame"
+      ],
+      "forbiddenUsage": [
+        "parent background-image",
+        "background-size 100% 100%",
+        "wallpaper",
+        "inline content image"
+      ],
       "intendedComponent": "AelunorPanelFrame",
       "layer": "ornament",
       "accessibility": "Decorative: aria-hidden, pointer-events none, user-select none.",
@@ -163,8 +228,15 @@
       "mirroredPath": "/static/brand/ui-kit/divider-arcane-small.png",
       "category": "ui-kit",
       "role": "divider",
-      "allowedUsage": ["AelunorDivider variant small", "decorative empty-state pseudo-element"],
-      "forbiddenUsage": ["content img with filename alt", "button background", "panel frame"],
+      "allowedUsage": [
+        "AelunorDivider variant small",
+        "decorative empty-state pseudo-element"
+      ],
+      "forbiddenUsage": [
+        "content img with filename alt",
+        "button background",
+        "panel frame"
+      ],
       "intendedComponent": "AelunorDivider",
       "layer": "ornament",
       "accessibility": "Decorative: aria-hidden and no meaningful text in image.",
@@ -177,8 +249,14 @@
       "mirroredPath": "/static/brand/ui-kit/divider-arcane-wide.png",
       "category": "ui-kit",
       "role": "divider",
-      "allowedUsage": ["AelunorDivider variant wide"],
-      "forbiddenUsage": ["content img with filename alt", "button background", "panel frame"],
+      "allowedUsage": [
+        "AelunorDivider variant wide"
+      ],
+      "forbiddenUsage": [
+        "content img with filename alt",
+        "button background",
+        "panel frame"
+      ],
       "intendedComponent": "AelunorDivider",
       "layer": "ornament",
       "accessibility": "Decorative: aria-hidden and no meaningful text in image.",
@@ -191,8 +269,15 @@
       "mirroredPath": "/static/brand/ui-kit/icon-frame-circle.png",
       "category": "ui-kit",
       "role": "frame",
-      "allowedUsage": ["AelunorIconFrame", "approved active sidebar icon pseudo-element"],
-      "forbiddenUsage": ["semantic icon replacement", "button text", "page background"],
+      "allowedUsage": [
+        "AelunorIconFrame",
+        "approved active sidebar icon pseudo-element"
+      ],
+      "forbiddenUsage": [
+        "semantic icon replacement",
+        "button text",
+        "page background"
+      ],
       "intendedComponent": "AelunorIconFrame",
       "layer": "ornament",
       "accessibility": "Frame is decorative; icon child supplies meaning or is hidden.",
@@ -205,8 +290,17 @@
       "mirroredPath": "/static/icons/hub_icon_sidebar.png",
       "category": "ui-kit",
       "role": "icon",
-      "allowedUsage": ["HubSidebar navigation icon", "semantic navigation icon inside HubSidebar"],
-      "forbiddenUsage": ["decorative panel frame", "button background", "page background", "text replacement", "standalone brand logo"],
+      "allowedUsage": [
+        "HubSidebar navigation icon",
+        "semantic navigation icon inside HubSidebar"
+      ],
+      "forbiddenUsage": [
+        "decorative panel frame",
+        "button background",
+        "page background",
+        "text replacement",
+        "standalone brand logo"
+      ],
       "intendedComponent": "HubSidebar",
       "layer": "content",
       "accessibility": "May be decorative with alt=\"\" when the HubSidebar button exposes a real text label or accessible name. Do not use filename alt text. Do not use as text replacement.",
@@ -219,8 +313,17 @@
       "mirroredPath": "/static/icons/campaign_icon_sidebar.png",
       "category": "ui-kit",
       "role": "icon",
-      "allowedUsage": ["HubSidebar navigation icon", "semantic navigation icon inside HubSidebar"],
-      "forbiddenUsage": ["decorative panel frame", "button background", "page background", "text replacement", "standalone brand logo"],
+      "allowedUsage": [
+        "HubSidebar navigation icon",
+        "semantic navigation icon inside HubSidebar"
+      ],
+      "forbiddenUsage": [
+        "decorative panel frame",
+        "button background",
+        "page background",
+        "text replacement",
+        "standalone brand logo"
+      ],
       "intendedComponent": "HubSidebar",
       "layer": "content",
       "accessibility": "May be decorative with alt=\"\" when the HubSidebar button exposes a real text label or accessible name. Do not use filename alt text. Do not use as text replacement.",
@@ -233,8 +336,17 @@
       "mirroredPath": "/static/icons/characters_icon_png.png",
       "category": "ui-kit",
       "role": "icon",
-      "allowedUsage": ["HubSidebar navigation icon", "semantic navigation icon inside HubSidebar"],
-      "forbiddenUsage": ["decorative panel frame", "button background", "page background", "text replacement", "standalone brand logo"],
+      "allowedUsage": [
+        "HubSidebar navigation icon",
+        "semantic navigation icon inside HubSidebar"
+      ],
+      "forbiddenUsage": [
+        "decorative panel frame",
+        "button background",
+        "page background",
+        "text replacement",
+        "standalone brand logo"
+      ],
       "intendedComponent": "HubSidebar",
       "layer": "content",
       "accessibility": "May be decorative with alt=\"\" when the HubSidebar button exposes a real text label or accessible name. Do not use filename alt text. Do not use as text replacement.",
@@ -247,8 +359,17 @@
       "mirroredPath": "/static/icons/world_icon_sidebar.png",
       "category": "ui-kit",
       "role": "icon",
-      "allowedUsage": ["HubSidebar navigation icon", "semantic navigation icon inside HubSidebar"],
-      "forbiddenUsage": ["decorative panel frame", "button background", "page background", "text replacement", "standalone brand logo"],
+      "allowedUsage": [
+        "HubSidebar navigation icon",
+        "semantic navigation icon inside HubSidebar"
+      ],
+      "forbiddenUsage": [
+        "decorative panel frame",
+        "button background",
+        "page background",
+        "text replacement",
+        "standalone brand logo"
+      ],
       "intendedComponent": "HubSidebar",
       "layer": "content",
       "accessibility": "May be decorative with alt=\"\" when the HubSidebar button exposes a real text label or accessible name. Do not use filename alt text. Do not use as text replacement.",
@@ -261,8 +382,17 @@
       "mirroredPath": "/static/icons/quests_icon_sidebar.png",
       "category": "ui-kit",
       "role": "icon",
-      "allowedUsage": ["HubSidebar navigation icon", "semantic navigation icon inside HubSidebar"],
-      "forbiddenUsage": ["decorative panel frame", "button background", "page background", "text replacement", "standalone brand logo"],
+      "allowedUsage": [
+        "HubSidebar navigation icon",
+        "semantic navigation icon inside HubSidebar"
+      ],
+      "forbiddenUsage": [
+        "decorative panel frame",
+        "button background",
+        "page background",
+        "text replacement",
+        "standalone brand logo"
+      ],
       "intendedComponent": "HubSidebar",
       "layer": "content",
       "accessibility": "May be decorative with alt=\"\" when the HubSidebar button exposes a real text label or accessible name. Do not use filename alt text. Do not use as text replacement.",
@@ -275,8 +405,17 @@
       "mirroredPath": "/static/icons/inventory_icon_sidebar.png",
       "category": "ui-kit",
       "role": "icon",
-      "allowedUsage": ["HubSidebar navigation icon", "semantic navigation icon inside HubSidebar"],
-      "forbiddenUsage": ["decorative panel frame", "button background", "page background", "text replacement", "standalone brand logo"],
+      "allowedUsage": [
+        "HubSidebar navigation icon",
+        "semantic navigation icon inside HubSidebar"
+      ],
+      "forbiddenUsage": [
+        "decorative panel frame",
+        "button background",
+        "page background",
+        "text replacement",
+        "standalone brand logo"
+      ],
       "intendedComponent": "HubSidebar",
       "layer": "content",
       "accessibility": "May be decorative with alt=\"\" when the HubSidebar button exposes a real text label or accessible name. Do not use filename alt text. Do not use as text replacement.",
@@ -289,8 +428,17 @@
       "mirroredPath": "/static/icons/codex_icon_sidebar.png",
       "category": "ui-kit",
       "role": "icon",
-      "allowedUsage": ["HubSidebar navigation icon", "semantic navigation icon inside HubSidebar"],
-      "forbiddenUsage": ["decorative panel frame", "button background", "page background", "text replacement", "standalone brand logo"],
+      "allowedUsage": [
+        "HubSidebar navigation icon",
+        "semantic navigation icon inside HubSidebar"
+      ],
+      "forbiddenUsage": [
+        "decorative panel frame",
+        "button background",
+        "page background",
+        "text replacement",
+        "standalone brand logo"
+      ],
       "intendedComponent": "HubSidebar",
       "layer": "content",
       "accessibility": "May be decorative with alt=\"\" when the HubSidebar button exposes a real text label or accessible name. Do not use filename alt text. Do not use as text replacement.",
@@ -303,8 +451,17 @@
       "mirroredPath": "/static/icons/settings_icon_sidebar.png",
       "category": "ui-kit",
       "role": "icon",
-      "allowedUsage": ["HubSidebar navigation icon", "semantic navigation icon inside HubSidebar"],
-      "forbiddenUsage": ["decorative panel frame", "button background", "page background", "text replacement", "standalone brand logo"],
+      "allowedUsage": [
+        "HubSidebar navigation icon",
+        "semantic navigation icon inside HubSidebar"
+      ],
+      "forbiddenUsage": [
+        "decorative panel frame",
+        "button background",
+        "page background",
+        "text replacement",
+        "standalone brand logo"
+      ],
       "intendedComponent": "HubSidebar",
       "layer": "content",
       "accessibility": "May be decorative with alt=\"\" when the HubSidebar button exposes a real text label or accessible name. Do not use filename alt text. Do not use as text replacement.",
@@ -317,8 +474,16 @@
       "mirroredPath": "/static/brand/ui-kit/texture-arcane-noise.webp",
       "category": "ui-kit",
       "role": "texture",
-      "allowedUsage": ["low-opacity texture layer", "AelunorPanelFrame texture", "AelunorSceneBackground texture"],
-      "forbiddenUsage": ["content image", "high-opacity foreground", "clickable layer"],
+      "allowedUsage": [
+        "low-opacity texture layer",
+        "AelunorPanelFrame texture",
+        "AelunorSceneBackground texture"
+      ],
+      "forbiddenUsage": [
+        "content image",
+        "high-opacity foreground",
+        "clickable layer"
+      ],
       "intendedComponent": "AelunorPanelFrame or AelunorSceneBackground",
       "layer": "texture",
       "accessibility": "Decorative layer must be aria-hidden or pseudo-element.",
@@ -331,8 +496,18 @@
       "mirroredPath": "/static/brand/illustrations/empty-chronicle-seal.webp",
       "category": "ui-kit",
       "role": "illustration",
-      "allowedUsage": ["Campaign Hub empty-state illustration", "decorative empty chronicle visual"],
-      "forbiddenUsage": ["semantic navigation icon", "decorative panel frame", "button background", "page background", "text replacement", "standalone brand logo"],
+      "allowedUsage": [
+        "Campaign Hub empty-state illustration",
+        "decorative empty chronicle visual"
+      ],
+      "forbiddenUsage": [
+        "semantic navigation icon",
+        "decorative panel frame",
+        "button background",
+        "page background",
+        "text replacement",
+        "standalone brand logo"
+      ],
       "intendedComponent": "HubContinuationPanel",
       "layer": "content",
       "accessibility": "Decorative empty-state illustration: use alt=\"\" and aria-hidden when surrounding text explains the empty state. Do not use filename alt text.",
@@ -340,13 +515,97 @@
       "notes": "Transparent WebP derived from provided PNG. Keep separate from icon-frame-circle decorative frame and sidebar navigation icons."
     },
     {
+      "id": "chronicle-book-opening-spritesheet",
+      "path": "/brand/animations/chronicle-book-opening-spritesheet.webp",
+      "mirroredPath": "/static/brand/animations/chronicle-book-opening-spritesheet.webp",
+      "category": "ui-kit",
+      "role": "animation",
+      "allowedUsage": [
+        "Campaign start loading animation",
+        "Campaign resume loading animation",
+        "Decorative chronicle awakening animation"
+      ],
+      "forbiddenUsage": [
+        "semantic navigation icon",
+        "button background",
+        "panel frame",
+        "page wallpaper",
+        "text replacement",
+        "standalone logo"
+      ],
+      "intendedComponent": "ChronicleBookOpeningAnimation",
+      "layer": "content",
+      "accessibility": "Decorative animation only. Render with aria-hidden=\"true\" when surrounding real DOM text explains the loading state.",
+      "responsiveBehavior": "Preserve square frame aspect ratio. Do not stretch individual frames.",
+      "notes": "5-frame horizontal sprite sheet (2560x512, 512x512 per frame): closed book to fully open with glowing arcane seal. Transparent WebP."
+    },
+    {
+      "id": "chronicle-book-opening-animated",
+      "path": "/brand/animations/chronicle-book-opening-animated.webp",
+      "mirroredPath": "/static/brand/animations/chronicle-book-opening-animated.webp",
+      "category": "ui-kit",
+      "role": "animation",
+      "allowedUsage": [
+        "Campaign start loading animation",
+        "Campaign resume loading animation",
+        "Decorative chronicle awakening animation"
+      ],
+      "forbiddenUsage": [
+        "semantic navigation icon",
+        "button background",
+        "panel frame",
+        "page wallpaper",
+        "text replacement",
+        "standalone logo"
+      ],
+      "intendedComponent": "ChronicleBookOpeningAnimation",
+      "layer": "content",
+      "accessibility": "Decorative animation only. Render with aria-hidden=\"true\" when surrounding real DOM text explains the loading state.",
+      "responsiveBehavior": "Preserve square aspect ratio; scale within loading surfaces without layout shift.",
+      "notes": "Animated WebP (512x512, 5 frames at 190ms, infinite loop, transparent) generated by tools/animation-pipeline from chronicle-book-opening-spritesheet.webp. Rebuild via npm run build:assets; see docs/ASSET_ANIMATION_PIPELINE.md."
+    },
+    {
+      "id": "chronicle-book-opening-spritesheet-normalized",
+      "path": "/brand/animations/chronicle-book-opening-spritesheet-normalized.webp",
+      "mirroredPath": "/static/brand/animations/chronicle-book-opening-spritesheet-normalized.webp",
+      "category": "ui-kit",
+      "role": "animation",
+      "allowedUsage": [
+        "Campaign start loading animation",
+        "Campaign resume loading animation",
+        "Decorative chronicle awakening animation"
+      ],
+      "forbiddenUsage": [
+        "semantic navigation icon",
+        "button background",
+        "panel frame",
+        "page wallpaper",
+        "text replacement",
+        "standalone logo"
+      ],
+      "intendedComponent": "ChronicleBookOpeningAnimation",
+      "layer": "content",
+      "accessibility": "Decorative animation only. Render with aria-hidden=\"true\" when surrounding real DOM text explains the loading state.",
+      "responsiveBehavior": "Preserve square frame aspect ratio. Do not stretch individual frames.",
+      "notes": "Normalized 5-frame sprite sheet (2560x512, exact 512x512 cells, transparent) generated by tools/animation-pipeline; drop-in replacement for chronicle-book-opening-spritesheet.webp. Rebuild via npm run build:assets; see docs/ASSET_ANIMATION_PIPELINE.md."
+    },
+    {
       "id": "wallpaper-aelunor-hybrid",
       "path": "/brand/wallpapers/aelunor-hybrid.png",
       "mirroredPath": "/static/brand/wallpapers/aelunor-hybrid.png",
       "category": "wallpaper",
       "role": "background",
-      "allowedUsage": ["AelunorSceneBackground", "page-level scene background"],
-      "forbiddenUsage": ["card", "button", "modal", "sidebar", "panel ornament"],
+      "allowedUsage": [
+        "AelunorSceneBackground",
+        "page-level scene background"
+      ],
+      "forbiddenUsage": [
+        "card",
+        "button",
+        "modal",
+        "sidebar",
+        "panel ornament"
+      ],
       "intendedComponent": "AelunorSceneBackground",
       "layer": "background",
       "accessibility": "Decorative page background; aria-hidden.",
@@ -359,8 +618,16 @@
       "mirroredPath": "/static/brand/wallpapers/hub-reference.png",
       "category": "wallpaper",
       "role": "background",
-      "allowedUsage": ["AelunorSceneBackground", "page-level scene background", "approved miniature map preview"],
-      "forbiddenUsage": ["card wallpaper", "button background", "modal background"],
+      "allowedUsage": [
+        "AelunorSceneBackground",
+        "page-level scene background",
+        "approved miniature map preview"
+      ],
+      "forbiddenUsage": [
+        "card wallpaper",
+        "button background",
+        "modal background"
+      ],
       "intendedComponent": "AelunorSceneBackground",
       "layer": "background",
       "accessibility": "Decorative page background; aria-hidden.",
@@ -373,8 +640,17 @@
       "mirroredPath": "/static/brand/wallpapers/nachtblau.png",
       "category": "wallpaper",
       "role": "background",
-      "allowedUsage": ["AelunorSceneBackground", "page-level scene background"],
-      "forbiddenUsage": ["card", "button", "modal", "sidebar", "panel ornament"],
+      "allowedUsage": [
+        "AelunorSceneBackground",
+        "page-level scene background"
+      ],
+      "forbiddenUsage": [
+        "card",
+        "button",
+        "modal",
+        "sidebar",
+        "panel ornament"
+      ],
       "intendedComponent": "AelunorSceneBackground",
       "layer": "background",
       "accessibility": "Decorative page background; aria-hidden.",
@@ -387,8 +663,17 @@
       "mirroredPath": "/static/brand/wallpapers/tavern.png",
       "category": "wallpaper",
       "role": "background",
-      "allowedUsage": ["AelunorSceneBackground", "page-level scene background"],
-      "forbiddenUsage": ["card", "button", "modal", "sidebar", "panel ornament"],
+      "allowedUsage": [
+        "AelunorSceneBackground",
+        "page-level scene background"
+      ],
+      "forbiddenUsage": [
+        "card",
+        "button",
+        "modal",
+        "sidebar",
+        "panel ornament"
+      ],
       "intendedComponent": "AelunorSceneBackground",
       "layer": "background",
       "accessibility": "Decorative page background; aria-hidden.",
@@ -401,8 +686,17 @@
       "mirroredPath": "/static/brand/wallpapers/waldlichtung.png",
       "category": "wallpaper",
       "role": "background",
-      "allowedUsage": ["AelunorSceneBackground", "page-level scene background"],
-      "forbiddenUsage": ["card", "button", "modal", "sidebar", "panel ornament"],
+      "allowedUsage": [
+        "AelunorSceneBackground",
+        "page-level scene background"
+      ],
+      "forbiddenUsage": [
+        "card",
+        "button",
+        "modal",
+        "sidebar",
+        "panel ornament"
+      ],
       "intendedComponent": "AelunorSceneBackground",
       "layer": "background",
       "accessibility": "Decorative page background; aria-hidden.",
@@ -415,8 +709,17 @@
       "mirroredPath": "/static/brand/wallpapers/wallpaper-ancient-temple-arcane.png",
       "category": "wallpaper",
       "role": "background",
-      "allowedUsage": ["AelunorSceneBackground", "page-level scene background"],
-      "forbiddenUsage": ["card", "button", "modal", "sidebar", "panel ornament"],
+      "allowedUsage": [
+        "AelunorSceneBackground",
+        "page-level scene background"
+      ],
+      "forbiddenUsage": [
+        "card",
+        "button",
+        "modal",
+        "sidebar",
+        "panel ornament"
+      ],
       "intendedComponent": "AelunorSceneBackground",
       "layer": "background",
       "accessibility": "Decorative page background; aria-hidden.",
@@ -429,8 +732,17 @@
       "mirroredPath": "/static/brand/wallpapers/wallpaper-campfire-long-rest.png",
       "category": "wallpaper",
       "role": "background",
-      "allowedUsage": ["AelunorSceneBackground", "page-level scene background"],
-      "forbiddenUsage": ["card", "button", "modal", "sidebar", "panel ornament"],
+      "allowedUsage": [
+        "AelunorSceneBackground",
+        "page-level scene background"
+      ],
+      "forbiddenUsage": [
+        "card",
+        "button",
+        "modal",
+        "sidebar",
+        "panel ornament"
+      ],
       "intendedComponent": "AelunorSceneBackground",
       "layer": "background",
       "accessibility": "Decorative page background; aria-hidden.",
@@ -443,8 +755,17 @@
       "mirroredPath": "/static/brand/wallpapers/wallpaper-city-night-market.png",
       "category": "wallpaper",
       "role": "background",
-      "allowedUsage": ["AelunorSceneBackground", "page-level scene background"],
-      "forbiddenUsage": ["card", "button", "modal", "sidebar", "panel ornament"],
+      "allowedUsage": [
+        "AelunorSceneBackground",
+        "page-level scene background"
+      ],
+      "forbiddenUsage": [
+        "card",
+        "button",
+        "modal",
+        "sidebar",
+        "panel ornament"
+      ],
       "intendedComponent": "AelunorSceneBackground",
       "layer": "background",
       "accessibility": "Decorative page background; aria-hidden.",
@@ -457,8 +778,17 @@
       "mirroredPath": "/static/brand/wallpapers/wallpaper-desert-sandstone-temple.png",
       "category": "wallpaper",
       "role": "background",
-      "allowedUsage": ["AelunorSceneBackground", "page-level scene background"],
-      "forbiddenUsage": ["card", "button", "modal", "sidebar", "panel ornament"],
+      "allowedUsage": [
+        "AelunorSceneBackground",
+        "page-level scene background"
+      ],
+      "forbiddenUsage": [
+        "card",
+        "button",
+        "modal",
+        "sidebar",
+        "panel ornament"
+      ],
       "intendedComponent": "AelunorSceneBackground",
       "layer": "background",
       "accessibility": "Decorative page background; aria-hidden.",
@@ -471,8 +801,17 @@
       "mirroredPath": "/static/brand/wallpapers/wallpaper-dungeon-shattered-causeway.png",
       "category": "wallpaper",
       "role": "background",
-      "allowedUsage": ["AelunorSceneBackground", "page-level scene background"],
-      "forbiddenUsage": ["card", "button", "modal", "sidebar", "panel ornament"],
+      "allowedUsage": [
+        "AelunorSceneBackground",
+        "page-level scene background"
+      ],
+      "forbiddenUsage": [
+        "card",
+        "button",
+        "modal",
+        "sidebar",
+        "panel ornament"
+      ],
       "intendedComponent": "AelunorSceneBackground",
       "layer": "background",
       "accessibility": "Decorative page background; aria-hidden.",
@@ -485,8 +824,17 @@
       "mirroredPath": "/static/brand/wallpapers/wallpaper-forest-glade.png",
       "category": "wallpaper",
       "role": "background",
-      "allowedUsage": ["AelunorSceneBackground", "page-level scene background"],
-      "forbiddenUsage": ["card", "button", "modal", "sidebar", "panel ornament"],
+      "allowedUsage": [
+        "AelunorSceneBackground",
+        "page-level scene background"
+      ],
+      "forbiddenUsage": [
+        "card",
+        "button",
+        "modal",
+        "sidebar",
+        "panel ornament"
+      ],
       "intendedComponent": "AelunorSceneBackground",
       "layer": "background",
       "accessibility": "Decorative page background; aria-hidden.",
@@ -499,8 +847,17 @@
       "mirroredPath": "/static/brand/wallpapers/wallpaper-frostlands-northern-ruins.png",
       "category": "wallpaper",
       "role": "background",
-      "allowedUsage": ["AelunorSceneBackground", "page-level scene background"],
-      "forbiddenUsage": ["card", "button", "modal", "sidebar", "panel ornament"],
+      "allowedUsage": [
+        "AelunorSceneBackground",
+        "page-level scene background"
+      ],
+      "forbiddenUsage": [
+        "card",
+        "button",
+        "modal",
+        "sidebar",
+        "panel ornament"
+      ],
       "intendedComponent": "AelunorSceneBackground",
       "layer": "background",
       "accessibility": "Decorative page background; aria-hidden.",
@@ -513,8 +870,17 @@
       "mirroredPath": "/static/brand/wallpapers/wallpaper-moonlit-crossroads.png",
       "category": "wallpaper",
       "role": "background",
-      "allowedUsage": ["AelunorSceneBackground", "page-level scene background"],
-      "forbiddenUsage": ["card", "button", "modal", "sidebar", "panel ornament"],
+      "allowedUsage": [
+        "AelunorSceneBackground",
+        "page-level scene background"
+      ],
+      "forbiddenUsage": [
+        "card",
+        "button",
+        "modal",
+        "sidebar",
+        "panel ornament"
+      ],
       "intendedComponent": "AelunorSceneBackground",
       "layer": "background",
       "accessibility": "Decorative page background; aria-hidden.",
@@ -527,8 +893,17 @@
       "mirroredPath": "/static/brand/wallpapers/wallpaper-tavern-interior.png",
       "category": "wallpaper",
       "role": "background",
-      "allowedUsage": ["AelunorSceneBackground", "page-level scene background"],
-      "forbiddenUsage": ["card", "button", "modal", "sidebar", "panel ornament"],
+      "allowedUsage": [
+        "AelunorSceneBackground",
+        "page-level scene background"
+      ],
+      "forbiddenUsage": [
+        "card",
+        "button",
+        "modal",
+        "sidebar",
+        "panel ornament"
+      ],
       "intendedComponent": "AelunorSceneBackground",
       "layer": "background",
       "accessibility": "Decorative page background; aria-hidden.",

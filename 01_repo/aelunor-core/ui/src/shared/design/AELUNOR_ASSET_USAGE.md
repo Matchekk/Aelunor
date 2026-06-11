@@ -26,6 +26,7 @@ For new assets or new asset patterns, start with `AELUNOR_ASSET_PRODUCTION_PROTO
 | `icon` | Keep semantic icon meaning separate from decorative frames. | Do not encode normal UI labels as images. |
 | `logo` | Use real alt text for brand identity, empty alt for decorative marks. | Do not use a logo as generic ornament or UI text replacement. |
 | `illustration` | Use only when it is the visible subject or scene content. | Do not use as random texture or control chrome. |
+| `animation` | Use sprite-sheet animations via their intended component as decorative loading/transition visuals. | Do not use as navigation icon, button background, panel frame, wallpaper, text replacement, or logo. |
 
 ## Layering
 
@@ -63,6 +64,14 @@ Use them only as HubSidebar navigation icons. The sidebar button must keep real 
 `empty-chronicle-seal.webp` is a transparent decorative illustration for the Campaign Hub empty state. It lives under `ui/public/brand/illustrations` and is mirrored under `app/static/brand/illustrations`.
 
 Use it only where real surrounding text explains that no chronicle exists yet. Render it with `alt=""` and `aria-hidden="true"`. Do not use it as a navigation icon, frame, button background, page background, text replacement, or brand logo.
+
+## Sprite-Sheet Animations
+
+`chronicle-book-opening-spritesheet.webp` is a 5-frame horizontal sprite sheet (2560x512, one 512x512 cell per frame) showing the chronicle book opening up to a glowing arcane seal. It lives under `ui/public/brand/animations` and is mirrored under `app/static/brand/animations`. It is registered with role `animation` and intended component `ChronicleBookOpeningAnimation`.
+
+Use it only for Campaign Hub start/resume/loading moments, rendered through `ChronicleBookOpeningAnimation` (decorative `span`, `aria-hidden="true"`, `pointer-events: none`). Real DOM text must explain the loading state; the animation never carries meaning on its own. Frame stepping uses explicit `background-position` keyframes at 0/25/50/75/100% — `steps()` over `0% -> 100%` would land between frames. `prefers-reduced-motion` shows the static final open-book frame.
+
+Two derived assets are generated from this sheet by the Motion Canvas pipeline in `tools/animation-pipeline` (see `docs/ASSET_ANIMATION_PIPELINE.md`): `chronicle-book-opening-animated.webp` (self-playing animated WebP, 512x512, infinite loop — for decorative `<img aria-hidden="true">` loading visuals where CSS keyframes are not wanted) and `chronicle-book-opening-spritesheet-normalized.webp` (drop-in sprite-sheet replacement with exact 512x512 cells). Do not edit the generated files by hand; rebuild them with `npm run build:assets`. The same usage and accessibility rules apply.
 
 ## Responsive Rules
 
