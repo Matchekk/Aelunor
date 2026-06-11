@@ -499,7 +499,7 @@ export function SetupWizardOverlay({ campaign, on_leave_session }: SetupWizardOv
                   {gate.is_waiting
                     ? waitingMessage
                     : reviewEntries.length > 0
-                      ? `${reviewEntries.length} summary item${reviewEntries.length === 1 ? "" : "s"} available for review.`
+                      ? `${reviewEntries.length} ${reviewEntries.length === 1 ? "Eintrag" : "Einträge"} in der Zusammenfassung.`
                       : "Für diesen Schritt liegt noch keine Zusammenfassung vor."}
                 </p>
                 {reviewEntries.length > 0 ? (

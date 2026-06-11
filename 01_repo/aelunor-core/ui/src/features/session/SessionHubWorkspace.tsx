@@ -487,7 +487,6 @@ export function SessionHubWorkspace({
               session_count={libraryEntries.length}
               has_active_session={currentSessionIsActive}
               latest_entry={latestLibraryEntry}
-              active_campaign_id={active_session.campaign_id}
               active_join_code={active_session.join_code}
             />
           }

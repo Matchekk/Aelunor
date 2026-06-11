@@ -18,13 +18,13 @@ export function SessionLibraryItem({ entry, resume_pending, on_resume, on_edit, 
       </div>
       <div className="session-library-item-actions">
         <button type="button" className="hub-primary-cta" onClick={() => on_resume(entry)} disabled={resume_pending}>
-          {resume_pending ? "Resuming..." : "Resume"}
+          {resume_pending ? "Wird geöffnet..." : "Fortsetzen"}
         </button>
         <button type="button" onClick={() => on_edit(entry)}>
-          Edit
+          Bearbeiten
         </button>
         <button type="button" onClick={() => on_forget(entry.campaign_id)}>
-          Forget
+          Entfernen
         </button>
       </div>
     </article>

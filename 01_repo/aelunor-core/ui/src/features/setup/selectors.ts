@@ -202,12 +202,31 @@ export function deriveSetupProgressSummary(progress: SetupProgressPayload | null
   return `Frage ${progress.step}/${progress.total}`;
 }
 
+const SETUP_REVIEW_LABELS: Record<string, string> = {
+  campaign_length: "Kampagnenlänge",
+  difficulty: "Schwierigkeit",
+  genre: "Genre",
+  party_size: "Gruppengröße",
+  setting: "Schauplatz",
+  theme: "Thema",
+  tone: "Ton",
+};
+
+function formatSetupReviewLabel(key: string): string {
+  const mapped = SETUP_REVIEW_LABELS[key];
+  if (mapped) {
+    return mapped;
+  }
+  const normalized = key.split("_").join(" ").trim();
+  return normalized ? normalized.charAt(0).toUpperCase() + normalized.slice(1) : "Eintrag";
+}
+
 export function deriveSetupReviewEntries(summary_preview: Record<string, unknown>): Array<{ label: string; value: string }> {
   return Object.entries(summary_preview)
     .filter(([, value]) => value !== null && value !== undefined && String(value).trim().length > 0)
     .slice(0, 8)
     .map(([key, value]) => ({
-      label: key.split("_").join(" "),
+      label: formatSetupReviewLabel(key),
       value: Array.isArray(value) ? value.join(", ") : String(value),
     }));
 }

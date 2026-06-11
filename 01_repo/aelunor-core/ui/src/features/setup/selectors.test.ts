@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createCampaignFixture } from "../../test/campaignFixture";
-import { deriveSetupGateState } from "./selectors";
+import { deriveSetupGateState, deriveSetupReviewEntries } from "./selectors";
 
 describe("deriveSetupGateState", () => {
   it("puts non-host viewers into waiting world setup when world setup is incomplete", () => {
@@ -83,5 +83,25 @@ describe("deriveSetupGateState", () => {
     expect(gate.mode).toBe("character");
     expect(gate.current_question?.question_id).toBe("q_origin");
     expect(gate.can_enter_play).toBe(false);
+  });
+});
+
+describe("deriveSetupReviewEntries", () => {
+  it("renders known setup summary keys as German user-facing labels", () => {
+    expect(
+      deriveSetupReviewEntries({
+        theme: "Klassische Fantasy",
+        tone: "Düster-realistisch",
+        party_size: 2,
+      }),
+    ).toEqual([
+      { label: "Thema", value: "Klassische Fantasy" },
+      { label: "Ton", value: "Düster-realistisch" },
+      { label: "Gruppengröße", value: "2" },
+    ]);
+  });
+
+  it("keeps unknown setup summary keys readable without raw underscores", () => {
+    expect(deriveSetupReviewEntries({ world_hook: "Alte Ruinen" })).toEqual([{ label: "World hook", value: "Alte Ruinen" }]);
   });
 });

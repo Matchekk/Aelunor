@@ -5,7 +5,6 @@ interface HubContextRailProps {
   session_count: number;
   has_active_session: boolean;
   latest_entry: SessionLibraryEntry | null;
-  active_campaign_id: string | null;
   active_join_code: string | null;
 }
 
@@ -27,7 +26,6 @@ export function HubContextRail({
   session_count,
   has_active_session,
   latest_entry,
-  active_campaign_id,
   active_join_code,
 }: HubContextRailProps) {
   if (!has_active_session && session_count === 0) {
@@ -57,7 +55,7 @@ export function HubContextRail({
         </div>
         {active_join_code || latest_entry?.join_code ? (
           <div className="hub-context-stat">
-            <span>Join Code</span>
+            <span>Beitrittscode</span>
             <strong>{active_join_code || latest_entry?.join_code}</strong>
           </div>
         ) : null}
@@ -65,7 +63,7 @@ export function HubContextRail({
 
       <AelunorPanelFrame className="hub-context-panel" variant="compact">
         <div className="hub-context-head">
-          <span>{has_active_session ? "Active Objective" : "Letzte Chronik"}</span>
+          <span>{has_active_session ? "Aktuelles Ziel" : "Letzte Chronik"}</span>
           <strong>{has_active_session ? "Nächsten Story-Turn starten" : latest_entry?.campaign_title ?? latest_entry?.label}</strong>
         </div>
         <p className="status-muted">
@@ -78,12 +76,11 @@ export function HubContextRail({
       {has_active_session ? (
         <AelunorPanelFrame className="hub-context-panel" variant="compact">
           <div className="hub-context-head">
-            <span>Canon State</span>
+            <span>Canon-Status</span>
             <strong>Bereit zur Prüfung</strong>
           </div>
           <p className="status-muted">
             Fortsetzen lädt Campaign-State, Claims und Canon vor dem Einstieg neu.
-            {active_campaign_id ? ` Campaign ${active_campaign_id.slice(0, 8)}` : ""}
           </p>
         </AelunorPanelFrame>
       ) : null}
