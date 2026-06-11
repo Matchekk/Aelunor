@@ -146,6 +146,13 @@
 .hub-sidebar-nav {
   display: grid;
   gap: 0.34rem;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hub-sidebar-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .hub-sidebar-link {
@@ -1358,13 +1365,23 @@
     grid-auto-flow: column;
     grid-auto-columns: max-content;
     overflow-x: auto;
+    cursor: grab;
     padding-bottom: 0.25rem;
+    scroll-snap-type: x proximity;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+    user-select: none;
+  }
+
+  .hub-sidebar-nav.is-dragging {
+    cursor: grabbing;
   }
 
   .hub-sidebar-link {
     grid-template-columns: 3.35rem auto;
     min-height: 3rem;
     min-width: 10rem;
+    scroll-snap-align: start;
   }
 
   .hub-dashboard-grid {

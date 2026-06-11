@@ -1,3 +1,5 @@
+import { useRef } from "react";
+
 import type { V1AppPage } from "../../../app/routing/routes";
 
 export type HubSidebarTarget = V1AppPage | "settings";
@@ -26,6 +28,24 @@ interface HubSidebarProps {
 }
 
 export function HubSidebar({ active_target, on_select }: HubSidebarProps) {
+  const dragStateRef = useRef({
+    pointer_id: -1,
+    start_x: 0,
+    scroll_left: 0,
+  });
+  const suppressClickRef = useRef(false);
+
+  const stopDrag = (element: HTMLElement, pointer_id: number) => {
+    if (dragStateRef.current.pointer_id !== pointer_id) {
+      return;
+    }
+    element.classList.remove("is-dragging");
+    if (element.hasPointerCapture(pointer_id)) {
+      element.releasePointerCapture(pointer_id);
+    }
+    dragStateRef.current.pointer_id = -1;
+  };
+
   return (
     <aside className="hub-sidebar" aria-label="Aelunor Navigation">
       <div className="hub-sidebar-brand">
@@ -34,7 +54,40 @@ export function HubSidebar({ active_target, on_select }: HubSidebarProps) {
         </span>
         <strong>AELUNOR</strong>
       </div>
-      <nav className="hub-sidebar-nav" aria-label="Hub Bereiche">
+      <nav
+        className="hub-sidebar-nav"
+        aria-label="Hub Bereiche"
+        onPointerDown={(event) => {
+          if (event.button !== 0 || event.currentTarget.scrollWidth <= event.currentTarget.clientWidth) {
+            return;
+          }
+          dragStateRef.current = {
+            pointer_id: event.pointerId,
+            start_x: event.clientX,
+            scroll_left: event.currentTarget.scrollLeft,
+          };
+          suppressClickRef.current = false;
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }}
+        onPointerMove={(event) => {
+          const dragState = dragStateRef.current;
+          if (dragState.pointer_id !== event.pointerId) {
+            return;
+          }
+          const deltaX = event.clientX - dragState.start_x;
+          if (Math.abs(deltaX) > 4) {
+            suppressClickRef.current = true;
+            event.currentTarget.classList.add("is-dragging");
+          }
+          event.currentTarget.scrollLeft = dragState.scroll_left - deltaX;
+        }}
+        onPointerUp={(event) => {
+          stopDrag(event.currentTarget, event.pointerId);
+        }}
+        onPointerCancel={(event) => {
+          stopDrag(event.currentTarget, event.pointerId);
+        }}
+      >
         {HUB_NAV_ITEMS.map((item) => (
           <button
             key={item.label}
@@ -43,6 +96,12 @@ export function HubSidebar({ active_target, on_select }: HubSidebarProps) {
             aria-current={item.id === active_target ? "page" : undefined}
             title={item.label}
             onClick={(event) => {
+              if (suppressClickRef.current) {
+                event.preventDefault();
+                event.stopPropagation();
+                suppressClickRef.current = false;
+                return;
+              }
               on_select(item.id, event.currentTarget);
             }}
           >
