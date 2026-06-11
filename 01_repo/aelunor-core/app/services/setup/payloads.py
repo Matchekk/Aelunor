@@ -67,8 +67,8 @@ def dynamic_other_hint(question: Dict[str, Any], context: Dict[str, str]) -> str
         return f"Wenn nichts passt, beschreibe eine eigene Antwort, die zur Figur und zur Welt {theme or 'des Runs'} passt."
     if question["type"] == "multiselect":
         if context.get("setup_type") == "world":
-            return "Eigene zusÃ¤tzliche Gesetze oder Marker kannst du hier als kommagetrennte Liste ergÃ¤nzen."
-        return "Eigene zusÃ¤tzliche Merkmale kannst du hier als kommagetrennte Liste ergÃ¤nzen."
+            return "Eigene zusätzliche Gesetze oder Marker kannst du hier als kommagetrennte Liste ergänzen."
+        return "Eigene zusätzliche Merkmale kannst du hier als kommagetrennte Liste ergänzen."
     return ""
 
 

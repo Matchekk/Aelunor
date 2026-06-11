@@ -12,6 +12,14 @@ def _safe_int(value: Any, default: int) -> int:
         return default
 
 
+def _scene_name_from_id(scene_id: str) -> str:
+    raw_name = str(scene_id or "").strip()
+    if raw_name.startswith("scene_"):
+        raw_name = raw_name[len("scene_") :]
+    raw_name = raw_name.replace("_", " ").replace("-", " ")
+    return " ".join(part[:1].upper() + part[1:] for part in raw_name.split())[:80].strip()
+
+
 @dataclass(frozen=True)
 class PatchSanitizerDependencies:
     normalize_patch_semantics: Callable[[Any], Dict[str, Any]]
@@ -149,11 +157,36 @@ def sanitize_patch(state: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, An
     sanitized["items_new"] = cleaned_items_new
     known_items = set((state.get("items") or {}).keys()) | set(cleaned_items_new.keys())
     characters = sanitized.get("characters") or {}
+    map_nodes = [node for node in (sanitized.get("map_add_nodes") or []) if isinstance(node, dict)]
+    known_scene_ids = set((state.get("scenes") or {}).keys()) | set(((state.get("map") or {}).get("nodes") or {}).keys())
+    pending_scene_ids = {str(node.get("id") or "").strip() for node in map_nodes if str(node.get("id") or "").strip()}
     for slot_name in list(characters.keys()):
         if slot_name not in state["characters"]:
             characters.pop(slot_name, None)
             continue
         upd = characters[slot_name]
+        scene_id = str(upd.get("scene_id") or "").strip()
+        if scene_id:
+            upd["scene_id"] = scene_id
+            if scene_id not in known_scene_ids and scene_id not in pending_scene_ids:
+                scene_name = deps.clean_scene_name(_scene_name_from_id(scene_id))
+                if (
+                    scene_name
+                    and deps.is_plausible_scene_name(scene_name)
+                    and not deps.is_generic_scene_identifier(scene_id, scene_name)
+                ):
+                    map_nodes.append(
+                        {
+                            "id": scene_id,
+                            "name": scene_name,
+                            "type": "location",
+                            "danger": 1,
+                            "discovered": True,
+                        }
+                    )
+                    pending_scene_ids.add(scene_id)
+                else:
+                    upd.pop("scene_id", None)
         upd["inventory_add"] = [item_id for item_id in (upd.get("inventory_add") or []) if item_id in known_items]
         eq = deps.normalize_equipment_update_payload(upd.get("equip_set") or upd.get("equipment_set") or {})
         for equip_slot in list(eq.keys()):
@@ -244,7 +277,7 @@ def sanitize_patch(state: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, An
         if entry
     ]
     sanitized_map_nodes: List[Dict[str, Any]] = []
-    for node in (sanitized.get("map_add_nodes") or []):
+    for node in map_nodes:
         if not isinstance(node, dict):
             continue
         node_id = str(node.get("id") or "").strip()

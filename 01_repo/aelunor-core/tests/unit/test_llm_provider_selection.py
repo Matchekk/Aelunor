@@ -1,5 +1,4 @@
 import unittest
-from unittest.mock import patch
 
 from app.adapters import llm_config
 from app.adapters.anthropic_adapter import AnthropicAdapter, AnthropicSettings, FallbackLLMAdapter
@@ -43,13 +42,9 @@ class LLMProviderSelectionTests(unittest.TestCase):
         self.assertIsInstance(llm_config.select_llm_adapter("ollama"), OllamaAdapter)
         self.assertIsInstance(llm_config.select_llm_adapter("anthropic"), AnthropicAdapter)
 
-    def test_auto_uses_fallback_only_when_key_present(self) -> None:
-        with patch.object(llm_config, "anthropic_key_present", return_value=True):
-            adapter = llm_config.select_llm_adapter("auto")
-            self.assertIsInstance(adapter, FallbackLLMAdapter)
-        with patch.object(llm_config, "anthropic_key_present", return_value=False):
-            adapter = llm_config.select_llm_adapter("auto")
-            self.assertIsInstance(adapter, OllamaAdapter)
+    def test_auto_stays_local_even_when_anthropic_key_exists(self) -> None:
+        adapter = llm_config.select_llm_adapter("auto")
+        self.assertIsInstance(adapter, OllamaAdapter)
 
     def test_fallback_routes_to_cloud_when_local_fails(self) -> None:
         primary, cloud = _BoomPrimary(), _StubCloud()

@@ -24,10 +24,10 @@ def fallback_random_text(
         gender = deps.extract_text_answer((((campaign.get("setup", {}) or {}).get("characters", {}) or {}).get(slot_name, {}).get("answers", {}) or {}).get("char_gender"))
     fallbacks = {
         "central_conflict": "Ein sterbendes Grenzland wird von einem alten Schattenkult und hungrigen Bestien zugleich zerfressen.",
-        "factions": "Die Schwarze Abtei - will verbotene Reliquien sammeln und herrscht durch Angst.\nDie Roten ZÃ¶llner - pressen die letzten Siedlungen mit Gewalt aus.\nDer Aschencirkel - jagt jede fremde Macht und opfert Wissen fÃ¼r StÃ¤rke.",
-        "taboos": "Keine zusÃ¤tzlichen Tabus. Konsequenzen sollen hart, aber fair bleiben.",
+        "factions": "Die Schwarze Abtei - will verbotene Reliquien sammeln und herrscht durch Angst.\nDie Roten Zöllner - pressen die letzten Siedlungen mit Gewalt aus.\nDer Aschencirkel - jagt jede fremde Macht und opfert Wissen für Stärke.",
+        "taboos": "Keine zusätzlichen Tabus. Konsequenzen sollen hart, aber fair bleiben.",
         "resource_name": "Mana",
-        "earth_life": "Auf der Erde fÃ¼hrte die Figur ein unscheinbares Leben, war aber zÃ¤h, aufmerksam und unter Druck belastbar.",
+        "earth_life": "Auf der Erde führte die Figur ein unscheinbares Leben, war aber zäh, aufmerksam und unter Druck belastbar.",
         "first_goal": "Schnell einen sicheren Ort finden und verstehen, welche Macht diese Welt im Hintergrund lenkt.",
         "earth_items": "Taschenlampe, Feuerzeug, kleines Notizbuch",
         "signature_item": "Ein abgenutztes Messer mit Erinnerungsspur",
@@ -36,14 +36,14 @@ def fallback_random_text(
         male_names = ["Riven", "Kael", "Marek", "Taron", "Levin"]
         female_names = ["Mira", "Elara", "Sera", "Nyra", "Talia"]
         neutral_names = ["Ash", "Rin", "Nox", "Vale", "Kian"]
-        if "mÃ¤nn" in gender.lower():
+        if "männ" in gender.lower():
             return random.choice(male_names)
         if "weib" in gender.lower():
             return random.choice(female_names)
         return random.choice(neutral_names)
     if question_id == "central_conflict" and world_theme:
-        return f"In einer Welt mit dem Thema {world_theme} kÃ¤mpfen die letzten freien Enklaven gegen eine Macht, die langsam alles Lebendige verdirbt."
-    return fallbacks.get(question_id, "Etwas DÃ¼steres, Eigenes und Folgenschweres.")
+        return f"In einer Welt mit dem Thema {world_theme} kämpfen die letzten freien Enklaven gegen eine Macht, die langsam alles Lebendige verdirbt."
+    return fallbacks.get(question_id, "Etwas Düsteres, Eigenes und Folgenschweres.")
 
 
 def fallback_random_answer_payload(
@@ -93,7 +93,7 @@ def generate_random_setup_answer(
         f"Aktuelle Welt-Zusammenfassung: {json.dumps(summary, ensure_ascii=False)}\n"
         f"Bisherige Antworten dieses Flows: {json.dumps(current_answers, ensure_ascii=False)}\n"
         f"Frage: {json.dumps(question, ensure_ascii=False)}\n"
-        "Gib eine passende zufÃ¤llige Antwort fÃ¼r genau diese eine Frage zurÃ¼ck."
+        "Gib eine passende zufällige Antwort für genau diese eine Frage zurück."
     )
     try:
         raw = deps.call_ollama_schema(deps.setup_random_system_prompt, user, deps.setup_random_schema, timeout=120, temperature=0.7)
@@ -178,7 +178,7 @@ def build_random_setup_preview(
         if not qid:
             break
         if question_id and generated_count == 0 and qid != question_id:
-            raise HTTPException(status_code=409, detail="Die aktive Setup-Frage hat sich geÃ¤ndert. Bitte neu Ã¶ffnen.")
+            raise HTTPException(status_code=409, detail="Die aktive Setup-Frage hat sich geändert. Bitte neu öffnen.")
         question = question_map.get(qid)
         if not question:
             raise HTTPException(status_code=404, detail="Unbekannte Setup-Frage.")
@@ -226,7 +226,7 @@ def apply_random_setup_preview(
         if not qid:
             break
         if _entry_question_id(entry) != qid:
-            raise HTTPException(status_code=409, detail="Die Setup-Reihenfolge hat sich geÃ¤ndert. Bitte neu erzeugen.")
+            raise HTTPException(status_code=409, detail="Die Setup-Reihenfolge hat sich geändert. Bitte neu erzeugen.")
         question = question_map.get(qid)
         if not question:
             raise HTTPException(status_code=404, detail="Unbekannte Setup-Frage.")

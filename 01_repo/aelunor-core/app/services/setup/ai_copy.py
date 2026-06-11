@@ -1,4 +1,5 @@
 import json
+import os
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
@@ -91,6 +92,10 @@ def store_question_ai_copy(setup_node: Dict[str, Any], question_id: str, ai_copy
     return cleaned
 
 
+def setup_ai_copy_enabled() -> bool:
+    return str(os.getenv("ENABLE_SETUP_AI_COPY", "")).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def ensure_question_ai_copy(
     campaign: Dict[str, Any],
     *,
@@ -112,6 +117,9 @@ def ensure_question_ai_copy(
     existing = get_persisted_question_ai_copy(setup_node, question_id)
     if existing:
         return existing
+    fallback = clean_setup_ai_copy(question.get("prompt_template") or question["label"])
+    if not setup_ai_copy_enabled():
+        return store_question_ai_copy(setup_node, question_id, fallback, "fallback", deps=deps)
     generated = generate_setup_ai_copy(campaign, question, setup_type=setup_type, slot_name=slot_name, deps=deps)
-    source = "fallback" if clean_setup_ai_copy(generated) == clean_setup_ai_copy(question.get("prompt_template") or question["label"]) else "ai"
+    source = "fallback" if clean_setup_ai_copy(generated) == fallback else "ai"
     return store_question_ai_copy(setup_node, question_id, generated or question["label"], source, deps=deps)

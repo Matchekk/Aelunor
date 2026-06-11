@@ -107,7 +107,7 @@ def migrate_campaign_to_dynamic_slots(campaign: CampaignState, *, ports: Campaig
         "tone": ports.legacy_select_answer_payload(world_question["tone"], world_setup.get("tone", "")),
         "difficulty": ports.legacy_select_answer_payload(world_question["difficulty"], "Brutal"),
         "death_possible": True,
-        "monsters_density": ports.legacy_select_answer_payload(world_question["monsters_density"], "RegelmÃ¤ÃŸig"),
+        "monsters_density": ports.legacy_select_answer_payload(world_question["monsters_density"], "Regelmäßig"),
         "resource_scarcity": ports.legacy_select_answer_payload(world_question["resource_scarcity"], "Mittel"),
         "resource_name": ports.legacy_select_answer_payload(
             world_question["resource_name"],

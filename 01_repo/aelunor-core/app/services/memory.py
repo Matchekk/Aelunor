@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 from app.prompts.system_prompts import MEMORY_SYSTEM_PROMPT
+from app.services.memory_context import compact_character_for_turn_context, compact_setup_for_turn_context, compact_world_for_turn_context
 
 
 CampaignState = Dict[str, Any]
@@ -141,10 +142,12 @@ def rebuild_memory_summary(campaign: CampaignState, *, ports: MemoryPorts) -> No
 def build_context_packet(campaign: CampaignState, state: CampaignState, actor: str, action_type: str, *, ports: MemoryPorts) -> str:
     normalized_characters = {}
     for slot_name, character in (state.get("characters") or {}).items():
-        normalized_characters[slot_name] = ports.normalize_character_state(
-            character,
-            slot_name,
-            state.get("items", {}) or {},
+        normalized_characters[slot_name] = compact_character_for_turn_context(
+            ports.normalize_character_state(
+                character,
+                slot_name,
+                state.get("items", {}) or {},
+            )
         )
     recent = []
     for turn in ports.active_turns(campaign)[-8:]:
@@ -165,24 +168,24 @@ def build_context_packet(campaign: CampaignState, state: CampaignState, actor: s
         "meta": state["meta"],
         "combat": (state.get("meta") or {}).get("combat", {}),
         "attribute_influence": (state.get("meta") or {}).get("attribute_influence", {}),
-        "setup": campaign.get("setup", {}),
+        "setup": compact_setup_for_turn_context(campaign.get("setup", {})),
         "rules_profile": build_rules_profile(campaign, ports=ports),
         "active_party": ports.active_party(campaign),
         "display_party": [
             {"slot_id": slot_name, "display_name": ports.display_name_for_slot(campaign, slot_name)}
             for slot_name in ports.active_party(campaign)
         ],
-        "world": state["world"],
+        "world": compact_world_for_turn_context(state["world"]),
         "map": state["map"],
         "plotpoints": state.get("plotpoints", []),
         "scenes": state.get("scenes", {}),
         "characters": normalized_characters,
         "items": state.get("items", {}),
-        "world_races": (state.get("world") or {}).get("races", {}),
-        "world_beast_types": (state.get("world") or {}).get("beast_types", {}),
-        "world_elements": (state.get("world") or {}).get("elements", {}),
-        "world_element_relations": (state.get("world") or {}).get("element_relations", {}),
-        "world_element_paths": (state.get("world") or {}).get("element_class_paths", {}),
+        "world_races": {},
+        "world_beast_types": {},
+        "world_elements": {},
+        "world_element_relations": {},
+        "world_element_paths": {},
         "world_element_summary": ports.build_world_element_summary(state, limit=24),
         "race_codex_summary": ports.build_race_codex_summary(state, limit=24),
         "beast_codex_summary": ports.build_beast_codex_summary(state, limit=24),

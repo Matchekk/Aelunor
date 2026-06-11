@@ -7,16 +7,18 @@ must not crash the apply/normalize/load paths.
 import app.main  # noqa: F401  -- wires configure_dependencies for the submodules below
 
 import copy
+from types import SimpleNamespace
 
 import pytest
 
 from app.helpers.setup_finalize import _coerce_player_count
-from app.helpers.setup_random import fallback_random_answer_payload
+from app.helpers.setup_random import fallback_random_answer_payload, fallback_random_text
 from app.repositories.campaign_repository import CampaignRepository
 from app.services.canon import npc_extractor, progression_gate
 from app.services.characters import normalization as char_norm
 from app.services.characters.combat_state import calculate_combat_flags
 from app.services.characters.resources import canonical_resource_deltas_from_update
+from app.services.campaigns.state_shape import WorldSummaryBoardPorts, apply_world_summary_to_boards
 from app.services.extraction import classes as auto_classes
 from app.services.llm.json_repair import extract_json_payload
 from app.services.patch_payloads import normalize_patch_semantics
@@ -31,6 +33,41 @@ from app.services.world.appearance import record_appearance_change
 
 
 # --- Group A: turn patch apply must not crash on wrong-typed LLM fields -------
+
+
+def test_setup_random_fallback_text_is_not_mojibake():
+    deps = SimpleNamespace(extract_text_answer=lambda value: value.get("selected") if isinstance(value, dict) else "")
+    campaign = {"setup": {"world": {"answers": {"theme": {"selected": "Grimdark Fantasy"}}}}}
+
+    central_conflict = fallback_random_text("central_conflict", setup_type="world", campaign=campaign, deps=deps)
+    factions = fallback_random_text("factions", setup_type="world", campaign=campaign, deps=deps)
+
+    assert "kämpfen" in central_conflict
+    assert "Zöllner" in factions
+    assert "Stärke" in factions
+    assert "Ã" not in central_conflict + factions
+
+
+def test_world_summary_authors_note_is_not_mojibake():
+    campaign = {
+        "setup": {
+            "world": {
+                "summary": {
+                    "theme": "Monster-Hunt",
+                    "ruleset": "Dramatisch",
+                    "central_conflict": "Freie Enklaven kämpfen weiter.",
+                }
+            }
+        }
+    }
+    ports = WorldSummaryBoardPorts(make_id=lambda prefix: f"{prefix}_1", utc_now=lambda: "2026-01-01T00:00:00Z")
+
+    apply_world_summary_to_boards(campaign, "player_1", ports=ports)
+
+    content = campaign["boards"]["authors_note"]["content"]
+    assert "Erzählrahmen: Dramatisch" in content
+    assert "kämpfen" in content
+    assert "Ã" not in content
 
 def test_bio_set_non_dict_is_ignored():
     character = {"bio": {"name": "x"}}

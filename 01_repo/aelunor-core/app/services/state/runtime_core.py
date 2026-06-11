@@ -51,6 +51,7 @@ from app.services.setup import finalization as setup_finalization
 from app.services.setup import payloads as setup_payloads
 from app.services.setup import randomizer as setup_randomizer
 from app.services.setup import summaries as setup_summaries
+from app.services import turn_engine
 from app.adapters.llm import OllamaAdapter, OllamaSettings
 from app.adapters.ollama_config import (
     OLLAMA_ADAPTER,
@@ -744,6 +745,8 @@ def ordered_slots(keys: List[str]) -> List[str]:
 
 
 def generate_world_elements_with_llm(summary: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if str(os.getenv("ENABLE_LLM_WORLD_ELEMENTS", "")).strip().lower() not in {"1", "true", "yes", "on"}:
+        return []
     return _generate_world_elements_with_llm(
         summary,
         call_ollama_schema=call_ollama_schema,
@@ -1027,6 +1030,8 @@ def normalize_meta_migrations(meta: Dict[str, Any]) -> Dict[str, Any]:
     return migrations
 
 def generate_character_attribute_weights(campaign: Dict[str, Any], slot_name: str, summary: Dict[str, Any]) -> Dict[str, Any]:
+    if str(os.getenv("ENABLE_LLM_CHARACTER_ATTRIBUTES", "")).strip().lower() not in {"1", "true", "yes", "on"}:
+        return {"weights": fallback_character_attribute_weights(summary), "source": "fallback"}
     return setup_attributes.generate_character_attribute_weights(
         campaign, slot_name, summary, call_ollama_schema=call_ollama_schema
     )
@@ -1789,7 +1794,8 @@ INTRO_RETRYABLE_ERROR_CODES = frozenset({
 })
 
 INTRO_RETRY_HARDENING = (
-    "WICHTIG FÜR DIESEN ZWEITEN VERSUCH: Der erste Versuch hat das erwartete Datenformat verletzt. "
+    "WICHTIG FÜR DIESEN ZWEITEN VERSUCH: Der erste Versuch war strukturell unbrauchbar "
+    "oder hat das erwartete Datenformat verletzt. "
     "Erzähle die Story als sauberen Fließtext ohne Markdown und ohne JSON außerhalb des vereinbarten Formats. "
     "Halte den Patch konservativ und minimal. Führe keine neuen ungeprüften Figuren ein. "
     "Setze keine scene_id auf Orte, die nicht im selben Patch als gültiger Map-Knoten angelegt werden."
@@ -1804,7 +1810,11 @@ def _intro_error_code(exc: BaseException) -> str:
     detail = getattr(exc, "detail", None)
     text = str(detail) if detail is not None else str(exc)
     match = re.search(r"\[E:([A-Z_]+)\]", text)
-    return match.group(1) if match else ""
+    if match:
+        return match.group(1)
+    if isinstance(exc, HTTPException) and int(exc.status_code or 0) >= 500:
+        return ERROR_CODE_NARRATOR_RESPONSE
+    return ""
 
 def _intro_failure_diagnostics(exc: BaseException) -> Dict[str, str]:
     cause_class = str(getattr(exc, "cause_class", "") or "") or exc.__class__.__name__

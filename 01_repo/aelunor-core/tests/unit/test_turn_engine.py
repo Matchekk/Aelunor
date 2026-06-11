@@ -96,6 +96,8 @@ def configure_engine_for_tests() -> None:
             "class_xp_to_next",
         },
         "normalize_patch_semantics": state_engine.normalize_patch_semantics,
+        "blank_patch": state_engine.blank_patch,
+        "class_rank_sort_value": state_engine.class_rank_sort_value,
         "clean_auto_item_name": state_engine.clean_auto_item_name,
         "clean_creator_item_name": state_engine.clean_creator_item_name,
         "ensure_item_shape": state_engine.ensure_item_shape,
@@ -106,6 +108,8 @@ def configure_engine_for_tests() -> None:
         "normalize_class_current": state_engine.normalize_class_current,
         "skill_id_from_name": state_engine.skill_id_from_name,
         "normalize_dynamic_skill_state": state_engine.normalize_dynamic_skill_state,
+        "ensure_progression_shape": state_engine.ensure_progression_shape,
+        "ensure_character_progression_core": state_engine.ensure_character_progression_core,
         "resource_name_for_character": state_engine.resource_name_for_character,
         "normalize_skill_elements_for_world": state_engine.normalize_skill_elements_for_world,
         "normalize_progression_event_list": state_engine.normalize_progression_event_list,
@@ -117,12 +121,19 @@ def configure_engine_for_tests() -> None:
         "is_plausible_scene_name": state_engine.is_plausible_scene_name,
         "is_generic_scene_identifier": state_engine.is_generic_scene_identifier,
         "clamp": state_engine.clamp,
+        "canonical_resources_set_from_payload": state_engine.canonical_resources_set_from_payload,
+        "legacy_misc_resources_set_from_payload": state_engine.legacy_misc_resources_set_from_payload,
+        "canonical_resource_deltas_from_update": state_engine.canonical_resource_deltas_from_update,
+        "legacy_misc_resource_deltas_from_update": state_engine.legacy_misc_resource_deltas_from_update,
         "normalize_event_entry": state_engine.normalize_event_entry,
         "normalized_eval_text": state_engine.normalized_eval_text,
         "resolve_class_element_id": state_engine.resolve_class_element_id,
         "normalize_skill_rank": state_engine.normalize_skill_rank,
         "is_skill_manifestation_name_plausible": state_engine.is_skill_manifestation_name_plausible,
     }
+    for name in turn_engine.all_dependency_names():
+        if hasattr(state_engine, name):
+            engine_symbols.setdefault(name, getattr(state_engine, name))
     for name in state_engine.EXPORTED_SYMBOLS:
         engine_symbols.setdefault(name, getattr(state_engine, name))
     state_engine.configure(engine_symbols)
@@ -878,7 +889,7 @@ class TurnEngineTests(unittest.TestCase):
 
         def fake_call(_system, user, _schema, **kwargs):
             calls.append((user, kwargs))
-            return {"story": "kurz"}
+            return {"story": "kurz ok"}
 
         story = rewrite_story_length_guard_helper(
             system_prompt="system",
@@ -896,9 +907,94 @@ class TurnEngineTests(unittest.TestCase):
             http_exception_type=HTTPException,
         )
 
-        self.assertEqual(story, "kurz")
+        self.assertEqual(story, "kurz ok")
         self.assertEqual(calls[0][1]["timeout"], 90)
         self.assertIn("KOMPRIMIERUNGSAUFTRAG:", calls[0][0])
+
+    def test_story_length_guard_strips_json_leaked_tail(self) -> None:
+        story = rewrite_story_length_guard_helper(
+            system_prompt="system",
+            user_prompt="user",
+            story_text='Kian verlässt den sicheren Rand und folgt der Spur. ", "patch": {"meta": {}}',
+            patch={},
+            requests_payload=[],
+            min_story_chars=10,
+            max_story_chars=120,
+            min_story_rewrite_attempts=1,
+            max_story_compress_attempts=1,
+            story_rewrite_schema={"type": "object"},
+            ollama_temperature=0.7,
+            call_ollama_schema=lambda *_args, **_kwargs: self.fail("leaked tail should be stripped without LLM"),
+            http_exception_type=HTTPException,
+        )
+
+        self.assertEqual(story, "Kian verlässt den sicheren Rand und folgt der Spur.")
+        self.assertNotIn("patch", story)
+
+    def test_story_length_guard_strips_newline_patch_tail(self) -> None:
+        story = rewrite_story_length_guard_helper(
+            system_prompt="system",
+            user_prompt="user",
+            story_text='Kian hört die Warnung und erkennt den nächsten Konflikt.",\n"patch": {"meta": {}}',
+            patch={},
+            requests_payload=[],
+            min_story_chars=10,
+            max_story_chars=120,
+            min_story_rewrite_attempts=1,
+            max_story_compress_attempts=1,
+            story_rewrite_schema={"type": "object"},
+            ollama_temperature=0.7,
+            call_ollama_schema=lambda *_args, **_kwargs: self.fail("newline patch tail should be stripped without LLM"),
+            http_exception_type=HTTPException,
+        )
+
+        self.assertEqual(story, "Kian hört die Warnung und erkennt den nächsten Konflikt.")
+        self.assertNotIn("patch", story)
+
+    def test_story_length_guard_strips_meta_markdown_tail(self) -> None:
+        story = rewrite_story_length_guard_helper(
+            system_prompt="system",
+            user_prompt="user",
+            story_text="Kian erkennt die Anomalie und hat eine klare spielbare Lage.\n\n*Anmerkung:* Das ist Meta.",
+            patch={},
+            requests_payload=[],
+            min_story_chars=10,
+            max_story_chars=120,
+            min_story_rewrite_attempts=1,
+            max_story_compress_attempts=1,
+            story_rewrite_schema={"type": "object"},
+            ollama_temperature=0.7,
+            call_ollama_schema=lambda *_args, **_kwargs: self.fail("meta tail should be stripped without LLM"),
+            http_exception_type=HTTPException,
+        )
+
+        self.assertEqual(story, "Kian erkennt die Anomalie und hat eine klare spielbare Lage.")
+
+    def test_story_length_guard_rewrites_story_emptied_by_leak_strip(self) -> None:
+        calls = []
+
+        def fake_call(_system, user, _schema, **kwargs):
+            calls.append((user, kwargs))
+            return {"story": "Kian bekommt eine saubere spielbare Szene."}
+
+        story = rewrite_story_length_guard_helper(
+            system_prompt="system",
+            user_prompt="user",
+            story_text='", "patch": {"meta": {}}',
+            patch={},
+            requests_payload=[],
+            min_story_chars=20,
+            max_story_chars=120,
+            min_story_rewrite_attempts=1,
+            max_story_compress_attempts=1,
+            story_rewrite_schema={"type": "object"},
+            ollama_temperature=0.7,
+            call_ollama_schema=fake_call,
+            http_exception_type=HTTPException,
+        )
+
+        self.assertEqual(story, "Kian bekommt eine saubere spielbare Szene.")
+        self.assertEqual(len(calls), 1)
 
     def test_story_length_guard_forwards_configured_ollama_timeout(self) -> None:
         calls = []
@@ -931,6 +1027,28 @@ class TurnEngineTests(unittest.TestCase):
         compress_call = next(call for call in calls if "KOMPRIMIERUNGSAUFTRAG:" in call[0])
         self.assertEqual(rewrite_call[1]["timeout"], 300)
         self.assertEqual(compress_call[1]["timeout"], 300)
+
+    def test_story_length_guard_trims_when_compression_stays_too_long(self) -> None:
+        long_story = "Kian folgt der Spur. Die Gefahr wächst. " * 8
+
+        story = rewrite_story_length_guard_helper(
+            system_prompt="system",
+            user_prompt="user",
+            story_text=long_story,
+            patch={},
+            requests_payload=[],
+            min_story_chars=10,
+            max_story_chars=70,
+            min_story_rewrite_attempts=1,
+            max_story_compress_attempts=1,
+            story_rewrite_schema={"type": "object"},
+            ollama_temperature=0.7,
+            call_ollama_schema=lambda *_args, **_kwargs: {"story": long_story},
+            http_exception_type=HTTPException,
+        )
+
+        self.assertLessEqual(len(story), 70)
+        self.assertIn("Kian folgt der Spur", story)
 
     def test_story_length_guard_raises_when_rewrite_stays_short(self) -> None:
         with self.assertRaises(HTTPException) as ctx:
@@ -1062,6 +1180,36 @@ class TurnEngineTests(unittest.TestCase):
         self.assertNotIn("item_broken", sanitized["items_new"])
         self.assertEqual(sanitized["items_new"]["item_shield"]["name"], "Schild")
         self.assertEqual(sanitized["items_new"]["item_shield"]["slot"], "offhand")
+
+    def test_sanitize_patch_adds_node_for_new_character_scene(self) -> None:
+        state = self._base_apply_state()
+        patch = {
+            "characters": {
+                "slot_1": {
+                    "scene_id": "prologue_awakening",
+                }
+            }
+        }
+
+        sanitized = turn_engine.sanitize_patch(state, patch)
+
+        self.assertEqual(sanitized["characters"]["slot_1"]["scene_id"], "prologue_awakening")
+        self.assertEqual(
+            sanitized["map_add_nodes"],
+            [
+                {
+                    "id": "prologue_awakening",
+                    "name": "Prologue Awakening",
+                    "type": "location",
+                    "danger": 1,
+                    "discovered": True,
+                }
+            ],
+        )
+        turn_engine.validate_patch(state, sanitized)
+        applied = turn_engine.apply_patch(state, sanitized)
+        self.assertEqual(applied["characters"]["slot_1"]["scene_id"], "prologue_awakening")
+        self.assertEqual(applied["scenes"]["prologue_awakening"]["name"], "Prologue Awakening")
 
     def test_apply_patch_adds_new_items_inventory_and_equipment(self) -> None:
         state = self._base_apply_state()

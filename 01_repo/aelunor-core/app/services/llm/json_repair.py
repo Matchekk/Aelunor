@@ -31,9 +31,9 @@ def schema_fallback_instruction(schema: Optional[Dict[str, Any]]) -> str:
     if is_turn_response_schema(schema):
         return TURN_RESPONSE_JSON_CONTRACT
     if not isinstance(schema, dict):
-        return "Antworte ausschlieÃŸlich mit gÃ¼ltigem JSON ohne Markdown."
+        return "Antworte ausschließlich mit gültigem JSON ohne Markdown."
     return (
-        "Antworte ausschlieÃŸlich mit gÃ¼ltigem JSON ohne Markdown. "
+        "Antworte ausschließlich mit gültigem JSON ohne Markdown. "
         "Halte dich an dieses Schema:\n"
         + json.dumps(schema, ensure_ascii=False)
     )

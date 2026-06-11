@@ -17,8 +17,7 @@ def test_local_ollama_campaign_start_and_three_playable_turns(tmp_path: Path, mo
         pytest.skip(f"Setze {llm.LOCAL_LLM_ENV}=1, um den lokalen Ollama/Gemma-Live-Test auszuführen.")
 
     data_dir = tmp_path / "aelunor-local-llm-data"
-    runtime_dir = Path("D:/Aelunor/07_runtime").resolve()
-    assert runtime_dir not in data_dir.resolve().parents
+    assert data_dir.resolve().is_relative_to(tmp_path.resolve())
 
     monkeypatch.setenv("DATA_DIR", str(data_dir))
     monkeypatch.setenv("LLM_PROVIDER", "ollama")

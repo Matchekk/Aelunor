@@ -6,6 +6,19 @@ from fastapi import HTTPException
 
 
 CampaignState = Dict[str, Any]
+_RETRYABLE_TURN_ERROR_CODES = {
+    "NARRATOR_RESPONSE_ERROR",
+    "JSON_REPAIR_ERROR",
+    "SCHEMA_VALIDATION_ERROR",
+}
+
+
+def _is_retryable_turn_error(exc: Any) -> bool:
+    return str(getattr(exc, "error_code", "") or "") in _RETRYABLE_TURN_ERROR_CODES
+
+
+def _turn_response(turn: Dict[str, Any], trace_ctx: Dict[str, Any], campaign: CampaignState) -> Dict[str, Any]:
+    return {"turn_id": turn["turn_id"], "trace_id": str((trace_ctx or {}).get("trace_id") or ""), "campaign": campaign}
 
 
 @dataclass(frozen=True)
@@ -63,16 +76,32 @@ def create_turn(
     deps.start_blocking_action(campaign, player_id=player_id, kind=blocking_kind, slot_id=actor)
     request_received_ts = time.time()
     try:
-        turn = deps.create_turn_record(
-            campaign=campaign,
-            actor=actor,
-            player_id=player_id,
-            action_type=action_type,
-            content=content,
-            request_received_ts=request_received_ts,
-            trace_ctx=trace_ctx,
-        )
-        deps.save_campaign(campaign, reason="turn_created", trace_ctx=trace_ctx)
+        for attempt in range(1, 4):
+            try:
+                turn = deps.create_turn_record(
+                    campaign=campaign,
+                    actor=actor,
+                    player_id=player_id,
+                    action_type=action_type,
+                    content=content,
+                    request_received_ts=request_received_ts,
+                    trace_ctx=trace_ctx,
+                )
+                deps.save_campaign(campaign, reason="turn_created", trace_ctx=trace_ctx)
+                break
+            except deps.turn_flow_error_cls as exc:
+                if attempt < 3 and _is_retryable_turn_error(exc):
+                    deps.emit_turn_phase_event(
+                        trace_ctx,
+                        phase=exc.phase or str((trace_ctx or {}).get("last_phase") or "turn_internal"),
+                        success=False,
+                        error_code=exc.error_code,
+                        error_class=exc.cause_class,
+                        message=exc.cause_message[:240],
+                        extra={"attempt": attempt, "retrying": True},
+                    )
+                    continue
+                raise
     except deps.turn_flow_error_cls as exc:
         deps.emit_turn_phase_event(
             trace_ctx,
@@ -98,6 +127,25 @@ def create_turn(
             phase=str((trace_ctx or {}).get("last_phase") or "turn_internal"),
             trace_ctx=trace_ctx,
         )
+        if _is_retryable_turn_error(classified):
+            try:
+                turn = deps.create_turn_record(
+                    campaign=campaign,
+                    actor=actor,
+                    player_id=player_id,
+                    action_type=action_type,
+                    content=content,
+                    request_received_ts=request_received_ts,
+                    trace_ctx=trace_ctx,
+                )
+                deps.save_campaign(campaign, reason="turn_created", trace_ctx=trace_ctx)
+                return _turn_response(turn, trace_ctx, campaign)
+            except Exception as retry_exc:
+                classified = deps.classify_turn_exception(
+                    retry_exc,
+                    phase=str((trace_ctx or {}).get("last_phase") or "turn_internal"),
+                    trace_ctx=trace_ctx,
+                )
         deps.emit_turn_phase_event(
             trace_ctx,
             phase=classified.phase,
@@ -120,6 +168,25 @@ def create_turn(
             phase=str((trace_ctx or {}).get("last_phase") or "turn_internal"),
             trace_ctx=trace_ctx,
         )
+        if _is_retryable_turn_error(classified):
+            try:
+                turn = deps.create_turn_record(
+                    campaign=campaign,
+                    actor=actor,
+                    player_id=player_id,
+                    action_type=action_type,
+                    content=content,
+                    request_received_ts=request_received_ts,
+                    trace_ctx=trace_ctx,
+                )
+                deps.save_campaign(campaign, reason="turn_created", trace_ctx=trace_ctx)
+                return _turn_response(turn, trace_ctx, campaign)
+            except Exception as retry_exc:
+                classified = deps.classify_turn_exception(
+                    retry_exc,
+                    phase=str((trace_ctx or {}).get("last_phase") or "turn_internal"),
+                    trace_ctx=trace_ctx,
+                )
         deps.emit_turn_phase_event(
             trace_ctx,
             phase=classified.phase,
@@ -138,11 +205,7 @@ def create_turn(
         )
     finally:
         deps.clear_blocking_action(campaign_id)
-    return {
-        "turn_id": turn["turn_id"],
-        "trace_id": str((trace_ctx or {}).get("trace_id") or ""),
-        "campaign": campaign,
-    }
+    return _turn_response(turn, trace_ctx, campaign)
 
 
 def edit_turn(
@@ -235,4 +298,3 @@ def retry_turn(
         "turn_id": new_turn["turn_id"],
         "campaign": campaign,
     }
-

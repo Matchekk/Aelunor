@@ -77,8 +77,9 @@ npm run dev
 | Variable | Default | Zweck |
 | --- | --- | --- |
 | `DATA_DIR` | Docker: `/data`, lokal sonst app-abhaengig | Kampagnen- und Runtime-Persistenz |
+| `LLM_PROVIDER` | `ollama` | LLM-Backend; `auto` ist lokaler Kompatibilitaetsalias, kein Cloud-Fallback |
 | `OLLAMA_URL` | `http://host.docker.internal:11434` in Compose | Ollama-Endpunkt |
-| `OLLAMA_MODEL` | `gemma3:12b` in Compose | Narrator-/Extractor-Modell |
+| `OLLAMA_MODEL` | `gemma4:12b` in Compose | Narrator-/Extractor-Modell |
 | `OLLAMA_TIMEOUT_SEC` | `300` in Compose | LLM-Timeout |
 | `OLLAMA_TEMPERATURE` | `0.6` in Compose | LLM-Sampling |
 | `OLLAMA_NUM_CTX` | `8192` in Compose | Kontextfenster |

@@ -63,7 +63,7 @@ def apply_world_summary_to_boards(
         f"Ressourcen: {summary.get('resource_scarcity', '')}",
         f"Heilung: {summary.get('healing_frequency', '')}",
         f"Monsterdichte: {summary.get('monsters_density', '')}",
-        f"ErzÃ¤hlrahmen: {summary.get('ruleset', '')}",
+        f"Erzählrahmen: {summary.get('ruleset', '')}",
         f"Outcome-Modell: {summary.get('outcome_model', '')}",
         f"Weltstruktur: {summary.get('world_structure', '')}",
         f"Weltgesetze: {', '.join(summary.get('world_laws', []))}",

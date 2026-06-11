@@ -12,7 +12,7 @@ import requests
 from fastapi.testclient import TestClient
 
 
-LOCAL_LLM_ENV = "AELUNOR_LOCAL_LLM_TEST"
+LOCAL_LLM_ENV = "AELUNOR_RUN_LOCAL_LLM_SMOKE"
 OLLAMA_MODEL = "gemma4:12b"
 OLLAMA_URL = "http://127.0.0.1:11434"
 SLOT_ID = "slot_1"
