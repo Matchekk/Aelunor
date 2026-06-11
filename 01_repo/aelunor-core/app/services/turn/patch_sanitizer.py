@@ -214,6 +214,10 @@ def sanitize_patch(state: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, An
             upd["class_update"] = deps.deep_copy(upd["class_update"])
         if upd.get("skills_set"):
             normalized_skill_updates = {}
+            resource_name = deps.resource_name_for_character(
+                state["characters"][slot_name],
+                ((state.get("world") or {}).get("settings") or {}),
+            )
             for raw_key, raw_value in (upd.get("skills_set") or {}).items():
                 skill_name = (raw_value or {}).get("name", raw_key) if isinstance(raw_value, dict) else raw_key
                 skill_key = deps.skill_id_from_name(str(skill_name or raw_key))
@@ -221,15 +225,15 @@ def sanitize_patch(state: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str, An
                     raw_value,
                     skill_id=skill_key,
                     skill_name=str(skill_name or raw_key),
-                    resource_name=deps.resource_name_for_character(
-                        state["characters"][slot_name],
-                        ((state.get("world") or {}).get("settings") or {}),
-                    ),
+                    resource_name=resource_name,
                 )
                 normalized_skill_updates[skill_key] = deps.normalize_skill_elements_for_world(
                     normalized_skill_updates[skill_key],
                     state.get("world") if isinstance(state.get("world"), dict) else {},
                 )
+                cost = normalized_skill_updates[skill_key].get("cost")
+                if isinstance(cost, dict) and cost.get("resource") != resource_name:
+                    cost["resource"] = resource_name
             upd["skills_set"] = normalized_skill_updates
         if upd.get("skills_delta"):
             normalized_skill_deltas = {}

@@ -1722,6 +1722,30 @@ class IntroInitialSceneBackingSanitizerTests(unittest.TestCase):
 
         turn_engine.validate_patch(state, result)
 
+    def test_sanitizer_repairs_model_skill_cost_resource_before_validation(self) -> None:
+        state = self._start_state()
+        state["world"] = {"settings": {"resource_name": "Nebellicht"}}
+        state["characters"]["slot_1"]["progression"] = {"resource_name": "Nebellicht"}
+        patch = {
+            "characters": {
+                "slot_1": {
+                    "skills_set": {
+                        "signal": {
+                            "name": "Signaldeutung im Dunst",
+                            "tags": ["magie"],
+                            "cost": {"resource": "Signaldeutung im Dunst", "amount": 1},
+                        }
+                    }
+                }
+            }
+        }
+
+        result = turn_engine.sanitize_patch(state, patch)
+
+        skill = result["characters"]["slot_1"]["skills_set"]["skill_signaldeutung_im_dunst"]
+        self.assertEqual(skill["cost"], {"resource": "Nebellicht", "amount": 1})
+        turn_engine.validate_patch(state, result)
+
     def test_no_backing_when_map_nodes_already_exist(self) -> None:
         state = self._start_state()
         state["map"]["nodes"]["scene_dorf"] = {"name": "Dorf am Hang"}
