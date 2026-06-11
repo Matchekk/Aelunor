@@ -30,43 +30,43 @@ interface DomainPageCopy {
 const DOMAIN_PAGE_COPY: Record<Exclude<V1AppPage, "hub" | "campaigns">, DomainPageCopy> = {
   characters: {
     eyebrow: "Party & Claims",
-    title: "Characters",
+    title: "Figuren",
     description: "Charaktere, Claims, Sheets und Setup-Fortschritt bekommen hier ihren eigenen Arbeitsbereich.",
-    active_detail: "Eine aktive lokale Session ist vorhanden. Öffne die Kampagne, um Charaktere und Claims im Live-State zu bearbeiten.",
-    standby_detail: "Starte oder joine zuerst eine Kampagne, damit Charakterdaten an echte Campaign-State-Flows gebunden bleiben.",
+    active_detail: "Eine aktive lokale Session ist vorhanden. Öffne die Kampagne, um Charaktere und Claims im Live-Zustand zu bearbeiten.",
+    standby_detail: "Starte zuerst eine Kampagne oder tritt einer Runde bei, damit Charakterdaten an echte Kampagnen-Flows gebunden bleiben.",
     primary_label: "Charaktere öffnen",
   },
   world: {
-    eyebrow: "World Bible",
-    title: "World",
-    description: "Orte, Fraktionen, World Info und Canon-Regeln werden aus dem Kampagnenzustand heraus gepflegt.",
-    active_detail: "Öffne die Campaign-Workspace-Ansicht mit World Info Board, um am aktuellen Weltzustand zu arbeiten.",
-    standby_detail: "Ohne aktive Kampagne gibt es noch keinen reload-sicheren World-State.",
-    primary_label: "World Board öffnen",
+    eyebrow: "Weltbibel",
+    title: "Welt",
+    description: "Orte, Fraktionen, Weltwissen und Canon-Regeln werden aus dem Kampagnenzustand heraus gepflegt.",
+    active_detail: "Öffne die Kampagnenansicht mit dem Weltwissen-Board, um am aktuellen Weltzustand zu arbeiten.",
+    standby_detail: "Ohne aktive Kampagne gibt es noch keinen reload-sicheren Weltzustand.",
+    primary_label: "Welt-Board öffnen",
   },
   quests: {
-    eyebrow: "Plot & Objectives",
+    eyebrow: "Plot & Ziele",
     title: "Quests",
-    description: "Story Cards, offene Ziele und Plotpunkte werden als eigener Navigationsbereich geführt.",
-    active_detail: "Öffne die Kampagne direkt mit Story Cards, um aktuelle Ziele und Plotpunkte zu sehen.",
-    standby_detail: "Quests entstehen aus Campaign-Turns und brauchen deshalb zuerst eine aktive Chronik.",
-    primary_label: "Story Cards öffnen",
+    description: "Story-Karten, offene Ziele und Plotpunkte werden als eigener Navigationsbereich geführt.",
+    active_detail: "Öffne die Kampagne direkt mit Story-Karten, um aktuelle Ziele und Plotpunkte zu sehen.",
+    standby_detail: "Quests entstehen aus Kampagnen-Turns und brauchen deshalb zuerst eine aktive Chronik.",
+    primary_label: "Story-Karten öffnen",
   },
   inventory: {
-    eyebrow: "Items & Resources",
-    title: "Inventory",
-    description: "Ausrüstung, Items und Ressourcen werden künftig aus dem Campaign-State heraus fokussiert erreichbar.",
-    active_detail: "Die aktive Kampagne ist verfügbar. Öffne den Play-Workspace, um Inventar-State an echter Spiellogik zu prüfen.",
-    standby_detail: "Inventar ohne aktive Kampagne wäre nur Dummy-State; erstelle oder joine deshalb zuerst eine Session.",
+    eyebrow: "Ausrüstung & Ressourcen",
+    title: "Inventar",
+    description: "Ausrüstung, Items und Ressourcen werden künftig aus dem Kampagnenzustand heraus fokussiert erreichbar.",
+    active_detail: "Die aktive Kampagne ist verfügbar. Öffne den Spieltisch, um Inventar-Zustand an echter Spiellogik zu prüfen.",
+    standby_detail: "Inventar ohne aktive Kampagne wäre nur Platzhalterzustand; erstelle zuerst eine Session oder tritt einer Runde bei.",
     primary_label: "Kampagne öffnen",
   },
   codex: {
     eyebrow: "Canon & Lore",
-    title: "Codex",
-    description: "Entdeckte Lore, Races, Beast Types und Canon-Einträge bekommen hier eine eigene Einstiegsfläche.",
-    active_detail: "Öffne die Campaign-Kontextsuche, um Codex- und Canon-Informationen im aktuellen State zu nutzen.",
-    standby_detail: "Codex-Inhalte müssen aus einer Kampagne kommen, damit sie nicht parallel zur Persistenz laufen.",
-    primary_label: "Codex-Kontext öffnen",
+    title: "Kodex",
+    description: "Entdeckte Lore, Völker, Kreaturentypen und Canon-Einträge bekommen hier eine eigene Einstiegsfläche.",
+    active_detail: "Öffne die Kampagnen-Kontextsuche, um Kodex- und Canon-Informationen im aktuellen Zustand zu nutzen.",
+    standby_detail: "Kodex-Inhalte müssen aus einer Kampagne kommen, damit sie nicht parallel zur Persistenz laufen.",
+    primary_label: "Kodex-Kontext öffnen",
   },
 };
 
@@ -100,7 +100,7 @@ function DomainPage({
         <div className="hub-dashboard-main">
           <AelunorPanelFrame className="v1-panel hub-domain-panel" variant="card" texture>
             <div className="v1-panel-head">
-              <h2>{has_active_session ? "Campaign Surface bereit" : "Campaign erforderlich"}</h2>
+              <h2>{has_active_session ? "Kampagnenansicht bereit" : "Kampagne erforderlich"}</h2>
               <span>{copy.eyebrow}</span>
             </div>
             <AelunorDivider variant="small" />
@@ -156,8 +156,8 @@ export function HubAppPage({
     return (
       <>
         <HubPageHeader
-          eyebrow="Campaign Control"
-          title="Campaigns"
+          eyebrow="Kampagnensteuerung"
+          title="Kampagnen"
           description="Gespeicherte Sessions, neue Runden und Join-Flows sind jetzt aus dem Hub herausgezogen."
         />
         <section className="hub-dashboard-grid is-single-column">
@@ -165,7 +165,7 @@ export function HubAppPage({
             {continuation}
             <section className="hub-campaigns-main">{session_library}</section>
           </div>
-          <section className="hub-actions-grid" aria-label="Campaign Aktionen">
+          <section className="hub-actions-grid" aria-label="Kampagnenaktionen">
             <div id="hub-create-panel">{create_campaign}</div>
             <div id="hub-join-panel">{join_campaign}</div>
           </section>

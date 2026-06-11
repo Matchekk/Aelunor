@@ -983,6 +983,11 @@
   gap: 0.6rem;
 }
 
+.hub-resume-loading {
+  display: flex;
+  justify-content: center;
+}
+
 .session-card-form {
   display: grid;
   gap: 0.78rem;

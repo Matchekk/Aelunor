@@ -13,13 +13,13 @@ interface HubNavItem {
 
 const HUB_NAV_ITEMS: HubNavItem[] = [
   { id: "hub", label: "Hub", icon: "H", icon_src: "/v1/icons/hub_icon_sidebar.png" },
-  { id: "campaigns", label: "Campaign", icon: "C", icon_src: "/v1/icons/campaign_icon_sidebar.png" },
-  { id: "characters", label: "Characters", icon: "P", icon_src: "/v1/icons/characters_icon_png.png" },
-  { id: "world", label: "World", icon: "W", icon_src: "/v1/icons/world_icon_sidebar.png" },
+  { id: "campaigns", label: "Kampagnen", icon: "C", icon_src: "/v1/icons/campaign_icon_sidebar.png" },
+  { id: "characters", label: "Figuren", icon: "P", icon_src: "/v1/icons/characters_icon_png.png" },
+  { id: "world", label: "Welt", icon: "W", icon_src: "/v1/icons/world_icon_sidebar.png" },
   { id: "quests", label: "Quests", icon: "Q", icon_src: "/v1/icons/quests_icon_sidebar.png" },
-  { id: "inventory", label: "Inventory", icon: "I", icon_src: "/v1/icons/inventory_icon_sidebar.png" },
-  { id: "codex", label: "Codex", icon: "X", icon_src: "/v1/icons/codex_icon_sidebar.png" },
-  { id: "settings", label: "Settings", icon: "S", icon_src: "/v1/icons/settings_icon_sidebar.png" },
+  { id: "inventory", label: "Inventar", icon: "I", icon_src: "/v1/icons/inventory_icon_sidebar.png" },
+  { id: "codex", label: "Kodex", icon: "X", icon_src: "/v1/icons/codex_icon_sidebar.png" },
+  { id: "settings", label: "Einstellungen", icon: "S", icon_src: "/v1/icons/settings_icon_sidebar.png" },
 ];
 
 interface HubSidebarProps {

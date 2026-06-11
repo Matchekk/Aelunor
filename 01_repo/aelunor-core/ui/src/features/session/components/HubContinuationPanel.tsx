@@ -1,5 +1,6 @@
 import type { SessionLibraryEntry } from "../../../shared/api/contracts";
 import { AelunorDivider, AelunorPanelFrame } from "../../../shared/ui/aelunorAssets";
+import { ChronicleBookOpeningAnimation } from "../../../shared/ui/ChronicleBookOpeningAnimation";
 import { WaitingInline, WaitingSectionOverlay } from "../../../shared/waiting/components";
 
 interface HubContinuationPanelProps {
@@ -39,6 +40,11 @@ export function HubContinuationPanel({
       </div>
       <AelunorDivider variant="small" />
       <WaitingInline target="hub_resume" className="hub-waiting-inline" />
+      {resume_pending_campaign_id ? (
+        <div className="hub-resume-loading">
+          <ChronicleBookOpeningAnimation size={96} looping />
+        </div>
+      ) : null}
       {has_active_session ? (
         <div className="hub-continuation-block">
           <strong>{latest_entry?.campaign_title ?? latest_entry?.label ?? "Aktive lokale Session"}</strong>

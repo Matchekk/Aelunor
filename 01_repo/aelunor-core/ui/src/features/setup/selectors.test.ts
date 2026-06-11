@@ -84,6 +84,58 @@ describe("deriveSetupGateState", () => {
     expect(gate.current_question?.question_id).toBe("q_origin");
     expect(gate.can_enter_play).toBe(false);
   });
+
+  it("localizes raw setup question and option labels without changing stored values", () => {
+    const campaign = createCampaignFixture({
+      viewer_context: {
+        player_id: "player-host",
+        display_name: "Host",
+        is_host: true,
+        claimed_slot_id: null,
+        claimed_character: null,
+        phase: "world_setup",
+        needs_world_setup: true,
+        needs_character_setup: false,
+        pending_setup_question: {
+          question: {
+            question_id: "world_theme",
+            label: "Was soll das Theme sein?",
+            type: "select",
+            required: true,
+            options: [],
+            option_entries: [{ value: "__other__", label: "Other", description: "Passt, wenn dieser Run offen bleibt." }],
+            allow_other: true,
+            other_hint: "Wenn nichts passt, beschreibe den Run selbst.",
+            ai_copy: "Welches Grundthema soll den Run tragen?",
+            existing_answer: null,
+          },
+          progress: {
+            answered: 0,
+            total: 1,
+            step: 1,
+          },
+        },
+      },
+      setup_runtime: {
+        phase: "world_setup",
+        phase_display: "World Setup",
+        world: {
+          completed: false,
+        },
+      },
+    });
+
+    const question = deriveSetupGateState(campaign).current_question;
+
+    expect(question?.label).toBe("Was soll das Thema sein?");
+    expect(question?.ai_copy).toBe("Welches Grundthema soll die Spielrunde tragen?");
+    expect(question?.other_hint).toBe("Wenn nichts passt, beschreibe die Spielrunde selbst.");
+    expect(question?.option_entries[0]).toEqual({
+      value: "__other__",
+      label: "Eigene Antwort",
+      description: "Passt, wenn diese Spielrunde offen bleibt.",
+    });
+  });
 });
 
 describe("deriveSetupReviewEntries", () => {

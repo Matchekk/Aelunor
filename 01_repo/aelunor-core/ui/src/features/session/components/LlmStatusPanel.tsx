@@ -50,7 +50,7 @@ export function LlmStatusPanel() {
         <div className="v1-panel-head">
           <h2>LLM-Status</h2>
         </div>
-        <p className="status-muted">Status nicht verfügbar. Der Session-Hub bleibt ohne diesen Endpoint nutzbar.</p>
+        <p className="status-muted">Status nicht verfügbar. Der Session-Hub bleibt ohne diese Statusabfrage nutzbar.</p>
       </section>
     );
   }

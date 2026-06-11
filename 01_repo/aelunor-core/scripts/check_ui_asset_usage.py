@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCAN_ROOTS = [ROOT / "ui" / "src", ROOT / "app" / "static"]
 SKIP_DIRS = {".git", "dist", "node_modules", "__pycache__", "07_runtime"}
 TEXT_SUFFIXES = {".css", ".html", ".js", ".jsx", ".md", ".ts", ".tsx"}
-VALID_ROLES = {"background", "texture", "frame", "corner", "divider", "icon", "logo", "illustration", "unknown"}
+VALID_ROLES = {"background", "texture", "frame", "corner", "divider", "icon", "logo", "illustration", "animation", "unknown"}
 CRITICAL_ROLES = {"background", "texture", "frame", "corner", "divider"}
 APPROVED_DIRECT_REFERENCES = {
     ROOT / "ui" / "src" / "shared" / "styles" / "aelunor-ui-assets.css",

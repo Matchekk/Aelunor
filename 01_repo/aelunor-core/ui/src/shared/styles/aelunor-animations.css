@@ -1,0 +1,46 @@
+/* Aelunor sprite-sheet animations.
+   chronicle-book-opening-spritesheet.webp: 5 horizontal frames, 512x512 each.
+   Frame positions must be exact multiples of 25% (0/25/50/75/100): with
+   background-size 500%, steps() over 0%->100% would land between frames at
+   20/40/60/80%, so the keyframes pin each frame explicitly. */
+
+.chronicle-book-opening-animation {
+  display: inline-block;
+  width: var(--chronicle-book-size, 12rem);
+  height: var(--chronicle-book-size, 12rem);
+  background-image: url("/v1/brand/animations/chronicle-book-opening-spritesheet.webp");
+  background-repeat: no-repeat;
+  background-size: 500% 100%;
+  background-position: 0% 0%;
+  animation: chronicle-book-open-once 950ms linear forwards;
+  pointer-events: none;
+  user-select: none;
+}
+
+.chronicle-book-opening-animation.is-looping {
+  animation: chronicle-book-open-loop 1600ms linear infinite;
+}
+
+@keyframes chronicle-book-open-once {
+  0%, 19.99% { background-position: 0% 0%; }
+  20%, 39.99% { background-position: 25% 0%; }
+  40%, 59.99% { background-position: 50% 0%; }
+  60%, 79.99% { background-position: 75% 0%; }
+  80%, 100% { background-position: 100% 0%; }
+}
+
+@keyframes chronicle-book-open-loop {
+  0%, 19.99% { background-position: 0% 0%; }
+  20%, 39.99% { background-position: 25% 0%; }
+  40%, 59.99% { background-position: 50% 0%; }
+  60%, 79.99% { background-position: 75% 0%; }
+  80%, 100% { background-position: 100% 0%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chronicle-book-opening-animation,
+  .chronicle-book-opening-animation.is-looping {
+    animation: none;
+    background-position: 100% 0%;
+  }
+}

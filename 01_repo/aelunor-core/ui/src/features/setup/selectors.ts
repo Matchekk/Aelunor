@@ -56,6 +56,61 @@ function readNumber(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
+const QUESTION_LABEL_REPLACEMENTS: Array<[string, string]> = [
+  ["diesen Run", "diese Spielrunde"],
+  ["dieser Run", "diese Spielrunde"],
+  ["diesem Run", "dieser Spielrunde"],
+  ["den Run", "die Spielrunde"],
+  ["dem Run", "der Spielrunde"],
+  ["Run", "Spielrunde"],
+  ["Theme", "Thema"],
+  ["Tone", "Ton"],
+];
+
+function formatSetupVisibleCopy(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  return QUESTION_LABEL_REPLACEMENTS.reduce(
+    (result, [raw, replacement]) => result.replace(new RegExp(`\\b${raw}\\b`, "g"), replacement),
+    trimmed,
+  );
+}
+
+function formatSetupQuestionLabel(label: string): string {
+  return formatSetupVisibleCopy(label) || "Unbenannte Frage";
+}
+
+function formatSetupOptionLabel(label: string, value: string): string {
+  const visible = formatSetupVisibleCopy(label) || formatSetupVisibleCopy(value) || value;
+  return visible === "Other" ? "Eigene Antwort" : visible;
+}
+
+function normalizeSetupQuestion(question: SetupQuestionPayload): SetupQuestionPayload {
+  return {
+    ...question,
+    label: formatSetupQuestionLabel(question.label),
+    ...(question.other_hint ? { other_hint: formatSetupVisibleCopy(question.other_hint) } : {}),
+    ai_copy: formatSetupVisibleCopy(question.ai_copy),
+    option_entries: question.option_entries.map((entry) => ({
+      ...entry,
+      label: formatSetupOptionLabel(entry.label, entry.value),
+      ...(entry.description ? { description: formatSetupVisibleCopy(entry.description) } : {}),
+    })),
+  };
+}
+
+function normalizeSetupPromptState(prompt: SetupPromptState | null): SetupPromptState | null {
+  return prompt
+    ? {
+        ...prompt,
+        question: normalizeSetupQuestion(prompt.question),
+      }
+    : null;
+}
+
 function coercePromptState(value: unknown): SetupPromptState | null {
   const record = readRecord(value);
   const question = readRecord(record.question);
@@ -66,7 +121,7 @@ function coercePromptState(value: unknown): SetupPromptState | null {
   return {
     question: {
       question_id: readString(question.question_id),
-      label: readString(question.label) || "Unbenannte Frage",
+      label: formatSetupQuestionLabel(readString(question.label)),
       type: (readString(question.type) || "text") as SetupQuestionPayload["type"],
       required: question.required === true,
       options: Array.isArray(question.options)
@@ -78,7 +133,7 @@ function coercePromptState(value: unknown): SetupPromptState | null {
             .filter((entry) => readString(entry.value))
             .map((entry) => ({
               value: readString(entry.value),
-              label: readString(entry.label) || readString(entry.value),
+              label: formatSetupOptionLabel(readString(entry.label), readString(entry.value)),
               ...(readString(entry.description) ? { description: readString(entry.description) } : {}),
             }))
         : [],
@@ -149,7 +204,7 @@ export function deriveSetupGateState(campaign: CampaignSnapshot): SetupGateState
 
   const mode: SetupFlowMode | null = needs_world_setup ? "world" : needs_character_setup ? "character" : null;
   const runtime = mode === "world" ? campaign.setup_runtime.world : mode === "character" ? campaign.setup_runtime.character : null;
-  const current_prompt = mode === "world" ? world_prompt : mode === "character" ? character_prompt : null;
+  const current_prompt = normalizeSetupPromptState(mode === "world" ? world_prompt : mode === "character" ? character_prompt : null);
   const progress = current_prompt?.progress ?? runtime?.progress ?? runtime?.global_progress ?? null;
   const chapter_progress = runtime?.chapter_progress ?? null;
   const global_progress = runtime?.global_progress ?? progress ?? null;
@@ -234,7 +289,7 @@ export function deriveSetupReviewEntries(summary_preview: Record<string, unknown
 export function deriveSetupWaitingMessage(campaign: CampaignSnapshot): string {
   const ready_counter = deriveSetupGateState(campaign).ready_counter;
   if (ready_counter.total > 0) {
-    return `World setup is still in progress. Ready ${ready_counter.ready}/${ready_counter.total} claimed characters are finished so far.`;
+    return `Das Welt-Setup laeuft noch. Bereit: ${ready_counter.ready}/${ready_counter.total} beanspruchte Charaktere sind abgeschlossen.`;
   }
-  return "World setup is still in progress. Wait for the host to finish defining the campaign frame.";
+  return "Das Welt-Setup laeuft noch. Warte, bis der Host den Kampagnenrahmen abgeschlossen hat.";
 }

@@ -47,7 +47,7 @@ export function HubContextRail({
   }
 
   return (
-    <aside className="hub-context-rail" aria-label="Campaign Kontext">
+    <aside className="hub-context-rail" aria-label="Kampagnenkontext">
       <AelunorPanelFrame className="hub-context-panel" variant="compact">
         <div className="hub-context-head">
           <span>{has_active_session ? "Spieler online" : "Gespeicherte Sessions"}</span>
