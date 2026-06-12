@@ -104,7 +104,8 @@ class OllamaAdapter:
         response = requests.post(f"{self.settings.url}/api/chat", json=payload, timeout=request_timeout)
         if response.status_code != 200:
             raise RuntimeError(f"Ollama error {response.status_code}: {response.text[:500]}")
-        content = (response.json().get("message", {}) or {}).get("content", "").strip()
+        body = response.json()
+        content = (body.get("message", {}) or {}).get("content", "").strip()
         record_llm_call(
             duration_s=time.perf_counter() - started,
             model=request_model,
@@ -113,5 +114,7 @@ class OllamaAdapter:
             prompt_chars=len(system) + len(user),
             response_chars=len(content),
             has_schema=format_schema is not None,
+            prompt_tokens=int(body.get("prompt_eval_count") or 0),
+            response_tokens=int(body.get("eval_count") or 0),
         )
         return content

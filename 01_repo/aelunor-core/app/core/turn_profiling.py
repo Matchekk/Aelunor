@@ -50,6 +50,8 @@ class TurnProfiler:
         prompt_chars: int,
         response_chars: int,
         has_schema: bool,
+        prompt_tokens: int = 0,
+        response_tokens: int = 0,
     ) -> None:
         self.llm_calls.append(
             {
@@ -60,6 +62,8 @@ class TurnProfiler:
                 "temp": temperature,
                 "prompt_chars": prompt_chars,
                 "response_chars": response_chars,
+                "prompt_tokens": prompt_tokens,
+                "response_tokens": response_tokens,
                 "schema": has_schema,
             }
         )
@@ -124,6 +128,8 @@ def record_llm_call(
     prompt_chars: int,
     response_chars: int,
     has_schema: bool,
+    prompt_tokens: int = 0,
+    response_tokens: int = 0,
 ) -> None:
     profiler = _CURRENT.get()
     if profiler is None:
@@ -136,4 +142,6 @@ def record_llm_call(
         prompt_chars=prompt_chars,
         response_chars=response_chars,
         has_schema=has_schema,
+        prompt_tokens=prompt_tokens,
+        response_tokens=response_tokens,
     )

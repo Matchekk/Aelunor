@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Protocol
 
@@ -31,6 +32,15 @@ class ChatAdapter(Protocol):
 EmitTurnPhaseEvent = Callable[..., None]
 TurnFlowErrorFactory = Callable[..., Exception]
 
+def repairable_content(content: Any) -> bool:
+    """Nur Antworten mit Nutzinformation sind reparierbar.
+
+    Nach Kontext-Truncation liefern lokale Modelle typischerweise leere oder
+    degenerierte Antworten (nur Klammern/Backticks/Whitespace). Ein Repair-
+    Lauf darauf erzeugt nur eine inhaltslose Schema-Attrappe.
+    """
+    return bool(re.sub(r"[\s`'\"{}\[\],:]+", "", str(content or "")))
+
 
 @dataclass(frozen=True)
 class LlmClientSettings:
@@ -50,12 +60,15 @@ def call_ollama_text(
     system: str,
     user: str,
 ) -> str:
+    # Kein hartes num_ctx=4096 mehr: die Memory-Zusammenfassung bekommt ~30k
+    # Zeichen Input; bei 4096 wurde der Prompt abgeschnitten und das Modell
+    # lieferte konsequent leere Antworten. Der Adapter-Default vermeidet
+    # zusaetzlich den Kontextwechsel (Model-Reload) mitten im Turn.
     return adapter.chat(
         system,
         user,
         timeout=max(30, settings.timeout_sec),
         temperature=0.35,
-        num_ctx=4096,
     )
 
 
@@ -239,6 +252,12 @@ def call_ollama_json(
                 extra={"mode": "formatless_retry_failed"},
             )
         try:
+            if not repairable_content(content):
+                # Degenerierte Narrator-Antwort: Repair haette keinerlei
+                # Inhalt als Basis und wuerde eine kontextlose Story
+                # halluzinieren. Stattdessen scheitern lassen, damit der
+                # Turn-Retry mit vollem Kontext neu ansetzt.
+                raise RuntimeError("Model returned empty content; nothing to repair")
             repaired = repair_json_payload_with_model(
                 adapter,
                 settings,
@@ -301,6 +320,8 @@ def call_ollama_schema(
         return extract_json_payload(content)
     except RuntimeError as exc:
         if "Model returned non-JSON content" not in str(exc) and "Model returned empty content" not in str(exc):
+            raise
+        if not repairable_content(content):
             raise
         # The repair pass must get the same budget as the schema call itself;
         # a 120s cap reliably times out on local models.

@@ -1119,12 +1119,13 @@ def ollama_adapter() -> Any:
     )
 
 def call_ollama_text(system: str, user: str) -> str:
+    # Kein hartes num_ctx=4096: der Memory-Summary-Input (~30k Zeichen) wurde
+    # sonst abgeschnitten und das Modell lieferte konsequent leere Antworten.
     return ollama_adapter().chat(
         system,
         user,
         timeout=max(30, OLLAMA_TIMEOUT_SEC),
         temperature=0.35,
-        num_ctx=4096,
     )
 
 def repair_json_payload_with_model(

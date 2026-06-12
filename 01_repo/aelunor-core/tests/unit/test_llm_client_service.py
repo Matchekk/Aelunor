@@ -62,7 +62,9 @@ class LlmClientServiceTests(unittest.TestCase):
         self.assertEqual(result, "Antwort")
         self.assertEqual(adapter.calls[0]["timeout"], 240)
         self.assertEqual(adapter.calls[0]["temperature"], 0.35)
-        self.assertEqual(adapter.calls[0]["num_ctx"], 4096)
+        # Textaufrufe (Memory-Summary) folgen dem Adapter-Default-Kontext,
+        # damit grosse Inputs nicht abgeschnitten werden.
+        self.assertIsNone(adapter.calls[0]["num_ctx"])
 
     def test_call_ollama_chat_retries_without_schema_when_ollama_format_fails(self) -> None:
         adapter = FakeAdapter([RuntimeError("failed to parse grammar"), "{\"ok\": true}"])
