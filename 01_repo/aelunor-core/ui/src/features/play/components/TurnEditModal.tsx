@@ -91,8 +91,8 @@ export function TurnEditModal({
           </button>
         </header>
 
-        <div className="turn-edit-grid">
-          <label className="setup-field">
+        <div className="turn-edit-stack">
+          <label className="setup-field turn-edit-field-input">
             <span>Spielerbeitrag</span>
             <textarea
               value={inputText}
@@ -102,7 +102,7 @@ export function TurnEditModal({
               disabled={pending}
             />
           </label>
-          <label className="setup-field">
+          <label className="setup-field turn-edit-field-gm">
             <span>GM-Antwort</span>
             <textarea
               value={gmText}
