@@ -1,0 +1,81 @@
+{
+  "label": "it4_prompt_budget",
+  "campaign_id": "camp_c02276e6d5",
+  "turns_requested": 4,
+  "turns_completed": 4,
+  "errors": [],
+  "turn_times_s": [
+    96.2,
+    54.6,
+    86.8,
+    115.2
+  ],
+  "total_avg_s": 88.2,
+  "total_median_s": 91.5,
+  "best_s": 54.6,
+  "worst_s": 115.2,
+  "resources": {
+    "vram_mb_peak": 7793.0,
+    "gpu_pct_avg": 72.5
+  },
+  "env": {
+    "OLLAMA_MODEL": "",
+    "OLLAMA_NUM_CTX": "",
+    "OLLAMA_NARRATOR_MODEL": "",
+    "OLLAMA_NARRATOR_NUM_CTX": "",
+    "OLLAMA_EXTRACTOR_MODEL": "",
+    "OLLAMA_EXTRACTOR_NUM_CTX": "",
+    "OLLAMA_REPAIR_MODEL": "",
+    "OLLAMA_REPAIR_NUM_CTX": "",
+    "AELUNOR_CANON_EXTRACTOR_MODE": ""
+  },
+  "phase_breakdown": {
+    "finalize_state_memory": {
+      "avg_s": 12.7,
+      "max_s": 14.1,
+      "turns_with_calls": 4,
+      "avg_prompt_tokens": 7516,
+      "max_prompt_tokens": 7619
+    },
+    "narrator": {
+      "avg_s": 55.7,
+      "max_s": 86.6,
+      "turns_with_calls": 4,
+      "avg_prompt_tokens": 23322,
+      "max_prompt_tokens": 23730
+    },
+    "npc_extractor": {
+      "avg_s": 12.4,
+      "max_s": 13.9,
+      "turns_with_calls": 4,
+      "avg_prompt_tokens": 1103,
+      "max_prompt_tokens": 1136
+    },
+    "story_length_guard": {
+      "avg_s": 13.6,
+      "max_s": 14.1,
+      "turns_with_calls": 2,
+      "avg_prompt_tokens": 768,
+      "max_prompt_tokens": 828
+    },
+    "_turn_total": {
+      "avg_s": 87.7,
+      "turns": 4
+    }
+  },
+  "state_digest": {
+    "meta_turn": 21,
+    "items_total": 15,
+    "npc_codex_total": 3,
+    "scenes_total": 2,
+    "slot1_scene": "node_siedlung_elaenor",
+    "slot1_inventory_count": null,
+    "slot1_skills": [
+      "skill_moosgriff",
+      "skill_slot_1"
+    ],
+    "slot1_hp": null,
+    "slot1_xp": null,
+    "quarantine_count": 0
+  }
+}

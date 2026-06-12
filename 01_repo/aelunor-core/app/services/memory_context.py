@@ -70,6 +70,70 @@ def compact_setup_for_turn_context(setup: Any) -> Dict[str, Any]:
     }
 
 
+# Interne Buchhaltung, die der Narrator nie braucht. meta.combat ist zudem ein
+# exaktes Duplikat des top-level combat-Eintrags im CONTEXT_PACKET.
+NARRATOR_IRRELEVANT_META_KEYS = {
+    "extraction_quarantine",
+    "combat",
+    "timing",
+    "intro_state",
+    "migrations",
+    "world_codex_seed",
+}
+
+# Volle GM-Texte nur fuer die juengsten Turns; aeltere werden angeschnitten.
+RECENT_TURNS_FULL_TEXT_COUNT = 3
+RECENT_TURNS_TRIMMED_GM_CHARS = 400
+
+COMBAT_ACTION_QUEUE_MAX = 6
+PLOTPOINTS_MAX = 16
+PLOTPOINT_NOTES_MAX_CHARS = 280
+_RESOLVED_PLOTPOINT_STATUSES = {"resolved", "done", "closed", "abgeschlossen"}
+
+
+def compact_meta_for_turn_context(meta: Any) -> Dict[str, Any]:
+    if not isinstance(meta, dict):
+        return {}
+    return {str(key): value for key, value in meta.items() if key not in NARRATOR_IRRELEVANT_META_KEYS}
+
+
+def compact_combat_for_turn_context(combat: Any) -> Dict[str, Any]:
+    if not isinstance(combat, dict):
+        return {}
+    compact = dict(combat)
+    queue = compact.get("action_queue")
+    if isinstance(queue, list) and len(queue) > COMBAT_ACTION_QUEUE_MAX:
+        compact["action_queue"] = queue[-COMBAT_ACTION_QUEUE_MAX:]
+        compact["action_queue_omitted_count"] = len(queue) - COMBAT_ACTION_QUEUE_MAX
+    return compact
+
+
+def compact_plotpoints_for_turn_context(plotpoints: Any) -> list:
+    if not isinstance(plotpoints, list):
+        return []
+    open_points = [
+        point
+        for point in plotpoints
+        if isinstance(point, dict)
+        and str(point.get("status") or "").strip().lower() not in _RESOLVED_PLOTPOINT_STATUSES
+    ]
+    compact = []
+    for point in open_points[-PLOTPOINTS_MAX:]:
+        entry = dict(point)
+        entry["notes"] = _truncate_text(entry.get("notes"), max_chars=PLOTPOINT_NOTES_MAX_CHARS)
+        compact.append(entry)
+    return compact
+
+
+def compact_recent_turn_for_turn_context(entry: Dict[str, Any], *, full_text: bool) -> Dict[str, Any]:
+    if full_text:
+        return entry
+    compact = dict(entry)
+    compact["gm_text"] = _truncate_text(compact.get("gm_text"), max_chars=RECENT_TURNS_TRIMMED_GM_CHARS)
+    compact.pop("requests", None)
+    return compact
+
+
 def compact_world_for_turn_context(world: Any) -> Dict[str, Any]:
     if not isinstance(world, dict):
         return {}

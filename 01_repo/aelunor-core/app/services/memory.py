@@ -4,7 +4,16 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 from app.prompts.system_prompts import MEMORY_SYSTEM_PROMPT
-from app.services.memory_context import compact_character_for_turn_context, compact_setup_for_turn_context, compact_world_for_turn_context
+from app.services.memory_context import (
+    RECENT_TURNS_FULL_TEXT_COUNT,
+    compact_character_for_turn_context,
+    compact_combat_for_turn_context,
+    compact_meta_for_turn_context,
+    compact_plotpoints_for_turn_context,
+    compact_recent_turn_for_turn_context,
+    compact_setup_for_turn_context,
+    compact_world_for_turn_context,
+)
 
 
 CampaignState = Dict[str, Any]
@@ -150,23 +159,24 @@ def build_context_packet(campaign: CampaignState, state: CampaignState, actor: s
             )
         )
     recent = []
-    for turn in ports.active_turns(campaign)[-8:]:
-        recent.append(
-            {
-                "turn_number": turn["turn_number"],
-                "actor": turn["actor"],
-                "actor_display": ports.display_name_for_slot(campaign, turn["actor"])
-                if ports.is_slot_id(turn["actor"])
-                else turn["actor"],
-                "action_type": turn["action_type"],
-                "player_text": turn["input_text_display"],
-                "gm_text": turn["gm_text_display"],
-                "requests": turn.get("requests", []),
-            }
-        )
+    window = ports.active_turns(campaign)[-8:]
+    full_text_from = max(0, len(window) - RECENT_TURNS_FULL_TEXT_COUNT)
+    for index, turn in enumerate(window):
+        entry = {
+            "turn_number": turn["turn_number"],
+            "actor": turn["actor"],
+            "actor_display": ports.display_name_for_slot(campaign, turn["actor"])
+            if ports.is_slot_id(turn["actor"])
+            else turn["actor"],
+            "action_type": turn["action_type"],
+            "player_text": turn["input_text_display"],
+            "gm_text": turn["gm_text_display"],
+            "requests": turn.get("requests", []),
+        }
+        recent.append(compact_recent_turn_for_turn_context(entry, full_text=index >= full_text_from))
     packet = {
-        "meta": state["meta"],
-        "combat": (state.get("meta") or {}).get("combat", {}),
+        "meta": compact_meta_for_turn_context(state["meta"]),
+        "combat": compact_combat_for_turn_context((state.get("meta") or {}).get("combat", {})),
         "attribute_influence": (state.get("meta") or {}).get("attribute_influence", {}),
         "setup": compact_setup_for_turn_context(campaign.get("setup", {})),
         "rules_profile": build_rules_profile(campaign, ports=ports),
@@ -177,7 +187,7 @@ def build_context_packet(campaign: CampaignState, state: CampaignState, actor: s
         ],
         "world": compact_world_for_turn_context(state["world"]),
         "map": state["map"],
-        "plotpoints": state.get("plotpoints", []),
+        "plotpoints": compact_plotpoints_for_turn_context(state.get("plotpoints", [])),
         "scenes": state.get("scenes", {}),
         "characters": normalized_characters,
         "items": state.get("items", {}),

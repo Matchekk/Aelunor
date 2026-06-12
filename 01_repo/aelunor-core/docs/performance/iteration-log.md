@@ -181,6 +181,60 @@ Ziel 2 000 Zeichen):**
   funktionierend (889 Tokens, 14 s, generierungsdominiert).
 - Harte Turn-Fails 0/4 statt 2/4. Keine Qualitäts-/State-Regression sichtbar.
 - Nebenfix: Benchmark-Runner exportiert Stories jetzt aus `gm_text_display`.
+- Commit: cdd0cc1.
+
+---
+
+## Iteration 4 — Narrator Prompt Budget (2026-06-12)
+
+**Hypothese:** Der 30–32k-Token-Narrator-Prompt enthält massive Waste-Anteile;
+gezielte deterministische Kürzung bringt ihn unter 24k und beendet die Kollaps-Klippe.
+
+**Prompt-Budget-Bericht (echter gespeicherter Turn-28-Prompt, 101k Zeichen ≈ 32k Tokens):**
+- User-Prompt 91,5k Zeichen, davon CONTEXT_PACKET 82,4k (90 %).
+- Top-Posten im Packet: recent_turns 19,2k (23 %) · characters 11,5k · **meta 11,4k** ·
+  plotpoints 9,4k · setup 6,7k · boards 5,7k · combat 4,5k.
+- Waste-Funde:
+  1. `meta.extraction_quarantine` (5,7k): interne Extraktions-Buchhaltung inkl.
+     evidence_text — für den Narrator irrelevant.
+  2. `meta.combat` = **exaktes Duplikat** des top-level `combat`-Eintrags (−4,5k).
+  3. `combat.action_queue`: unbegrenzt wachsend (15 Runden seit Turn 2, 4,3k).
+  4. `meta.timing/intro_state/migrations/world_codex_seed`: interne Felder.
+  5. recent_turns: 8 × voller GM-Text à ~2,3k.
+  6. plotpoints: 23 Einträge, ungefiltert, teils mit Halluzinations-Artefakten.
+
+**Änderung (memory_context.py + build_context_packet):**
+- `compact_meta_for_turn_context`: interne meta-Keys raus (Quarantäne, combat-Duplikat,
+  timing, intro_state, migrations, world_codex_seed).
+- `compact_combat_for_turn_context`: action_queue auf letzte 6 Einträge gekappt
+  (mit `action_queue_omitted_count`).
+- recent_turns: letzte 3 Turns voll, ältere 5 mit gm_text auf 400 Zeichen gekürzt,
+  requests entfernt.
+- `compact_plotpoints_for_turn_context`: resolved/done/closed raus, letzte 16,
+  notes auf 280 Zeichen.
+- Kein globales num_ctx-Senken (bleibt 32768).
+
+**Offline-Verifikation:** Packet 82 390 → **54 310 Zeichen (−34 %)**;
+Narrator-Prompt geschätzt ~23k Tokens statt 32k. 758 Tests grün.
+
+**Messung (`it4_prompt_budget`, 4 Turns):**
+- **4/4 Turns, 0 Fehler, 0 Fallbacks — alle 4 Stories echt (1 777–2 105 Zeichen).**
+  Erstmals liefert jeder Turn echte Erzählung (Baseline: 2/8, It. 3: 2/4).
+- Narrator-Prompt: **23 322 Tokens Ø / 23 730 max** (vorher 32 072/32 605) → Ziel <24k
+  erreicht, ~9k Tokens unter num_ctx, keine Truncation mehr möglich.
+- Narrator-Retries: 7 Calls über 4 Turns (It. 3: 16) — Restretries sind Qualitäts-Checks
+  (Repetition/Truncation-Detektor), kein Kollaps.
+- Sauberer Turn: **54.1 s** (Narrator 31.2 + Memory ~12.7 + NPC ~12.4).
+- Total Ø 88.2 s — numerisch über It. 3 (76.7 s), aber nicht vergleichbar: It.-3-Schnitt
+  war durch billige Fallback-Turns (159 Zeichen, kein Guard) geschönt. Ehrlicher Vergleich
+  über sauberen Turn + Qualität: 54.1 s mit 4/4 echten Stories vs. 56.9 s mit 2/4.
+- Story-Guard-Compress lief 2× (je ~13.6 s, 768 Tokens) — funktioniert.
+- State-Digest plausibel (Items 15, NPCs 3, Quarantäne 0).
+
+**Entscheidung: KEEP.** Promptgröße −27 %, Stabilität von Münzwurf auf 100 % echte
+Stories, Quality klar über Baseline.
+
+
 
 
 
