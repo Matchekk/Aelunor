@@ -10,7 +10,6 @@ interface TopBarProps {
   campaign: CampaignSnapshot;
   session: SessionBootstrap;
   active_scene_label: string;
-  active_actor_label: string;
   on_leave_session: () => void;
   can_unclaim: boolean;
   unclaim_pending: boolean;
@@ -35,7 +34,6 @@ export const TopBar = memo(function TopBar({
   campaign,
   session,
   active_scene_label,
-  active_actor_label,
   on_leave_session,
   can_unclaim,
   unclaim_pending,
@@ -71,14 +69,13 @@ export const TopBar = memo(function TopBar({
     return {
       phase: phaseState.phase_display || phaseState.phase,
       scene: active_scene_label && active_scene_label !== "Alle Szenen" ? active_scene_label : campaign.boards?.plot_essentials?.active_scene || "Alle Szenen",
-      actor: active_actor_label,
-      session: session.join_code ? "LIVE" : campaignLengthLabel,
+      session: session.join_code && campaign.players.length > 1 ? "LIVE" : campaignLengthLabel,
       detail: [day !== null ? `Tag ${day}` : "", timeOfDay, cycleSec !== null ? `${Math.round(cycleSec)}s` : ""].filter(Boolean).join(" · "),
     };
   }, [
-    active_actor_label,
     active_scene_label,
     campaign.boards?.plot_essentials?.active_scene,
+    campaign.players.length,
     campaign.state,
     campaign.world_time?.day,
     campaign.world_time?.time_of_day,
@@ -111,7 +108,6 @@ export const TopBar = memo(function TopBar({
       <div className="campaign-topbar-meta" aria-label={campaign.campaign_meta.title || "Aelunor Kampagne"}>
         <div><span>Phase</span><strong>{meta.phase}</strong></div>
         <div><span>Szene</span><strong>{meta.scene}</strong></div>
-        <div><span>Aktiver Slot</span><strong>{meta.actor}</strong></div>
         <div><span>Session</span><strong>{meta.session}</strong><small>{meta.detail}</small></div>
       </div>
 

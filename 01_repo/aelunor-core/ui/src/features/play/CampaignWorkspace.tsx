@@ -113,16 +113,6 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
     [sceneOptions, selectedSceneId],
   );
   const selectedActorSlotId = useMemo(() => resolveSelectedActorId(campaign, selectedActorId), [campaign, selectedActorId]);
-  const selectedActorLabel = useMemo(() => {
-    if (!selectedActorSlotId) {
-      return "Kein Akteur";
-    }
-    return (
-      (campaign.party_overview ?? []).find((entry) => entry.slot_id === selectedActorSlotId)?.display_name ??
-      (campaign.display_party ?? []).find((entry) => entry.slot_id === selectedActorSlotId)?.display_name ??
-      selectedActorSlotId
-    );
-  }, [campaign.display_party, campaign.party_overview, selectedActorSlotId]);
   const isPreplay = !phaseState.is_active_play;
   const activeSceneLabel = selectedScene?.scene_name ?? (selectedSceneId === "all" ? "Alle Szenen" : selectedSceneId);
   const visibleTimelineEntries = useMemo(
@@ -345,8 +335,7 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
           campaign={campaign}
           session={session}
           active_scene_label={activeSceneLabel}
-          active_actor_label={selectedActorLabel}
-          can_unclaim={Boolean(claimedSlotId)}
+          can_unclaim={Boolean(claimedSlotId) && campaign.players.length > 1}
           unclaim_pending={unclaimMutation.isPending}
           on_open_codex={() => openBoards("world")}
           on_open_notifications={() => openBoards("memory")}
