@@ -290,6 +290,57 @@ kostet nur den bisherigen Call, False-Negative würde still Canon verlieren).
 **Entscheidung: KEEP** (NPC-Trigger als kostenloser konservativer Guard mit
 `always`-Escape-Hatch; Progression-Compact-Fix klar positiv: vorher stiller
 Truncation-Leerlauf + ~8 s Waste pro Progression-Claim-Turn).
+Commit: 02d104c.
+
+---
+
+## Iteration 7 — Ollama-Runtime-Settings (ABGEBROCHEN, ungemessen)
+
+`OLLAMA_FLASH_ATTENTION=1` wurde testweise gesetzt und Ollama neu gestartet, der
+Benchmark dazu lief auf Nutzerwunsch (Loop-Stopp) nicht mehr. Die Env-Variable wurde
+wieder entfernt und Ollama in Originalkonfiguration neu gestartet — **kein Zustand
+geändert, keine Messung, keine Entscheidung.** Kandidat für einen späteren Loop
+(Research-Notizen §3: FA + KV q8_0 sind die aussichtsreichsten Knöpfe; erwarteter
+Gewinn primär VRAM, da gemma4:e4b als MoE nur 3.3 GB belegt).
+
+---
+
+# Finaler Bericht (Loop beendet 2026-06-12)
+
+**Stop-Grund:** Nutzer-Stopp nach Iteration 6. Stop-Regel „<45 s" nicht erreicht,
+aber alle bekannten toten/teuren Pipeline-Pfade sind behoben.
+
+| Metrik | Baseline (It. 0) | Final (It. 6) | Δ |
+|---|---:|---:|---|
+| Total Ø pro Turn | ~110 s (Vorgabe ~90 s) | **61.2 s** | **−44 %** |
+| Harte Turn-Fails | 4 von 8 (50 %) | **0 von 4** | −100 % |
+| Echte Stories (kein Fallback) | 2 von 8 | **4 von 4** | Münzwurf → stabil |
+| LLM-Calls pro Turn | 5+ (Narrator, 2× Canon, NPC, Memory + Retries) | 2.5–3.5 (Narrator, NPC getriggert, Memory ½, Guard bei Bedarf) | ca. −50 % |
+| Narrator-Prompt | 31.9–32.6k Tokens (**> num_ctx, truncated**) | 23.1–23.7k | −27 %, Klippe beseitigt |
+| Narrator-Retries | bis 6 Calls/Turn | 1 Retry über 4 Turns | — |
+| Canon-Extractor | 28.8–35.5 s/Turn, halluzinierend | 0 s (deterministische Heuristik) | −100 % |
+| Story-Compress | deterministischer Turn-Killer ab ~25 Turns | 12.7–14 s, funktioniert | repariert |
+| Progression-Gate | 32 767 truncated Tokens, Confidence leer | compact 1.2k Tokens | repariert |
+| Memory | 11.7–13.5 s jeden Turn | ~11.4 s jeden 2. Turn (Opt-in) | −~6 s/Turn Ø |
+| NPC | 11–14 s immer | gleich, aber deterministisch getriggert | neutral–positiv |
+| VRAM Peak | 7.80 GB | 7.79 GB | unverändert |
+| GPU Ø | 65–70 % | 72 % | besser ausgelastet |
+| Quality | Baseline (instabil) | klar über Baseline | ↑ |
+
+**KEEP:** Canon heuristic_only (Default) · Compress ohne Vollkontext · Prompt-Budget
+(meta/combat/plotpoints/recent_turns) · Memory-Intervall (Opt-in, Default 1) ·
+NPC-Trigger (Default an, `always`-Escape) · Progression-Gate compact.
+**PARK:** Canon-compact-Modus (braucht schlankes Extractor-Schema) · It. 7
+Runtime-Settings (FA/KV q8_0, ungemessen) · It. 8 kleineres Extractor-Modell
+(geringes Restpotenzial, da Extractor-LLM-Calls weitgehend eliminiert).
+**REVERT:** keiner (alle gemessenen Änderungen waren KEEP).
+
+**Verbleibender Bottleneck:** Narrator-Generierung selbst (~31–35 s/Call, davon
+~½ Prefill von 23k Tokens, ~½ Decoding von 1.2–2.3k Output-Tokens). Nächste Hebel:
+Prompt weiter Richtung 18k (Charaktere/Setup-Deduplizierung), cache-freundliches
+Prompt-Layout (stabiler Prefix), FA/KV-Settings, ggf. Output-Längenbudget.
+
+**Finale Start-Kommandos:** siehe current-best-config.md.
 
 
 
