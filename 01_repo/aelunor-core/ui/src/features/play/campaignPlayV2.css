@@ -1,16 +1,24 @@
 /* Campaign play v2: story-first shell using the registered Aelunor asset wrappers. */
-.campaign-play-shell { max-width: none; height: 100dvh; min-height: 100dvh; overflow: hidden; padding: 0.45rem; gap: 0; background: #030711; }
+.campaign-play-shell {
+  /* Density tokens: one place to tune how compact the play HUD reads. */
+  --play-density-padding: 0.55rem;
+  --play-density-gap: 0.4rem;
+  --play-control-height: 2.1rem;
+  --play-font-size-sm: 0.78rem;
+  --play-font-size-kicker: 0.62rem;
+  max-width: none; height: 100dvh; min-height: 100dvh; overflow: hidden; padding: 0.4rem; gap: 0; background: #030711;
+}
 .campaign-play-content { position: relative; z-index: var(--ael-z-content); display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 0.45rem; height: 100%; min-height: 0; }
-.campaign-topbar { display: grid; grid-template-columns: 260px minmax(0, 1fr) auto; gap: 0.7rem; min-height: 4.15rem; padding: 0.48rem 0.7rem; border-radius: 0; border-color: rgba(215, 178, 108, 0.35); }
-.campaign-topbar-brand { display: inline-flex; gap: 0.65rem; align-items: center; color: var(--v1-gold); font-family: var(--v1-font-display); font-size: clamp(1.45rem, 1.35vw, 2rem); letter-spacing: 0.15em; text-transform: uppercase; }
-.campaign-topbar-brand .topbar-brand-icon { width: 2.25rem; height: 2.25rem; border-radius: 50%; }
+.campaign-topbar { display: grid; grid-template-columns: 220px minmax(0, 1fr) auto; gap: 0.6rem; min-height: 3.5rem; padding: 0.4rem 0.65rem; border-radius: 0; border-color: rgba(215, 178, 108, 0.35); }
+.campaign-topbar-brand { display: inline-flex; gap: 0.55rem; align-items: center; color: var(--v1-gold); font-family: var(--v1-font-display); font-size: clamp(1.15rem, 1.1vw, 1.6rem); letter-spacing: 0.13em; text-transform: uppercase; }
+.campaign-topbar-brand .topbar-brand-icon { width: 1.9rem; height: 1.9rem; border-radius: 50%; }
 .campaign-topbar-meta { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 0.45rem; align-items: center; min-width: 0; }
 .campaign-topbar-meta div { min-width: 0; padding: 0.25rem 0.55rem; border-left: 1px solid rgba(215, 178, 108, 0.2); }
-.campaign-topbar-meta span, .play-panel-kicker, .actor-dock-kicker { display: block; color: var(--v1-gold); font-family: var(--v1-font-display); font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase; }
+.campaign-topbar-meta span, .play-panel-kicker, .actor-dock-kicker { display: block; color: var(--v1-gold); font-family: var(--v1-font-display); font-size: var(--play-font-size-kicker, 0.62rem); letter-spacing: 0.16em; text-transform: uppercase; }
 .campaign-topbar-meta strong, .campaign-topbar-meta small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.campaign-topbar-meta strong { color: var(--v1-text-strong); font-size: 0.9rem; }
-.campaign-topbar-meta small { color: var(--v1-text-muted); font-size: 0.72rem; }
-.topbar-icon-action { width: 3.1rem; min-height: 3.1rem; display: inline-grid; place-items: center; padding: 0; border-radius: 0.45rem; border-color: rgba(215, 178, 108, 0.32); background: rgba(7, 15, 24, 0.78); }
+.campaign-topbar-meta strong { color: var(--v1-text-strong); font-size: 0.84rem; }
+.campaign-topbar-meta small { color: var(--v1-text-muted); font-size: 0.68rem; }
+.topbar-icon-action { width: 2.4rem; min-height: var(--play-control-height, 2.1rem); display: inline-grid; place-items: center; padding: 0; border-radius: 0.45rem; border-color: rgba(215, 178, 108, 0.32); background: rgba(7, 15, 24, 0.78); }
 .topbar-action-glyph { position: relative; width: 1.35rem; height: 1.35rem; color: var(--v1-gold); }
 .topbar-action-glyph::before, .topbar-action-glyph::after { content: ""; position: absolute; border: 2px solid currentColor; }
 .topbar-action-glyph.is-book::before { inset: 0.1rem 0.12rem; border-radius: 0.18rem; border-left-width: 4px; }
@@ -19,10 +27,10 @@
 .topbar-action-glyph.is-bell::after { left: 0.56rem; bottom: 0; width: 0.28rem; height: 0.28rem; border-radius: 50%; background: currentColor; }
 .topbar-action-glyph.is-gear::before { inset: 0.17rem; border-radius: 50%; }
 .topbar-action-glyph.is-gear::after { inset: 0.52rem; border-radius: 50%; }
-.campaign-play-grid { display: grid; grid-template-columns: clamp(300px, 20vw, 340px) minmax(0, 1fr) clamp(310px, 21vw, 360px); gap: 0.45rem; min-height: 0; }
-.campaign-play-grid.is-actor-collapsed { grid-template-columns: clamp(300px, 20vw, 340px) minmax(0, 1fr) 0px; }
+.campaign-play-grid { display: grid; grid-template-columns: clamp(255px, 18vw, 320px) minmax(0, 1fr) clamp(275px, 19vw, 330px); gap: var(--play-density-gap, 0.4rem); min-height: 0; }
+.campaign-play-grid.is-actor-collapsed { grid-template-columns: clamp(255px, 18vw, 320px) minmax(0, 1fr) 0px; }
 .world-rail, .actor-dock { min-height: 0; overflow: auto; scrollbar-width: thin; }
-.world-rail { display: grid; grid-template-rows: auto auto auto minmax(210px, 1fr); gap: 0.45rem; }
+.world-rail { display: grid; grid-template-rows: auto auto auto minmax(180px, 1fr); gap: var(--play-density-gap, 0.4rem); }
 .scene-card, .current-quest-card, .party-mini-panel, .map-preview-card, .actor-dock { border: 1px solid rgba(215, 178, 108, 0.28); background: linear-gradient(180deg, rgba(6, 16, 25, 0.9), rgba(3, 8, 13, 0.94)); box-shadow: var(--v1-shadow-sm); }
 .scene-card-button, .quest-card-button, .map-preview-button { width: 100%; min-height: 0; border: 0; background: transparent; box-shadow: none; display: flex; flex-direction: column; gap: 0.45rem; align-items: stretch; text-align: left; color: var(--v1-text-base); }
 .scene-card-button strong, .quest-card-button strong { color: var(--v1-text-strong); font-family: var(--v1-font-display); font-size: 1.05rem; }
@@ -33,9 +41,9 @@
 .play-panel-head { display: flex; gap: 0.45rem; flex-wrap: wrap; color: var(--v1-text-muted); font-size: 0.82rem; }
 .play-panel-head { justify-content: space-between; align-items: center; margin-bottom: 0.65rem; }
 .party-avatar-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.45rem; }
-.party-avatar { min-height: 4.5rem; display: grid; grid-template-rows: 1fr 0.22rem; justify-items: center; gap: 0.38rem; padding: 0.2rem; border: 0; background: transparent; }
+.party-avatar { min-height: 3.8rem; display: grid; grid-template-rows: 1fr 0.22rem; justify-items: center; gap: 0.3rem; padding: 0.15rem; border: 0; background: transparent; }
 .party-avatar span, .actor-portrait-slot { border-radius: 50%; border: 1px solid rgba(215, 178, 108, 0.55); background: radial-gradient(circle at 50% 35%, rgba(95, 183, 204, 0.22), transparent 42%), linear-gradient(180deg, #152234, #050910); color: var(--v1-gold); }
-.party-avatar span { width: 3.2rem; aspect-ratio: 1; display: grid; place-items: center; font-family: var(--v1-font-display); }
+.party-avatar span { width: 2.7rem; aspect-ratio: 1; display: grid; place-items: center; font-family: var(--v1-font-display); }
 .party-avatar i { display: block; height: 0.2rem; justify-self: start; border-radius: 999px; background: var(--v1-success); }
 .party-avatar.is-selected span { border-color: var(--v1-accent-strong); box-shadow: 0 0 18px rgba(138, 185, 216, 0.28); }
 .map-preview-button { position: relative; height: 100%; }
@@ -56,7 +64,7 @@
 .campaign-main-column.story-workspace { min-height: 0; height: 100%; padding: 0.65rem; border-radius: 0; }
 .story-context-row, .journal-stage.timeline-panel, .player-composer.composer-panel { border-radius: 0; }
 .story-member-chip { border-radius: 999px; min-height: 1.75rem; }
-.timeline-list > .journal-entry-card:first-child { padding: clamp(1rem, 1.4vw, 1.6rem); }
+.timeline-list > .journal-entry-card:first-child { padding: clamp(0.8rem, 1.1vw, 1.2rem); }
 .player-composer.composer-panel { position: relative; bottom: auto; padding: 0.78rem; }
 .composer-input-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(190px, 240px); gap: 0.75rem; align-items: stretch; }
 .composer-input-grid .composer-textarea-wrap textarea { min-height: 7rem; height: 100%; }
@@ -141,10 +149,10 @@
 .campaign-play-shell .player-composer.composer-panel .composer-helper { margin-top: 0; }
 /* Compact the action column so the input row's floor is low — leaves slack at
    the block height and keeps every control on-screen at smaller heights too. */
-.campaign-play-shell .composer-actor-send { gap: 0.4rem; }
-.campaign-play-shell .composer-actor-send select { min-height: 2.1rem; padding-block: 0.2rem; }
-.campaign-play-shell .composer-actor-send .submit-bar button { min-height: 2.6rem; font-size: 0.95rem; letter-spacing: 0.12em; }
-.campaign-play-shell .composer-mode-tabs button, .campaign-play-shell .composer-tools-tabs button { min-height: 1.85rem; }
+.campaign-play-shell .composer-actor-send { gap: 0.35rem; }
+.campaign-play-shell .composer-actor-send select { min-height: var(--play-control-height, 2.1rem); padding-block: 0.2rem; }
+.campaign-play-shell .composer-actor-send .submit-bar button { min-height: 2.3rem; font-size: 0.88rem; letter-spacing: 0.1em; }
+.campaign-play-shell .composer-mode-tabs button, .campaign-play-shell .composer-tools-tabs button { min-height: 1.7rem; }
 .campaign-play-shell .composer-resize-handle { flex: 0 0 12px; display: grid; place-items: center; margin: -0.3rem 0; cursor: row-resize; touch-action: none; }
 .campaign-play-shell .composer-resize-handle i { display: block; width: 5rem; height: 3px; border-radius: 999px; background: color-mix(in srgb, var(--ael-gold, #caa763) 28%, transparent); transition: background 120ms ease, width 120ms ease; }
 .campaign-play-shell .composer-resize-handle:hover i, .campaign-play-shell .composer-resize-handle:focus-visible i { width: 7rem; background: color-mix(in srgb, var(--ael-gold, #caa763) 58%, transparent); }
@@ -156,9 +164,9 @@ body.is-resizing-composer * { user-select: none; }
    tighter type scale and spacing, and ink-on-parchment forced via tokens so
    higher-specificity base rules (.timeline-item p, legacy story-turn colors)
    cannot leave light text on the light card. */
-.campaign-play-shell .campaign-main-column.story-workspace { gap: 0.55rem; padding: 0.65rem 0.75rem; }
-.campaign-play-shell .story-context-row { padding-bottom: 0.45rem; }
-.campaign-play-shell .story-timeline.timeline-panel { padding: 0.75rem 0.95rem 0.85rem; }
+.campaign-play-shell .campaign-main-column.story-workspace { gap: 0.45rem; padding: var(--play-density-padding, 0.55rem) 0.65rem; }
+.campaign-play-shell .story-context-row { padding-bottom: 0.4rem; }
+.campaign-play-shell .story-timeline.timeline-panel { padding: 0.6rem 0.8rem 0.7rem; }
 .campaign-play-shell .timeline-head { margin-bottom: 0.55rem; padding-bottom: 0.35rem; }
 .campaign-play-shell .timeline-head .panelTitle { font-size: clamp(1.05rem, 0.45vw + 0.85rem, 1.45rem); letter-spacing: 0.08em; }
 .campaign-play-shell .timeline-head > span { font-size: 0.76rem; }
@@ -167,9 +175,10 @@ body.is-resizing-composer * { user-select: none; }
 /* Let the chronicle scroll use the available reading width (legacy-play.css
    capped .campaign-play-shell .timeline-list at 900px); a wider cap means the
    parchment grows, especially once the right actor rail is collapsed. */
-.campaign-play-shell .timeline-list { gap: 0.7rem; max-width: min(100%, 76rem); }
+.campaign-play-shell .timeline-list { gap: 0.55rem; max-width: min(100%, 76rem); }
 .campaign-play-shell .timeline-head, .campaign-play-shell .timeline-scene-switcher, .campaign-play-shell .timeline-empty, .campaign-play-shell .timeline-window-status, .campaign-play-shell .timeline-window-actions { max-width: min(100%, 76rem); margin-inline: auto; }
-.campaign-play-shell .timeline-item.story-turn-card { padding: 0.85rem 1.05rem 0.95rem; }
+.campaign-play-shell .timeline-item.story-turn-card { padding: 0.7rem 0.9rem 0.8rem; }
+.campaign-play-shell .timeline-turn-actions button { min-height: var(--play-control-height, 2.1rem); font-size: var(--play-font-size-sm, 0.78rem); padding-block: 0.2rem; }
 .campaign-play-shell .story-turn-card .timeline-item-head { margin-bottom: 0.45rem; padding-bottom: 0.4rem; }
 .campaign-play-shell .story-turn-card .story-turn-text { font-size: clamp(0.94rem, 0.15vw + 0.9rem, 1.04rem); line-height: 1.62; }
 .campaign-play-shell .story-turn-card, .campaign-play-shell .story-turn-card .story-turn-text, .campaign-play-shell .story-turn-card p, .campaign-play-shell .story-turn-card .timeline-item-title strong { color: var(--ael-story-ink, #2b2118); }
@@ -179,13 +188,16 @@ body.is-resizing-composer * { user-select: none; }
 .campaign-play-shell .story-turn-card .timeline-delta-block, .campaign-play-shell .story-turn-card .timeline-delta-block summary, .campaign-play-shell .story-turn-card .timeline-delta-block li { color: color-mix(in srgb, var(--ael-story-ink, #2b2118) 80%, transparent); }
 .campaign-play-shell .composer-dock-head { margin-bottom: 0; }
 .campaign-play-shell .player-composer.composer-panel .composer-mode-cluster { margin-top: 0; }
-.campaign-play-shell .composer-dock-head .panelTitle { font-size: clamp(0.98rem, 0.35vw + 0.8rem, 1.28rem); letter-spacing: 0.1em; }
-.campaign-play-shell .composer-input-grid { gap: 0.6rem; }
-.campaign-play-shell .composer-helper, .campaign-play-shell .composer-status-bar { font-size: 0.74rem; }
+.campaign-play-shell .composer-dock-head .panelTitle { font-size: clamp(0.88rem, 0.3vw + 0.74rem, 1.1rem); letter-spacing: 0.09em; }
+.campaign-play-shell .composer-dock-head > span { font-size: var(--play-font-size-sm, 0.78rem); }
+.campaign-play-shell .composer-input-grid { gap: 0.55rem; }
+.campaign-play-shell .composer-helper, .campaign-play-shell .composer-status-bar { font-size: 0.72rem; }
 
 /* 3. Composer: RPG action dock instead of a heavy gray form. */
-.campaign-play-shell .player-composer.composer-panel { padding: 0.6rem 0.85rem 0.75rem; }
-.campaign-play-shell .composer-input-grid .composer-textarea-wrap textarea { min-height: 4.6rem; padding: 0.55rem 0.7rem; border-radius: 0.7rem; transition: border-color 120ms ease, box-shadow 120ms ease; }
+.campaign-play-shell .player-composer.composer-panel { padding: var(--play-density-padding, 0.55rem) 0.7rem 0.6rem; }
+.campaign-play-shell .composer-input-grid .composer-textarea-wrap textarea { min-height: 4.6rem; padding: 0.45rem 0.6rem; border-radius: 0.6rem; font-size: 0.92rem; line-height: 1.5; transition: border-color 120ms ease, box-shadow 120ms ease; }
+.campaign-play-shell .composer-textarea-wrap > .status-muted { font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.campaign-play-shell .composer-textarea-wrap textarea::placeholder { color: color-mix(in srgb, var(--ael-text-muted, #93a3b8) 62%, transparent); font-size: 0.86rem; }
 .campaign-play-shell .composer-textarea-wrap textarea:focus { outline: none; border-color: color-mix(in srgb, var(--ael-gold, #caa763) 62%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ael-gold, #caa763) 38%, transparent), inset 0 1px 18px rgba(0, 0, 0, 0.3); }
 .campaign-play-shell .composer-mode-tabs { flex-wrap: nowrap; }
 .campaign-play-shell .composer-mode-tabs button, .campaign-play-shell .composer-tools-tabs button { flex: 1 1 0; min-width: 0; border-radius: 0.55rem; font-family: var(--v1-font-display); font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; padding-inline: 0.4rem; }
@@ -194,7 +206,10 @@ body.is-resizing-composer * { user-select: none; }
 .campaign-play-shell .submit-bar button[disabled] { opacity: 0.6; border-color: color-mix(in srgb, var(--ael-gold, #caa763) 26%, transparent); background: color-mix(in srgb, var(--ael-surface-soft, #15202f) 55%, transparent); color: var(--ael-text-muted, #93a3b8); }
 
 /* 4. Right actor HUD: calm sections, framed portrait, real meters. */
-.campaign-play-shell .actor-dock { padding: 0.85rem 0.95rem; }
+.campaign-play-shell .actor-dock { padding: 0.65rem 0.75rem; }
+.campaign-play-shell .actor-header { grid-template-columns: 4.6rem minmax(0, 1fr); gap: 0.65rem; margin-bottom: 0.5rem; }
+.campaign-play-shell .actor-portrait-slot { width: 4.6rem; font-size: 1.3rem; }
+.campaign-play-shell .actor-header-copy h2 { font-size: 1.12rem; }
 .campaign-play-shell .actor-portrait-slot { box-shadow: 0 0 0 1px color-mix(in srgb, var(--ael-gold, #caa763) 40%, transparent), 0 0 22px color-mix(in srgb, var(--ael-glow, #527fb8) 30%, transparent); }
 .campaign-play-shell .actor-header-copy h2 { font-family: var(--v1-font-display); letter-spacing: 0.03em; text-wrap: balance; }
 .campaign-play-shell .actor-header-copy p { overflow-wrap: break-word; }
@@ -211,7 +226,8 @@ body.is-resizing-composer * { user-select: none; }
 .campaign-play-shell .top-skills-panel p, .campaign-play-shell .equipment-preview p, .campaign-play-shell .important-items-panel p, .campaign-play-shell .bonds-preview-panel p { padding: 0.55rem 0.65rem; border: 1px dashed color-mix(in srgb, var(--ael-border, #44546d) 58%, transparent); border-radius: 0.6rem; text-align: center; font-style: italic; }
 
 /* 5. Left world rail: scene, quest, party and map as fantasy panels. */
-.campaign-play-shell .scene-card, .campaign-play-shell .current-quest-card, .campaign-play-shell .party-mini-panel, .campaign-play-shell .map-preview-card { padding: 0.75rem 0.85rem; }
+.campaign-play-shell .scene-card, .campaign-play-shell .current-quest-card, .campaign-play-shell .party-mini-panel, .campaign-play-shell .map-preview-card { padding: var(--play-density-padding, 0.55rem) 0.65rem; }
+.campaign-play-shell .scene-card-button strong, .campaign-play-shell .quest-card-button strong { font-size: 0.95rem; }
 .campaign-play-shell .scene-card-button strong, .campaign-play-shell .quest-card-button strong { font-family: var(--v1-font-display); letter-spacing: 0.03em; }
 .campaign-play-shell .quest-card-button strong { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .campaign-play-shell .quest-card-button small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -223,11 +239,11 @@ body.is-resizing-composer * { user-select: none; }
 .campaign-play-shell .map-current { box-shadow: 0 0 14px color-mix(in srgb, var(--ael-glow, #527fb8) 70%, transparent); }
 
 /* 6. Topbar: status segments instead of admin rows. */
-.campaign-play-shell .campaign-topbar { min-height: 3.9rem; padding: 0.42rem 0.8rem; }
-.campaign-play-shell .campaign-topbar-meta { gap: 0.5rem; }
-.campaign-play-shell .campaign-topbar-meta div { border: 1px solid color-mix(in srgb, var(--ael-border, #44546d) 44%, transparent); border-left-width: 1px; border-radius: 0.6rem; background: color-mix(in srgb, var(--ael-surface-soft, #15202f) 36%, transparent); padding: 0.28rem 0.6rem; }
-.campaign-play-shell .topbar-utility-btn { min-height: 2.45rem; border-radius: 0.55rem; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; }
-.campaign-play-shell .topbar-icon-action { width: 2.7rem; min-height: 2.45rem; border-radius: 0.55rem; }
+.campaign-play-shell .campaign-topbar { min-height: 3.3rem; padding: 0.36rem 0.7rem; }
+.campaign-play-shell .campaign-topbar-meta { gap: 0.45rem; }
+.campaign-play-shell .campaign-topbar-meta div { border: 1px solid color-mix(in srgb, var(--ael-border, #44546d) 44%, transparent); border-left-width: 1px; border-radius: 0.55rem; background: color-mix(in srgb, var(--ael-surface-soft, #15202f) 36%, transparent); padding: 0.22rem 0.5rem; }
+.campaign-play-shell .topbar-utility-btn { min-height: var(--play-control-height, 2.1rem); border-radius: 0.55rem; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.campaign-play-shell .topbar-icon-action { width: 2.4rem; min-height: var(--play-control-height, 2.1rem); border-radius: 0.55rem; }
 
 @media (max-width: 1200px) { .campaign-play-grid, .campaign-play-grid.is-actor-collapsed { grid-template-columns: minmax(250px, 300px) minmax(0, 1fr); } .campaign-play-shell .actor-rail-shell { display: none; } .campaign-topbar { grid-template-columns: auto minmax(0, 1fr); } .topbar-actions { grid-column: 1 / -1; } }
 @media (max-width: 900px) {
