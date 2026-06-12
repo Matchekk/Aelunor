@@ -60,6 +60,18 @@ def normalize_equipment_update_payload(payload: Any) -> Dict[str, str]:
     return normalized
 
 
+def find_inventory_item_id_by_name(state: Dict[str, Any], character: Dict[str, Any], item_name: Any) -> str:
+    normalized = normalized_eval_text(item_name)
+    if not normalized:
+        return ""
+    items_db = state.get("items") or {}
+    for entry in (character.get("inventory") or {}).get("items") or []:
+        item_id = str((entry or {}).get("item_id") or "")
+        if item_id and normalized_eval_text((items_db.get(item_id) or {}).get("name", "")) == normalized:
+            return item_id
+    return ""
+
+
 def infer_item_slot_from_definition(item: Dict[str, Any]) -> str:
     slot = normalize_equipment_slot_key(item.get("slot"))
     if slot:

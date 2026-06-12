@@ -8,7 +8,7 @@ from app.core.ids import make_id
 from app.services.campaigns.party import display_name_for_slot
 from app.services.campaigns.views import active_turns
 from app.services.characters.resource_maxima import iter_equipped_item_ids, list_inventory_items
-from app.services.items.inventory import ensure_item_shape
+from app.services.items.inventory import ensure_item_shape, find_inventory_item_id_by_name, normalize_equipment_slot_key
 from app.services.setup.answers import parse_earth_items, summarize_creator_item_name
 from app.services.world.text_normalization import normalized_eval_text
 from app.text.patterns import (
@@ -387,11 +387,16 @@ def materialize_story_items_from_turn_history(campaign: Dict[str, Any]) -> None:
             turn.get("input_text_display", "") if turn.get("action_type") in {"story", "canon"} else "",
         ):
             for event in extract_auto_story_item_events(source_text, actor_display):
-                item_id = materialize_inventory_item(state, character, event.get("name", ""), source_tag="story_auto")
+                event_name = str(event.get("name") or "")
+                item_id = materialize_inventory_item(state, character, event_name, source_tag="story_auto")
                 if not item_id:
+                    # Item existiert bereits im Inventar: per Namen aufloesen, damit Equip-Events trotzdem greifen.
+                    item_id = find_inventory_item_id_by_name(state, character, clean_auto_item_name(event_name))
+                if not item_id or str(event.get("mode") or "") != "equip":
                     continue
-                if str(event.get("mode") or "") != "equip":
-                    continue
-                item_stub = build_auto_item_stub(str(event.get("name") or ""), str(event.get("sentence") or ""))
-                equip_slot = item_stub.get("slot") or "weapon"
+                item_stub = build_auto_item_stub(event_name, str(event.get("sentence") or ""))
+                equip_slot = normalize_equipment_slot_key(item_stub.get("slot")) or "weapon"
                 character.setdefault("equipment", {})[equip_slot] = item_id
+                item_entry = state.setdefault("items", {}).get(item_id)
+                if isinstance(item_entry, dict) and not item_entry.get("slot"):
+                    item_entry["slot"] = equip_slot
