@@ -35,7 +35,7 @@ function sheetWithGear(): CharacterSheetResponse {
 describe("deriveActorDockView gear mapping", () => {
   it("shows equipped items and hides empty slots", () => {
     const view = deriveActorDockView(createCampaignFixture(), "aria", sheetWithGear());
-    expect(view.equipment).toEqual([{ slot: "Weapon", name: "Geschwungenes Langschwert" }]);
+    expect(view.equipment).toEqual([{ slot: "Waffe", name: "Geschwungenes Langschwert" }]);
   });
 
   it("lists rare, quest and cursed items as important, hides plain commons", () => {

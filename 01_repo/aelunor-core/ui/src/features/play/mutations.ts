@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type {
   CampaignMutationResponse,
@@ -17,6 +17,13 @@ import { invalidateCampaignQuery } from "../../entities/campaign/queries";
 import { endpoints } from "../../shared/api/endpoints";
 import { httpClient, postJson } from "../../shared/api/httpClient";
 
+// Turns veraendern auch Charakterzustand (Ausruestung, Ressourcen) — das
+// Actor-Dock-Sheet muss zusammen mit dem Campaign-Snapshot neu geladen werden.
+async function invalidatePlayQueries(queryClient: QueryClient, campaign_id: string): Promise<void> {
+  await invalidateCampaignQuery(queryClient, campaign_id);
+  await queryClient.invalidateQueries({ queryKey: ["play", "actor-dock", campaign_id] });
+}
+
 export function useSubmitTurnMutation(campaign_id: string) {
   const queryClient = useQueryClient();
 
@@ -24,7 +31,7 @@ export function useSubmitTurnMutation(campaign_id: string) {
     mutationFn: async (payload: SubmitTurnRequest) =>
       postJson<SubmitTurnResponse>(endpoints.campaigns.create_turn(campaign_id), payload),
     onSuccess: async () => {
-      await invalidateCampaignQuery(queryClient, campaign_id);
+      await invalidatePlayQueries(queryClient, campaign_id);
     },
   });
 }
@@ -42,7 +49,7 @@ export function useRetryIntroMutation(campaign_id: string) {
   return useMutation({
     mutationFn: async () => postJson<RetryIntroResponse>(endpoints.campaigns.retry_intro(campaign_id)),
     onSuccess: async () => {
-      await invalidateCampaignQuery(queryClient, campaign_id);
+      await invalidatePlayQueries(queryClient, campaign_id);
     },
   });
 }
@@ -57,7 +64,7 @@ export function useEditTurnMutation(campaign_id: string) {
         body: JSON.stringify(payload),
       }),
     onSuccess: async () => {
-      await invalidateCampaignQuery(queryClient, campaign_id);
+      await invalidatePlayQueries(queryClient, campaign_id);
     },
   });
 }
@@ -69,7 +76,7 @@ export function useUndoTurnMutation(campaign_id: string) {
     mutationFn: async (turn_id: string) =>
       postJson<TurnUndoResponse>(endpoints.campaigns.undo_turn(campaign_id, turn_id)),
     onSuccess: async () => {
-      await invalidateCampaignQuery(queryClient, campaign_id);
+      await invalidatePlayQueries(queryClient, campaign_id);
     },
   });
 }
@@ -81,7 +88,7 @@ export function useRetryTurnMutation(campaign_id: string) {
     mutationFn: async (turn_id: string) =>
       postJson<TurnRetryResponse>(endpoints.campaigns.retry_turn(campaign_id, turn_id)),
     onSuccess: async () => {
-      await invalidateCampaignQuery(queryClient, campaign_id);
+      await invalidatePlayQueries(queryClient, campaign_id);
     },
   });
 }
@@ -100,7 +107,7 @@ export function usePatchPlayerDiaryMutation(campaign_id: string, player_id: stri
       });
     },
     onSuccess: async () => {
-      await invalidateCampaignQuery(queryClient, campaign_id);
+      await invalidatePlayQueries(queryClient, campaign_id);
     },
   });
 }

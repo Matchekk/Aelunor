@@ -159,13 +159,30 @@ function topSkills(sheet: CharacterSheetResponse | null): ActorDockView["skills"
     }));
 }
 
+const EQUIPMENT_SLOT_LABELS: Record<string, string> = {
+  weapon: "Waffe",
+  mainhand: "Waffe",
+  offhand: "Nebenhand",
+  head: "Kopf",
+  chest: "Brust",
+  armor: "Brust",
+  cloak: "Umhang",
+  gloves: "Handschuhe",
+  boots: "Stiefel",
+  amulet: "Amulett",
+  ring_1: "Ring 1",
+  ring_2: "Ring 2",
+  trinket: "Talisman",
+  relic: "Relikt",
+};
+
 function equipmentPreview(sheet: CharacterSheetResponse | null): ActorDockView["equipment"] {
   const equipment = readRecord(sheet?.sheet.gear_inventory.equipment);
   const preferred = ["weapon", "mainhand", "chest", "armor", "cloak", "amulet", "trinket", "relic"];
   return Object.entries(equipment)
     .sort(([left], [right]) => preferred.indexOf(left) - preferred.indexOf(right))
     .map(([slot, value]) => ({
-      slot: titleize(slot),
+      slot: EQUIPMENT_SLOT_LABELS[slot] ?? titleize(slot),
       name: readString(readRecord(value).name) || "Leer",
     }))
     .filter((entry) => entry.name !== "Leer")
