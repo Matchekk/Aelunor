@@ -249,3 +249,35 @@ body.is-resizing-composer * { user-select: none; }
   .campaign-play-shell .map-preview-card { flex: 0 0 auto; }
   .campaign-play-shell .map-placeholder { min-height: 150px; }
 }
+
+/* Quiet the bright nested frame lines in the play center. The previous stack
+   used multiple pale borders on the workspace, journal and composer, which
+   read as thin white artifacts over the dark scene. */
+.campaign-play-shell .campaign-main-column.story-workspace {
+  border-color: color-mix(in srgb, var(--ael-gold, #caa763) 22%, transparent);
+  box-shadow:
+    0 20px 58px rgba(0, 0, 0, 0.34),
+    inset 0 1px rgba(255, 244, 218, 0.025);
+}
+
+.campaign-play-shell .campaign-main-column.story-workspace::after {
+  inset: 0.7rem;
+  border-color: color-mix(in srgb, var(--ael-gold, #caa763) 13%, transparent);
+  box-shadow: inset 0 0 44px rgba(0, 0, 0, 0.24);
+}
+
+.campaign-play-shell .story-timeline.timeline-panel,
+.campaign-play-shell .composer-dock.composer-panel {
+  border-color: color-mix(in srgb, var(--ael-gold, #caa763) 24%, transparent);
+  box-shadow:
+    0 18px 52px rgba(0, 0, 0, 0.34),
+    inset 0 1px rgba(255, 244, 218, 0.025);
+}
+
+.campaign-play-shell .composer-dock.composer-panel::before {
+  border-color: color-mix(in srgb, var(--ael-gold, #caa763) 12%, transparent);
+}
+
+.campaign-play-shell .timeline-head {
+  border-bottom-color: color-mix(in srgb, var(--ael-gold, #caa763) 24%, transparent);
+}

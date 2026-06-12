@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import type { V1AppPage } from "../../../app/routing/routes";
 
@@ -22,28 +22,74 @@ const HUB_NAV_ITEMS: HubNavItem[] = [
   { id: "settings", label: "Einstellungen", icon: "S", icon_src: "/v1/icons/settings_icon_sidebar.png" },
 ];
 
+function canDragSidebarNav(element: HTMLElement): boolean {
+  const styles = window.getComputedStyle(element);
+  return styles.gridAutoFlow === "column" && element.scrollWidth > element.clientWidth + 4;
+}
+
 interface HubSidebarProps {
   active_target: V1AppPage;
   on_select: (target: HubSidebarTarget, return_focus_element: HTMLElement | null) => void;
 }
 
 export function HubSidebar({ active_target, on_select }: HubSidebarProps) {
+  const activeLinkRef = useRef<HTMLButtonElement | null>(null);
   const dragStateRef = useRef({
+    animation_frame_id: 0,
+    latest_delta_x: 0,
     pointer_id: -1,
     start_x: 0,
     scroll_left: 0,
   });
   const suppressClickRef = useRef(false);
 
+  useEffect(() => {
+    const element = activeLinkRef.current;
+    if (!element || !canDragSidebarNav(element.parentElement as HTMLElement)) {
+      return;
+    }
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    element.scrollIntoView({
+      behavior: prefersReducedMotion ? "auto" : "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [active_target]);
+
+  useEffect(() => {
+    return () => {
+      const animationFrameId = dragStateRef.current.animation_frame_id;
+      if (animationFrameId) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, []);
+
   const stopDrag = (element: HTMLElement, pointer_id: number) => {
     if (dragStateRef.current.pointer_id !== pointer_id) {
       return;
+    }
+    const animationFrameId = dragStateRef.current.animation_frame_id;
+    if (animationFrameId) {
+      window.cancelAnimationFrame(animationFrameId);
+      dragStateRef.current.animation_frame_id = 0;
+      element.scrollLeft = dragStateRef.current.scroll_left - dragStateRef.current.latest_delta_x;
     }
     element.classList.remove("is-dragging");
     if (element.hasPointerCapture(pointer_id)) {
       element.releasePointerCapture(pointer_id);
     }
     dragStateRef.current.pointer_id = -1;
+  };
+
+  const scheduleDragScroll = (element: HTMLElement) => {
+    if (dragStateRef.current.animation_frame_id) {
+      return;
+    }
+    dragStateRef.current.animation_frame_id = window.requestAnimationFrame(() => {
+      dragStateRef.current.animation_frame_id = 0;
+      element.scrollLeft = dragStateRef.current.scroll_left - dragStateRef.current.latest_delta_x;
+    });
   };
 
   return (
@@ -58,10 +104,13 @@ export function HubSidebar({ active_target, on_select }: HubSidebarProps) {
         className="hub-sidebar-nav"
         aria-label="Hub Bereiche"
         onPointerDown={(event) => {
-          if (event.button !== 0 || event.currentTarget.scrollWidth <= event.currentTarget.clientWidth) {
+          suppressClickRef.current = false;
+          if (event.button !== 0 || !canDragSidebarNav(event.currentTarget)) {
             return;
           }
           dragStateRef.current = {
+            animation_frame_id: 0,
+            latest_delta_x: 0,
             pointer_id: event.pointerId,
             start_x: event.clientX,
             scroll_left: event.currentTarget.scrollLeft,
@@ -79,7 +128,8 @@ export function HubSidebar({ active_target, on_select }: HubSidebarProps) {
             suppressClickRef.current = true;
             event.currentTarget.classList.add("is-dragging");
           }
-          event.currentTarget.scrollLeft = dragState.scroll_left - deltaX;
+          dragState.latest_delta_x = deltaX;
+          scheduleDragScroll(event.currentTarget);
         }}
         onPointerUp={(event) => {
           stopDrag(event.currentTarget, event.pointerId);
@@ -92,6 +142,7 @@ export function HubSidebar({ active_target, on_select }: HubSidebarProps) {
           <button
             key={item.label}
             type="button"
+            ref={item.id === active_target ? activeLinkRef : undefined}
             className={`hub-sidebar-link${item.id === active_target ? " is-active" : ""}`}
             aria-current={item.id === active_target ? "page" : undefined}
             title={item.label}

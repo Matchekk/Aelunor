@@ -14,6 +14,9 @@
   --hub-radius-lg: 1.15rem;
   --hub-radius-md: 0.8rem;
   --hub-shadow: 0 24px 80px rgba(0, 0, 0, 0.44);
+  --hub-motion-fast: 150ms;
+  --hub-motion-medium: 220ms;
+  --hub-motion-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   position: relative;
   display: grid;
   grid-template-columns: 17.5rem minmax(0, 1fr);
@@ -51,8 +54,8 @@
 
 .session-hub-shell.gateway-shell.aelunor-hud-hub::before {
   background:
-    linear-gradient(rgba(125, 220, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(125, 220, 255, 0.026) 1px, transparent 1px);
+    linear-gradient(rgba(125, 220, 255, 0.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(125, 220, 255, 0.01) 1px, transparent 1px);
   background-size: 72px 72px;
   mask-image: radial-gradient(circle at 52% 24%, black, transparent 72%);
 }
@@ -96,14 +99,15 @@
   border-radius: inherit;
   pointer-events: none;
   background:
-    linear-gradient(90deg, rgba(242, 245, 247, 0.48), transparent 4rem) top left / 6rem 1px no-repeat,
-    linear-gradient(180deg, rgba(242, 245, 247, 0.34), transparent 3rem) top left / 1px 4.5rem no-repeat,
-    linear-gradient(270deg, rgba(125, 220, 255, 0.32), transparent 4rem) top right / 6rem 1px no-repeat,
-    linear-gradient(180deg, rgba(125, 220, 255, 0.24), transparent 3rem) top right / 1px 4.5rem no-repeat,
-    linear-gradient(90deg, rgba(125, 220, 255, 0.22), transparent 4rem) bottom left / 6rem 1px no-repeat,
-    linear-gradient(0deg, rgba(125, 220, 255, 0.22), transparent 3rem) bottom left / 1px 4.5rem no-repeat,
-    linear-gradient(270deg, rgba(242, 245, 247, 0.24), transparent 4rem) bottom right / 6rem 1px no-repeat,
-    linear-gradient(0deg, rgba(242, 245, 247, 0.2), transparent 3rem) bottom right / 1px 4.5rem no-repeat;
+    linear-gradient(90deg, rgba(216, 184, 106, 0.2), transparent 4rem) top left / 6rem 1px no-repeat,
+    linear-gradient(180deg, rgba(216, 184, 106, 0.14), transparent 3rem) top left / 1px 4.5rem no-repeat,
+    linear-gradient(270deg, rgba(125, 220, 255, 0.14), transparent 4rem) top right / 6rem 1px no-repeat,
+    linear-gradient(180deg, rgba(125, 220, 255, 0.1), transparent 3rem) top right / 1px 4.5rem no-repeat,
+    linear-gradient(90deg, rgba(125, 220, 255, 0.1), transparent 4rem) bottom left / 6rem 1px no-repeat,
+    linear-gradient(0deg, rgba(125, 220, 255, 0.1), transparent 3rem) bottom left / 1px 4.5rem no-repeat,
+    linear-gradient(270deg, rgba(216, 184, 106, 0.12), transparent 4rem) bottom right / 6rem 1px no-repeat,
+    linear-gradient(0deg, rgba(216, 184, 106, 0.1), transparent 3rem) bottom right / 1px 4.5rem no-repeat;
+  opacity: 0.46;
 }
 
 .hub-sidebar-brand {
@@ -147,6 +151,7 @@
   display: grid;
   gap: 0.34rem;
   overscroll-behavior-x: contain;
+  scroll-behavior: smooth;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -171,11 +176,31 @@
   font: inherit;
   font-weight: 650;
   text-align: left;
+  overflow: hidden;
   transition:
-    transform 180ms ease,
-    border-color 180ms ease,
-    background 180ms ease,
-    color 180ms ease;
+    transform var(--hub-motion-medium) var(--hub-motion-ease),
+    border-color var(--hub-motion-fast) ease,
+    background var(--hub-motion-fast) ease,
+    color var(--hub-motion-fast) ease;
+}
+
+.hub-sidebar-link::before {
+  content: "";
+  position: absolute;
+  inset: 0.32rem auto 0.32rem 0.18rem;
+  width: 0.18rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--hub-cyan-strong), rgba(216, 184, 106, 0.72));
+  opacity: 0;
+  transform: scaleY(0.5);
+  transform-origin: center;
+  transition:
+    opacity var(--hub-motion-fast) ease,
+    transform var(--hub-motion-medium) var(--hub-motion-ease);
+}
+
+.hub-sidebar-link:hover {
+  transform: translateX(2px);
 }
 
 .hub-sidebar-link:hover,
@@ -187,7 +212,17 @@
   color: var(--hub-text);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.05),
-    0 0 30px rgba(56, 189, 248, 0.18);
+    0 0 18px rgba(56, 189, 248, 0.12);
+}
+
+.hub-sidebar-link:hover::before,
+.hub-sidebar-link.is-active::before {
+  opacity: 1;
+  transform: scaleY(1);
+}
+
+.hub-sidebar-link.is-active {
+  transform: translateX(3px);
 }
 
 .hub-sidebar-link.is-active::after {
@@ -216,6 +251,8 @@
   font-size: 0.78rem;
   letter-spacing: 0.04em;
   overflow: visible;
+  transition:
+    transform var(--hub-motion-medium) var(--hub-motion-ease);
 }
 
 .hub-sidebar-icon.has-image {
@@ -236,6 +273,17 @@
     drop-shadow(0 0 12px rgba(125, 220, 255, 0.52))
     drop-shadow(0 8px 12px rgba(0, 0, 0, 0.38));
   transform: none;
+  transition: transform var(--hub-motion-medium) var(--hub-motion-ease);
+}
+
+.hub-sidebar-link:hover .hub-sidebar-icon,
+.hub-sidebar-link.is-active .hub-sidebar-icon {
+  transform: scale(1.035);
+}
+
+.hub-sidebar-link:hover .hub-sidebar-icon img,
+.hub-sidebar-link.is-active .hub-sidebar-icon img {
+  transform: scale(1.045);
 }
 
 .hub-main-frame {
@@ -253,6 +301,48 @@
   display: grid;
   align-content: center;
   gap: 0.35rem;
+}
+
+@keyframes hub-scroll-reveal {
+  from {
+    opacity: 0.82;
+    transform: translateY(10px) scale(0.992);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@supports (animation-timeline: view()) {
+  .aelunor-hud-hub .hub-page-header,
+  .aelunor-hud-hub .hub-continuation,
+  .aelunor-hud-hub .hub-campaigns-panel,
+  .aelunor-hud-hub .hub-action-card,
+  .aelunor-hud-hub .hub-domain-panel,
+  .aelunor-hud-hub .hub-context-panel {
+    animation: hub-scroll-reveal both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 26%;
+    will-change: transform, opacity;
+  }
+}
+
+.aelunor-hud-hub .aelunor-frame-host {
+  contain: paint;
+}
+
+.aelunor-hud-hub .aelunor-frame-overlay,
+.aelunor-hud-hub .aelunor-corner,
+.aelunor-hud-hub .aelunor-divider {
+  filter: none;
+}
+
+.aelunor-hud-hub .aelunor-frame-host.is-hero,
+.aelunor-hud-hub .aelunor-frame-host.is-card,
+.aelunor-hud-hub .llm-status-panel {
+  backdrop-filter: none;
 }
 
 .hub-page-header h1 {
@@ -737,16 +827,15 @@
   box-shadow:
     inset 0 1px rgba(255, 255, 255, 0.06),
     0 14px 34px rgba(0, 0, 0, 0.24);
-  backdrop-filter: blur(16px);
-  transition: border-color 220ms ease, box-shadow 220ms ease, transform 220ms ease;
+  backdrop-filter: none;
+  transition: border-color 180ms ease, transform 180ms ease;
 }
 
 .session-card.hub-action-card:hover {
   border-color: rgba(125, 220, 255, 0.28);
   box-shadow:
     inset 0 1px rgba(255, 255, 255, 0.08),
-    0 18px 42px rgba(0, 0, 0, 0.28),
-    0 0 30px rgba(56, 189, 248, 0.1);
+    0 16px 34px rgba(0, 0, 0, 0.24);
   transform: translateY(-2px);
 }
 
@@ -848,8 +937,8 @@
   box-shadow:
     inset 0 1px rgba(255, 255, 255, 0.06),
     0 14px 34px rgba(0, 0, 0, 0.24);
-  backdrop-filter: blur(16px);
-  transition: border-color 220ms ease, box-shadow 220ms ease;
+  backdrop-filter: none;
+  transition: border-color 180ms ease;
 }
 
 .v1-panel.hub-continuation:hover,
@@ -857,8 +946,7 @@
   border-color: rgba(125, 220, 255, 0.28);
   box-shadow:
     inset 0 1px rgba(255, 255, 255, 0.08),
-    0 18px 42px rgba(0, 0, 0, 0.28),
-    0 0 30px rgba(56, 189, 248, 0.1);
+    0 16px 34px rgba(0, 0, 0, 0.24);
 }
 
 .hub-continuation-block,
@@ -885,23 +973,43 @@
 
 .hub-continuation-empty {
   display: grid;
-  place-items: start;
+  grid-template-columns: 2.7rem minmax(0, 1fr);
+  grid-template-areas:
+    "seal copy"
+    "actions actions";
+  align-items: start;
   min-height: 14rem;
-  align-content: center;
+  align-content: start;
   text-align: left;
   padding: clamp(1.3rem, 2vw, 1.8rem);
 }
 
 .hub-empty-chronicle-seal {
-  width: clamp(6.4rem, 14vw, 10.5rem);
-  aspect-ratio: 1;
+  grid-area: seal;
+  width: 2.35rem;
+  height: 2.35rem;
   object-fit: contain;
-  margin: 0 0 0.25rem;
+  padding: 0.22rem;
+  margin: 0;
+  border: 1px solid rgba(125, 220, 255, 0.22);
+  border-radius: 50%;
+  background: rgba(125, 220, 255, 0.06);
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.12);
   pointer-events: none;
   user-select: none;
   filter:
-    drop-shadow(0 0 18px rgba(102, 217, 255, 0.18))
-    drop-shadow(0 16px 28px rgba(0, 0, 0, 0.28));
+    drop-shadow(0 0 10px rgba(102, 217, 255, 0.18))
+    drop-shadow(0 8px 14px rgba(0, 0, 0, 0.28));
+}
+
+.hub-continuation-empty > div:not(.hub-continuation-actions) {
+  grid-area: copy;
+  min-width: 0;
+}
+
+.hub-continuation-empty .hub-continuation-actions {
+  grid-area: actions;
+  margin-top: 0.75rem;
 }
 
 .hub-continuation-empty p {
@@ -920,14 +1028,7 @@
 }
 
 .hub-continuation-empty::before {
-  content: "";
-  width: 2.35rem;
-  height: 2.35rem;
-  margin: 0 0 0.45rem;
-  border-radius: 50%;
-  border: 1px solid rgba(125, 220, 255, 0.22);
-  background: rgba(125, 220, 255, 0.06);
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.12);
+  display: none;
 }
 
 .v1-panel-head {
@@ -1114,16 +1215,15 @@
   box-shadow:
     inset 0 1px rgba(255, 255, 255, 0.06),
     0 12px 30px rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(16px);
-  transition: border-color 220ms ease, box-shadow 220ms ease;
+  backdrop-filter: none;
+  transition: border-color 180ms ease;
 }
 
 .hub-context-panel:hover {
   border-color: rgba(125, 220, 255, 0.22);
   box-shadow:
     inset 0 1px rgba(255, 255, 255, 0.08),
-    0 18px 42px rgba(0, 0, 0, 0.28),
-    0 0 30px rgba(56, 189, 248, 0.1);
+    0 16px 34px rgba(0, 0, 0, 0.24);
 }
 
 .hub-context-rail.is-empty {
@@ -1371,7 +1471,9 @@
     grid-auto-columns: max-content;
     overflow-x: auto;
     cursor: grab;
-    padding-bottom: 0.25rem;
+    padding-inline: 0.12rem 0.85rem;
+    padding-bottom: 0.35rem;
+    scroll-padding-inline: 0.75rem;
     scroll-snap-type: x proximity;
     touch-action: pan-x;
     -webkit-overflow-scrolling: touch;
@@ -1380,13 +1482,20 @@
 
   .hub-sidebar-nav.is-dragging {
     cursor: grabbing;
+    scroll-behavior: auto;
+    scroll-snap-type: none;
   }
 
   .hub-sidebar-link {
     grid-template-columns: 3.35rem auto;
     min-height: 3rem;
     min-width: 10rem;
-    scroll-snap-align: start;
+    scroll-snap-align: center;
+  }
+
+  .hub-sidebar-link:hover,
+  .hub-sidebar-link.is-active {
+    transform: translateY(-1px);
   }
 
   .hub-dashboard-grid {
@@ -1499,7 +1608,20 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .hub-sidebar-nav {
+    scroll-behavior: auto;
+  }
+
   .hub-sidebar-link,
+  .aelunor-hud-hub .hub-page-header,
+  .aelunor-hud-hub .hub-continuation,
+  .aelunor-hud-hub .hub-campaigns-panel,
+  .aelunor-hud-hub .hub-action-card,
+  .aelunor-hud-hub .hub-domain-panel,
+  .aelunor-hud-hub .hub-context-panel,
+  .hub-sidebar-link::before,
+  .hub-sidebar-icon,
+  .hub-sidebar-icon img,
   .hub-hero-primary,
   .hub-hero-secondary,
   .hub-primary-cta,
@@ -1507,6 +1629,20 @@
   .session-library-item-actions button,
   .session-inline-actions button,
   .session-card-form input {
+    animation: none;
     transition: none;
+    will-change: auto;
+  }
+
+  .hub-sidebar-link,
+  .hub-sidebar-link:hover,
+  .hub-sidebar-link.is-active,
+  .hub-sidebar-icon,
+  .hub-sidebar-link:hover .hub-sidebar-icon,
+  .hub-sidebar-link.is-active .hub-sidebar-icon,
+  .hub-sidebar-icon img,
+  .hub-sidebar-link:hover .hub-sidebar-icon img,
+  .hub-sidebar-link.is-active .hub-sidebar-icon img {
+    transform: none;
   }
 }
