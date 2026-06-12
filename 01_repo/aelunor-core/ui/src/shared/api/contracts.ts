@@ -6,6 +6,27 @@ export interface ThemeState {
   font_size: FontSizeId;
 }
 
+export interface LlmModelInfo {
+  name: string;
+  modifiedAt?: string | null;
+  size?: number | null;
+  family?: string | null;
+  details?: Record<string, unknown> | null;
+}
+
+export interface LlmModelsResponse {
+  ok: boolean;
+  status: "connected" | "offline" | "error";
+  message: string;
+  models: LlmModelInfo[];
+}
+
+export interface LlmTestResponse {
+  ok: boolean;
+  message: string;
+  latencyMs?: number | null;
+}
+
 export interface PresenceActivity {
   kind: string;
   label: string;

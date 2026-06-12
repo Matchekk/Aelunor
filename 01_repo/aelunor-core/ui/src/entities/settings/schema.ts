@@ -1,27 +1,53 @@
 import type { FontPresetId, ThemeId } from "../../shared/types/domain";
 import type {
-  AccessibilitySettings,
+  AppearanceUiDensityId,
   AppearanceSettings,
+  AutoSummaryTurns,
+  CanonStrictnessId,
   ComposerModePreference,
   DateFormatId,
-  InteractionSettings,
+  FixedLocationThemeId,
+  GlowIntensityId,
+  GmProviderId,
+  GmResponseLengthId,
+  GmStyleId,
   LanguageId,
-  LocaleSettings,
-  NotificationSettings,
+  LocationThemeModeId,
   NumberFormatId,
+  RandomnessId,
+  ReadingSettings,
+  ReadingTextSizeId,
   StoryWidthId,
+  StoryLineHeightId,
+  ThemeModeId,
   TimeFormatId,
   TimelineDetailDefault,
+  TurnModeId,
   TooltipIntensity,
   UiDensityId,
   UserSettings,
 } from "./types";
-import { FONT_SIZE_DEFAULT_PX, normalizeFontSizePx } from "./fontSize";
+import { fontSizeLabelToPx, fontSizePxToLabel, normalizeFontSizePx } from "./fontSize";
+import { resolveSettingsDefaults, USER_SETTINGS_SCHEMA_VERSION } from "./defaults";
 
-export const USER_SETTINGS_SCHEMA_VERSION = 3;
+export { resolveSettingsDefaults, USER_SETTINGS_SCHEMA_VERSION } from "./defaults";
 
 const THEME_IDS: ThemeId[] = ["arcane", "tavern", "glade", "hybrid"];
 const FONT_PRESET_IDS: FontPresetId[] = ["aelunor-classic", "book-mode", "readable", "literary-fantasy", "international"];
+const GM_PROVIDER_IDS: GmProviderId[] = ["ollama", "custom-openai-compatible", "mock"];
+const GM_STYLE_IDS: GmStyleId[] = ["balanced", "creative", "strict"];
+const GM_RESPONSE_LENGTH_IDS: GmResponseLengthId[] = ["short", "normal", "epic"];
+const CANON_STRICTNESS_IDS: CanonStrictnessId[] = ["loose", "normal", "strict"];
+const THEME_MODE_IDS: ThemeModeId[] = ["aelunor-dark", "high-contrast", "system"];
+const LOCATION_THEME_MODE_IDS: LocationThemeModeId[] = ["automatic", "fixed"];
+const FIXED_LOCATION_THEME_IDS: FixedLocationThemeId[] = ["default", "tavern", "forest", "frostlands", "dungeon", "city", "temple"];
+const APPEARANCE_UI_DENSITY_IDS: AppearanceUiDensityId[] = ["compact", "comfortable", "cinematic"];
+const GLOW_INTENSITY_IDS: GlowIntensityId[] = ["normal", "low", "off"];
+const READING_TEXT_SIZE_IDS: ReadingTextSizeId[] = ["small", "medium", "large", "extra-large"];
+const STORY_LINE_HEIGHT_IDS: StoryLineHeightId[] = ["normal", "comfortable", "spacious"];
+const TURN_MODE_IDS: TurnModeId[] = ["story-first", "balanced", "rules-aware"];
+const RANDOMNESS_IDS: RandomnessId[] = ["low", "normal", "high"];
+const AUTO_SUMMARY_TURNS_IDS: AutoSummaryTurns[] = [0, 10, 20, 30];
 const DENSITY_IDS: UiDensityId[] = ["compact", "standard", "comfortable"];
 const STORY_WIDTH_IDS: StoryWidthId[] = ["focused", "standard", "wide"];
 const COMPOSER_MODE_PREFERENCE_IDS: ComposerModePreference[] = ["do", "say", "story"];
@@ -59,6 +85,19 @@ function readEnum<T extends string>(value: unknown, allowed: readonly T[], fallb
   return allowed.includes(normalized as T) ? (normalized as T) : fallback;
 }
 
+function readNumberEnum<T extends number>(value: unknown, allowed: readonly T[], fallback: T): T {
+  const numeric = readNumber(value, fallback);
+  return allowed.includes(numeric as T) ? (numeric as T) : fallback;
+}
+
+function readNullableString(value: unknown, fallback: string | null): string | null {
+  if (value === null) {
+    return null;
+  }
+  const normalized = readString(value).trim();
+  return normalized ? normalized : fallback;
+}
+
 function readFontPreset(value: unknown, fallback: FontPresetId): FontPresetId {
   const normalized = readString(value);
   if (FONT_PRESET_IDS.includes(normalized as FontPresetId)) {
@@ -81,78 +120,78 @@ function normalizeVolume(value: unknown, fallback: number): number {
   return Math.min(100, Math.max(0, Math.round(numeric)));
 }
 
-export function resolveSettingsDefaults(): UserSettings {
-  const appearance: AppearanceSettings = {
-    theme: "hybrid",
-    font_preset: "aelunor-classic",
-    font_size: FONT_SIZE_DEFAULT_PX,
-    density: "standard",
-    story_width: "standard",
-  };
+function readTextSize(value: unknown, fallback: ReadingTextSizeId): ReadingTextSizeId {
+  const normalized = readString(value);
+  if (READING_TEXT_SIZE_IDS.includes(normalized as ReadingTextSizeId)) {
+    return normalized as ReadingTextSizeId;
+  }
+  return fontSizePxToLabel(value || fontSizeLabelToPx(fallback));
+}
 
-  const interaction: InteractionSettings = {
-    auto_scroll: true,
-    confirm_leave: true,
-    remember_filters: true,
-    timeline_detail_default: "collapsed",
-    shortcuts_enabled: true,
-    shortcut_hints: true,
-    composer_mode_preference: "do",
-    tooltip_intensity: "standard",
-  };
+function legacyThemeFromMode(themeMode: ThemeModeId): ThemeId {
+  return themeMode === "high-contrast" ? "arcane" : "hybrid";
+}
 
-  const locale: LocaleSettings = {
-    language: "de",
-    time_format: "24h",
-    date_format: "locale",
-    number_format: "locale",
-  };
-
-  const notifications: NotificationSettings = {
-    ui_sound: false,
-    sound_volume: 60,
-    desktop_notifications: false,
-  };
-
-  return {
-    appearance,
-    interaction,
-    accessibility: {
-      reduced_motion: false,
-      high_contrast: false,
-      strong_focus: false,
-      larger_targets: false,
-      reading_friendly_mode: false,
-    },
-    locale,
-    notifications,
-    local_data_meta: {
-      resettable_local_names: true,
-      resettable_drafts: true,
-      resettable_filters: true,
-    },
-    meta: {
-      schema_version: USER_SETTINGS_SCHEMA_VERSION,
-    },
-  };
+function legacyDensityFromUiDensity(uiDensity: AppearanceUiDensityId): UiDensityId {
+  return uiDensity === "compact" ? "compact" : "comfortable";
 }
 
 export function normalizeSettings(raw: unknown, fallback = resolveSettingsDefaults()): UserSettings {
   const record = readRecord(raw);
+  const gm = readRecord(record.gm);
   const appearance = readRecord(record.appearance);
+  const reading = readRecord(record.reading);
+  const gameplay = readRecord(record.gameplay);
+  const privacy = readRecord(record.privacy);
+  const diagnostics = readRecord(record.diagnostics);
   const interaction = readRecord(record.interaction);
   const accessibility = readRecord(record.accessibility);
   const locale = readRecord(record.locale);
   const notifications = readRecord(record.notifications);
   const localDataMeta = readRecord(record.local_data_meta);
+  const normalizedReading: ReadingSettings = {
+    fontPreset: readFontPreset(reading.fontPreset ?? appearance.font_preset, fallback.reading.fontPreset),
+    textSize: readTextSize(reading.textSize ?? appearance.font_size, fallback.reading.textSize),
+    storyLineHeight: readEnum(reading.storyLineHeight, STORY_LINE_HEIGHT_IDS, fallback.reading.storyLineHeight),
+  };
+  const normalizedAppearance: AppearanceSettings = {
+    themeMode: readEnum(appearance.themeMode, THEME_MODE_IDS, fallback.appearance.themeMode),
+    locationThemeMode: readEnum(appearance.locationThemeMode, LOCATION_THEME_MODE_IDS, fallback.appearance.locationThemeMode),
+    fixedLocationTheme: readEnum(appearance.fixedLocationTheme, FIXED_LOCATION_THEME_IDS, fallback.appearance.fixedLocationTheme),
+    uiDensity: readEnum(appearance.uiDensity ?? appearance.density, APPEARANCE_UI_DENSITY_IDS, fallback.appearance.uiDensity),
+    glowIntensity: readEnum(appearance.glowIntensity, GLOW_INTENSITY_IDS, fallback.appearance.glowIntensity),
+    reducedMotion: readBoolean(appearance.reducedMotion ?? accessibility.reduced_motion, fallback.appearance.reducedMotion),
+    theme: readEnum(appearance.theme, THEME_IDS, legacyThemeFromMode(fallback.appearance.themeMode)),
+    font_preset: normalizedReading.fontPreset,
+    font_size: normalizeFontSizePx(appearance.font_size, fontSizeLabelToPx(normalizedReading.textSize)),
+    density: readEnum(appearance.density, DENSITY_IDS, legacyDensityFromUiDensity(fallback.appearance.uiDensity)),
+    story_width: readEnum(appearance.story_width, STORY_WIDTH_IDS, fallback.appearance.story_width),
+  };
 
   return {
-    appearance: {
-      theme: readEnum(appearance.theme, THEME_IDS, fallback.appearance.theme),
-      font_preset: readFontPreset(appearance.font_preset, fallback.appearance.font_preset),
-      font_size: normalizeFontSizePx(appearance.font_size, fallback.appearance.font_size),
-      density: readEnum(appearance.density, DENSITY_IDS, fallback.appearance.density),
-      story_width: readEnum(appearance.story_width, STORY_WIDTH_IDS, fallback.appearance.story_width),
+    gm: {
+      provider: readEnum(gm.provider, GM_PROVIDER_IDS, fallback.gm.provider),
+      ollamaBaseUrl: readString(gm.ollamaBaseUrl).trim() || fallback.gm.ollamaBaseUrl,
+      model: readNullableString(gm.model, fallback.gm.model),
+      style: readEnum(gm.style, GM_STYLE_IDS, fallback.gm.style),
+      responseLength: readEnum(gm.responseLength, GM_RESPONSE_LENGTH_IDS, fallback.gm.responseLength),
+      canonStrictness: readEnum(gm.canonStrictness, CANON_STRICTNESS_IDS, fallback.gm.canonStrictness),
+    },
+    appearance: normalizedAppearance,
+    reading: normalizedReading,
+    gameplay: {
+      turnMode: readEnum(gameplay.turnMode, TURN_MODE_IDS, fallback.gameplay.turnMode),
+      randomness: readEnum(gameplay.randomness, RANDOMNESS_IDS, fallback.gameplay.randomness),
+      showHints: readBoolean(gameplay.showHints, fallback.gameplay.showHints),
+      autoSummaryTurns: readNumberEnum(gameplay.autoSummaryTurns, AUTO_SUMMARY_TURNS_IDS, fallback.gameplay.autoSummaryTurns),
+    },
+    privacy: {
+      preferLocalModels: readBoolean(privacy.preferLocalModels, fallback.privacy.preferLocalModels),
+      allowExternalApiCalls: readBoolean(privacy.allowExternalApiCalls, fallback.privacy.allowExternalApiCalls),
+      anonymizeDiagnostics: readBoolean(privacy.anonymizeDiagnostics, fallback.privacy.anonymizeDiagnostics),
+    },
+    diagnostics: {
+      showDeveloperPanel: readBoolean(diagnostics.showDeveloperPanel, fallback.diagnostics.showDeveloperPanel),
     },
     interaction: {
       auto_scroll: readBoolean(interaction.auto_scroll, fallback.interaction.auto_scroll),
@@ -173,7 +212,7 @@ export function normalizeSettings(raw: unknown, fallback = resolveSettingsDefaul
       tooltip_intensity: readEnum(interaction.tooltip_intensity, TOOLTIP_INTENSITY_IDS, fallback.interaction.tooltip_intensity),
     },
     accessibility: {
-      reduced_motion: readBoolean(accessibility.reduced_motion, fallback.accessibility.reduced_motion),
+      reduced_motion: normalizedAppearance.reducedMotion,
       high_contrast: readBoolean(accessibility.high_contrast, fallback.accessibility.high_contrast),
       strong_focus: readBoolean(accessibility.strong_focus, fallback.accessibility.strong_focus),
       larger_targets: readBoolean(accessibility.larger_targets, fallback.accessibility.larger_targets),

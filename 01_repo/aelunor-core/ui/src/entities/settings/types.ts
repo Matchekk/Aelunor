@@ -1,5 +1,19 @@
 import type { FontPresetId, FontSizeId, ThemeId } from "../../shared/types/domain";
 
+export type GmProviderId = "ollama" | "custom-openai-compatible" | "mock";
+export type GmStyleId = "balanced" | "creative" | "strict";
+export type GmResponseLengthId = "short" | "normal" | "epic";
+export type CanonStrictnessId = "loose" | "normal" | "strict";
+export type ThemeModeId = "aelunor-dark" | "high-contrast" | "system";
+export type LocationThemeModeId = "automatic" | "fixed";
+export type FixedLocationThemeId = "default" | "tavern" | "forest" | "frostlands" | "dungeon" | "city" | "temple";
+export type AppearanceUiDensityId = "compact" | "comfortable" | "cinematic";
+export type GlowIntensityId = "normal" | "low" | "off";
+export type ReadingTextSizeId = "small" | "medium" | "large" | "extra-large";
+export type StoryLineHeightId = "normal" | "comfortable" | "spacious";
+export type TurnModeId = "story-first" | "balanced" | "rules-aware";
+export type RandomnessId = "low" | "normal" | "high";
+export type AutoSummaryTurns = 0 | 10 | 20 | 30;
 export type UiDensityId = "compact" | "standard" | "comfortable";
 export type StoryWidthId = "focused" | "standard" | "wide";
 export type TimelineDetailDefault = "collapsed" | "expanded";
@@ -10,12 +24,51 @@ export type TimeFormatId = "24h" | "12h";
 export type DateFormatId = "locale" | "dmy" | "mdy" | "ymd";
 export type NumberFormatId = "locale" | "de" | "en";
 
+export interface GmSettings {
+  provider: GmProviderId;
+  ollamaBaseUrl: string;
+  model: string | null;
+  style: GmStyleId;
+  responseLength: GmResponseLengthId;
+  canonStrictness: CanonStrictnessId;
+}
+
 export interface AppearanceSettings {
+  themeMode: ThemeModeId;
+  locationThemeMode: LocationThemeModeId;
+  fixedLocationTheme: FixedLocationThemeId;
+  uiDensity: AppearanceUiDensityId;
+  glowIntensity: GlowIntensityId;
+  reducedMotion: boolean;
+  // Legacy v1 fields kept during the settings migration slice.
   theme: ThemeId;
   font_preset: FontPresetId;
   font_size: FontSizeId;
   density: UiDensityId;
   story_width: StoryWidthId;
+}
+
+export interface ReadingSettings {
+  fontPreset: FontPresetId;
+  textSize: ReadingTextSizeId;
+  storyLineHeight: StoryLineHeightId;
+}
+
+export interface GameplaySettings {
+  turnMode: TurnModeId;
+  randomness: RandomnessId;
+  showHints: boolean;
+  autoSummaryTurns: AutoSummaryTurns;
+}
+
+export interface PrivacySettings {
+  preferLocalModels: boolean;
+  allowExternalApiCalls: boolean;
+  anonymizeDiagnostics: boolean;
+}
+
+export interface DiagnosticsSettings {
+  showDeveloperPanel: boolean;
 }
 
 export interface InteractionSettings {
@@ -61,7 +114,12 @@ export interface SettingsMeta {
 }
 
 export interface UserSettings {
+  gm: GmSettings;
   appearance: AppearanceSettings;
+  reading: ReadingSettings;
+  gameplay: GameplaySettings;
+  privacy: PrivacySettings;
+  diagnostics: DiagnosticsSettings;
   interaction: InteractionSettings;
   accessibility: AccessibilitySettings;
   locale: LocaleSettings;

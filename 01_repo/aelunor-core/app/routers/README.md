@@ -16,6 +16,7 @@ Fachlogik gehoert in `app/services/`.
 | `context.py` | Read-only Kontext-/Canon-Fragen |
 | `sheets.py` | Party-, Character- und NPC-Sheets |
 | `presence.py` | SSE-Tickets, Stream, Activity, Clear |
+| `llm.py` | Lokale Ollama-Modellliste und kurzer GM-Test |
 
 ## Dependency-Regel
 

@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { readLegacyAppearanceFromStorage, resolveInitialSettingsFromStorage } from "./store";
+import { readLegacyAppearanceFromStorage, resolveInitialSettingsFromStorage, useUserSettingsStore } from "./store";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 class MemoryStorage implements Storage {
   private map = new Map<string, string>();
@@ -73,5 +77,21 @@ describe("settings store migration helpers", () => {
     expect(settings.appearance.font_preset).toBe("aelunor-classic");
     expect(settings.appearance.font_size).toBe(16);
     expect(settings.locale.language).toBe("de");
+  });
+
+  it("persists the selected GM model and reloads it", () => {
+    const storage = new MemoryStorage();
+    vi.stubGlobal("window", { localStorage: storage });
+
+    useUserSettingsStore.getState().patch_gm({
+      ollamaBaseUrl: "http://127.0.0.1:11434",
+      model: "llama3.1:8b",
+    });
+
+    const persisted = storage.getItem("aelunorUserSettingsV1");
+    expect(persisted).not.toBeNull();
+    const reloaded = resolveInitialSettingsFromStorage(storage);
+    expect(reloaded.gm.model).toBe("llama3.1:8b");
+    expect(reloaded.gm.ollamaBaseUrl).toBe("http://127.0.0.1:11434");
   });
 });

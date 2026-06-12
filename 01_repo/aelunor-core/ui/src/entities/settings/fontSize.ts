@@ -2,11 +2,20 @@ export const FONT_SIZE_MIN_PX = 14;
 export const FONT_SIZE_DEFAULT_PX = 16;
 export const FONT_SIZE_MAX_PX = 20;
 export const FONT_SIZE_STEP_PX = 1;
+export type FontSizeLabel = "small" | "medium" | "large" | "extra-large";
 
 const LEGACY_FONT_SIZE_PX: Record<string, number> = {
   small: 14,
   medium: 16,
   large: 18,
+  "extra-large": 20,
+};
+
+const FONT_SIZE_LABEL_PX: Record<FontSizeLabel, number> = {
+  small: 14,
+  medium: 16,
+  large: 18,
+  "extra-large": 20,
 };
 
 export function clampFontSizePx(value: number): number {
@@ -43,4 +52,22 @@ export function readFontSizePx(value: unknown): number | null {
   }
 
   return null;
+}
+
+export function fontSizeLabelToPx(value: FontSizeLabel): number {
+  return FONT_SIZE_LABEL_PX[value];
+}
+
+export function fontSizePxToLabel(value: unknown): FontSizeLabel {
+  const px = normalizeFontSizePx(value);
+  if (px <= 14) {
+    return "small";
+  }
+  if (px <= 16) {
+    return "medium";
+  }
+  if (px <= 18) {
+    return "large";
+  }
+  return "extra-large";
 }

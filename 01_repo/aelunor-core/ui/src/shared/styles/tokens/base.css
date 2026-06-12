@@ -119,6 +119,22 @@
   --v1-space-lg: 1.65rem;
 }
 
+:root[data-ui-density="cinematic"] {
+  --v1-control-height: 3rem;
+  --v1-control-padding-y: 0.82rem;
+  --v1-space-md: 1.12rem;
+  --v1-space-lg: 1.75rem;
+}
+
+:root[data-glow-intensity="low"] {
+  --v1-accent-glow: rgba(120, 200, 255, 0.12);
+}
+
+:root[data-glow-intensity="off"] {
+  --v1-accent-glow: transparent;
+  --v1-shadow-glow: var(--v1-shadow-sm);
+}
+
 :root[data-story-width="focused"] {
   --v1-story-text-max-width: 68ch;
 }

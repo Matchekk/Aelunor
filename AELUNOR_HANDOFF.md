@@ -279,6 +279,36 @@
   behielt 18px. Play/Chronik-DOM: Body/Buttons Inter, Story Spectral,
   Heading Cinzel, externe Asset-URLs und Console errors/warnings leer.
 
+## Settings-System Phase 1
+
+* Versioniertes Settings-Schema v4 unter `ui/src/entities/settings/`:
+  neue Bereiche `gm`, `appearance`, `reading`, `gameplay`, `privacy`,
+  `diagnostics`; Legacy-Felder (`appearance.theme`, `font_preset`,
+  `font_size`, `density`, `story_width`) bleiben fuer bestehende UI-Slices
+  erhalten und werden synchronisiert.
+* Settings-Dialog ist in die Zielbereiche gegliedert: GM & KI, Darstellung,
+  Text & Lesbarkeit, Spielgefuehl, Daten & Sicherheit, Diagnose. Neue
+  Sections liegen unter `ui/src/shared/ui/settings/`; Developer-Details sind
+  nur sichtbar, wenn `diagnostics.showDeveloperPanel` aktiv ist.
+* Lokale Ollama-Erkennung: `GET /api/llm/models` und `POST /api/llm/test`
+  ueber duennen Router `app/routers/llm.py` und Service
+  `app/services/llm/model_catalog.py`. Nur lokale Base-URLs sind erlaubt;
+  leere URL faellt auf `http://127.0.0.1:11434` zurueck; Fehler werden als
+  saubere Response statt Stacktrace geliefert.
+* GM-Settings-UI speichert `gm.ollamaBaseUrl` und `gm.model` lokal, kann
+  Modelle scannen und ein kurzes Test-Prompt senden. Browser-Smoke lief gegen
+  Fake-Ollama auf `127.0.0.1:11435`: Scan, Auswahl, GM testen, Reload-
+  Persistenz, keine Console-Errors.
+* Root-Hooks: `ThemeProvider` setzt `data-theme-mode`, `data-ui-density`,
+  `data-glow-intensity`, `data-reduced-motion`, Reading-Attribute und
+  `--v1-story-line-height`/`--v1-font-size-base`.
+* Turn Engine nutzt `gm.model` noch nicht, weil Settings aktuell nur lokal im
+  Browser persistieren und bei Turn-Requests nicht an das Backend uebergeben
+  werden. Hook-Punkt fuer naechsten Slice: gespeicherte GM-Auswahl kontrolliert
+  in den Turn-/Narrator-Request-Kontext oder eine backendseitige Settings-
+  Persistenz ueberfuehren; `OllamaAdapter.chat` nutzt derzeit weiterhin
+  `OllamaSettings.model` aus Environment/Wiring.
+
 ## Offene GitHub-Issue-Landschaft
 
 Snapshot 2026-06-09; nur Lesezugriff. Details:

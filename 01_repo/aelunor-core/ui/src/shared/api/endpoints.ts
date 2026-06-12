@@ -70,5 +70,7 @@ export const endpoints = {
   },
   system: {
     llm_status: () => "/api/llm/status",
+    llm_models: () => "/api/llm/models",
+    llm_test: () => "/api/llm/test",
   },
 };

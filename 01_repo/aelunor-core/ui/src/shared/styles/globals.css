@@ -69,7 +69,7 @@ h6 {
 .world-info-content,
 .memory-summary-content {
   font-family: var(--font-story);
-  line-height: max(1.5, var(--v1-line-body));
+  line-height: max(1.5, var(--v1-story-line-height, var(--v1-line-body)));
 }
 
 body::before {
@@ -1520,6 +1520,34 @@ summary::-webkit-details-marker {
 .settings-font-size-preview {
   color: var(--v1-text-strong);
   line-height: 1.5;
+}
+
+.settings-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.settings-inline-actions .settings-select {
+  min-width: min(16rem, 100%);
+  flex: 1 1 14rem;
+}
+
+.settings-status-line {
+  width: 100%;
+  margin: 0.35rem 0 0;
+  color: var(--v1-text-muted-strong);
+  font-size: 0.84rem;
+}
+
+.settings-status-line.is-connected {
+  color: var(--v1-success);
+}
+
+.settings-status-line.is-offline,
+.settings-status-line.is-error {
+  color: var(--v1-warning);
 }
 
 .settings-swatch-row {

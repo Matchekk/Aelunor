@@ -205,6 +205,7 @@ from app.routers import boards as boards_router_module
 from app.routers import campaigns as campaigns_router_module
 from app.routers import claim as claim_router_module
 from app.routers import context as context_router_module
+from app.routers import llm as llm_router_module
 from app.routers import presence as presence_router_module
 from app.routers import setup as setup_router_module
 from app.routers import sheets as sheets_router_module
@@ -443,6 +444,10 @@ state_engine.configure_dependencies(
     )
 )
 turn_engine.configure(state_engine_runtime())
+
+app.include_router(
+    llm_router_module.build_llm_router()
+)
 
 app.include_router(
     campaigns_router_module.build_campaigns_router(

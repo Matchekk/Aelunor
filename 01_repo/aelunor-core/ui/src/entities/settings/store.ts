@@ -4,6 +4,9 @@ import type { ThemeId, FontPresetId, FontSizeId } from "../../shared/types/domai
 import type {
   AccessibilitySettings,
   AppearanceSettings,
+  DiagnosticsSettings,
+  GameplaySettings,
+  GmSettings,
   ComposerModePreference,
   DateFormatId,
   InteractionSettings,
@@ -11,6 +14,8 @@ import type {
   LocaleSettings,
   NotificationSettings,
   NumberFormatId,
+  PrivacySettings,
+  ReadingSettings,
   StoryWidthId,
   TimeFormatId,
   TimelineDetailDefault,
@@ -19,7 +24,7 @@ import type {
   UserSettings,
 } from "./types";
 import { clearLocalComfortData } from "./localData";
-import { normalizeFontSizePx, readFontSizePx } from "./fontSize";
+import { fontSizeLabelToPx, fontSizePxToLabel, normalizeFontSizePx, readFontSizePx } from "./fontSize";
 import { migrateSettings, resolveSettingsDefaults } from "./schema";
 
 const SETTINGS_STORAGE_KEY = "aelunorUserSettingsV1";
@@ -32,7 +37,12 @@ const THEME_IDS: ThemeId[] = ["arcane", "tavern", "glade", "hybrid"];
 const FONT_PRESET_IDS: FontPresetId[] = ["aelunor-classic", "book-mode", "readable", "literary-fantasy", "international"];
 
 interface UserSettingsStoreState extends UserSettings {
+  patch_gm: (patch: Partial<GmSettings>) => void;
   patch_appearance: (patch: Partial<AppearanceSettings>) => void;
+  patch_reading: (patch: Partial<ReadingSettings>) => void;
+  patch_gameplay: (patch: Partial<GameplaySettings>) => void;
+  patch_privacy: (patch: Partial<PrivacySettings>) => void;
+  patch_diagnostics: (patch: Partial<DiagnosticsSettings>) => void;
   patch_interaction: (patch: Partial<InteractionSettings>) => void;
   patch_accessibility: (patch: Partial<AccessibilitySettings>) => void;
   patch_locale: (patch: Partial<LocaleSettings>) => void;
@@ -179,7 +189,6 @@ export function resolveInitialSettingsFromStorage(storage: Storage | null): User
 
   const legacyAppearance = readLegacyAppearanceFromStorage(storage);
   const recovered: UserSettings = migrateSettings({
-    ...defaults,
     appearance: {
       ...defaults.appearance,
       ...legacyAppearance,
@@ -192,7 +201,12 @@ export function resolveInitialSettingsFromStorage(storage: Storage | null): User
 
 function snapshotFromState(state: UserSettingsStoreState): UserSettings {
   return {
+    gm: state.gm,
     appearance: state.appearance,
+    reading: state.reading,
+    gameplay: state.gameplay,
+    privacy: state.privacy,
+    diagnostics: state.diagnostics,
     interaction: state.interaction,
     accessibility: state.accessibility,
     locale: state.locale,
@@ -218,11 +232,64 @@ const initialSettings = resolveInitialSettingsFromStorage(localStorageSafe());
 
 export const useUserSettingsStore = create<UserSettingsStoreState>((set) => ({
   ...initialSettings,
+  patch_gm: (patch) => {
+    updateStore(set, (state) => ({
+      ...state,
+      gm: {
+        ...state.gm,
+        ...patch,
+      },
+    }));
+  },
   patch_appearance: (patch) => {
     updateStore(set, (state) => ({
       ...state,
       appearance: {
         ...state.appearance,
+        ...patch,
+      },
+    }));
+  },
+  patch_reading: (patch) => {
+    updateStore(set, (state) => {
+      const reading = {
+        ...state.reading,
+        ...patch,
+      };
+      return {
+        ...state,
+        reading,
+        appearance: {
+          ...state.appearance,
+          font_preset: reading.fontPreset,
+          font_size: fontSizeLabelToPx(reading.textSize),
+        },
+      };
+    });
+  },
+  patch_gameplay: (patch) => {
+    updateStore(set, (state) => ({
+      ...state,
+      gameplay: {
+        ...state.gameplay,
+        ...patch,
+      },
+    }));
+  },
+  patch_privacy: (patch) => {
+    updateStore(set, (state) => ({
+      ...state,
+      privacy: {
+        ...state.privacy,
+        ...patch,
+      },
+    }));
+  },
+  patch_diagnostics: (patch) => {
+    updateStore(set, (state) => ({
+      ...state,
+      diagnostics: {
+        ...state.diagnostics,
         ...patch,
       },
     }));
@@ -275,6 +342,10 @@ export const useUserSettingsStore = create<UserSettingsStoreState>((set) => ({
   set_font_preset: (font_preset) => {
     updateStore(set, (state) => ({
       ...state,
+      reading: {
+        ...state.reading,
+        fontPreset: font_preset,
+      },
       appearance: {
         ...state.appearance,
         font_preset,
@@ -282,8 +353,13 @@ export const useUserSettingsStore = create<UserSettingsStoreState>((set) => ({
     }));
   },
   set_font_size: (font_size) => {
+    const normalizedSize = normalizeFontSizePx(font_size);
     updateStore(set, (state) => ({
       ...state,
+      reading: {
+        ...state.reading,
+        textSize: fontSizePxToLabel(normalizedSize),
+      },
       appearance: {
         ...state.appearance,
         font_size: normalizeFontSizePx(font_size, state.appearance.font_size),
@@ -296,6 +372,7 @@ export const useUserSettingsStore = create<UserSettingsStoreState>((set) => ({
       appearance: {
         ...state.appearance,
         density,
+        uiDensity: density === "compact" ? "compact" : "comfortable",
       },
     }));
   },
@@ -383,6 +460,10 @@ export const useUserSettingsStore = create<UserSettingsStoreState>((set) => ({
   set_reduced_motion: (reduced_motion) => {
     updateStore(set, (state) => ({
       ...state,
+      appearance: {
+        ...state.appearance,
+        reducedMotion: reduced_motion,
+      },
       accessibility: {
         ...state.accessibility,
         reduced_motion,
