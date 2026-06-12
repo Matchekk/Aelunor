@@ -83,6 +83,10 @@ TURN_ENGINE_RUNTIME_DEPENDENCY_GROUPS: Dict[str, Tuple[str, ...]] = {
     "attribute_meta_explicit_ports": (
         "normalize_attribute_influence_meta",
     ),
+    "rag_explicit_ports": (
+        "collect_turn_rag_context",
+        "build_turn_rag_prompt_block",
+    ),
     "domain_helpers": (
         "apply_attribute_bias_to_patch",
         "apply_attribute_bias_to_resolution",

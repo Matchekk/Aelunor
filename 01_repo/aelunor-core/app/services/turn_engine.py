@@ -62,9 +62,14 @@ from app.services.turn.dependencies import (
     TurnLlmDependencies,
     TurnPacingDependencies,
     TurnProgressionDependencies,
+    TurnRagDependencies,
     build_turn_llm_dependencies,
 )
 from app.services.turn.runtime_inventory import all_dependency_names
+from app.services.rag import (
+    build_turn_rag_prompt_block as default_build_turn_rag_prompt_block,
+    collect_turn_rag_context as default_collect_turn_rag_context,
+)
 from app.services.canon import extractor as canon_extractor_service
 from app.services.canon import gate as canon_gate_service
 from app.services.canon import npc_extractor as npc_extractor_service
@@ -91,6 +96,7 @@ _TURN_EXTRACTION_DEPS: Optional[TurnExtractionDependencies] = None
 _TURN_LLM_DEPS: Optional[TurnLlmDependencies] = None
 _TURN_PACING_DEPS: Optional[TurnPacingDependencies] = None
 _TURN_PROGRESSION_DEPS: Optional[TurnProgressionDependencies] = None
+_TURN_RAG_DEPS: Optional[TurnRagDependencies] = None
 _TURN_LLM_PORT_NAMES = frozenset(("call_ollama_json", "call_ollama_schema"))
 _TURN_EXTRACTION_PORT_NAMES = frozenset(
     (
@@ -120,6 +126,7 @@ _TURN_PACING_PORT_NAMES = frozenset(
     )
 )
 _TURN_ATTRIBUTE_PORT_NAMES = frozenset(("normalize_attribute_influence_meta",))
+_TURN_RAG_PORT_NAMES = frozenset(("collect_turn_rag_context", "build_turn_rag_prompt_block"))
 _TURN_PORT_NAMES = (
     _TURN_LLM_PORT_NAMES
     | _TURN_EXTRACTION_PORT_NAMES
@@ -127,6 +134,7 @@ _TURN_PORT_NAMES = (
     | _TURN_CODEX_PORT_NAMES
     | _TURN_PACING_PORT_NAMES
     | _TURN_ATTRIBUTE_PORT_NAMES
+    | _TURN_RAG_PORT_NAMES
 )
 _PATCH_SANITIZER_DEP_NAMES = (
     "normalize_patch_semantics",
@@ -263,6 +271,18 @@ def configure_turn_attribute_dependencies(deps: TurnAttributeDependencies) -> No
     _TURN_ATTRIBUTE_DEPS = deps
 
 
+def configure_turn_rag_dependencies(deps: TurnRagDependencies) -> None:
+    global _TURN_RAG_DEPS
+    _TURN_RAG_DEPS = deps
+
+
+def _default_turn_rag_dependencies() -> TurnRagDependencies:
+    return TurnRagDependencies(
+        collect_turn_rag_context=default_collect_turn_rag_context,
+        build_turn_rag_prompt_block=default_build_turn_rag_prompt_block,
+    )
+
+
 def _build_runtime_turn_extraction_dependencies(runtime: Dict[str, Any]) -> Optional[TurnExtractionDependencies]:
     required_names = (
         "build_extractor_context_packet",
@@ -336,6 +356,16 @@ def _build_runtime_turn_attribute_dependencies(runtime: Dict[str, Any]) -> Optio
         return None
     return TurnAttributeDependencies(
         normalize_attribute_influence_meta=runtime["normalize_attribute_influence_meta"],
+    )
+
+
+def _build_runtime_turn_rag_dependencies(runtime: Dict[str, Any]) -> Optional[TurnRagDependencies]:
+    required_names = ("collect_turn_rag_context", "build_turn_rag_prompt_block")
+    if any(not callable(runtime.get(name)) for name in required_names):
+        return None
+    return TurnRagDependencies(
+        collect_turn_rag_context=runtime["collect_turn_rag_context"],
+        build_turn_rag_prompt_block=runtime["build_turn_rag_prompt_block"],
     )
 
 
@@ -446,6 +476,17 @@ def _build_source_turn_attribute_dependencies(source: Any) -> Optional[TurnAttri
     return TurnAttributeDependencies(normalize_attribute_influence_meta=normalize)
 
 
+def _build_source_turn_rag_dependencies(source: Any) -> Optional[TurnRagDependencies]:
+    collect = _source_callable(source, "collect_turn_rag_context")
+    build_block = _source_callable(source, "build_turn_rag_prompt_block")
+    if collect is None or build_block is None:
+        return None
+    return TurnRagDependencies(
+        collect_turn_rag_context=collect,
+        build_turn_rag_prompt_block=build_block,
+    )
+
+
 def turn_extraction_dependencies() -> TurnExtractionDependencies:
     if _TURN_EXTRACTION_DEPS is None:
         raise RuntimeError("Turn extraction dependencies are not configured.")
@@ -474,6 +515,10 @@ def turn_attribute_dependencies() -> TurnAttributeDependencies:
     if _TURN_ATTRIBUTE_DEPS is None:
         raise RuntimeError("Turn attribute dependencies are not configured.")
     return _TURN_ATTRIBUTE_DEPS
+
+
+def turn_rag_dependencies() -> TurnRagDependencies:
+    return _TURN_RAG_DEPS or _default_turn_rag_dependencies()
 
 
 def _default_turn_llm_dependencies() -> TurnLlmDependencies:
@@ -576,6 +621,45 @@ def normalize_attribute_influence_meta(*args: Any, **kwargs: Any) -> Dict[str, A
     return turn_attribute_dependencies().normalize_attribute_influence_meta(*args, **kwargs)
 
 
+def collect_turn_rag_context(*args: Any, **kwargs: Any) -> Dict[str, Any]:
+    return turn_rag_dependencies().collect_turn_rag_context(*args, **kwargs)
+
+
+def build_turn_rag_prompt_block(*args: Any, **kwargs: Any) -> str:
+    return turn_rag_dependencies().build_turn_rag_prompt_block(*args, **kwargs)
+
+
+def _collect_turn_rag_prompt_context(
+    *,
+    campaign: Dict[str, Any],
+    state: Dict[str, Any],
+    actor: str,
+    action_type: str,
+    content: str,
+    trace_ctx: Optional[Dict[str, Any]] = None,
+) -> tuple[Dict[str, Any], str]:
+    try:
+        rag_context = collect_turn_rag_context(
+            campaign=campaign,
+            state=state,
+            actor=actor,
+            action_type=action_type,
+            content=content,
+        )
+        return rag_context, build_turn_rag_prompt_block(rag_context)
+    except Exception as exc:
+        emit_turn_phase_event(
+            trace_ctx,
+            phase="rag_context",
+            success=False,
+            error_code="rag_context_failed",
+            error_class=exc.__class__.__name__,
+            message=str(exc)[:240],
+            extra={"stage": "turn_rag", "fail_open": True},
+        )
+        return {"chunks": [], "warnings": [exc.__class__.__name__]}, ""
+
+
 def configure(main_globals: Dict[str, Any]) -> None:
     """Inject main-module globals needed by extracted turn engine functions."""
     global _CONFIGURED
@@ -629,6 +713,14 @@ def configure(main_globals: Dict[str, Any]) -> None:
         attribute_deps = runtime_attribute_deps or source_attribute_deps
         if attribute_deps is not None:
             configure_turn_attribute_dependencies(attribute_deps)
+    explicit_rag_deps = main_globals.get("turn_rag_dependencies")
+    if isinstance(explicit_rag_deps, TurnRagDependencies):
+        configure_turn_rag_dependencies(explicit_rag_deps)
+    else:
+        runtime_rag_deps = _build_runtime_turn_rag_dependencies(main_globals)
+        source_rag_deps = _build_source_turn_rag_dependencies(main_globals.get("state_engine"))
+        rag_deps = runtime_rag_deps or source_rag_deps or _default_turn_rag_dependencies()
+        configure_turn_rag_dependencies(rag_deps)
     globals().update({key: value for key, value in main_globals.items() if key not in _TURN_PORT_NAMES})
     state_source = main_globals.get("state_engine")
     if state_source is not None:
@@ -1286,6 +1378,19 @@ def create_turn_record(
     context_campaign = {**campaign, "state": working_state}
     actor_slot = actor if is_slot_id(actor) and actor in (working_state.get("characters") or {}) else None
     world_character_context = build_world_character_context_packet(context_campaign, actor_slot=actor_slot)
+    rag_context, rag_prompt_block = _collect_turn_rag_prompt_context(
+        campaign=context_campaign,
+        state=working_state,
+        actor=actor,
+        action_type=action_type,
+        content=content,
+        trace_ctx=trace_ctx,
+    )
+    consistency_context = "\n\n".join(
+        block
+        for block in (world_character_context["combined_text"], rag_prompt_block)
+        if str(block or "").strip()
+    )
     user_prompt, actor_display, actor_resolution_hint = build_turn_user_prompt(
         campaign=campaign,
         actor=actor,
@@ -1297,7 +1402,7 @@ def create_turn_record(
         display_name_for_slot=display_name_for_slot,
         is_slot_id=is_slot_id,
         is_first_person_action=is_first_person_action,
-        consistency_context=world_character_context["combined_text"],
+        consistency_context=consistency_context,
     )
     system_prompt = build_turn_system_prompt(
         system_prompt_base=SYSTEM_PROMPT,
@@ -1322,6 +1427,8 @@ def create_turn_record(
         "combat_context": combat_context,
         "combat_scaling": combat_scaling_context,
         "world_character_context": world_character_context,
+        "rag_context": rag_context,
+        "rag_prompt_block": rag_prompt_block,
     }
 
     narrator_patch = blank_patch()

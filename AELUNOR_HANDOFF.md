@@ -110,10 +110,22 @@
   keine LLM-/HTTP-Aufrufe; Limits geclamped, Response bounded. Endpoint
   `POST /api/campaigns/{id}/context/rag-preview` (duenner Router, Wiring ueber
   `factories.build_rag_context_preview_dependencies` + `main.py`).
-* Noch nicht produktiv integriert: keine Vector-DB, keine Embeddings, keine
-  Turn-Pipeline-Integration; Preview injiziert nichts in echte Turns.
-* RAG ist unterstuetzende Erinnerung; strukturierter Campaign-/World-/Turn-State
-  gewinnt bei Konflikt (Hinweis steht im erzeugten Context-Block).
+* Turn-Pipeline-Integration ergaenzt (Branch
+  `feat/engine-rag-turn-context`): eigener Port `TurnRagDependencies` in
+  `app/services/turn/dependencies.py` mit `collect_turn_rag_context(...)` und
+  `build_turn_rag_prompt_block(...)`. `turn_engine.py` konfiguriert den Port
+  fallback-sicher und injiziert den Block in den bestehenden Narrator-
+  Userprompt-Zusatz neben World-/Character-Consistency-Kontext.
+* Turn-RAG-Collector/Prompting unter `app/services/rag/turn_context.py` und
+  `prompting.py`: stdlib-only, lexical/deterministisch, read-only,
+  no Vector-DB/Embeddings, keine Runtime-Dateien, keine LLM-/HTTP-Aufrufe,
+  harte Limits. Chunk-Typen: `recent_turn`, `current_scene`, `character`,
+  `npc`, `codex`, `world_rule`, `plotpoint`, `item`, `condition`,
+  `setup_answer`.
+* Echte Turns erhalten `[RELEVANT CAMPAIGN MEMORY] ... [/RELEVANT CAMPAIGN
+  MEMORY]`; Preview injiziert weiterhin nichts und bleibt read-only.
+  RAG ist unterstuetzende Erinnerung; strukturierter Campaign-/World-/Turn-
+  State gewinnt bei Konflikt (Hinweis steht im erzeugten Promptblock).
 
 ## UI-State-HUD-Status
 

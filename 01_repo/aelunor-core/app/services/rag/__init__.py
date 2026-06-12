@@ -23,7 +23,9 @@ from .memory_index import (
     retrieve_campaign_memory,
 )
 from .models import RAGChunk, RAGDocument, RetrievalQuery, RetrievalResult
+from .prompting import build_turn_rag_prompt_block
 from .retrieval import retrieve_chunks
+from .turn_context import collect_turn_rag_context
 
 __all__ = [
     "RAGDocument",
@@ -41,4 +43,6 @@ __all__ = [
     "build_campaign_memory_context",
     "RagContextPreviewDependencies",
     "preview_campaign_rag_context",
+    "collect_turn_rag_context",
+    "build_turn_rag_prompt_block",
 ]

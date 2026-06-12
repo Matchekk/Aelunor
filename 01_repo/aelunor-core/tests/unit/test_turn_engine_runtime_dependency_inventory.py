@@ -21,6 +21,8 @@ class TurnEngineRuntimeDependencyInventoryTests(unittest.TestCase):
         self.assertIn("milestone_state_for_turn", dependency_names_for_group("pacing_timing_explicit_ports"))
         self.assertIn("update_turn_timing_ema", dependency_names_for_group("pacing_timing_explicit_ports"))
         self.assertIn("normalize_attribute_influence_meta", dependency_names_for_group("attribute_meta_explicit_ports"))
+        self.assertIn("collect_turn_rag_context", dependency_names_for_group("rag_explicit_ports"))
+        self.assertIn("build_turn_rag_prompt_block", dependency_names_for_group("rag_explicit_ports"))
         self.assertIn("clean_auto_item_name", dependency_names_for_group("domain_helpers"))
 
     def test_inventory_deduplicates_all_dependency_names(self) -> None:
@@ -40,6 +42,7 @@ class TurnEngineRuntimeDependencyInventoryTests(unittest.TestCase):
             "codex_explicit_ports",
             "pacing_timing_explicit_ports",
             "attribute_meta_explicit_ports",
+            "rag_explicit_ports",
         ):
             explicit_ports.update(dependency_names_for_group(group))
 
