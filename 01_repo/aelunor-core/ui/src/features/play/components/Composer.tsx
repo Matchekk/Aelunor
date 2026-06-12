@@ -6,6 +6,7 @@ import { usePresenceStore } from "../../../entities/presence/store";
 import { resolveInitialComposerMode } from "../../../entities/settings/interaction";
 import { useUserSettingsStore } from "../../../entities/settings/store";
 import { deriveUserFacingErrorMessage } from "../../../shared/errors/userFacing";
+import { canControlActor } from "../actorControl";
 import { getPlayModeConfig, type PlayModeId, PLAY_MODE_CONFIG } from "../modeConfig";
 import { useContextQueryMutation, useSubmitTurnMutation } from "../mutations";
 import { useWaitingSignal } from "../../../shared/waiting/hooks";
@@ -75,7 +76,11 @@ export function Composer({ campaign, selected_actor_id, on_actor_select, on_open
   const currentDraft = drafts[currentMode];
   const submitPending = submitTurnMutation.isPending || contextQueryMutation.isPending;
   const access = deriveComposerAccessState(campaign, currentMode, blockingAction, submitPending, currentDraft);
-  const selectedActorMatchesClaim = !selected_actor_id || selected_actor_id === access.actor;
+  const controllableParty = useMemo(
+    () => (campaign.party_overview ?? []).filter((entry) => canControlActor(campaign, entry.slot_id)),
+    [campaign],
+  );
+  const selectedActorMatchesClaim = !selected_actor_id || canControlActor(campaign, selected_actor_id);
   const introMessage = deriveIntroBannerMessage(campaign);
   const latestRequests = deriveLatestRequests(campaign, access.actor);
   const modeConfig = getPlayModeConfig(currentMode);
@@ -258,18 +263,22 @@ export function Composer({ campaign, selected_actor_id, on_actor_select, on_open
         </label>
         <div className="composer-actor-send">
           <label>
-            <span>Akteur</span>
-            <select
-              value={selected_actor_id ?? access.actor ?? ""}
-              onChange={(event) => on_actor_select(event.target.value)}
-              disabled={submitPending || (campaign.party_overview ?? []).length === 0}
-            >
-              {(campaign.party_overview ?? []).map((entry) => (
-                <option key={entry.slot_id} value={entry.slot_id}>
-                  {entry.display_name}
-                </option>
-              ))}
-            </select>
+            <span>Charakter</span>
+            {controllableParty.length > 1 ? (
+              <select
+                value={selected_actor_id ?? access.actor ?? ""}
+                onChange={(event) => on_actor_select(event.target.value)}
+                disabled={submitPending}
+              >
+                {controllableParty.map((entry) => (
+                  <option key={entry.slot_id} value={entry.slot_id}>
+                    {entry.display_name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="composer-actor-name">{controllableParty[0]?.display_name ?? "Kein Charakter"}</span>
+            )}
           </label>
           <SubmitBar
             submit_label={access.submit_label}
@@ -283,7 +292,7 @@ export function Composer({ campaign, selected_actor_id, on_actor_select, on_open
         </div>
       </div>
       <p className="status-muted composer-helper">
-        {selectedActorMatchesClaim ? access.helper_text : "Waehle deinen geclaimten Akteur, um einen Zug zu senden."}
+        {selectedActorMatchesClaim ? access.helper_text : "Du kannst nur deinen eigenen Charakter steuern."}
       </p>
     </section>
   );

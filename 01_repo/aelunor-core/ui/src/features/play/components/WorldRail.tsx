@@ -8,8 +8,8 @@ import { deriveSceneAtmosphere } from "../sceneAtmosphere";
 interface WorldRailProps {
   campaign: CampaignSnapshot;
   active_scene_label: string;
-  selected_actor_id: string | null;
-  on_select_actor: (slot_id: string) => void;
+  viewer_slot_id: string | null;
+  on_open_character: (slot_id: string) => void;
   on_open_scene: () => void;
   on_open_quest: () => void;
   on_open_map: () => void;
@@ -30,8 +30,8 @@ function firstInitial(value: string): string {
 export const WorldRail = memo(function WorldRail({
   campaign,
   active_scene_label,
-  selected_actor_id,
-  on_select_actor,
+  viewer_slot_id,
+  on_open_character,
   on_open_scene,
   on_open_quest,
   on_open_map,
@@ -74,23 +74,24 @@ export const WorldRail = memo(function WorldRail({
 
       <AelunorPanelFrame as="section" className="party-mini-panel" variant="compact" texture>
         <div className="play-panel-head">
-          <span className="play-panel-kicker">Party</span>
-          <small>{party.length} Akteure</small>
+          <span className="play-panel-kicker">Gruppe</span>
+          <small>{party.length} Mitglieder</small>
         </div>
         <div className="party-avatar-row">
-          {party.length === 0 ? <p className="status-muted">Noch keine Party sichtbar.</p> : null}
+          {party.length === 0 ? <p className="status-muted">Noch keine Gruppe sichtbar.</p> : null}
           {party.slice(0, 5).map((entry) => {
             const slotId = entry.slot_id;
             const hpCurrent = "hp_current" in entry && typeof entry.hp_current === "number" ? entry.hp_current : null;
             const hpMax = "hp_max" in entry && typeof entry.hp_max === "number" ? entry.hp_max : null;
             const percent = hpMax && hpMax > 0 && hpCurrent !== null ? Math.max(0, Math.min(100, (hpCurrent / hpMax) * 100)) : null;
+            const baseTitle = percent !== null ? `${entry.display_name} · ${hpCurrent}/${hpMax} Leben` : entry.display_name;
             return (
               <button
                 key={slotId}
                 type="button"
-                className={selected_actor_id === slotId ? "party-avatar is-selected" : "party-avatar"}
-                onClick={() => on_select_actor(slotId)}
-                title={percent !== null ? `${entry.display_name} · ${hpCurrent}/${hpMax} Leben` : entry.display_name}
+                className={viewer_slot_id === slotId ? "party-avatar is-selected" : "party-avatar"}
+                onClick={() => on_open_character(slotId)}
+                title={`${baseTitle} · Details ansehen`}
               >
                 <span>{firstInitial(entry.display_name)}</span>
                 {percent !== null ? <i style={{ width: `${percent}%` }} aria-hidden="true" /> : null}

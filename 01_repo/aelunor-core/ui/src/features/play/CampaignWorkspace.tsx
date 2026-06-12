@@ -33,6 +33,7 @@ import { readPlayUiMemory, writePlayUiMemory } from "./uiMemory";
 import { AelunorSceneBackground } from "../../shared/ui/aelunorAssets";
 import { WorldRail } from "./components/WorldRail";
 import { ActorDock } from "./components/ActorDock";
+import { canControlActor } from "./actorControl";
 import { resolveSelectedActorId } from "./actorDockModel";
 import { useResizableComposerHeight } from "./composerResize";
 
@@ -354,8 +355,8 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
           <WorldRail
             campaign={campaign}
             active_scene_label={activeSceneLabel}
-            selected_actor_id={selectedActorSlotId}
-            on_select_actor={setSelectedActorId}
+            viewer_slot_id={claimedSlotId}
+            on_open_character={(slot_id) => openCharacterDrawer(slot_id)}
             on_open_scene={() => openBoards("world")}
             on_open_quest={() => openBoards("plot")}
             on_open_map={() => openBoards("world")}
@@ -419,7 +420,11 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
                 <Composer
                   campaign={campaign}
                   selected_actor_id={selectedActorSlotId}
-                  on_actor_select={setSelectedActorId}
+                  on_actor_select={(slot_id) => {
+                    if (canControlActor(campaign, slot_id)) {
+                      setSelectedActorId(slot_id);
+                    }
+                  }}
                   on_open_context={openContextModal}
                 />
               </>
