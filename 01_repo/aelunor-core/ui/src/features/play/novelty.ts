@@ -232,8 +232,13 @@ export function clearCodexNovelty(campaign_id: string, kind: "race" | "beast", e
   return keys.some((key) => clearNovelty(campaign_id, key));
 }
 
-export function clearBoardNovelty(campaign_id: string, tab_id: "plot" | "note" | "cards" | "world" | "memory" | "session"): boolean {
+export function clearBoardNovelty(
+  campaign_id: string,
+  tab_id: "scene" | "map" | "plot" | "note" | "cards" | "world" | "memory" | "session",
+): boolean {
   const keyMap = {
+    scene: "board:scene",
+    map: "board:map",
     plot: "board:plot",
     note: "board:note",
     cards: "board:cards",

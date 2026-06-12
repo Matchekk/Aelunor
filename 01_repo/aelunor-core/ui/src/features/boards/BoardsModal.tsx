@@ -25,11 +25,24 @@ import type { BoardTabId } from "./selectors";
 import { canEditBoards, deriveBoardTabs } from "./selectors";
 import { AuthorsNotePanel } from "./components/AuthorsNotePanel";
 import { BoardsTabNav } from "./components/BoardsTabNav";
+import { MapPanel } from "./components/MapPanel";
 import { MemorySummaryPanel } from "./components/MemorySummaryPanel";
 import { PlotEssentialsPanel } from "./components/PlotEssentialsPanel";
+import { ScenePanel } from "./components/ScenePanel";
 import { SessionPanel } from "./components/SessionPanel";
 import { StoryCardsPanel } from "./components/StoryCardsPanel";
 import { WorldInfoPanel } from "./components/WorldInfoPanel";
+
+const TAB_HEADERS: Record<BoardTabId, { kicker: string; title: string; description: string }> = {
+  scene: { kicker: "Szene", title: "Aktuelle Szene", description: "Wo die Geschichte gerade spielt und wer anwesend ist." },
+  map: { kicker: "Karte", title: "Bekannte Welt", description: "Entdeckte Orte und ihre Verbindungen." },
+  plot: { kicker: "Quest", title: "Plot & Ziele", description: "Aktuelles Ziel, Bedrohungen und offene Fäden." },
+  note: { kicker: "Regie", title: "Autoren-Notiz", description: "Bindende Hinweise für den Erzähler." },
+  cards: { kicker: "Regie", title: "Story-Karten", description: "Wiederkehrende Motive und Bausteine." },
+  world: { kicker: "Welt", title: "Weltwissen", description: "Fakten über die Welt, die der Erzähler kennt." },
+  memory: { kicker: "Chronik", title: "Erinnerung", description: "Zusammenfassung des bisherigen Verlaufs." },
+  session: { kicker: "Verwaltung", title: "Kampagne", description: "Titel, Export und lokale Sitzung verwalten." },
+};
 
 interface BoardsModalProps {
   campaign: CampaignSnapshot;
@@ -126,6 +139,10 @@ export function BoardsModal({
 
   const renderActivePanel = () => {
     switch (active_tab) {
+      case "scene":
+        return <ScenePanel campaign={campaign} />;
+      case "map":
+        return <MapPanel campaign={campaign} />;
       case "plot":
         return (
           <PlotEssentialsPanel
@@ -248,15 +265,13 @@ export function BoardsModal({
       >
         <header className="boards-modal-header">
           <div>
-            <div className="v1-topbar-kicker">Campaign Meta</div>
-            <h1>{campaign.campaign_meta.title || "Campaign boards"}</h1>
-            <p className="status-muted">
-              Boards stay separate from the main story flow. Only the active tab mounts inside this workspace.
-            </p>
+            <div className="v1-topbar-kicker">{TAB_HEADERS[active_tab].kicker}</div>
+            <h1>{active_tab === "session" ? campaign.campaign_meta.title || TAB_HEADERS.session.title : TAB_HEADERS[active_tab].title}</h1>
+            <p className="status-muted">{TAB_HEADERS[active_tab].description}</p>
           </div>
           <div className="session-inline-actions">
             <button type="button" onClick={on_close}>
-              Close boards
+              Schließen
             </button>
           </div>
         </header>

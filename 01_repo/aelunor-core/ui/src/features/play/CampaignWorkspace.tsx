@@ -357,9 +357,9 @@ export function CampaignWorkspace({ campaign, session, on_clear_active_session }
             active_scene_label={activeSceneLabel}
             viewer_slot_id={claimedSlotId}
             on_open_character={(slot_id) => openCharacterDrawer(slot_id)}
-            on_open_scene={() => openBoards("world")}
+            on_open_scene={() => openBoards("scene")}
             on_open_quest={() => openBoards("plot")}
-            on_open_map={() => openBoards("world")}
+            on_open_map={() => openBoards("map")}
           />
           <section
             ref={centerColumnRef}

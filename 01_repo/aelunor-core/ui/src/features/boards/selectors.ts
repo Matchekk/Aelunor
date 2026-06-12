@@ -2,7 +2,7 @@ import type { CampaignSnapshot, StoryCardEntry, WorldInfoEntry } from "../../sha
 import { formatDateTime as formatLocaleDateTime } from "../../shared/formatting/locale";
 import { deriveBoardNoveltyCount, getNoveltyCount, noveltyLabel } from "../play/novelty";
 
-export type BoardTabId = "plot" | "note" | "cards" | "world" | "memory" | "session";
+export type BoardTabId = "scene" | "map" | "plot" | "note" | "cards" | "world" | "memory" | "session";
 
 export interface BoardTabConfig {
   id: BoardTabId;
@@ -10,12 +10,14 @@ export interface BoardTabConfig {
 }
 
 export const BOARD_TABS: BoardTabConfig[] = [
-  { id: "plot", label: "Plot Essentials" },
-  { id: "note", label: "Author's Note" },
-  { id: "cards", label: "Story Cards" },
-  { id: "world", label: "World Info" },
-  { id: "memory", label: "Memory Summary" },
-  { id: "session", label: "Session" },
+  { id: "scene", label: "Szene" },
+  { id: "map", label: "Karte" },
+  { id: "plot", label: "Plot" },
+  { id: "note", label: "Autoren-Notiz" },
+  { id: "cards", label: "Story-Karten" },
+  { id: "world", label: "Weltwissen" },
+  { id: "memory", label: "Erinnerung" },
+  { id: "session", label: "Kampagne" },
 ];
 
 function formatBoardDateTime(value: string | null | undefined): string {
@@ -31,6 +33,8 @@ function formatBoardDateTime(value: string | null | undefined): string {
 
 export function deriveBoardTabs(campaign_id: string): Array<BoardTabConfig & { novelty_label: string | null }> {
   const keyByTab: Record<BoardTabId, string> = {
+    scene: "board:scene",
+    map: "board:map",
     plot: "board:plot",
     note: "board:note",
     cards: "board:cards",

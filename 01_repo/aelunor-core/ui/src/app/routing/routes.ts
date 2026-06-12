@@ -32,6 +32,8 @@ export interface PlayRouteState {
 }
 
 const BOARD_QUERY_TO_TAB: Record<string, BoardTabId> = {
+  scene: "scene",
+  map: "map",
   plot_essentials: "plot",
   authors_note: "note",
   story_cards: "cards",
@@ -46,6 +48,8 @@ const BOARD_TAB_TO_QUERY: Record<BoardTabId, string> = Object.entries(BOARD_QUER
     return acc;
   },
   {
+    scene: "scene",
+    map: "map",
     plot: "plot_essentials",
     note: "authors_note",
     cards: "story_cards",
