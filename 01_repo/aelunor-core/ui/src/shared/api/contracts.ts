@@ -27,6 +27,12 @@ export interface LlmTestResponse {
   latencyMs?: number | null;
 }
 
+export interface LlmActiveModelResponse {
+  ok: boolean;
+  model: string | null;
+  message?: string | null;
+}
+
 export interface PresenceActivity {
   kind: string;
   label: string;

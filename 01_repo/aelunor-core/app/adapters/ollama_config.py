@@ -2,10 +2,12 @@ import os
 from typing import Optional
 
 from app.adapters.llm import OllamaAdapter, OllamaSettings
+from app.services.llm.active_model import load_persisted_model
 
-DEFAULT_OLLAMA_MODEL = "gemma4:12b"
+DEFAULT_OLLAMA_MODEL = "gemma4:e4b"
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://192.168.65.254:11434").rstrip("/")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
+# Prioritaet: expliziter env-Override > in den Einstellungen gewaehltes Modell > Default.
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "").strip() or load_persisted_model() or DEFAULT_OLLAMA_MODEL
 _OLLAMA_SEED_RAW = str(os.getenv("OLLAMA_SEED", "")).strip()
 OLLAMA_SEED: Optional[int] = int(_OLLAMA_SEED_RAW) if _OLLAMA_SEED_RAW else None
 OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.6"))

@@ -72,5 +72,6 @@ export const endpoints = {
     llm_status: () => "/api/llm/status",
     llm_models: () => "/api/llm/models",
     llm_test: () => "/api/llm/test",
+    llm_model: () => "/api/llm/model",
   },
 };

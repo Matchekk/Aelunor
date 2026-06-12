@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { fetchLlmModels, testGmModel } from "../../../entities/settings/gmApi";
+import { applyGmModel, fetchActiveGmModel, fetchLlmModels, testGmModel } from "../../../entities/settings/gmApi";
 import type { GmProviderId } from "../../../entities/settings/types";
 import { useUserSettingsStore } from "../../../entities/settings/store";
 import type { LlmModelInfo } from "../../api/contracts";
@@ -22,6 +22,37 @@ export function SettingsGmSection() {
       ? [{ name: gm.model }, ...models]
       : models;
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchActiveGmModel()
+      .then((result) => {
+        if (cancelled || !result.model) {
+          return;
+        }
+        setMessage(`GM-Modell aktiv: ${result.model}`);
+        useUserSettingsStore.getState().patch_gm({ model: result.model });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function selectModel(model: string | null) {
+    patchGm({ model });
+    if (!model) {
+      return;
+    }
+    try {
+      const result = await applyGmModel(model);
+      setStatus(result.ok ? "connected" : "error");
+      setMessage(result.message ?? (result.ok ? `GM-Modell aktiv: ${result.model}` : "GM-Modell konnte nicht gesetzt werden."));
+    } catch (error) {
+      setStatus("error");
+      setMessage(error instanceof Error ? error.message : "GM-Modell konnte nicht gesetzt werden.");
+    }
+  }
+
   async function scanModels() {
     setStatus("loading");
     setMessage("Suche lokale Ollama-Modelle ...");
@@ -31,7 +62,7 @@ export function SettingsGmSection() {
       setStatus(result.status);
       setMessage(result.message);
       if (!gm.model && result.models[0]?.name) {
-        patchGm({ model: result.models[0].name });
+        await selectModel(result.models[0].name);
       }
     } catch (error) {
       setStatus("error");
@@ -78,12 +109,12 @@ export function SettingsGmSection() {
           />
         </SettingsField>
 
-        <SettingsField label="GM Model" description="Modelle werden über die lokale Ollama API gelesen.">
+        <SettingsField label="GM Model" description="Die Auswahl gilt sofort für alle GM-Antworten.">
           <div className="settings-inline-actions">
             <select
               className="settings-select"
               value={gm.model ?? ""}
-              onChange={(event) => patchGm({ model: event.target.value || null })}
+              onChange={(event) => void selectModel(event.target.value || null)}
             >
               <option value="">Kein Modell gewählt</option>
               {modelOptions.map((model) => (

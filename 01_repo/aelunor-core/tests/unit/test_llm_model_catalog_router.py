@@ -1,3 +1,6 @@
+import json
+import os
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -5,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from requests import ConnectionError
 
+from app.adapters.llm import OllamaAdapter, OllamaSettings
 from app.routers.llm import build_llm_router
 
 
@@ -88,6 +92,58 @@ class LlmModelCatalogRouterTests(unittest.TestCase):
         payload = post.call_args.kwargs["json"]
         self.assertEqual(payload["model"], "llama3.1:8b")
         self.assertEqual(payload["options"]["num_ctx"], 512)
+
+
+def _adapter(model: str = "gemma4:12b") -> OllamaAdapter:
+    return OllamaAdapter(
+        OllamaSettings(
+            url="http://127.0.0.1:11434",
+            model=model,
+            timeout_sec=30,
+            seed=None,
+            temperature=0.6,
+            num_ctx=8192,
+            repeat_penalty=1.18,
+            repeat_last_n=192,
+        )
+    )
+
+
+class LlmActiveModelRouterTests(unittest.TestCase):
+    def test_set_model_switches_adapter_and_persists(self):
+        client = _client()
+        adapter = _adapter()
+        with tempfile.TemporaryDirectory() as tmp, patch(
+            "app.adapters.ollama_config.OLLAMA_ADAPTER", adapter
+        ), patch("app.services.llm.active_model.DATA_DIR", tmp):
+            response = client.put("/api/llm/model", json={"model": "gemma4:e4b"})
+
+            self.assertEqual(response.status_code, 200)
+            body = response.json()
+            self.assertTrue(body["ok"])
+            self.assertEqual(body["model"], "gemma4:e4b")
+            self.assertEqual(adapter.settings.model, "gemma4:e4b")
+            with open(os.path.join(tmp, "llm_settings.json"), encoding="utf-8") as handle:
+                self.assertEqual(json.load(handle)["model"], "gemma4:e4b")
+
+            current = client.get("/api/llm/model").json()
+            self.assertTrue(current["ok"])
+            self.assertEqual(current["model"], "gemma4:e4b")
+
+    def test_set_model_rejects_blank_without_side_effects(self):
+        client = _client()
+        adapter = _adapter()
+        with tempfile.TemporaryDirectory() as tmp, patch(
+            "app.adapters.ollama_config.OLLAMA_ADAPTER", adapter
+        ), patch("app.services.llm.active_model.DATA_DIR", tmp):
+            response = client.put("/api/llm/model", json={"model": "  "})
+
+            self.assertEqual(response.status_code, 200)
+            body = response.json()
+            self.assertFalse(body["ok"])
+            self.assertEqual(body["model"], "gemma4:12b")
+            self.assertEqual(adapter.settings.model, "gemma4:12b")
+            self.assertFalse(os.path.exists(os.path.join(tmp, "llm_settings.json")))
 
 
 if __name__ == "__main__":
