@@ -1,0 +1,52 @@
+body,
+button,
+input,
+textarea,
+select {
+  font-family: var(--font-ui);
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: var(--font-ui) !important;
+}
+
+.narrative,
+.story-text,
+.chronicle-text,
+.dialogue-text,
+.text-output,
+.story-turn-lead,
+.story-turn-text,
+.timeline-item-input,
+.context-result-content,
+.story-card-content,
+.world-info-content,
+.memory-summary-content,
+.campaign-play-shell .story-turn-card .story-turn-text,
+.campaign-play-shell .story-turn-card .story-turn-lead,
+.campaign-play-shell .story-turn-card p {
+  font-family: var(--font-story);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.campaign-title,
+.chapter-title,
+.location-title,
+.arcane-heading,
+.panel h2,
+.panel h3,
+.v1-panel-head h1,
+.v1-panel-head h2,
+.v1-panel-head h3,
+.timeline-item-title strong,
+.campaign-play-shell .timeline-item-title strong {
+  font-family: var(--font-display);
+}

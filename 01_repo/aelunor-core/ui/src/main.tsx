@@ -12,6 +12,7 @@ import "./shared/styles/aelunor-play-shell.css";
 import "./shared/styles/aelunor-play-composer.css";
 import "./shared/styles/aelunor-play-shell-responsive.css";
 import "./features/play/campaignPlayV2.css";
+import "./shared/styles/font-semantics.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

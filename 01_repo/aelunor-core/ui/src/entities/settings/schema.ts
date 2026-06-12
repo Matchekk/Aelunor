@@ -17,10 +17,10 @@ import type {
   UserSettings,
 } from "./types";
 
-export const USER_SETTINGS_SCHEMA_VERSION = 1;
+export const USER_SETTINGS_SCHEMA_VERSION = 2;
 
 const THEME_IDS: ThemeId[] = ["arcane", "tavern", "glade", "hybrid"];
-const FONT_PRESET_IDS: FontPresetId[] = ["classic", "clean", "literary"];
+const FONT_PRESET_IDS: FontPresetId[] = ["aelunor-classic", "book-mode", "readable", "literary-fantasy", "international"];
 const FONT_SIZE_IDS: FontSizeId[] = ["small", "medium", "large"];
 const DENSITY_IDS: UiDensityId[] = ["compact", "standard", "comfortable"];
 const STORY_WIDTH_IDS: StoryWidthId[] = ["focused", "standard", "wide"];
@@ -59,6 +59,23 @@ function readEnum<T extends string>(value: unknown, allowed: readonly T[], fallb
   return allowed.includes(normalized as T) ? (normalized as T) : fallback;
 }
 
+function readFontPreset(value: unknown, fallback: FontPresetId): FontPresetId {
+  const normalized = readString(value);
+  if (FONT_PRESET_IDS.includes(normalized as FontPresetId)) {
+    return normalized as FontPresetId;
+  }
+  if (normalized === "classic") {
+    return "aelunor-classic";
+  }
+  if (normalized === "clean") {
+    return "readable";
+  }
+  if (normalized === "literary") {
+    return "literary-fantasy";
+  }
+  return fallback;
+}
+
 function normalizeVolume(value: unknown, fallback: number): number {
   const numeric = readNumber(value, fallback);
   return Math.min(100, Math.max(0, Math.round(numeric)));
@@ -67,7 +84,7 @@ function normalizeVolume(value: unknown, fallback: number): number {
 export function resolveSettingsDefaults(): UserSettings {
   const appearance: AppearanceSettings = {
     theme: "hybrid",
-    font_preset: "classic",
+    font_preset: "aelunor-classic",
     font_size: "medium",
     density: "standard",
     story_width: "standard",
@@ -132,7 +149,7 @@ export function normalizeSettings(raw: unknown, fallback = resolveSettingsDefaul
   return {
     appearance: {
       theme: readEnum(appearance.theme, THEME_IDS, fallback.appearance.theme),
-      font_preset: readEnum(appearance.font_preset, FONT_PRESET_IDS, fallback.appearance.font_preset),
+      font_preset: readFontPreset(appearance.font_preset, fallback.appearance.font_preset),
       font_size: readEnum(appearance.font_size, FONT_SIZE_IDS, fallback.appearance.font_size),
       density: readEnum(appearance.density, DENSITY_IDS, fallback.appearance.density),
       story_width: readEnum(appearance.story_width, STORY_WIDTH_IDS, fallback.appearance.story_width),

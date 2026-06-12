@@ -247,6 +247,29 @@
   bis zum Intro abschliessen), keine Runtime-Daten, keine Backend-/Turn-/
   LLM-Dateien in diesem PR.
 
+## UI-Font-Preset-System
+
+* Font-Presets sind im v1-Settings-Store integriert (`aelunorUserSettingsV1`,
+  Legacy-Sync-Key `isekaiFontPreset`). Default ist `aelunor-classic`;
+  alte Werte werden gemappt: `classic` -> `aelunor-classic`, `clean` ->
+  `readable`, `literary` -> `literary-fantasy`.
+* Aktuelle Presets: Aelunor Classic, Book Mode, Readable Mode,
+  Literary Fantasy, International Fallback. Root-Attribut:
+  `data-font-preset`.
+* CSS-Tokens liegen in `ui/src/shared/styles/tokens/fonts.css`:
+  `--font-ui`, `--font-story`, `--font-display` plus v1-Aliase. Ein finaler
+  Semantik-Layer `font-semantics.css` haelt Controls auf UI-Font,
+  Story/Chronik-Ausgaben auf Story-Font und Headings auf Display-Font.
+* Keine CDN-Fonts und keine aktiven `@font-face`-Rules. Lokale WOFF2-Dateien
+  sind noch nicht vorhanden; Ablage/Anleitung vorbereitet unter
+  `ui/public/fonts/README.md`. Fehlende Fonts fallen daher auf Systemfonts
+  zurueck und erzeugen keine 404-Font-Requests.
+* Browser-Smoke (temporaeres `.agent_tmp/font-smoke-runtime`, kein LLM-Call):
+  Settings geoeffnet, Preset auf Readable gewechselt, Reload behielt Auswahl,
+  Play/Chronik-DOM mit temporaerem Turn geprueft. Computed Styles: Storytext
+  = Atkinson/Story-Fallback, Buttons/Textarea = UI-Font, Heading = Display-
+  Font; Console errors/warnings leer; keine Google/CDN-Font-Links.
+
 ## Offene GitHub-Issue-Landschaft
 
 Snapshot 2026-06-09; nur Lesezugriff. Details:

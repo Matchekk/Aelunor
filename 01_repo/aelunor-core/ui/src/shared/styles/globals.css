@@ -4,6 +4,7 @@
 @import "./tokens/theme-glade.css";
 @import "./tokens/theme-hybrid.css";
 @import "./tokens/aelunor-premium.css";
+@import "./tokens/fonts.css";
 @import "./aelunor-premium-layout.css";
 
 * {
@@ -26,7 +27,7 @@ html {
 body {
   background: var(--v1-bg-app);
   color: var(--v1-text-base);
-  font-family: var(--v1-font-body);
+  font-family: var(--font-ui);
   font-size: var(--v1-text-body-size);
   line-height: var(--v1-line-body);
   text-rendering: optimizeLegibility;
@@ -39,7 +40,36 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: var(--v1-font-display);
+  font-family: var(--font-display);
+}
+
+.campaign-title,
+.chapter-title,
+.location-title,
+.arcane-heading,
+.panel h2,
+.panel h3,
+.v1-panel-head h1,
+.v1-panel-head h2,
+.v1-panel-head h3,
+.timeline-item-title strong {
+  font-family: var(--font-display);
+}
+
+.narrative,
+.story-text,
+.chronicle-text,
+.dialogue-text,
+.text-output,
+.story-turn-lead,
+.story-turn-text,
+.timeline-item-input,
+.context-result-content,
+.story-card-content,
+.world-info-content,
+.memory-summary-content {
+  font-family: var(--font-story);
+  line-height: max(1.5, var(--v1-line-body));
 }
 
 body::before {
@@ -62,6 +92,7 @@ input,
 textarea,
 select {
   font: inherit;
+  font-family: var(--font-ui);
 }
 
 button,
@@ -2459,7 +2490,7 @@ summary::-webkit-details-marker {
   line-height: 1.82;
   font-size: 1.04rem;
   max-width: var(--v1-story-text-max-width);
-  font-family: "Book Antiqua", "Palatino Linotype", "Garamond", serif;
+  font-family: var(--font-story);
 }
 
 :root[data-reading-friendly="true"] .story-turn-text {

@@ -77,19 +77,29 @@ const THEME_OPTIONS: Array<{
 
 const FONT_OPTIONS: Array<{ id: FontPresetId; label: string; sample_font: string }> = [
   {
-    id: "classic",
-    label: "Classic",
-    sample_font: '"Palatino Linotype", "Book Antiqua", Palatino, serif',
+    id: "aelunor-classic",
+    label: "Aelunor Classic",
+    sample_font: '"Spectral", Georgia, "Times New Roman", serif',
   },
   {
-    id: "clean",
-    label: "Clean",
-    sample_font: '"Segoe UI", "Trebuchet MS", Tahoma, sans-serif',
+    id: "book-mode",
+    label: "Book Mode",
+    sample_font: '"EB Garamond", Garamond, Georgia, serif',
   },
   {
-    id: "literary",
-    label: "Literary",
-    sample_font: '"Garamond", "Times New Roman", serif',
+    id: "readable",
+    label: "Readable Mode",
+    sample_font: '"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif',
+  },
+  {
+    id: "literary-fantasy",
+    label: "Literary Fantasy",
+    sample_font: '"Alegreya", Georgia, "Times New Roman", serif',
+  },
+  {
+    id: "international",
+    label: "International Fallback",
+    sample_font: '"Noto Serif", Georgia, "Times New Roman", serif',
   },
 ];
 

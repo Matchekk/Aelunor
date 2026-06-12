@@ -100,21 +100,6 @@
   --ael-z-toast: 30;
 }
 
-:root[data-font-preset="classic"] {
-  --v1-font-display: "Palatino Linotype", "Book Antiqua", Palatino, serif;
-  --v1-font-body: "Trebuchet MS", "Segoe UI", Tahoma, sans-serif;
-}
-
-:root[data-font-preset="clean"] {
-  --v1-font-display: "Segoe UI Semibold", "Trebuchet MS", Tahoma, sans-serif;
-  --v1-font-body: "Segoe UI", "Trebuchet MS", Tahoma, sans-serif;
-}
-
-:root[data-font-preset="literary"] {
-  --v1-font-display: "Garamond", "Times New Roman", serif;
-  --v1-font-body: "Book Antiqua", "Palatino Linotype", serif;
-}
-
 :root[data-font-size="small"] {
   --v1-font-size-base: 14px;
 }

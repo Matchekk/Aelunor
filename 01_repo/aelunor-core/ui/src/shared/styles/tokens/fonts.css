@@ -1,0 +1,36 @@
+:root,
+:root[data-font-preset="aelunor-classic"] {
+  --font-ui: "Inter", "Segoe UI", "Aptos", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-story: "Spectral", Georgia, "Times New Roman", serif;
+  --font-display: "Cinzel", "Palatino Linotype", "Book Antiqua", Palatino, serif;
+
+  --v1-font-ui: var(--font-ui);
+  --v1-font-sans: var(--font-ui);
+  --v1-font-body: var(--font-ui);
+  --v1-font-story: var(--font-story);
+  --v1-font-display: var(--font-display);
+}
+
+:root[data-font-preset="book-mode"] {
+  --font-ui: "Inter", "Segoe UI", "Aptos", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-story: "EB Garamond", Garamond, Georgia, "Times New Roman", serif;
+  --font-display: "Cormorant Garamond", Garamond, Georgia, serif;
+}
+
+:root[data-font-preset="readable"] {
+  --font-ui: "Atkinson Hyperlegible", "Segoe UI", "Aptos", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-story: "Atkinson Hyperlegible", "Segoe UI", "Aptos", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: "Inter", "Segoe UI", "Aptos", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+:root[data-font-preset="literary-fantasy"] {
+  --font-ui: "Inter", "Segoe UI", "Aptos", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-story: "Alegreya", Georgia, "Times New Roman", serif;
+  --font-display: "Cinzel", "Palatino Linotype", "Book Antiqua", Palatino, serif;
+}
+
+:root[data-font-preset="international"] {
+  --font-ui: "Noto Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-story: "Noto Serif", Georgia, "Times New Roman", serif;
+  --font-display: "Cinzel", "Noto Serif", Georgia, serif;
+}

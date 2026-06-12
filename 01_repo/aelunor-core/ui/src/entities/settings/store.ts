@@ -28,7 +28,7 @@ const LEGACY_FONT_PRESET_KEY = "isekaiFontPreset";
 const LEGACY_FONT_SIZE_KEY = "isekaiFontSize";
 
 const THEME_IDS: ThemeId[] = ["arcane", "tavern", "glade", "hybrid"];
-const FONT_PRESET_IDS: FontPresetId[] = ["classic", "clean", "literary"];
+const FONT_PRESET_IDS: FontPresetId[] = ["aelunor-classic", "book-mode", "readable", "literary-fantasy", "international"];
 const FONT_SIZE_IDS: FontSizeId[] = ["small", "medium", "large"];
 
 interface UserSettingsStoreState extends UserSettings {
@@ -90,6 +90,22 @@ function isFontPreset(value: unknown): value is FontPresetId {
   return typeof value === "string" && FONT_PRESET_IDS.includes(value as FontPresetId);
 }
 
+function normalizeLegacyFontPreset(value: unknown): FontPresetId | null {
+  if (isFontPreset(value)) {
+    return value;
+  }
+  if (value === "classic") {
+    return "aelunor-classic";
+  }
+  if (value === "clean") {
+    return "readable";
+  }
+  if (value === "literary") {
+    return "literary-fantasy";
+  }
+  return null;
+}
+
 function isFontSize(value: unknown): value is FontSizeId {
   return typeof value === "string" && FONT_SIZE_IDS.includes(value as FontSizeId);
 }
@@ -126,8 +142,9 @@ export function readLegacyAppearanceFromStorage(storage: Storage | null): Partia
   if (isTheme(themeCandidate)) {
     next.theme = themeCandidate;
   }
-  if (isFontPreset(fontPresetCandidate)) {
-    next.font_preset = fontPresetCandidate;
+  const fontPreset = normalizeLegacyFontPreset(fontPresetCandidate);
+  if (fontPreset) {
+    next.font_preset = fontPreset;
   }
   if (isFontSize(fontSizeCandidate)) {
     next.font_size = fontSizeCandidate;

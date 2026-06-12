@@ -46,7 +46,7 @@ describe("settings store migration helpers", () => {
 
     const legacy = readLegacyAppearanceFromStorage(storage);
     expect(legacy.theme).toBe("hybrid");
-    expect(legacy.font_preset).toBe("clean");
+    expect(legacy.font_preset).toBe("readable");
     expect(legacy.font_size).toBe("large");
   });
 
@@ -58,7 +58,7 @@ describe("settings store migration helpers", () => {
 
     const settings = resolveInitialSettingsFromStorage(storage);
     expect(settings.appearance.theme).toBe("glade");
-    expect(settings.appearance.font_preset).toBe("literary");
+    expect(settings.appearance.font_preset).toBe("literary-fantasy");
     expect(settings.appearance.font_size).toBe("small");
     expect(storage.getItem("aelunorUserSettingsV1")).not.toBeNull();
   });
@@ -69,6 +69,7 @@ describe("settings store migration helpers", () => {
 
     const settings = resolveInitialSettingsFromStorage(storage);
     expect(settings.appearance.theme).toBe("hybrid");
+    expect(settings.appearance.font_preset).toBe("aelunor-classic");
     expect(settings.locale.language).toBe("de");
   });
 });
