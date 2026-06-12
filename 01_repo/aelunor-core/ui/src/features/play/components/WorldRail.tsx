@@ -2,7 +2,8 @@ import { memo, useMemo } from "react";
 
 import type { CampaignSnapshot } from "../../../shared/api/contracts";
 import { AelunorPanelFrame } from "../../../shared/ui/aelunorAssets";
-import { displayParty, partyOverview, plotEssentials, worldTime } from "../partyHudModel";
+import { displayParty, partyOverview, plotEssentials } from "../partyHudModel";
+import { deriveSceneAtmosphere } from "../sceneAtmosphere";
 
 interface WorldRailProps {
   campaign: CampaignSnapshot;
@@ -26,21 +27,6 @@ function firstInitial(value: string): string {
   return value.trim().charAt(0).toUpperCase() || "?";
 }
 
-function sceneMeta(campaign: CampaignSnapshot, active_scene_label: string) {
-  const state = readRecord(campaign.state);
-  const activeScene = readString(plotEssentials(campaign).active_scene);
-  const sceneName = active_scene_label && active_scene_label !== "Alle Szenen" ? active_scene_label : activeScene || "Unbekannte Szene";
-  const sceneId = partyOverview(campaign).find((entry) => entry.scene_name === sceneName)?.scene_id ?? "";
-  const scenes = readRecord(state.scenes);
-  const scene = readRecord(scenes[sceneId]);
-  return {
-    name: sceneName,
-    district: readString(scene.location) || readString(scene.region) || "Aktueller Schauplatz",
-    time: readString(worldTime(campaign).time_of_day) || "Zeit unbekannt",
-    weather: readString(worldTime(campaign).weather) || "Wetter unbekannt",
-  };
-}
-
 export const WorldRail = memo(function WorldRail({
   campaign,
   active_scene_label,
@@ -50,7 +36,7 @@ export const WorldRail = memo(function WorldRail({
   on_open_quest,
   on_open_map,
 }: WorldRailProps) {
-  const scene = useMemo(() => sceneMeta(campaign, active_scene_label), [active_scene_label, campaign]);
+  const scene = useMemo(() => deriveSceneAtmosphere(campaign, active_scene_label), [active_scene_label, campaign]);
   const plot = plotEssentials(campaign);
   const currentGoal = readString(plot.current_goal);
   const currentThreat = readString(plot.current_threat);
@@ -69,11 +55,7 @@ export const WorldRail = memo(function WorldRail({
             <i />
           </span>
           <strong>{scene.name}</strong>
-          <small>{scene.district}</small>
-          <span className="scene-meta-row">
-            <span>{scene.time}</span>
-            <span>{scene.weather}</span>
-          </span>
+          <p className="scene-atmosphere">{scene.text}</p>
         </button>
       </AelunorPanelFrame>
 

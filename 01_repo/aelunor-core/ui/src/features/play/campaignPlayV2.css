@@ -29,7 +29,8 @@
 .scene-card-button small, .quest-card-button small, .quest-loop-summary { color: var(--v1-text-muted-strong); line-height: 1.35; }
 .scene-image-slot { position: relative; aspect-ratio: 16 / 6.2; overflow: hidden; border: 1px solid rgba(215, 178, 108, 0.34); background: linear-gradient(180deg, rgba(12, 34, 49, 0.12), rgba(0, 0, 0, 0.5)), url("/v1/brand/wallpapers/wallpaper-ancient-temple-arcane.png") center / cover no-repeat; }
 .scene-image-slot::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent, rgba(3, 7, 13, 0.58)); }
-.scene-meta-row, .play-panel-head { display: flex; gap: 0.45rem; flex-wrap: wrap; color: var(--v1-text-muted); font-size: 0.82rem; }
+.scene-atmosphere { margin: 0; color: var(--v1-text-muted-strong); font-size: 0.85rem; line-height: 1.45; font-style: italic; }
+.play-panel-head { display: flex; gap: 0.45rem; flex-wrap: wrap; color: var(--v1-text-muted); font-size: 0.82rem; }
 .play-panel-head { justify-content: space-between; align-items: center; margin-bottom: 0.65rem; }
 .party-avatar-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.45rem; }
 .party-avatar { min-height: 4.5rem; display: grid; grid-template-rows: 1fr 0.22rem; justify-items: center; gap: 0.38rem; padding: 0.2rem; border: 0; background: transparent; }
@@ -214,7 +215,6 @@ body.is-resizing-composer * { user-select: none; }
 .campaign-play-shell .quest-card-button strong { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .campaign-play-shell .quest-card-button small { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .campaign-play-shell .scene-image-slot { border-radius: 0.55rem; border-color: color-mix(in srgb, var(--ael-gold, #caa763) 38%, transparent); }
-.campaign-play-shell .scene-meta-row span { padding: 0.1rem 0.5rem; border: 1px solid color-mix(in srgb, var(--ael-border, #44546d) 46%, transparent); border-radius: 999px; font-size: 0.74rem; }
 .campaign-play-shell .map-placeholder { border-radius: 0.55rem; border-color: color-mix(in srgb, var(--ael-gold, #caa763) 32%, transparent); background: radial-gradient(circle at 30% 22%, color-mix(in srgb, var(--ael-gold, #caa763) 10%, transparent), transparent 5rem), radial-gradient(circle at 78% 64%, color-mix(in srgb, var(--ael-glow, #527fb8) 12%, transparent), transparent 6rem), linear-gradient(150deg, #0a1320, #050a12); }
 .campaign-play-shell .map-route { border-top-color: color-mix(in srgb, var(--ael-gold, #caa763) 42%, transparent); opacity: 0.85; }
 .campaign-play-shell .map-river { border-left-color: color-mix(in srgb, var(--ael-glow, #527fb8) 36%, transparent); }
