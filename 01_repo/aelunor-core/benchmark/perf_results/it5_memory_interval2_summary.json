@@ -1,0 +1,89 @@
+{
+  "label": "it5_memory_interval2",
+  "campaign_id": "camp_c02276e6d5",
+  "turns_requested": 4,
+  "turns_completed": 3,
+  "errors": [
+    "turn 1: TurnFlowError: Die KI-Antwort passte nicht zum erwarteten Datenformat."
+  ],
+  "turn_times_s": [
+    86.5,
+    76.1,
+    89.4
+  ],
+  "total_avg_s": 84.0,
+  "total_median_s": 86.5,
+  "best_s": 76.1,
+  "worst_s": 89.4,
+  "resources": {
+    "vram_mb_peak": 7799.0,
+    "gpu_pct_avg": 71.9
+  },
+  "env": {
+    "OLLAMA_MODEL": "",
+    "OLLAMA_NUM_CTX": "",
+    "OLLAMA_NARRATOR_MODEL": "",
+    "OLLAMA_NARRATOR_NUM_CTX": "",
+    "OLLAMA_EXTRACTOR_MODEL": "",
+    "OLLAMA_EXTRACTOR_NUM_CTX": "",
+    "OLLAMA_REPAIR_MODEL": "",
+    "OLLAMA_REPAIR_NUM_CTX": "",
+    "AELUNOR_CANON_EXTRACTOR_MODE": ""
+  },
+  "phase_breakdown": {
+    "finalize_state_memory": {
+      "avg_s": 9.8,
+      "max_s": 9.8,
+      "turns_with_calls": 1,
+      "avg_prompt_tokens": 7448,
+      "max_prompt_tokens": 7448
+    },
+    "narrator": {
+      "avg_s": 56.8,
+      "max_s": 72.0,
+      "turns_with_calls": 3,
+      "avg_prompt_tokens": 23440,
+      "max_prompt_tokens": 24033
+    },
+    "npc_extractor": {
+      "avg_s": 13.6,
+      "max_s": 14.0,
+      "turns_with_calls": 3,
+      "avg_prompt_tokens": 1064,
+      "max_prompt_tokens": 1101
+    },
+    "story_length_guard": {
+      "avg_s": 13.9,
+      "max_s": 13.9,
+      "turns_with_calls": 1,
+      "avg_prompt_tokens": 896,
+      "max_prompt_tokens": 896
+    },
+    "unphased": {
+      "avg_s": 15.6,
+      "max_s": 15.6,
+      "turns_with_calls": 1,
+      "avg_prompt_tokens": 17073,
+      "max_prompt_tokens": 32767
+    },
+    "_turn_total": {
+      "avg_s": 83.5,
+      "turns": 3
+    }
+  },
+  "state_digest": {
+    "meta_turn": 20,
+    "items_total": 13,
+    "npc_codex_total": 2,
+    "scenes_total": 2,
+    "slot1_scene": "node_siedlung_elaenor",
+    "slot1_inventory_count": null,
+    "slot1_skills": [
+      "skill_moosgriff",
+      "skill_slot_1"
+    ],
+    "slot1_hp": null,
+    "slot1_xp": null,
+    "quarantine_count": 0
+  }
+}

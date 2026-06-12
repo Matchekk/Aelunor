@@ -1867,16 +1867,17 @@ def _create_turn_record_impl(
     }
     state_after = working_state
     append_character_change_events(state_before, state_after, turn_number=int(state_after.get("meta", {}).get("turn", 0) or 0))
-    progression_result = apply_progression_events(
-        campaign,
-        state_before,
-        state_after,
-        patch,
-        actor=actor,
-        action_type=action_type,
-        player_text=content,
-        story_text=gm_text_display,
-    )
+    with profile_phase("progression"):
+        progression_result = apply_progression_events(
+            campaign,
+            state_before,
+            state_after,
+            patch,
+            actor=actor,
+            action_type=action_type,
+            player_text=content,
+            story_text=gm_text_display,
+        )
     skill_messages = apply_skill_events(campaign, state_after, patch.get("events_add") or [])
     if skill_messages:
         state_after.setdefault("events", [])

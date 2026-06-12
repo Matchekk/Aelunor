@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, replace
 from difflib import SequenceMatcher
@@ -372,6 +373,55 @@ def build_npc_extractor_context_packet(
     }
     return json.dumps(payload, ensure_ascii=False)
 
+# Personen-/Dialog-Signale: nur wenn der Turn-Text plausibel NPC-relevante
+# Information enthalten kann, lohnt der LLM-Call. Bewusst breit gefasst
+# (Substring, lowercased) — ein False-Positive kostet nur den bisherigen Call,
+# ein False-Negative wuerde still Canon verlieren.
+_NPC_PERSON_CUES = (
+    "sag", "sprich", "sprach", "ruft", "rief", "flüster", "fluester",
+    "antwort", "frag", "murmel", "stimme", "gestalt", "fremde", "person",
+    "mann", "frau", "kind", "greis", "händler", "haendler", "wache",
+    "wächter", "waechter", "reisende", "begegn", "vorstell", "nennt sich",
+    "stellt sich", "tritt hervor", "tritt heran", "nähert sich", "naehert sich",
+    "augen", "gesicht", "anführer", "anfuehrer", "gefährte", "gefaehrte",
+    "„", "»", '"',
+)
+_NPC_GONE_STATUSES = {"dead", "tot", "gone", "verschwunden"}
+
+
+def npc_extractor_trigger_enabled() -> bool:
+    """AELUNOR_NPC_EXTRACTOR_TRIGGER=always schaltet den Vorab-Check ab."""
+    raw = str(os.getenv("AELUNOR_NPC_EXTRACTOR_TRIGGER", "")).strip().lower()
+    return raw != "always"
+
+
+def npc_extractor_should_run(state: Dict[str, Any], actor: str, player_text: str, gm_text: str) -> bool:
+    combined = normalized_eval_text(f"{player_text or ''} {gm_text or ''}")
+    if not combined.strip():
+        return False
+    raw_combined = f"{player_text or ''} {gm_text or ''}".lower()
+    codex = state.get("npc_codex") or {}
+    actor_scene = str(((state.get("characters") or {}).get(actor) or {}).get("scene_id") or "")
+    for entry in codex.values():
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get("name") or "").strip()
+        if name and normalize_npc_alias(name) and normalize_npc_alias(name) in normalize_npc_alias(combined):
+            return True
+        for alias in entry.get("aliases") or []:
+            normalized = normalize_npc_alias(str(alias or ""))
+            if normalized and normalized in normalize_npc_alias(combined):
+                return True
+        status = str(entry.get("status") or "").strip().lower()
+        if (
+            actor_scene
+            and str(entry.get("last_seen_scene_id") or "") == actor_scene
+            and status not in _NPC_GONE_STATUSES
+        ):
+            return True
+    return any(cue in raw_combined for cue in _NPC_PERSON_CUES)
+
+
 def call_npc_extractor(
     campaign: Dict[str, Any],
     state: Dict[str, Any],
@@ -381,6 +431,8 @@ def call_npc_extractor(
     gm_text: str,
 ) -> List[Dict[str, Any]]:
     if not str(player_text or "").strip() and not str(gm_text or "").strip():
+        return []
+    if npc_extractor_trigger_enabled() and not npc_extractor_should_run(state, actor, player_text, gm_text):
         return []
     context_packet = build_npc_extractor_context_packet(campaign, state, actor, action_type, player_text, gm_text)
     user_prompt = (

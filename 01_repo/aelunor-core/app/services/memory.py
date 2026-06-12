@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
@@ -95,6 +96,21 @@ def heuristic_memory_summary(campaign: CampaignState, *, ports: MemoryPorts) -> 
     return " ".join(parts)
 
 
+def memory_summary_interval() -> int:
+    """Alle wie viele Turns die LLM-Memory-Zusammenfassung neu gebaut wird.
+
+    Default 1 (jeden Turn, bisheriges Verhalten). Bei N>1 darf die Summary bis
+    zu N-1 Turns nachlaufen; das ist abgedeckt, weil recent_turns im
+    CONTEXT_PACKET die letzten 8 Turns ohnehin woertlich enthaelt.
+    """
+    raw = str(os.getenv("AELUNOR_MEMORY_SUMMARY_INTERVAL", "")).strip()
+    try:
+        value = int(raw) if raw else 1
+    except ValueError:
+        return 1
+    return max(1, value)
+
+
 def rebuild_memory_summary(campaign: CampaignState, *, ports: MemoryPorts) -> None:
     turns = ports.active_turns(campaign)
     summary_turn = turns[-1]["turn_number"] if turns else 0
@@ -104,6 +120,11 @@ def rebuild_memory_summary(campaign: CampaignState, *, ports: MemoryPorts) -> No
             "updated_through_turn": 0,
             "updated_at": ports.utc_now(),
         }
+        return
+    existing = (campaign.get("boards") or {}).get("memory_summary") or {}
+    updated_through = int(existing.get("updated_through_turn", 0) or 0)
+    has_real_summary = bool(str(existing.get("content") or "").strip()) and updated_through > 0
+    if has_real_summary and 1 <= summary_turn - updated_through < memory_summary_interval():
         return
 
     recent_turns = [

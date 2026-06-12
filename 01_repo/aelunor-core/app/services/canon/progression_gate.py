@@ -22,6 +22,7 @@ from app.config.runtime import CAMPAIGN_LENGTHS, PACING_PROFILE_DEFAULTS
 from app.core.ids import deep_copy
 from app.prompts.system_prompts import PROGRESSION_EXTRACTOR_JSON_CONTRACT, PROGRESSION_EXTRACTOR_SYSTEM_PROMPT
 from app.services.campaigns.party import display_name_for_slot
+from app.services.canon.extractor import build_compact_extractor_context_packet
 from app.services.characters.resources import resource_name_for_character
 from app.services.extraction.abilities import clean_extracted_skill_name, story_sentences_for_actor
 from app.services.patch_payloads import normalize_patch_semantics
@@ -567,7 +568,10 @@ def call_progression_canon_extractor(
     player_text: str,
     story_text: str,
 ) -> Dict[str, Any]:
-    context_packet = build_extractor_context_packet(
+    # Kompaktes Packet statt Voll-State: das volle STATE_PACKET ueberschreitet
+    # num_ctx auf langen Kampagnen (gemessen 32 767 truncated Tokens, Antwort
+    # degeneriert zu 1 Token) — der Confidence-Score lief damit still leer.
+    context_packet = build_compact_extractor_context_packet(
         campaign,
         state,
         actor,

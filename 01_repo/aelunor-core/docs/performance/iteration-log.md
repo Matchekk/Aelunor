@@ -232,7 +232,66 @@ Narrator-Prompt geschätzt ~23k Tokens statt 32k. 758 Tests grün.
 - State-Digest plausibel (Items 15, NPCs 3, Quarantäne 0).
 
 **Entscheidung: KEEP.** Promptgröße −27 %, Stabilität von Münzwurf auf 100 % echte
-Stories, Quality klar über Baseline.
+Stories, Quality klar über Baseline. Commit: 8dba807.
+
+---
+
+## Iteration 5 — Memory-Frequenz (2026-06-12)
+
+**Hypothese:** Memory-Summary (~12.7 s/Turn) muss nicht jeden Turn laufen; recent_turns
+deckt die letzten 8 Turns ohnehin wörtlich ab.
+
+**Änderung:** `AELUNOR_MEMORY_SUMMARY_INTERVAL` (Default 1 = bisheriges Verhalten).
+Skip nur bei `1 <= turn_gap < interval` — Edit (gap 0) und Undo (gap < 0) bauen
+weiterhin immer neu; fehlende/leere Summary baut immer.
+
+**Messung (`it5_memory_interval2`, Intervall 2, 4 Turns, 3 abgeschlossen):**
+- Memory lief in 1 von 3 Turns (Intervall greift): **−9.8 s auf jedem Skip-Turn**.
+- 1 Turn-Fail (Datenformat) — siehe Nebenbefund unten, nicht memory-bedingt.
+- Stories echt (1 488–1 942 Zeichen), State-Digest plausibel.
+
+**Wichtiger Nebenbefund (Profil `unphased`-Calls):** `call_progression_canon_extractor`
+(Progression-Gate, läuft bei Progression-Claims) nutzte noch das volle
+`build_extractor_context_packet`: **32 767 truncated Prompt-Tokens, Antwort degeneriert
+zu 1 Token** — der Model-Anteil des Confidence-Scores lief still leer, plus ~8 s Waste.
+Fix: Progression-Gate auf `build_compact_extractor_context_packet` umgestellt (Iteration-2-
+Builder, ~1.2k Tokens) und `apply_progression_events` als Profil-Phase `progression`
+sichtbar gemacht.
+
+**Entscheidung Memory-Intervall: KEEP** (als Opt-in dokumentiert; Default bleibt 1,
+empfohlene Config nutzt 2 — bewusst konservativ, weil Langzeit-Kontinuität bei
+sehr langen Kampagnen von der Summary abhängt und n klein ist).
+
+---
+
+## Iteration 6 — NPC-Trigger + Progression-Packet-Fix (2026-06-12)
+
+**Hypothese NPC:** Der NPC-Call (11–14 s, nur 89–157 Response-Tokens) ist auf
+umgebungs-fokussierten Turns reiner Overhead; echte User-Turns 25–28 zeigten identische
+NPC-Updates jeden Turn.
+
+**Änderung:** `npc_extractor_should_run()` — deterministischer Vorab-Check; LLM-Call nur wenn
+(a) bekannter NPC-Name/-Alias im Turn-Text, (b) lebender NPC mit `last_seen_scene_id` ==
+Akteur-Szene, oder (c) Personen-/Dialog-Cues im Text (bewusst breite Liste — False-Positive
+kostet nur den bisherigen Call, False-Negative würde still Canon verlieren).
+`AELUNOR_NPC_EXTRACTOR_TRIGGER=always` schaltet den Check ab. Spot-Checks 6/6 korrekt.
+
+**Messung (`it6_npc_trigger_prog_compact`, 4 Turns, Memory-Intervall 2 aktiv):**
+- **4/4 Turns, 0 Fehler, Total Ø 61.2 s** (Median 61.0, Best 56.0, Worst 66.7) —
+  erstmals unter 70 s und sehr konsistent.
+- 4/4 echte Stories (1 823–2 113 Zeichen), nur 1 Narrator-Retry über alle Turns.
+- Narrator 35.5 s Ø; Memory lief 2/4 (Intervall greift, −11.4 s auf Skip-Turns);
+  **keine unphased-Calls mehr** → Progression-Fix bestätigt (kein truncated 32k-Call).
+- NPC-Trigger skippte in diesem Lauf nichts (Szene enthält 2 lebende NPCs + Personen-Cues
+  → Check sagt korrekt „laufen lassen"). Auf personenfreien Texten skippt er
+  (Spot-Checks). Kosten des Checks: vernachlässigbar, rein deterministisch.
+- State-Digest unauffällig, NPC-Codex konsistent (2 Einträge wie vorher).
+
+**Entscheidung: KEEP** (NPC-Trigger als kostenloser konservativer Guard mit
+`always`-Escape-Hatch; Progression-Compact-Fix klar positiv: vorher stiller
+Truncation-Leerlauf + ~8 s Waste pro Progression-Claim-Turn).
+
+
 
 
 
