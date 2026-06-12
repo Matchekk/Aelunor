@@ -47,7 +47,7 @@ describe("settings store migration helpers", () => {
     const legacy = readLegacyAppearanceFromStorage(storage);
     expect(legacy.theme).toBe("hybrid");
     expect(legacy.font_preset).toBe("readable");
-    expect(legacy.font_size).toBe("large");
+    expect(legacy.font_size).toBe(18);
   });
 
   it("falls back to defaults and applies legacy appearance when new schema is missing", () => {
@@ -59,8 +59,9 @@ describe("settings store migration helpers", () => {
     const settings = resolveInitialSettingsFromStorage(storage);
     expect(settings.appearance.theme).toBe("glade");
     expect(settings.appearance.font_preset).toBe("literary-fantasy");
-    expect(settings.appearance.font_size).toBe("small");
+    expect(settings.appearance.font_size).toBe(14);
     expect(storage.getItem("aelunorUserSettingsV1")).not.toBeNull();
+    expect(storage.getItem("isekaiFontSize")).toBe("14");
   });
 
   it("recovers from malformed persisted payloads", () => {
@@ -70,6 +71,7 @@ describe("settings store migration helpers", () => {
     const settings = resolveInitialSettingsFromStorage(storage);
     expect(settings.appearance.theme).toBe("hybrid");
     expect(settings.appearance.font_preset).toBe("aelunor-classic");
+    expect(settings.appearance.font_size).toBe(16);
     expect(settings.locale.language).toBe("de");
   });
 });

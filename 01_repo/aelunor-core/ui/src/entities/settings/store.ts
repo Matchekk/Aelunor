@@ -19,6 +19,7 @@ import type {
   UserSettings,
 } from "./types";
 import { clearLocalComfortData } from "./localData";
+import { normalizeFontSizePx, readFontSizePx } from "./fontSize";
 import { migrateSettings, resolveSettingsDefaults } from "./schema";
 
 const SETTINGS_STORAGE_KEY = "aelunorUserSettingsV1";
@@ -29,7 +30,6 @@ const LEGACY_FONT_SIZE_KEY = "isekaiFontSize";
 
 const THEME_IDS: ThemeId[] = ["arcane", "tavern", "glade", "hybrid"];
 const FONT_PRESET_IDS: FontPresetId[] = ["aelunor-classic", "book-mode", "readable", "literary-fantasy", "international"];
-const FONT_SIZE_IDS: FontSizeId[] = ["small", "medium", "large"];
 
 interface UserSettingsStoreState extends UserSettings {
   patch_appearance: (patch: Partial<AppearanceSettings>) => void;
@@ -106,10 +106,6 @@ function normalizeLegacyFontPreset(value: unknown): FontPresetId | null {
   return null;
 }
 
-function isFontSize(value: unknown): value is FontSizeId {
-  return typeof value === "string" && FONT_SIZE_IDS.includes(value as FontSizeId);
-}
-
 export function readLegacyAppearanceFromStorage(storage: Storage | null): Partial<AppearanceSettings> {
   if (!storage) {
     return {};
@@ -146,8 +142,9 @@ export function readLegacyAppearanceFromStorage(storage: Storage | null): Partia
   if (fontPreset) {
     next.font_preset = fontPreset;
   }
-  if (isFontSize(fontSizeCandidate)) {
-    next.font_size = fontSizeCandidate;
+  const fontSize = readFontSizePx(fontSizeCandidate);
+  if (fontSize !== null) {
+    next.font_size = fontSize;
   }
   return next;
 }
@@ -159,7 +156,7 @@ function syncLegacyAppearance(appearance: AppearanceSettings, storage_override: 
   }
   storage.setItem(LEGACY_THEME_KEY, appearance.theme);
   storage.setItem(LEGACY_FONT_PRESET_KEY, appearance.font_preset);
-  storage.setItem(LEGACY_FONT_SIZE_KEY, appearance.font_size);
+  storage.setItem(LEGACY_FONT_SIZE_KEY, String(appearance.font_size));
 }
 
 export function resolveInitialSettingsFromStorage(storage: Storage | null): UserSettings {
@@ -289,7 +286,7 @@ export const useUserSettingsStore = create<UserSettingsStoreState>((set) => ({
       ...state,
       appearance: {
         ...state.appearance,
-        font_size,
+        font_size: normalizeFontSizePx(font_size, state.appearance.font_size),
       },
     }));
   },

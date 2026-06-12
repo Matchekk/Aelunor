@@ -100,18 +100,6 @@
   --ael-z-toast: 30;
 }
 
-:root[data-font-size="small"] {
-  --v1-font-size-base: 14px;
-}
-
-:root[data-font-size="medium"] {
-  --v1-font-size-base: 16px;
-}
-
-:root[data-font-size="large"] {
-  --v1-font-size-base: 18px;
-}
-
 :root[data-density="compact"] {
   --v1-control-height: 2.45rem;
   --v1-control-padding-y: 0.58rem;

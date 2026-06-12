@@ -19,7 +19,8 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     const root = document.documentElement;
     root.dataset.theme = appearance.theme;
     root.dataset.fontPreset = appearance.font_preset;
-    root.dataset.fontSize = appearance.font_size;
+    root.dataset.fontSize = String(appearance.font_size);
+    root.style.setProperty("--v1-font-size-base", `${appearance.font_size}px`);
     root.dataset.density = appearance.density;
     root.dataset.storyWidth = appearance.story_width;
     root.dataset.reducedMotion = accessibility.reduced_motion ? "true" : "false";

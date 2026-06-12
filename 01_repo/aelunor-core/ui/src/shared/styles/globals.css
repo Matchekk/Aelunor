@@ -1484,6 +1484,44 @@ summary::-webkit-details-marker {
   line-height: 1.35;
 }
 
+.settings-font-stepper {
+  display: inline-grid;
+  grid-template-columns: var(--v1-control-height) minmax(4.5rem, auto) var(--v1-control-height);
+  align-items: center;
+  gap: 0.5rem;
+  width: fit-content;
+}
+
+.settings-stepper-button {
+  width: var(--v1-control-height);
+  min-width: var(--v1-control-height);
+  min-height: var(--v1-control-height);
+  padding: 0;
+  border-radius: var(--v1-radius-xs);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.18rem;
+  font-weight: 800;
+}
+
+.settings-stepper-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.settings-stepper-value {
+  min-width: 4.5rem;
+  text-align: center;
+  font-weight: 800;
+  color: var(--v1-text-strong);
+}
+
+.settings-font-size-preview {
+  color: var(--v1-text-strong);
+  line-height: 1.5;
+}
+
 .settings-swatch-row {
   display: inline-flex;
   gap: 0.25rem;

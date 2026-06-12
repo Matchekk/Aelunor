@@ -264,11 +264,20 @@
   sind noch nicht vorhanden; Ablage/Anleitung vorbereitet unter
   `ui/public/fonts/README.md`. Fehlende Fonts fallen daher auf Systemfonts
   zurueck und erzeugen keine 404-Font-Requests.
+* Textgroesse ist seit dem Font-Size-Stepper numerisch: `appearance.font_size`
+  speichert Pixelwerte von 14 bis 20 (Default 16), Settings zeigen `-`/`+`
+  in 1px-Schritten. Alte Werte `small`/`medium`/`large` werden beim Lesen auf
+  14/16/18 migriert; `ThemeProvider` setzt `--v1-font-size-base` inline und
+  `data-font-size` als Zahl.
 * Browser-Smoke (temporaeres `.agent_tmp/font-smoke-runtime`, kein LLM-Call):
   Settings geoeffnet, Preset auf Readable gewechselt, Reload behielt Auswahl,
   Play/Chronik-DOM mit temporaerem Turn geprueft. Computed Styles: Storytext
   = Atkinson/Story-Fallback, Buttons/Textarea = UI-Font, Heading = Display-
   Font; Console errors/warnings leer; keine Google/CDN-Font-Links.
+* Font-Size-Browser-Smoke (bestehende lokale App auf 8080): Settings-Stepper
+  von 14px bis 20px geprueft, `-`/`+` deaktivieren an den Grenzen, Reload
+  behielt 18px. Play/Chronik-DOM: Body/Buttons Inter, Story Spectral,
+  Heading Cinzel, externe Asset-URLs und Console errors/warnings leer.
 
 ## Offene GitHub-Issue-Landschaft
 

@@ -12,7 +12,8 @@ import type {
   TooltipIntensity,
   UiDensityId,
 } from "../../entities/settings/types";
-import type { FontPresetId, FontSizeId, ThemeId } from "../types/domain";
+import { clampFontSizePx, FONT_SIZE_MAX_PX, FONT_SIZE_MIN_PX, FONT_SIZE_STEP_PX } from "../../entities/settings/fontSize";
+import type { FontPresetId, ThemeId } from "../types/domain";
 import { useUserSettingsStore } from "../../entities/settings/store";
 import { useSurfaceLayer } from "./useSurfaceLayer";
 import {
@@ -103,12 +104,6 @@ const FONT_OPTIONS: Array<{ id: FontPresetId; label: string; sample_font: string
   },
 ];
 
-const SIZE_OPTIONS: Array<{ id: FontSizeId; label: string; preview_px: number }> = [
-  { id: "small", label: "Klein", preview_px: 14 },
-  { id: "medium", label: "Mittel", preview_px: 16 },
-  { id: "large", label: "Groß", preview_px: 18 },
-];
-
 const CATEGORY_ITEMS: Array<{ id: SettingsCategory; label: string; description: string }> = [
   { id: "appearance", label: "Darstellung", description: "Theme, Schrift und Flächenrhythmus" },
   { id: "interaction", label: "Lesen & Bedienung", description: "Timeline- und Composer-Verhalten" },
@@ -181,6 +176,8 @@ export function SettingsDialog({ open, on_close, return_focus_element = null }: 
     () => CATEGORY_ITEMS.find((item) => item.id === activeCategory) ?? DEFAULT_CATEGORY_META,
     [activeCategory],
   );
+  const canDecreaseFontSize = appearance.font_size > FONT_SIZE_MIN_PX;
+  const canIncreaseFontSize = appearance.font_size < FONT_SIZE_MAX_PX;
 
   if (!open) {
     return null;
@@ -310,22 +307,40 @@ export function SettingsDialog({ open, on_close, return_focus_element = null }: 
                       ))}
                     </div>
 
-                    <div className="settings-option-grid">
-                      {SIZE_OPTIONS.map((option) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          className={appearance.font_size === option.id ? "settings-option-card is-active" : "settings-option-card"}
-                          onClick={() => {
-                            setFontSize(option.id);
-                          }}
-                        >
-                          <span className="settings-option-title">{option.label}</span>
-                          <span className="settings-option-preview" style={{ fontSize: `${option.preview_px}px` }}>
-                            Vorschau Aelunor Text
-                          </span>
-                        </button>
-                      ))}
+                    <div className="settings-field-list">
+                      <SettingsField
+                        label="Textgröße"
+                        description={`In 1px-Schritten von ${FONT_SIZE_MIN_PX}px bis ${FONT_SIZE_MAX_PX}px.`}
+                      >
+                        <div className="settings-font-stepper" aria-label="Textgröße">
+                          <button
+                            type="button"
+                            className="settings-stepper-button"
+                            onClick={() => {
+                              setFontSize(clampFontSizePx(appearance.font_size - FONT_SIZE_STEP_PX));
+                            }}
+                            disabled={!canDecreaseFontSize}
+                            aria-label="Textgröße verkleinern"
+                          >
+                            -
+                          </button>
+                          <output className="settings-stepper-value" aria-live="polite">
+                            {appearance.font_size}px
+                          </output>
+                          <button
+                            type="button"
+                            className="settings-stepper-button"
+                            onClick={() => {
+                              setFontSize(clampFontSizePx(appearance.font_size + FONT_SIZE_STEP_PX));
+                            }}
+                            disabled={!canIncreaseFontSize}
+                            aria-label="Textgröße vergrößern"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <span className="settings-font-size-preview">Vorschau Aelunor Text</span>
+                      </SettingsField>
                     </div>
                   </SettingsSection>
 

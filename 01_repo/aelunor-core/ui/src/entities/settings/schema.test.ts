@@ -9,6 +9,7 @@ describe("settings schema", () => {
     expect(defaults.meta.schema_version).toBe(USER_SETTINGS_SCHEMA_VERSION);
     expect(defaults.appearance.theme).toBe("hybrid");
     expect(defaults.appearance.font_preset).toBe("aelunor-classic");
+    expect(defaults.appearance.font_size).toBe(16);
     expect(defaults.interaction.timeline_detail_default).toBe("collapsed");
     expect(defaults.accessibility.reduced_motion).toBe(false);
     expect(defaults.locale.language).toBe("de");
@@ -46,7 +47,7 @@ describe("settings schema", () => {
         appearance: {
           theme: "hybrid",
           font_preset: "book-mode",
-          font_size: "large",
+          font_size: 19,
           density: "compact",
           story_width: "focused",
         },
@@ -55,7 +56,7 @@ describe("settings schema", () => {
 
     expect(migrated.appearance.theme).toBe("hybrid");
     expect(migrated.appearance.font_preset).toBe("book-mode");
-    expect(migrated.appearance.font_size).toBe("large");
+    expect(migrated.appearance.font_size).toBe(19);
     expect(migrated.appearance.density).toBe("compact");
     expect(migrated.appearance.story_width).toBe("focused");
     expect(migrated.meta.schema_version).toBe(USER_SETTINGS_SCHEMA_VERSION);
@@ -65,5 +66,14 @@ describe("settings schema", () => {
     expect(normalizeSettings({ appearance: { font_preset: "classic" } }).appearance.font_preset).toBe("aelunor-classic");
     expect(normalizeSettings({ appearance: { font_preset: "clean" } }).appearance.font_preset).toBe("readable");
     expect(normalizeSettings({ appearance: { font_preset: "literary" } }).appearance.font_preset).toBe("literary-fantasy");
+  });
+
+  it("normalizes font size values and migrates old labels", () => {
+    expect(normalizeSettings({ appearance: { font_size: "small" } }).appearance.font_size).toBe(14);
+    expect(normalizeSettings({ appearance: { font_size: "medium" } }).appearance.font_size).toBe(16);
+    expect(normalizeSettings({ appearance: { font_size: "large" } }).appearance.font_size).toBe(18);
+    expect(normalizeSettings({ appearance: { font_size: "20" } }).appearance.font_size).toBe(20);
+    expect(normalizeSettings({ appearance: { font_size: 99 } }).appearance.font_size).toBe(20);
+    expect(normalizeSettings({ appearance: { font_size: 8 } }).appearance.font_size).toBe(14);
   });
 });

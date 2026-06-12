@@ -1,4 +1,4 @@
-import type { FontPresetId, FontSizeId, ThemeId } from "../../shared/types/domain";
+import type { FontPresetId, ThemeId } from "../../shared/types/domain";
 import type {
   AccessibilitySettings,
   AppearanceSettings,
@@ -16,12 +16,12 @@ import type {
   UiDensityId,
   UserSettings,
 } from "./types";
+import { FONT_SIZE_DEFAULT_PX, normalizeFontSizePx } from "./fontSize";
 
-export const USER_SETTINGS_SCHEMA_VERSION = 2;
+export const USER_SETTINGS_SCHEMA_VERSION = 3;
 
 const THEME_IDS: ThemeId[] = ["arcane", "tavern", "glade", "hybrid"];
 const FONT_PRESET_IDS: FontPresetId[] = ["aelunor-classic", "book-mode", "readable", "literary-fantasy", "international"];
-const FONT_SIZE_IDS: FontSizeId[] = ["small", "medium", "large"];
 const DENSITY_IDS: UiDensityId[] = ["compact", "standard", "comfortable"];
 const STORY_WIDTH_IDS: StoryWidthId[] = ["focused", "standard", "wide"];
 const COMPOSER_MODE_PREFERENCE_IDS: ComposerModePreference[] = ["do", "say", "story"];
@@ -85,7 +85,7 @@ export function resolveSettingsDefaults(): UserSettings {
   const appearance: AppearanceSettings = {
     theme: "hybrid",
     font_preset: "aelunor-classic",
-    font_size: "medium",
+    font_size: FONT_SIZE_DEFAULT_PX,
     density: "standard",
     story_width: "standard",
   };
@@ -150,7 +150,7 @@ export function normalizeSettings(raw: unknown, fallback = resolveSettingsDefaul
     appearance: {
       theme: readEnum(appearance.theme, THEME_IDS, fallback.appearance.theme),
       font_preset: readFontPreset(appearance.font_preset, fallback.appearance.font_preset),
-      font_size: readEnum(appearance.font_size, FONT_SIZE_IDS, fallback.appearance.font_size),
+      font_size: normalizeFontSizePx(appearance.font_size, fallback.appearance.font_size),
       density: readEnum(appearance.density, DENSITY_IDS, fallback.appearance.density),
       story_width: readEnum(appearance.story_width, STORY_WIDTH_IDS, fallback.appearance.story_width),
     },
