@@ -105,7 +105,8 @@ def build_turn_system_prompt(
         + "\nEröffne neue Antworten nie mit einer bloßen Wiederholung des zuletzt etablierten Zustands. Starte mit Veränderung, Konsequenz, Reaktion oder neuem Detail."
         + "\nJede Antwort braucht mindestens ein neues konkretes Element, das in den letzten zwei GM-Antworten so noch nicht gesagt wurde."
         + "\nPro Turn maximal eine große neue Hauptkomplikation; vertiefe primär bestehende Konflikte."
-        + "\nBeende Antworten mit klarer spielbarer Lage statt mit mehreren rhetorischen Fragen (maximal eine Abschlussfrage)."
+        + "\nBeende Antworten mit klarer spielbarer Lage. Stelle keine Entscheidungsfragen wie 'Was wird er tun?' oder 'Wie entscheidet er sich?' und biete keine Auswahlmenüs an."
+        + "\nDer Spieler entscheidet ausschließlich durch seine nächste Eingabe. Wenn er die Szene fortführen lassen will, nutzt er 'Weiter'."
         + "\nWenn eine Figur Schaden nimmt, erschöpft wird oder ihre Ressource sichtbar einsetzt, muss der Patch das sofort über hp_delta, stamina_delta oder resources_delta(res) abbilden."
         + "\nWenn eine Figur im Text klar getroffen, verwundet, erschöpft oder magisch ausgelaugt wird und der Patch keine passende Ressourcenänderung enthält, ist die Antwort unvollständig."
         + "\nIn Kampfszenen musst du aktiv vorhandene Ausrüstung, Klasse, Attribute und Skills der beteiligten Figuren berücksichtigen und im Fließtext konkret benennen, statt generische Treffertexte zu schreiben."
@@ -115,5 +116,6 @@ def build_turn_system_prompt(
         + "\nWenn der aktuelle Actor noch keinen Skill besitzt und sich in einer klaren Kampf-/Konfliktszene befindet, soll in hoher Priorität (Richtwert ~80%) eine plausible Skill-Erstmanifestation im Patch landen."
         + f"\nCOMBAT-SKALIERUNG: actor_score={combat_scaling_context.get('actor_score')} threat_score={combat_scaling_context.get('threat_score')} pressure={combat_scaling_context.get('pressure')} ratio={combat_scaling_context.get('ratio')} weighted_ratio={combat_scaling_context.get('weighted_ratio')} element_factor={combat_scaling_context.get('element_factor')}."
         + "\nEs gibt keine Würfel, keine DCs und keine Roll-Requests. requests darf nur clarify, choice oder none enthalten."
+        + "\nStandard für requests ist none. choice ist nur erlaubt, wenn der Spieler ausdrücklich Optionen verlangt hat; clarify nur, wenn eine Information wirklich fehlt."
         + f"\nDie story muss mindestens {min_story_chars} Zeichen enthalten."
     )

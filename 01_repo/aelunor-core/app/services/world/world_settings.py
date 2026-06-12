@@ -228,8 +228,8 @@ def build_pacing_instruction_block(
     if profile.get("campaign_length") == "short":
         lines.extend(
             [
-                "- Für SHORT: 3 Beats zwingend (Setup -> Konsequenz -> Eskalation) plus klarer Entscheidungspunkt.",
-                "- Antworte mit 2-4 konkreten Optionen und zusätzlich 'eigener Plan'.",
+                "- Für SHORT: 3 Beats zwingend (Setup -> Konsequenz -> Eskalation) mit klar spielbarer Endlage.",
+                "- Keine Auswahlmenüs und keine Entscheidungsfragen: beschreibe Konsequenzen und offene Lage, der Spieler entscheidet selbst.",
                 "- Weniger Kulissenbeschreibung, mehr sichtbarer Plot-Fortschritt pro Turn.",
             ]
         )
