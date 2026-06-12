@@ -1,0 +1,60 @@
+{
+  "label": "it1_heuristic_only",
+  "campaign_id": "camp_c02276e6d5",
+  "turns_requested": 4,
+  "turns_completed": 2,
+  "errors": [
+    "turn 1: TurnFlowError: Beim Verarbeiten des Zugs ist ein interner Fehler aufgetreten.",
+    "turn 2: TurnFlowError: Beim Verarbeiten des Zugs ist ein interner Fehler aufgetreten."
+  ],
+  "turn_times_s": [
+    91.4,
+    95.7
+  ],
+  "total_avg_s": 93.5,
+  "total_median_s": 93.5,
+  "best_s": 91.4,
+  "worst_s": 95.7,
+  "resources": {
+    "vram_mb_peak": 7795.0,
+    "gpu_pct_avg": 70.3
+  },
+  "env": {
+    "OLLAMA_MODEL": "",
+    "OLLAMA_NUM_CTX": "",
+    "OLLAMA_NARRATOR_MODEL": "",
+    "OLLAMA_NARRATOR_NUM_CTX": "",
+    "OLLAMA_EXTRACTOR_MODEL": "",
+    "OLLAMA_EXTRACTOR_NUM_CTX": "",
+    "OLLAMA_REPAIR_MODEL": "",
+    "OLLAMA_REPAIR_NUM_CTX": "",
+    "AELUNOR_CANON_EXTRACTOR_MODE": "heuristic_only"
+  },
+  "phase_breakdown": {
+    "finalize_state_memory": {
+      "avg_s": 11.7,
+      "max_s": 11.8,
+      "turns_with_calls": 2,
+      "avg_prompt_tokens": 6973,
+      "max_prompt_tokens": 7223
+    },
+    "narrator": {
+      "avg_s": 71.5,
+      "max_s": 74.4,
+      "turns_with_calls": 2,
+      "avg_prompt_tokens": 32068,
+      "max_prompt_tokens": 32605
+    },
+    "npc_extractor": {
+      "avg_s": 9.8,
+      "max_s": 10.7,
+      "turns_with_calls": 2,
+      "avg_prompt_tokens": 691,
+      "max_prompt_tokens": 692
+    },
+    "_turn_total": {
+      "avg_s": 93.1,
+      "turns": 2
+    }
+  }
+}

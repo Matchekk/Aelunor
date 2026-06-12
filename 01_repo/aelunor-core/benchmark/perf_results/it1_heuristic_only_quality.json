@@ -1,0 +1,25 @@
+{
+  "digest": {
+    "meta_turn": 19,
+    "items_total": 11,
+    "npc_codex_total": 2,
+    "scenes_total": 2,
+    "slot1_scene": "node_siedlung_elaenor",
+    "slot1_skills": [
+      "skill_moosgriff",
+      "skill_slot_1"
+    ]
+  },
+  "stories": [
+    {
+      "turn_id": "turn_aa1e56d63c",
+      "player": "",
+      "gm_text": "Rin tritt in die erste Szene dieser Chronik. Die Welt reagiert spürbar auf den abgeschlossenen Aufbau, und ein konkreter nächster Schritt liegt vor der Gruppe."
+    },
+    {
+      "turn_id": "turn_b57b045445",
+      "player": "",
+      "gm_text": "Rin tritt in die erste Szene dieser Chronik. Die Welt reagiert spürbar auf den abgeschlossenen Aufbau, und ein konkreter nächster Schritt liegt vor der Gruppe."
+    }
+  ]
+}

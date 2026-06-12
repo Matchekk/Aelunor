@@ -1672,15 +1672,16 @@ def _create_turn_record_impl(
         requests_payload = normalize_requests_payload(out.get("requests", []), default_actor=actor)
         if not used_local_narrator_fallback:
             try:
-                out["story"] = rewrite_story_length_guard(
-                    system_prompt=system_prompt,
-                    user_prompt=user_prompt,
-                    story_text=out.get("story", ""),
-                    patch=out.get("patch") or blank_patch(),
-                    requests_payload=requests_payload,
-                    min_story_chars=min_story_chars,
-                    max_story_chars=max_story_chars,
-                )
+                with profile_phase("story_length_guard"):
+                    out["story"] = rewrite_story_length_guard(
+                        system_prompt=system_prompt,
+                        user_prompt=user_prompt,
+                        story_text=out.get("story", ""),
+                        patch=out.get("patch") or blank_patch(),
+                        requests_payload=requests_payload,
+                        min_story_chars=min_story_chars,
+                        max_story_chars=max_story_chars,
+                    )
             except Exception as exc:
                 raise classify_turn_exception(exc, phase="narrator_call_finished", trace_ctx=trace_ctx)
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, replace
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -82,6 +83,33 @@ def _default_call_ollama_schema(system: str, user: str, schema: Dict[str, Any], 
         timeout=timeout,
         temperature=temperature,
     )
+
+
+CANON_EXTRACTOR_MODE_FULL = "full"
+CANON_EXTRACTOR_MODE_COMPACT = "compact"
+CANON_EXTRACTOR_MODE_HEURISTIC_ONLY = "heuristic_only"
+_CANON_EXTRACTOR_MODES = {
+    CANON_EXTRACTOR_MODE_FULL,
+    CANON_EXTRACTOR_MODE_COMPACT,
+    CANON_EXTRACTOR_MODE_HEURISTIC_ONLY,
+}
+
+
+def canon_extractor_mode() -> str:
+    """Steuert den LLM-Pfad des Canon-Extractors (AELUNOR_CANON_EXTRACTOR_MODE).
+
+    full           -> altes Verhalten: LLM-Call mit komplettem STATE_PACKET
+    compact        -> LLM-Call mit kompaktem Packet (Szene/Akteur/Delta statt Voll-State)
+    heuristic_only -> kein LLM-Call, nur deterministische Heuristik-Kandidaten
+
+    Default ist heuristic_only: Auf langen Kampagnen überschreitet das volle
+    STATE_PACKET num_ctx (gemessen 33k Tokens bei 32k Fenster), Ollama truncated
+    still und das Modell halluziniert dann Patches aus dem Nichts (z. B.
+    meta.phase="lobby", erfundene Charaktere) — siehe
+    docs/performance/iteration-log.md, Iteration 1.
+    """
+    raw = str(os.getenv("AELUNOR_CANON_EXTRACTOR_MODE", "")).strip().lower()
+    return raw if raw in _CANON_EXTRACTOR_MODES else CANON_EXTRACTOR_MODE_HEURISTIC_ONLY
 
 
 @dataclass(frozen=True)
@@ -370,26 +398,27 @@ def call_canon_extractor(
     ]
     safe_candidates, review_candidates, reject_candidates = split_candidates(classified_candidates)
     append_extraction_quarantine(state, review_candidates + reject_candidates)
-    context_packet = build_extractor_context_packet(campaign, state, actor, action_type, source_text, source=source)
-    user_prompt = (
-        "STATE_PACKET(JSON):\n"
-        + context_packet
-        + "\n\nOUTPUT-KONTRAKT:\n"
-        + CANON_EXTRACTOR_JSON_CONTRACT
-        + "\n\nExtrahiere nur kanonische Fakten aus source_text als Patch. Keine Prosa. Keine Erklärungen."
-    )
     llm_patch = blank_patch()
-    try:
-        payload = call_ollama_schema(
-            CANON_EXTRACTOR_SYSTEM_PROMPT,
-            user_prompt,
-            CANON_EXTRACTOR_SCHEMA,
-            timeout=120,
-            temperature=0.1,
+    if canon_extractor_mode() != CANON_EXTRACTOR_MODE_HEURISTIC_ONLY:
+        context_packet = build_extractor_context_packet(campaign, state, actor, action_type, source_text, source=source)
+        user_prompt = (
+            "STATE_PACKET(JSON):\n"
+            + context_packet
+            + "\n\nOUTPUT-KONTRAKT:\n"
+            + CANON_EXTRACTOR_JSON_CONTRACT
+            + "\n\nExtrahiere nur kanonische Fakten aus source_text als Patch. Keine Prosa. Keine Erklärungen."
         )
-        llm_patch = normalize_extractor_output_patch(payload)
-    except Exception:
-        llm_patch = blank_patch()
+        try:
+            payload = call_ollama_schema(
+                CANON_EXTRACTOR_SYSTEM_PROMPT,
+                user_prompt,
+                CANON_EXTRACTOR_SCHEMA,
+                timeout=120,
+                temperature=0.1,
+            )
+            llm_patch = normalize_extractor_output_patch(payload)
+        except Exception:
+            llm_patch = blank_patch()
     safe_patch = safe_candidates_to_patch(safe_candidates, campaign, state, actor)
     merged_patch, merge_conflicts = merge_safe_patch_additive(llm_patch, safe_patch, state)
     if merge_conflicts:
