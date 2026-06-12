@@ -1,8 +1,11 @@
 import secrets
+import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import requests
+
+from app.core.turn_profiling import record_llm_call
 
 
 @dataclass(frozen=True)
@@ -73,6 +76,7 @@ class OllamaAdapter:
         temperature: Optional[float] = None,
         repeat_penalty: Optional[float] = None,
         num_ctx: Optional[int] = None,
+        model: Optional[str] = None,
     ) -> str:
         request_timeout = max(30, int(timeout or self.settings.timeout_sec))
         options: Dict[str, Any] = {
@@ -84,8 +88,9 @@ class OllamaAdapter:
         seed = self.request_seed()
         if seed is not None:
             options["seed"] = seed
+        request_model = (model or "").strip() or self.settings.model
         payload: Dict[str, Any] = {
-            "model": self.settings.model,
+            "model": request_model,
             "stream": False,
             "messages": [
                 {"role": "system", "content": system},
@@ -95,7 +100,18 @@ class OllamaAdapter:
         }
         if format_schema is not None:
             payload["format"] = format_schema
+        started = time.perf_counter()
         response = requests.post(f"{self.settings.url}/api/chat", json=payload, timeout=request_timeout)
         if response.status_code != 200:
             raise RuntimeError(f"Ollama error {response.status_code}: {response.text[:500]}")
-        return (response.json().get("message", {}) or {}).get("content", "").strip()
+        content = (response.json().get("message", {}) or {}).get("content", "").strip()
+        record_llm_call(
+            duration_s=time.perf_counter() - started,
+            model=request_model,
+            num_ctx=int(options["num_ctx"]),
+            temperature=float(options["temperature"]),
+            prompt_chars=len(system) + len(user),
+            response_chars=len(content),
+            has_schema=format_schema is not None,
+        )
+        return content

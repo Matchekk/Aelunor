@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Protocol
 
+from app.services.llm.call_profiles import extractor_profile, narrator_profile, repair_profile
 from app.services.llm.json_repair import (
     extract_json_payload,
     ollama_format_fallback_needed,
@@ -22,6 +23,7 @@ class ChatAdapter(Protocol):
         temperature: Optional[float] = None,
         repeat_penalty: Optional[float] = None,
         num_ctx: Optional[int] = None,
+        **kwargs: Any,
     ) -> str:
         ...
 
@@ -67,8 +69,17 @@ def call_ollama_chat(
     timeout: Optional[int] = None,
     temperature: Optional[float] = None,
     repeat_penalty: Optional[float] = None,
+    num_ctx: Optional[int] = None,
+    model: Optional[str] = None,
 ) -> str:
     request_timeout = max(30, int(timeout or settings.timeout_sec))
+    # Nur gesetzte Overrides weiterreichen, damit Adapter ohne diese
+    # Parameter (z. B. Test-Fakes) unveraendert funktionieren.
+    profile_kwargs: Dict[str, Any] = {}
+    if num_ctx is not None:
+        profile_kwargs["num_ctx"] = num_ctx
+    if model is not None:
+        profile_kwargs["model"] = model
     try:
         return adapter.chat(
             system,
@@ -77,6 +88,7 @@ def call_ollama_chat(
             timeout=request_timeout,
             temperature=temperature,
             repeat_penalty=repeat_penalty,
+            **profile_kwargs,
         )
     except RuntimeError as exc:
         message = str(exc)
@@ -96,6 +108,8 @@ def call_ollama_chat(
                 timeout=request_timeout,
                 temperature=temperature,
                 repeat_penalty=repeat_penalty,
+                num_ctx=num_ctx,
+                model=model,
             )
         raise
 
@@ -112,6 +126,7 @@ def repair_json_payload_with_model(
     # Local models routinely need far longer than a fixed 90s for the repair
     # pass; without an explicit override the configured timeout must apply.
     repair_timeout = max(90, int(timeout or settings.timeout_sec))
+    profile = repair_profile()
     repair_user = (
         "Die folgende Modellantwort sollte JSON sein, ist aber kaputt oder unvollständig.\n"
         "Repariere sie zu einem einzelnen gültigen JSON-Objekt gemäß Schema.\n"
@@ -135,6 +150,8 @@ def repair_json_payload_with_model(
         timeout=repair_timeout,
         temperature=0.05,
         repeat_penalty=1.05,
+        num_ctx=profile.num_ctx,
+        model=profile.model,
     )
     return extract_json_payload(repaired)
 
@@ -151,6 +168,7 @@ def call_ollama_json(
     emit_turn_phase_event: EmitTurnPhaseEvent = _noop_emit,
     turn_flow_error: Optional[TurnFlowErrorFactory] = None,
 ) -> Dict[str, Any]:
+    profile = narrator_profile()
     content = call_ollama_chat(
         adapter,
         settings,
@@ -160,6 +178,8 @@ def call_ollama_json(
         timeout=max(180, settings.timeout_sec),
         temperature=settings.temperature if temperature is None else temperature,
         repeat_penalty=repeat_penalty,
+        num_ctx=profile.num_ctx,
+        model=profile.model,
     )
     try:
         parsed = extract_json_payload(content)
@@ -197,6 +217,8 @@ def call_ollama_json(
                 timeout=max(180, settings.timeout_sec),
                 temperature=max(0.35, settings.temperature - 0.1),
                 repeat_penalty=repeat_penalty,
+                num_ctx=profile.num_ctx,
+                model=profile.model,
             )
             parsed_retry = extract_json_payload(retry_content)
             emit_turn_phase_event(
@@ -263,6 +285,7 @@ def call_ollama_schema(
     temperature: float = 0.45,
 ) -> Dict[str, Any]:
     schema_timeout = max(90, int(timeout or settings.timeout_sec))
+    profile = extractor_profile()
     content = call_ollama_chat(
         adapter,
         settings,
@@ -271,6 +294,8 @@ def call_ollama_schema(
         format_schema=schema,
         timeout=schema_timeout,
         temperature=temperature,
+        num_ctx=profile.num_ctx,
+        model=profile.model,
     )
     try:
         return extract_json_payload(content)

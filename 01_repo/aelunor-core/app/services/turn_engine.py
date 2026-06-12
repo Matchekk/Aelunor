@@ -1,6 +1,8 @@
 import json
 import re
 import time
+
+from app.core.turn_profiling import end_turn_profile, profile_phase, start_turn_profile
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional
@@ -639,14 +641,15 @@ def _collect_turn_rag_prompt_context(
     trace_ctx: Optional[Dict[str, Any]] = None,
 ) -> tuple[Dict[str, Any], str]:
     try:
-        rag_context = collect_turn_rag_context(
-            campaign=campaign,
-            state=state,
-            actor=actor,
-            action_type=action_type,
-            content=content,
-        )
-        return rag_context, build_turn_rag_prompt_block(rag_context)
+        with profile_phase("rag_context"):
+            rag_context = collect_turn_rag_context(
+                campaign=campaign,
+                state=state,
+                actor=actor,
+                action_type=action_type,
+                content=content,
+            )
+            return rag_context, build_turn_rag_prompt_block(rag_context)
     except Exception as exc:
         emit_turn_phase_event(
             trace_ctx,
@@ -1354,6 +1357,39 @@ def create_turn_record(
     retry_of_turn_id: Optional[str] = None,
     trace_ctx: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    profiler = start_turn_profile(actor=actor, action_type=action_type)
+    try:
+        turn_record = _create_turn_record_impl(
+            campaign=campaign,
+            actor=actor,
+            player_id=player_id,
+            action_type=action_type,
+            content=content,
+            request_received_ts=request_received_ts,
+            retry_of_turn_id=retry_of_turn_id,
+            trace_ctx=trace_ctx,
+        )
+        if profiler is not None:
+            profiler.finish(
+                turn_id=turn_record.get("turn_id"),
+                turn_number=turn_record.get("turn_number"),
+                story_chars=len(str(turn_record.get("gm_text_display") or "")),
+            )
+        return turn_record
+    finally:
+        end_turn_profile()
+
+def _create_turn_record_impl(
+    *,
+    campaign: Dict[str, Any],
+    actor: str,
+    player_id: Optional[str],
+    action_type: str,
+    content: str,
+    request_received_ts: Optional[float] = None,
+    retry_of_turn_id: Optional[str] = None,
+    trace_ctx: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     state_before, working_state, pacing_block, pacing_profile, milestone_info, min_story_chars, max_story_chars = prepare_turn_working_state(
         campaign,
         deep_copy=deep_copy,
@@ -1505,16 +1541,17 @@ def create_turn_record(
             attempt_repeat_penalty = OLLAMA_REPEAT_PENALTY if attempt == 1 else min(1.35, OLLAMA_REPEAT_PENALTY + 0.06 * (attempt - 1))
             emit_turn_phase_event(trace_ctx, phase="narrator_call_started", success=True, extra={"attempt": attempt})
             try:
-                out = normalize_model_output_payload(
-                    call_ollama_json(
-                        system_prompt,
-                        prompt_attempt_user,
-                        temperature=attempt_temperature,
-                        repeat_penalty=attempt_repeat_penalty,
-                        trace_ctx=trace_ctx,
-                    ),
-                    default_actor=actor,
-                )
+                with profile_phase("narrator"):
+                    out = normalize_model_output_payload(
+                        call_ollama_json(
+                            system_prompt,
+                            prompt_attempt_user,
+                            temperature=attempt_temperature,
+                            repeat_penalty=attempt_repeat_penalty,
+                            trace_ctx=trace_ctx,
+                        ),
+                        default_actor=actor,
+                    )
                 emit_turn_phase_event(trace_ctx, phase="narrator_call_finished", success=True, extra={"attempt": attempt})
             except Exception as exc:
                 classified = classify_turn_exception(exc, phase="narrator_call_finished", trace_ctx=trace_ctx)
@@ -1710,20 +1747,21 @@ def create_turn_record(
             error_code_patch_apply=ERROR_CODE_PATCH_APPLY,
         )
         for source_text, source_kind in ((content, "player"), (out.get("story", ""), "narrator")):
-            extractor_piece = call_canon_extractor_with_events(
-                campaign,
-                working_state,
-                actor,
-                action_type,
-                source_text,
-                source=source_kind,
-                stage=source_kind,
-                trace_ctx=trace_ctx,
-                call_canon_extractor=call_canon_extractor,
-                emit_turn_phase_event=emit_turn_phase_event,
-                turn_flow_error=turn_flow_error,
-                error_code_extractor=ERROR_CODE_EXTRACTOR,
-            )
+            with profile_phase(f"canon_extractor_{source_kind}"):
+                extractor_piece = call_canon_extractor_with_events(
+                    campaign,
+                    working_state,
+                    actor,
+                    action_type,
+                    source_text,
+                    source=source_kind,
+                    stage=source_kind,
+                    trace_ctx=trace_ctx,
+                    call_canon_extractor=call_canon_extractor,
+                    emit_turn_phase_event=emit_turn_phase_event,
+                    turn_flow_error=turn_flow_error,
+                    error_code_extractor=ERROR_CODE_EXTRACTOR,
+                )
             emit_turn_phase_event(trace_ctx, phase="extractor_patch_apply", success=True, extra={"stage": source_kind})
             extractor_piece = sanitize_patch_with_events(
                 working_state,
@@ -1845,14 +1883,15 @@ def create_turn_record(
     npc_source_story = gm_text_display if action_type != "canon" else ""
     emit_turn_phase_event(trace_ctx, phase="npc_extractor", success=True, extra={"stage": "start"})
     try:
-        npc_upserts = call_npc_extractor(
-            campaign,
-            state_after,
-            actor,
-            action_type,
-            content,
-            npc_source_story,
-        )
+        with profile_phase("npc_extractor"):
+            npc_upserts = call_npc_extractor(
+                campaign,
+                state_after,
+                actor,
+                action_type,
+                content,
+                npc_source_story,
+            )
         npc_updates = apply_npc_upserts(
             campaign,
             state_after,
@@ -1934,11 +1973,12 @@ def create_turn_record(
     )
     if isinstance(trace_ctx, dict):
         trace_ctx["turn_id"] = turn_record["turn_id"]
-    campaign["state"] = state_after
-    normalize_npc_codex_state(campaign)
-    campaign.setdefault("turns", []).append(turn_record)
-    remember_recent_story(campaign)
-    rebuild_memory_summary(campaign)
+    with profile_phase("finalize_state_memory"):
+        campaign["state"] = state_after
+        normalize_npc_codex_state(campaign)
+        campaign.setdefault("turns", []).append(turn_record)
+        remember_recent_story(campaign)
+        rebuild_memory_summary(campaign)
     return turn_record
 
 def find_turn(campaign: Dict[str, Any], turn_id: str) -> Dict[str, Any]:

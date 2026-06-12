@@ -1,4 +1,7 @@
+import json
+import logging
 import os
+import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
@@ -9,7 +12,10 @@ from app.config.errors import (
     ERROR_CODE_PERSISTENCE,
     ERROR_CODE_SSE_BROADCAST,
 )
+from app.core.turn_profiling import profiling_enabled
 from app.repositories.campaign_repository import CampaignRepository
+
+profiling_logger = logging.getLogger("aelunor.turn_profile")
 
 
 CampaignState = Dict[str, Any]
@@ -105,7 +111,22 @@ def save_campaign(
 
     try:
         ports.emit_turn_phase_event(trace_ctx, phase="persist_save", success=True, extra={"reason": reason})
-        save_json(ports.repository, campaign_path(ports.repository, campaign_id), campaign)
+        if profiling_enabled():
+            save_started = time.perf_counter()
+            save_json(ports.repository, campaign_path(ports.repository, campaign_id), campaign)
+            profiling_logger.info(
+                json.dumps(
+                    {
+                        "kind": "save_profile",
+                        "campaign_id": campaign_id,
+                        "reason": reason,
+                        "s": round(time.perf_counter() - save_started, 3),
+                    },
+                    ensure_ascii=False,
+                )
+            )
+        else:
+            save_json(ports.repository, campaign_path(ports.repository, campaign_id), campaign)
         ports.emit_turn_phase_event(trace_ctx, phase="persist_save", success=True, extra={"reason": reason, "result": "ok"})
     except Exception as exc:
         ports.emit_turn_phase_event(

@@ -177,7 +177,7 @@ def test_turn_record_can_store_entity_guard_report_without_rejecting():
 
 
 def test_turn_engine_wires_entity_guard_without_llm_flow():
-    source = inspect.getsource(turn_engine.create_turn_record)
+    source = inspect.getsource(turn_engine._create_turn_record_impl)
 
     assert "build_patch_entity_guard_report" in source
     assert '"narrator": build_patch_entity_guard_report' in source
