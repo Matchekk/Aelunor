@@ -13,7 +13,7 @@ interface HubHeroProps {
 
 function getHeroTitle(hasActiveSession: boolean, latestEntry: SessionLibraryEntry | null): string {
   if (hasActiveSession) {
-    return latestEntry?.campaign_title ?? latestEntry?.label ?? "Active Campaign";
+    return latestEntry?.campaign_title ?? latestEntry?.label ?? "Aktive Kampagne";
   }
   if (latestEntry) {
     return latestEntry.campaign_title ?? latestEntry.label;
@@ -39,7 +39,7 @@ export function HubHero({
   return (
     <AelunorPanelFrame className="hub-hero-panel" variant="hero" texture aria-labelledby="hub-hero-title">
       <div className="hub-hero-copy">
-        <p className="hub-hero-chapter">Campaign Control</p>
+        <p className="hub-hero-chapter">Kampagnensteuerung</p>
         <AelunorDivider variant="small" />
         <h1 id="hub-hero-title">{heroTitle}</h1>
         <p className="hub-hero-subtitle">

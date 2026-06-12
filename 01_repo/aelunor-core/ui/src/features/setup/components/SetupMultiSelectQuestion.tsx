@@ -42,7 +42,7 @@ export function SetupMultiSelectQuestion({ question, draft, disabled, on_change 
       </div>
       {question.allow_other ? (
         <label className="setup-field setup-field-inline">
-          <span>{question.other_hint || "Additional entries, comma separated"}</span>
+          <span>{question.other_hint || "Weitere Angaben, durch Kommas getrennt"}</span>
           <input
             type="text"
             value={draft.other_values_text}

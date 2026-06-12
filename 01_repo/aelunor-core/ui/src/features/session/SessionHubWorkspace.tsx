@@ -140,7 +140,7 @@ export function SessionHubWorkspace({
   const clearCurrentSession = useCallback(() => {
     clearSessionBootstrap();
     on_active_session_change(readSessionBootstrap());
-    setStatusMessage("Local active session cleared.");
+    setStatusMessage("Aktive lokale Session wurde beendet.");
     setResumeError(null);
     setLastFailedCampaignId(null);
   }, [on_active_session_change]);
@@ -148,7 +148,7 @@ export function SessionHubWorkspace({
   const bootstrapSession = useCallback(
     async (session: SessionBootstrap, sourceLabel: string, localMeta: SessionLibraryLocalMeta = {}) => {
       if (!session.campaign_id || !session.player_id || !session.player_token) {
-        setResumeError("Session credentials are incomplete.");
+        setResumeError("Die lokalen Session-Zugangsdaten sind unvollständig.");
         return;
       }
 
@@ -158,7 +158,7 @@ export function SessionHubWorkspace({
       const player_id = persisted.player_id;
       const player_token = persisted.player_token;
       if (!campaign_id || !player_id || !player_token) {
-        setResumeError("Session credentials are incomplete.");
+        setResumeError("Die lokalen Session-Zugangsdaten sind unvollständig.");
         return;
       }
       setResumePendingCampaignId(campaign_id);
@@ -180,12 +180,12 @@ export function SessionHubWorkspace({
         });
         on_active_session_change(persisted);
         refreshLibrary();
-        setStatusMessage(`${sourceLabel}: campaign state validated.`);
+        setStatusMessage(`${sourceLabel}: Kampagnenzustand geprüft.`);
         navigate(buildCampaignPath(campaign_id, deriveRouteRenderState(campaign).canonical_workspace));
       } catch (error) {
         const restored = writeSessionBootstrap(rollbackSession);
         on_active_session_change(restored);
-        setResumeError(`${sourceLabel} failed: ${asErrorMessage(error)}`);
+        setResumeError(`${sourceLabel} fehlgeschlagen: ${asErrorMessage(error)}`);
         setLastFailedCampaignId(campaign_id);
       } finally {
         setResumePendingCampaignId(null);
@@ -203,7 +203,7 @@ export function SessionHubWorkspace({
         refreshLibrary();
         await bootstrapSession(
           readSessionBootstrap(),
-          "Create campaign",
+          "Kampagne erstellen",
           buildLocalMeta({
             label: payload.title,
             campaign_title: payload.title,
@@ -230,7 +230,7 @@ export function SessionHubWorkspace({
           : null;
         await bootstrapSession(
           session,
-          "Join campaign",
+          "Kampagne beitreten",
           buildLocalMeta({
             campaign_title: libraryEntry?.campaign_title ?? null,
             display_name: payload.display_name,
@@ -247,7 +247,7 @@ export function SessionHubWorkspace({
     async (entry: SessionLibraryEntry) => {
       await bootstrapSession(
         toSessionBootstrap(entry),
-        "Resume session",
+        "Session fortsetzen",
         buildLocalMeta({
           label: entry.label,
           campaign_title: entry.campaign_title ?? null,
@@ -265,7 +265,7 @@ export function SessionHubWorkspace({
       if (active_session.campaign_id === campaign_id) {
         clearCurrentSession();
       } else {
-        setStatusMessage("Local session entry removed.");
+        setStatusMessage("Lokaler Session-Eintrag entfernt.");
       }
       if (lastFailedCampaignId === campaign_id) {
         setLastFailedCampaignId(null);
@@ -280,7 +280,7 @@ export function SessionHubWorkspace({
       refreshLibrary();
       if (updated) {
         setEditingEntry(updated);
-        setStatusMessage("Local session label updated.");
+        setStatusMessage("Lokaler Session-Name aktualisiert.");
       }
     },
     [refreshLibrary],
@@ -294,7 +294,7 @@ export function SessionHubWorkspace({
       if (active_session.campaign_id === campaign_id) {
         clearCurrentSession();
       } else {
-        setStatusMessage("Local session entry deleted.");
+        setStatusMessage("Lokaler Session-Eintrag gelöscht.");
       }
       if (lastFailedCampaignId === campaign_id) {
         setLastFailedCampaignId(null);
@@ -306,11 +306,11 @@ export function SessionHubWorkspace({
   const handleExportEntry = useCallback((campaign_id: string) => {
     const payload = exportSessionLibraryEntry(campaign_id);
     if (!payload) {
-      setResumeError("Unable to export local session entry.");
+      setResumeError("Lokaler Session-Eintrag konnte nicht exportiert werden.");
       return;
     }
     downloadJson(`aelunor-session-${campaign_id}.json`, payload);
-    setStatusMessage("Local session exported.");
+    setStatusMessage("Lokale Session exportiert.");
   }, []);
 
   const createError = createMutation.isError ? asErrorMessage(createMutation.error) : null;
@@ -348,7 +348,7 @@ export function SessionHubWorkspace({
     const libraryEntry = readSessionLibrary().find((entry) => entry.campaign_id === active_session.campaign_id);
     void bootstrapSession(
       active_session,
-      "Resume current session",
+      "Aktive Session fortsetzen",
       buildLocalMeta({
         label: libraryEntry?.label,
         campaign_title: libraryEntry?.campaign_title ?? null,
@@ -411,15 +411,15 @@ export function SessionHubWorkspace({
         {lastFailedCampaignId ? (
           <section className="v1-panel session-card hub-alert-card">
             <div className="v1-panel-head">
-              <h2>Stale local credentials</h2>
+              <h2>Veraltete lokale Zugangsdaten</h2>
             </div>
-            <p className="status-muted">The stored credentials could not load campaign state from the server.</p>
+            <p className="status-muted">Die gespeicherten Zugangsdaten konnten den Kampagnenzustand nicht vom Server laden.</p>
             <div className="session-inline-actions">
               <button type="button" onClick={() => handleForgetEntry(lastFailedCampaignId)}>
-                Forget failed local session
+                Fehlgeschlagene lokale Session entfernen
               </button>
               <button type="button" onClick={clearCurrentSession}>
-                Clear active credentials
+                Aktive Zugangsdaten löschen
               </button>
             </div>
           </section>
@@ -487,7 +487,6 @@ export function SessionHubWorkspace({
               session_count={libraryEntries.length}
               has_active_session={currentSessionIsActive}
               latest_entry={latestLibraryEntry}
-              active_campaign_id={active_session.campaign_id}
               active_join_code={active_session.join_code}
             />
           }

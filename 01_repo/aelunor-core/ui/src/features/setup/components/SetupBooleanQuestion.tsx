@@ -6,8 +6,8 @@ export function SetupBooleanQuestion({ question, draft, disabled, on_change }: S
       <span>{question.label}</span>
       <div className="setup-choice-list">
         {[
-          { label: "Yes", value: true },
-          { label: "No", value: false },
+          { label: "Ja", value: true },
+          { label: "Nein", value: false },
         ].map((option) => {
           const checked = draft.boolean_value === option.value;
           return (

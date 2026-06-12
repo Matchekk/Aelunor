@@ -1,0 +1,3 @@
+# Edge refinement (scripts/refine_edges.py): purely numerical, no ML models.
+pymatting>=1.1.13
+pillow>=10.0

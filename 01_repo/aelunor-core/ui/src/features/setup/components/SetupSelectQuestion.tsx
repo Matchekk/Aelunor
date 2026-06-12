@@ -52,15 +52,15 @@ export function SetupSelectQuestion({ question, draft, disabled, on_change }: Se
               }}
             />
             <span className="setup-choice-copy">
-              <strong>Other</strong>
-              <small>{question.other_hint || "Describe a custom answer if nothing above fits."}</small>
+              <strong>Eigene Antwort</strong>
+              <small>{question.other_hint || "Beschreibe eine eigene Antwort, wenn nichts oben passt."}</small>
             </span>
           </label>
         ) : null}
       </div>
       {question.allow_other ? (
         <label className="setup-field setup-field-inline">
-          <span>{question.other_hint || "Custom answer"}</span>
+          <span>{question.other_hint || "Eigene Antwort"}</span>
           <input
             type="text"
             value={draft.other_text}

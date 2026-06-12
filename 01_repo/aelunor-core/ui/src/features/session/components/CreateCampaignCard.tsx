@@ -12,7 +12,7 @@ interface CreateCampaignCardProps {
 }
 
 export function CreateCampaignCard({ is_pending, error_message, default_display_name = null, on_submit }: CreateCampaignCardProps) {
-  const [title, setTitle] = useState("New Aelunor Campaign");
+  const [title, setTitle] = useState("Neue Aelunor-Kampagne");
   const [displayName, setDisplayName] = useState(default_display_name ?? "");
   const [localError, setLocalError] = useState<string | null>(null);
 
@@ -25,12 +25,12 @@ export function CreateCampaignCard({ is_pending, error_message, default_display_
   const submit = async () => {
     const normalizedDisplayName = displayName.trim();
     if (!normalizedDisplayName) {
-      setLocalError("Display name is required.");
+      setLocalError("Dein Name fehlt.");
       return;
     }
     setLocalError(null);
     await on_submit({
-      title: title.trim() || "New Aelunor Campaign",
+      title: title.trim() || "Neue Aelunor-Kampagne",
       display_name: normalizedDisplayName,
     });
   };

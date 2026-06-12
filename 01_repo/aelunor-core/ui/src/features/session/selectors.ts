@@ -11,13 +11,13 @@ export function validateJoinInput(join_code: string, display_name: string): stri
   const normalizedDisplayName = display_name.trim();
 
   if (!normalizedJoinCode) {
-    return "Join code is required.";
+    return "Der Beitrittscode fehlt.";
   }
   if (normalizedJoinCode.length < 4) {
-    return "Join code must be at least 4 characters.";
+    return "Der Beitrittscode muss mindestens 4 Zeichen lang sein.";
   }
   if (!normalizedDisplayName) {
-    return "Display name is required.";
+    return "Dein Name fehlt.";
   }
   return null;
 }
@@ -25,20 +25,20 @@ export function validateJoinInput(join_code: string, display_name: string): stri
 export function formatUpdatedAtLabel(value: string): string {
   const formatted = formatDateTime(value);
   if (!formatted) {
-    return "Unknown";
+    return "Unbekannt";
   }
   return formatted;
 }
 
 export function deriveSessionSubtitle(entry: SessionLibraryEntry): string {
-  const subtitleParts = [entry.join_code ? `Code ${entry.join_code}` : "No join code"];
+  const subtitleParts = [entry.join_code ? `Code ${entry.join_code}` : "Kein Beitrittscode"];
   if (entry.campaign_title && entry.campaign_title !== entry.label) {
     subtitleParts.unshift(entry.campaign_title);
   }
   if (entry.display_name) {
     subtitleParts.push(entry.display_name);
   }
-  subtitleParts.push(`Updated ${formatUpdatedAtLabel(entry.updated_at)}`);
+  subtitleParts.push(`Aktualisiert ${formatUpdatedAtLabel(entry.updated_at)}`);
   return subtitleParts.join(" • ");
 }
 
@@ -58,13 +58,13 @@ export function hasActiveSession(session: SessionBootstrap): boolean {
 export function deriveNextWorkspaceHint(campaign: CampaignSnapshot): string {
   const viewer = campaign.viewer_context;
   if (viewer.needs_world_setup) {
-    return "World setup would be the next gated destination in Phase C.";
+    return "Das Welt-Setup ist der nächste gesperrte Schritt.";
   }
   if (viewer.needs_character_setup) {
-    return "Character setup would be the next gated destination in Phase C.";
+    return "Das Charakter-Setup ist der nächste gesperrte Schritt.";
   }
   if (!viewer.claimed_slot_id) {
-    return "Claim workspace would be the next gated destination in Phase C.";
+    return "Der Claim-Bereich ist der nächste gesperrte Schritt.";
   }
-  return "Campaign play would be the next gated destination in Phase C.";
+  return "Der Spieltisch ist der nächste gesperrte Schritt.";
 }

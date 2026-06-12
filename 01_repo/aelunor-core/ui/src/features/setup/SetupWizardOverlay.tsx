@@ -429,12 +429,12 @@ export function SetupWizardOverlay({ campaign, on_leave_session }: SetupWizardOv
                 <div className="setup-empty-state">
                   <p>{waitingMessage}</p>
                   <p className="status-muted">
-                    The host must finish the shared world questions before slot claims and character setup can continue.
+                    Der Host muss die gemeinsamen Weltfragen abschließen, bevor Slot-Claims und Charakter-Setup weitergehen können.
                   </p>
                 </div>
               ) : !currentPrompt?.question ? (
                 <div className="setup-empty-state">
-                  <p>No setup question is currently loaded for this step.</p>
+                  <p>Für diesen Schritt ist aktuell keine Setup-Frage geladen.</p>
                   <div className="setup-inline-actions">
                     <button type="button" onClick={() => void loadCurrentStep()} disabled={submitPending || sharedBlocked}>
                       {nextMutation.isPending ? "Lade..." : "Aktuelle Setup-Frage laden"}
@@ -448,7 +448,7 @@ export function SetupWizardOverlay({ campaign, on_leave_session }: SetupWizardOv
                   <div className="setup-question-copy">
                     <p className="setup-ai-copy">{currentPrompt.question.ai_copy || currentPrompt.question.label}</p>
                     <p className="status-muted">
-                      {currentPrompt.question.required ? "Required" : "Optional"} • {deriveSetupProgressSummary(currentPrompt.progress)}
+                      {currentPrompt.question.required ? "Pflichtfrage" : "Optional"} • {deriveSetupProgressSummary(currentPrompt.progress)}
                     </p>
                   </div>
                   {draft ? (
@@ -499,7 +499,7 @@ export function SetupWizardOverlay({ campaign, on_leave_session }: SetupWizardOv
                   {gate.is_waiting
                     ? waitingMessage
                     : reviewEntries.length > 0
-                      ? `${reviewEntries.length} summary item${reviewEntries.length === 1 ? "" : "s"} available for review.`
+                      ? `${reviewEntries.length} ${reviewEntries.length === 1 ? "Eintrag" : "Einträge"} in der Zusammenfassung.`
                       : "Für diesen Schritt liegt noch keine Zusammenfassung vor."}
                 </p>
                 {reviewEntries.length > 0 ? (

@@ -46,7 +46,7 @@ export function JoinCampaignCard({ is_pending, error_message, default_display_na
       </div>
       <AelunorDivider variant="small" />
       <WaitingInline target="hub_join" className="hub-waiting-inline" />
-      <p className="status-muted">Schneller Einstieg in einen bestehenden Raum über Join-Code.</p>
+      <p className="status-muted">Schneller Einstieg in einen bestehenden Raum über Beitrittscode.</p>
       <form
         className="session-card-form"
         onSubmit={(event) => {
@@ -55,7 +55,7 @@ export function JoinCampaignCard({ is_pending, error_message, default_display_na
         }}
       >
         <label>
-          <span>Join-Code / Kampagnen-Code</span>
+          <span>Beitrittscode / Kampagnen-Code</span>
           <input
             value={joinCode}
             onChange={(event) => {

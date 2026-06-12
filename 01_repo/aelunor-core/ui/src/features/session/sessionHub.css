@@ -146,6 +146,13 @@
 .hub-sidebar-nav {
   display: grid;
   gap: 0.34rem;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hub-sidebar-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .hub-sidebar-link {
@@ -976,6 +983,11 @@
   gap: 0.6rem;
 }
 
+.hub-resume-loading {
+  display: flex;
+  justify-content: center;
+}
+
 .session-card-form {
   display: grid;
   gap: 0.78rem;
@@ -1358,13 +1370,23 @@
     grid-auto-flow: column;
     grid-auto-columns: max-content;
     overflow-x: auto;
+    cursor: grab;
     padding-bottom: 0.25rem;
+    scroll-snap-type: x proximity;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+    user-select: none;
+  }
+
+  .hub-sidebar-nav.is-dragging {
+    cursor: grabbing;
   }
 
   .hub-sidebar-link {
     grid-template-columns: 3.35rem auto;
     min-height: 3rem;
     min-width: 10rem;
+    scroll-snap-align: start;
   }
 
   .hub-dashboard-grid {
@@ -1385,12 +1407,19 @@
     padding: 0.85rem 0.75rem 1.4rem;
   }
 
+  .aelunor-hud-hub .hub-topbar {
+    position: static;
+    width: 100%;
+    margin-bottom: 0.75rem;
+    justify-content: flex-start;
+  }
+
   .hub-topbar {
     grid-template-columns: 1fr;
   }
 
   .hub-topbar-meta {
-    justify-content: flex-end;
+    justify-content: flex-start;
   }
 
   .hub-hero-panel {
@@ -1432,6 +1461,13 @@
 }
 
 @media (max-width: 520px) {
+  .hub-status-badge {
+    max-width: min(100%, 17rem);
+    min-height: 2.25rem;
+    padding: 0.3rem 0.65rem;
+    font-size: 0.78rem;
+  }
+
   .hub-sidebar-link {
     min-width: 8.6rem;
   }

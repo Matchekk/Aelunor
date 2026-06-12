@@ -2,15 +2,15 @@ import { AelunorDivider, AelunorPanelFrame } from "../../../shared/ui/aelunorAss
 
 const FEATURES = [
   {
-    label: "Story-first",
+    label: "Story im Fokus",
     text: "Kampagnen, Figuren und Weltzustand bleiben im Fokus.",
   },
   {
-    label: "Live Table",
-    text: "Presence, Claims und Sessionwechsel sind direkt erreichbar.",
+    label: "Live-Tisch",
+    text: "Spielerpräsenz, Claims und Sessionwechsel sind direkt erreichbar.",
   },
   {
-    label: "Canon Ready",
+    label: "Canon bereit",
     text: "Boards, Timeline und Setup führen zur spielbaren Szene.",
   },
 ];
