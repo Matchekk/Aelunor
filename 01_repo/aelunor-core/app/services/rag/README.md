@@ -1,15 +1,14 @@
 # RAG Foundation (`app/services/rag/`)
 
-Deterministic, offline-testable core for later campaign-memory RAG. This
-slice ships only local building blocks; nothing is wired into the turn
-pipeline yet.
+Deterministic, offline-testable campaign-memory RAG. The core remains local
+and stdlib-only; turn usage is wired through explicit Turn Engine ports.
 
 ## Zweck
 
-Eine deterministische Grundlage, die spaeter Langzeit-Erinnerungen (Kampagnen,
+Eine deterministische Grundlage, die Langzeit-Erinnerungen (Kampagnen,
 Chroniken, NPCs, Orte, Quests, fruehere Turns) gezielt in den Narrator-Kontext
-bringen kann. In diesem Slice nur reine Datenmodelle, Chunking, lexical
-Retrieval und ein bounded Context Builder.
+bringen kann. Die Turn-Integration bleibt read-only und laeuft ueber
+`TurnRagDependencies`.
 
 ## Nicht-Ziele (dieser Slice)
 
@@ -17,7 +16,6 @@ Retrieval und ein bounded Context Builder.
 - Keine Embeddings / Embedding-API.
 - Keine LLM-/Ollama-/HTTP-Aufrufe.
 - Keine Router / API-Endpunkte.
-- Keine Turn-Pipeline-Integration.
 - Keine neue externe Dependency (nur stdlib).
 
 ## Daten, die spaeter hinein duerfen
@@ -45,6 +43,8 @@ Stabile, kleine Oberflaeche (siehe `__init__.py`):
 - `build_rag_context(results, *, max_items=5, max_chars=2500)`
 - `build_rag_documents_from_campaign_state(campaign_id, state, *, max_text_chars=4000)`
 - `build_rag_document_id(campaign_id, source_type, stable_key)`
+- `collect_turn_rag_context(campaign, state, actor, action_type, content, ...)`
+- `build_turn_rag_prompt_block(rag_context, *, max_items=6, max_chars=3500)`
 
 ## Structured Memory Mapper
 
@@ -63,8 +63,8 @@ ein `state`-Mapping; Ausgabe: deterministische `RAGDocument`-Liste.
   begrenzt. Metadata bleibt klein und serialisierbar.
 - `campaign_id` ist Pflicht und fliesst in jede `RAGDocument.id` ein.
 
-Keine API, keine Turn-Integration. Der Mapper liefert nur die `RAGDocument`-
-Liste; das Zusammenstecken uebernimmt der Index-Service (siehe unten).
+Keine API im Mapper. Der Mapper liefert nur die `RAGDocument`-Liste; das
+Zusammenstecken uebernimmt der Index-Service oder der Turn-Context-Collector.
 
 ## In-Memory Campaign Memory Index Service
 
@@ -86,7 +86,28 @@ In-Memory-Service: Mapper -> Chunking -> Retrieval -> Context Builder.
 
 Er persistiert nichts, liest keine Runtime-Dateien und mutiert den Input-State
 nicht. Den read-only Anschluss an Router/API uebernimmt der Context-Preview-
-Service (siehe unten); eine Turn-Pipeline-Integration gibt es noch nicht.
+Service (siehe unten). Echte Turns nutzen den separaten Turn-Context-Collector.
+
+## Turn Context Integration
+
+`turn_context.py` baut pro Narrator-Turn ein kleines, deterministisches
+Read-only-RAG aus `campaign` + `working_state` und nutzt die bestehende
+Chunking-/Retrieval-Schicht. Es liest keine Dateien, persistiert nichts und
+mutiert den Campaign-State nicht.
+
+Unterstuetzte Turn-Chunk-Typen: `recent_turn`, `current_scene`, `character`,
+`npc`, `codex`, `world_rule`, `plotpoint`, `item`, `condition`,
+`setup_answer`.
+
+`prompting.py` rendert daraus einen hart begrenzten Block:
+`[RELEVANT CAMPAIGN MEMORY] ... [/RELEVANT CAMPAIGN MEMORY]`. Der Block nennt
+explizit, dass RAG nur Stuetzkontext ist und der aktuelle strukturierte
+Campaign-State bei Konflikten gewinnt.
+
+Die Turn Engine konsumiert das ueber `TurnRagDependencies` in
+`app/services/turn/dependencies.py`. Die Einspeisung sitzt im normalen
+Narrator-User-Prompt neben dem bestehenden World-/Character-Consistency-
+Kontext; `action_type=canon` nutzt weiter den Canon-Extractor-Pfad.
 
 ## Context Preview Service / API
 
@@ -114,9 +135,9 @@ beeinflussen.
 
 API: `POST /api/campaigns/{campaign_id}/context/rag-preview` (Router
 `app/routers/context.py`, Header `X-Player-Id`/`X-Player-Token`). Der Endpunkt
-zeigt RAG-Kontext, injiziert ihn aber noch nicht in Turns. Keine Persistenz,
-keine Vector-DB, keine Embeddings. Naechster Slice: LLM Context Contract
-Alignment oder guarded Turn-Context-Integration.
+zeigt RAG-Kontext. Echte Turns verwenden den separaten `[RELEVANT CAMPAIGN
+MEMORY]`-Block; die Preview bleibt read-only und loest keine Turns aus. Keine
+Persistenz, keine Vector-DB, keine Embeddings.
 
 ## Chunking
 
@@ -151,10 +172,9 @@ RAG ist unterstuetzende Erinnerung. Bei Konflikt gewinnt der aktuelle
 strukturierte Campaign-State. Der Context-Block enthaelt dazu einen
 expliziten Hinweis.
 
-## Spaetere Integrationsstelle (nicht in diesem Slice)
+## Turn Prompt Contract
 
-Die natuerliche Andockstelle ist die Turn-/Narrator-Kontextbildung
-(`app/services/context_service.py` bzw. die Turn-Pipeline-Kontextaufbereitung).
-Dort koennten retrievte Chunks als zusaetzlicher, klar markierter Kontextblock
-eingespeist werden. Bewusst kein Code-Wiring in diesem Slice — nur diese
-Dokumentation.
+RAG wird nicht als JSON-Wand in den Prompt geschrieben. `turn_engine.py`
+sammelt den Kontext nach `build_context_packet(...)` und vor dem
+Narrator-Aufruf, haengt den Promptblock an den bestehenden Zusatzkontext und
+speichert `rag_context` / `rag_prompt_block` im Turn-`prompt_payload`.

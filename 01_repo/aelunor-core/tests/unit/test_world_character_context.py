@@ -146,5 +146,7 @@ def test_turn_engine_wires_world_character_context_into_prompt_payload():
     source = inspect.getsource(turn_engine.create_turn_record)
 
     assert "build_world_character_context_packet" in source
-    assert 'consistency_context=world_character_context["combined_text"]' in source
+    assert 'world_character_context["combined_text"]' in source
+    assert "rag_prompt_block" in source
+    assert "consistency_context=consistency_context" in source
     assert '"world_character_context": world_character_context' in source

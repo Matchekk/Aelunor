@@ -4,6 +4,7 @@ import unittest
 
 import requests
 from fastapi import HTTPException
+from unittest.mock import patch
 
 from app.services import state_engine
 from app.services import turn_engine
@@ -145,6 +146,39 @@ def configure_engine_for_tests() -> None:
 class TurnEngineTests(unittest.TestCase):
     def setUp(self) -> None:
         configure_engine_for_tests()
+
+    def test_rag_context_failure_fails_open_and_emits_trace_event(self) -> None:
+        events = []
+
+        def fail_collect(**_kwargs):
+            raise RuntimeError("rag collector unavailable")
+
+        with (
+            patch.object(turn_engine, "collect_turn_rag_context", fail_collect),
+            patch.object(
+                turn_engine,
+                "emit_turn_phase_event",
+                lambda ctx, **payload: events.append((ctx, payload)),
+            ),
+        ):
+            context, block = turn_engine._collect_turn_rag_prompt_context(
+                campaign={"campaign_meta": {"campaign_id": "camp-rag"}},
+                state={"characters": {}},
+                actor="slot_1",
+                action_type="do",
+                content="Weiter",
+                trace_ctx={"trace_id": "trace_1"},
+            )
+
+        self.assertEqual(context, {"chunks": [], "warnings": ["RuntimeError"]})
+        self.assertEqual(block, "")
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0][0], {"trace_id": "trace_1"})
+        self.assertEqual(events[0][1]["phase"], "rag_context")
+        self.assertFalse(events[0][1]["success"])
+        self.assertEqual(events[0][1]["error_code"], "rag_context_failed")
+        self.assertEqual(events[0][1]["error_class"], "RuntimeError")
+        self.assertEqual(events[0][1]["extra"], {"stage": "turn_rag", "fail_open": True})
 
     def _base_apply_state(self) -> dict:
         character = state_engine.blank_character_state("slot_1")

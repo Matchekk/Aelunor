@@ -50,6 +50,12 @@ class TurnAttributeDependencies:
     normalize_attribute_influence_meta: Callable[..., Dict[str, Any]]
 
 
+@dataclass(frozen=True)
+class TurnRagDependencies:
+    collect_turn_rag_context: Callable[..., Dict[str, Any]]
+    build_turn_rag_prompt_block: Callable[..., str]
+
+
 def build_turn_llm_dependencies(
     *,
     adapter: llm_client.ChatAdapter,

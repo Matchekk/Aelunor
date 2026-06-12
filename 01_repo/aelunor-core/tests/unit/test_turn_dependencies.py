@@ -8,6 +8,7 @@ from app.services.turn.dependencies import (
     TurnExtractionDependencies,
     TurnPacingDependencies,
     TurnProgressionDependencies,
+    TurnRagDependencies,
     build_turn_llm_dependencies,
 )
 
@@ -148,6 +149,23 @@ class TurnDependenciesTests(unittest.TestCase):
         )
 
         self.assertTrue(deps.normalize_attribute_influence_meta({"last_turn": 1})["normalized"])
+
+    def test_turn_rag_dependencies_group_only_rag_ports(self) -> None:
+        deps = TurnRagDependencies(
+            collect_turn_rag_context=lambda **_kwargs: {"chunks": [{"id": "rag_1"}]},
+            build_turn_rag_prompt_block=lambda context: f"RAG:{len(context.get('chunks') or [])}",
+        )
+
+        context = deps.collect_turn_rag_context(
+            campaign={},
+            state={},
+            actor="slot_1",
+            action_type="do",
+            content="Weiter",
+        )
+
+        self.assertEqual(context["chunks"][0]["id"], "rag_1")
+        self.assertEqual(deps.build_turn_rag_prompt_block(context), "RAG:1")
 
 
 if __name__ == "__main__":

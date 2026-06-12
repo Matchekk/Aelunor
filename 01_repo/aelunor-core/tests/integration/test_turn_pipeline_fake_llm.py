@@ -55,6 +55,7 @@ class TurnPipelineFakeLlmTests(unittest.TestCase):
                     {
                         "system_len": len(system),
                         "user_len": len(user),
+                        "user": user,
                         "temperature": temperature,
                         "repeat_penalty": repeat_penalty,
                         "trace_id": (trace_ctx or {}).get("trace_id"),
@@ -129,8 +130,18 @@ class TurnPipelineFakeLlmTests(unittest.TestCase):
                 }
                 character = state_engine.blank_character_state(SLOT_ID)
                 character["bio"]["name"] = "Aria"
+                character["bio"]["summary"] = "Aria kennt die Runen am Mondtor."
+                character["scene_id"] = "scene_moon_gate"
                 character["class_current"] = state_engine.default_class_current()
                 campaign["state"].setdefault("characters", {})[SLOT_ID] = character
+                campaign["state"].setdefault("scenes", {})["scene_moon_gate"] = {
+                    "name": "Mondtor von Thalûn",
+                    "danger": 2,
+                    "notes": "Die Runen reagieren auf Aria.",
+                }
+                campaign["state"].setdefault("codex", {})["lore"] = {
+                    "moon_gate": {"known_facts": ["Mondtor-Runen brauchen klare Namen."]}
+                }
                 campaign["state"]["meta"]["phase"] = "active"
                 campaign["state"]["meta"]["turn"] = 0
                 campaign["state"]["meta"]["intro_state"] = {
@@ -150,6 +161,8 @@ class TurnPipelineFakeLlmTests(unittest.TestCase):
                 )
 
                 self.assertEqual(len(fake_llm_calls), 1)
+                self.assertIn("[RELEVANT CAMPAIGN MEMORY]", fake_llm_calls[0]["user"])
+                self.assertIn("Mondtor", fake_llm_calls[0]["user"])
                 self.assertTrue(turn["turn_id"].startswith("turn_"))
                 self.assertEqual(turn["actor"], SLOT_ID)
                 self.assertEqual(turn["player_id"], player_id)
