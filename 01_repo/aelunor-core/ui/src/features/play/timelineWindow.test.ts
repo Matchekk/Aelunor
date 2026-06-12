@@ -73,6 +73,7 @@ describe("timelineWindow helpers", () => {
     });
 
     const entries = deriveTimelineEntries(campaign);
-    expect(deriveRenderedTimelineEntries(entries, 2).map((entry) => entry.turn_id)).toEqual(["turn-5", "turn-4"]);
+    expect(entries.map((entry) => entry.turn_id)).toEqual(["turn-1", "turn-2", "turn-3", "turn-4", "turn-5"]);
+    expect(deriveRenderedTimelineEntries(entries, 2).map((entry) => entry.turn_id)).toEqual(["turn-4", "turn-5"]);
   });
 });

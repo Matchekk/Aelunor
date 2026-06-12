@@ -173,10 +173,11 @@ export const StoryTimeline = memo(function StoryTimeline({
     shouldOpenTimelineDetails(state.interaction.timeline_detail_default),
   );
   const [visibleCount, setVisibleCount] = useState(() => deriveInitialVisibleCount(entries.length));
+  const latestTurnId = entries[entries.length - 1]?.turn_id ?? null;
   const previousSceneIdRef = useRef(selected_scene_id);
   const previousTotalCountRef = useRef(entries.length);
-  const previousLatestTurnRef = useRef(entries[0]?.turn_id ?? null);
-  const timelineRef = useRef<HTMLElement | null>(null);
+  const previousLatestTurnRef = useRef(latestTurnId);
+  const timelineEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const scene_changed = previousSceneIdRef.current !== selected_scene_id;
@@ -199,24 +200,28 @@ export const StoryTimeline = memo(function StoryTimeline({
   );
 
   useEffect(() => {
-    const latestTurnId = entries[0]?.turn_id ?? null;
+    // Beim Betreten startet das Journal am neuesten Eintrag (unten), wie ein Buch beim Lesezeichen.
+    timelineEndRef.current?.scrollIntoView({ block: "end" });
+  }, []);
+
+  useEffect(() => {
     if (!autoScroll || !latestTurnId) {
       previousLatestTurnRef.current = latestTurnId;
       return;
     }
 
     if (previousLatestTurnRef.current && previousLatestTurnRef.current !== latestTurnId) {
-      timelineRef.current?.scrollIntoView({
+      timelineEndRef.current?.scrollIntoView({
         behavior: "smooth",
-        block: "start",
+        block: "end",
       });
     }
 
     previousLatestTurnRef.current = latestTurnId;
-  }, [autoScroll, entries]);
+  }, [autoScroll, latestTurnId]);
 
   return (
-    <section ref={timelineRef} className="story-timeline journal-stage panel timeline-panel">
+    <section className="story-timeline journal-stage panel timeline-panel">
       <div className="v1-panel-head timeline-head">
         <h2 className="panelTitle">{is_preplay ? "Verlauf" : "Journal"}</h2>
         <span>{selected_scene_name ? `${selected_scene_name} • ${entries.length} Züge` : `${entries.length} Züge`}</span>
@@ -247,36 +252,6 @@ export const StoryTimeline = memo(function StoryTimeline({
           </span>
         </div>
       ) : null}
-      {entries.length === 0 ? (
-        <div className="timeline-empty">
-          <p className="status-muted">{selected_scene_name ? "Für diese Szene sind noch keine Züge sichtbar." : "Noch keine Chronik-Einträge."}</p>
-          <p className="status-muted">
-            {selected_scene_name
-              ? "Wechsle zu „Alle Szenen“, um auch Einträge ohne Szenenmarker zu sehen."
-              : "Sobald Züge entstehen oder fortgesetzt werden, erscheinen sie hier."}
-          </p>
-        </div>
-      ) : (
-        <ol className="timeline-list">
-          {renderedEntries.map((entry) => (
-            <TimelineItem
-              key={entry.turn_id}
-              entry={entry}
-              is_latest_turn={entry.turn_id === entries[0]?.turn_id}
-              character_sheet_slots={character_sheet_slots}
-              details_open_by_default={detailsOpenByDefault}
-              can_continue_turn={can_continue_turn && entry.turn_id === entries[0]?.turn_id}
-              turn_actions_pending={turn_actions_pending}
-              turn_action_pending_id={turn_action_pending_id}
-              on_open_character={on_open_character}
-              on_edit_turn={on_edit_turn}
-              on_undo_turn={on_undo_turn}
-              on_retry_turn={on_retry_turn}
-              on_continue_turn={on_continue_turn}
-            />
-          ))}
-        </ol>
-      )}
       {windowState.can_load_more ? (
         <div className="timeline-window-actions">
           <button
@@ -298,6 +273,37 @@ export const StoryTimeline = memo(function StoryTimeline({
           </button>
         </div>
       ) : null}
+      {entries.length === 0 ? (
+        <div className="timeline-empty">
+          <p className="status-muted">{selected_scene_name ? "Für diese Szene sind noch keine Züge sichtbar." : "Noch keine Chronik-Einträge."}</p>
+          <p className="status-muted">
+            {selected_scene_name
+              ? "Wechsle zu „Alle Szenen“, um auch Einträge ohne Szenenmarker zu sehen."
+              : "Sobald Züge entstehen oder fortgesetzt werden, erscheinen sie hier."}
+          </p>
+        </div>
+      ) : (
+        <ol className="timeline-list">
+          {renderedEntries.map((entry) => (
+            <TimelineItem
+              key={entry.turn_id}
+              entry={entry}
+              is_latest_turn={entry.turn_id === latestTurnId}
+              character_sheet_slots={character_sheet_slots}
+              details_open_by_default={detailsOpenByDefault}
+              can_continue_turn={can_continue_turn && entry.turn_id === latestTurnId}
+              turn_actions_pending={turn_actions_pending}
+              turn_action_pending_id={turn_action_pending_id}
+              on_open_character={on_open_character}
+              on_edit_turn={on_edit_turn}
+              on_undo_turn={on_undo_turn}
+              on_retry_turn={on_retry_turn}
+              on_continue_turn={on_continue_turn}
+            />
+          ))}
+        </ol>
+      )}
+      <div ref={timelineEndRef} aria-hidden="true" />
     </section>
   );
 });

@@ -140,7 +140,7 @@ export function deriveTimelineEntries(campaign: CampaignSnapshot): TimelineEntry
     .sort((left, right) => {
       const leftNumber = left.turn_number ?? 0;
       const rightNumber = right.turn_number ?? 0;
-      return rightNumber - leftNumber;
+      return leftNumber - rightNumber;
     });
 }
 

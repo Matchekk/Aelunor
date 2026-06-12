@@ -66,5 +66,6 @@ export function deriveRenderedTimelineEntries(entries: TimelineEntry[], visible_
   if (visible_count <= 0) {
     return [];
   }
-  return entries.slice(0, visible_count);
+  // Entries sind chronologisch (alt -> neu); das Fenster zeigt immer die neuesten am Ende.
+  return entries.slice(-visible_count);
 }
