@@ -136,6 +136,53 @@ NPC-Auftritt, Skill-Levelup):**
 heuristic_only bleibt Default. Compact bleibt flag-gated als Basis für eine spätere
 Iteration „schlankes Extractor-Schema" (das volle Patch-Schema ist der eigentliche
 Kostentreiber, nicht das Packet). Kein Default-Verhalten geändert.
+Commit: 5bb4d6f.
+
+---
+
+## Iteration 3 — Story-Compress ohne Vollkontext (2026-06-12)
+
+**Hypothese:** Compress braucht nur die erzeugte Story + Ziellänge + Stilregel,
+nicht den kompletten 31k-Narrator-Kontext.
+
+**Änderung (story_length_guard.py, nur Compress-Zweig):**
+- Eigener minimaler System-Prompt (`_COMPRESS_SYSTEM_PROMPT`, Lektor-Rolle).
+- User-Prompt = Auftrag + Storytext; der volle Narrator-User-Prompt entfällt.
+- Temperatur fix 0.2. Kein num_ctx-Override (vermeidet Modell-Reload mitten im Turn;
+  Abweichung von der Plan-Idee 4096/8192 ist gemessen begründet: Iteration 2 zeigte,
+  dass der num_ctx-Wechsel nichts spart, und der Gewinn kommt aus dem Prefill).
+- Skip-bei-kurzer-Story existierte bereits (Schleifenbedingung vor dem Call).
+- Rewrite-Zweig (Mindestlänge) bewusst unverändert: er braucht Weltkontext, um Inhalt
+  zu ERWEITERN. Achtung, dokumentiertes Risiko: auch er sendet den Vollkontext und
+  dürfte auf 25+-Turn-Kampagnen degenerieren → Heilung über Iteration 4 (Prompt-Budget).
+
+**Offline-A/B (realer 91k-Zeichen-User-Prompt aus gespeichertem Turn, 5.2k-Zeichen-Story,
+Ziel 2 000 Zeichen):**
+- ALT (Vollkontext): **2/2 Fehlschläge**, degenerierte Antwort (`{` …) nach 8.2 s / 2.5 s.
+  → Auf der 28-Turn-Kampagne war jeder Compress-Call ein **deterministischer Turn-Killer**
+  (Guard-Exception → TurnFlowError → Narrator-Retry). Erklärt mutmaßlich einen Teil der
+  50 % Baseline-Turn-Fails bei langen Stories.
+- NEU (nur Story): 2/2 Erfolge, 17.2 s / 16.2 s (generierungsdominiert), Output 3 085 /
+  2 321 Zeichen, sprachlich sauber; deterministisches `_trim_story_to_max` kappt danach
+  wie bisher auf Satzgrenze.
+- 49 Guard-Tests grün.
+
+**Messung (`it3_compress_minimal`, 4 Turns):**
+- **4/4 Turns abgeschlossen, 0 harte Fails** — erstmals in diesem Loop (Baseline: 50 % Fails).
+- Total Ø **76.7 s** (Median 79.6, Best 57.4, Worst 90.2) vs. Baseline ~110 s.
+- Turn-Detail: Turn 29 echte Story (1 487 Zeichen) inkl. **funktionierendem Compress-Call
+  (14.0 s, 889 Prompt-Tokens statt ~31k)**; Turn 31 sauber mit 1 Narrator-Call in **56.9 s**
+  (= aktueller Clean-Turn-Floor: Narrator ~32 + Memory ~12 + NPC ~11);
+  Turns 30/32 Fallback-Stories nach je 6 Narrator-Versuchen (Narrator-Klippe, → Iteration 4).
+- State-Digest unauffällig (Items 12, NPCs 2, Szenen 2, Quarantäne 0).
+
+**Entscheidung: KEEP.**
+- Compress-Call: von „deterministischer Turn-Killer auf 25+-Turn-Kampagnen" zu
+  funktionierend (889 Tokens, 14 s, generierungsdominiert).
+- Harte Turn-Fails 0/4 statt 2/4. Keine Qualitäts-/State-Regression sichtbar.
+- Nebenfix: Benchmark-Runner exportiert Stories jetzt aus `gm_text_display`.
+
+
 
 
 

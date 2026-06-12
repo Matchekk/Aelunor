@@ -160,7 +160,7 @@ def main() -> int:
             continue
         elapsed = time.perf_counter() - t0
         turn_times.append(elapsed)
-        stories.append({"turn": index, "action": action, "gm_text": str(turn.get("gm_text") or "")})
+        stories.append({"turn": index, "action": action, "gm_text": str(turn.get("gm_text_display") or turn.get("gm_text_raw") or "")})
         print(f"  fertig in {elapsed:.1f}s", flush=True)
 
     resources = sampler.stop()

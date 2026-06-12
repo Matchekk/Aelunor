@@ -59,6 +59,18 @@ def _strip_story_leaks(story: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", content).strip(" \n\r\t,;")
 
 
+# Kompression braucht keinen Weltzustand: Sie soll ausschliesslich den bereits
+# erzeugten Storytext kuerzen. Der volle Narrator-Kontext (~31k Tokens) hat den
+# Compress-Call frueher dominiert (Prefill), ohne Information beizutragen.
+_COMPRESS_SYSTEM_PROMPT = (
+    "Du bist ein präziser deutscher Lektor für Fantasy-Erzähltexte. "
+    "Du kürzt den gelieferten Szenentext auf die geforderte Maximallänge. "
+    "Du erfindest nichts hinzu, verlierst keine Fakten, Namen oder Konsequenzen "
+    "und behältst Erzählperspektive, Tempus und Ton exakt bei. "
+    "Antworte ausschließlich mit dem gekürzten Text im Feld story."
+)
+
+
 def _trim_story_to_max(story: str, max_story_chars: int) -> str:
     content = str(story or "").strip()
     if max_story_chars <= 0 or len(content) <= max_story_chars:
@@ -131,19 +143,19 @@ def rewrite_story_length_guard(
         if len(story) <= max_story_chars:
             break
         compress_user = (
-            user_prompt
-            + "\n\nKOMPRIMIERUNGSAUFTRAG:\n"
-            + f"- Kürze dieselbe Szene auf maximal {max_story_chars} Zeichen.\n"
+            "KOMPRIMIERUNGSAUFTRAG:\n"
+            + f"- Kürze den folgenden Szenentext auf maximal {max_story_chars} Zeichen.\n"
             + "- Keine Fakten verlieren, keine Wiederholung, gleiche Konsequenzen.\n"
-            + "\nAktuelle lange story:\n"
+            + "- Gleiche Sprache, gleiche Perspektive, gleicher Ton.\n"
+            + "\nSzenentext:\n"
             + story
         )
         compressed = call_ollama_schema(
-            system_prompt,
+            _COMPRESS_SYSTEM_PROMPT,
             compress_user,
             story_rewrite_schema,
             timeout=compress_timeout,
-            temperature=max(0.35, ollama_temperature - 0.1),
+            temperature=0.2,
         )
         story = _strip_story_leaks(str((compressed or {}).get("story", "") or "").strip())
     story = _trim_story_to_max(story, max_story_chars)

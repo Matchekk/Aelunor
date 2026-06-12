@@ -1,0 +1,22 @@
+[
+  {
+    "turn": 1,
+    "action": "Ich sehe mich aufmerksam um und praege mir alle Details der Umgebung ein.",
+    "gm_text": ""
+  },
+  {
+    "turn": 2,
+    "action": "Ich gehe vorsichtig weiter und achte auf Geraeusche oder Bewegungen.",
+    "gm_text": ""
+  },
+  {
+    "turn": 3,
+    "action": "Ich untersuche das Auffaelligste in meiner Naehe genauer.",
+    "gm_text": ""
+  },
+  {
+    "turn": 4,
+    "action": "Ich halte kurz inne, sammle mich und plane meinen naechsten Schritt.",
+    "gm_text": ""
+  }
+]
