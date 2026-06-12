@@ -365,6 +365,88 @@ def build_extractor_context_packet(
     }
     return json.dumps(payload, ensure_ascii=False)
 
+def build_compact_extractor_context_packet(
+    campaign: Dict[str, Any],
+    state: Dict[str, Any],
+    actor: str,
+    action_type: str,
+    source_text: str,
+    *,
+    source: str,
+) -> str:
+    """Kompaktes Extractor-Packet: nur Grounding-Namen statt Voll-State.
+
+    Der Extractor soll Fakten aus source_text gegen bekannte Entitaeten
+    aufloesen — dafuer reichen Namenslisten und die aktive Party. Volle
+    Codex-Profile, Element-Relationen und der komplette NPC-Codex haben
+    das volle Packet auf >32k Tokens aufgeblasen (Truncation, Halluzination).
+    """
+    characters = state.get("characters") or {}
+    world = state.get("world") or {}
+    world_settings = world.get("settings") or {}
+    party = active_party(campaign)
+    actor_state = (characters.get(actor) or {}) if is_slot_id(actor) else {}
+    scene_id = str(actor_state.get("scene_id") or "")
+    scenes = state.get("scenes") or {}
+    payload = {
+        "source": source,
+        "action_type": action_type,
+        "actor": actor,
+        "actor_display": display_name_for_slot(campaign, actor) if is_slot_id(actor) else actor,
+        "active_party": [
+            {"slot_id": slot_name, "display_name": display_name_for_slot(campaign, slot_name)}
+            for slot_name in party
+        ],
+        "characters": {
+            slot_name: {
+                "display_name": display_name_for_slot(campaign, slot_name),
+                "scene_id": (characters.get(slot_name) or {}).get("scene_id", ""),
+                "class_name": (normalize_class_current((characters.get(slot_name) or {}).get("class_current")) or {}).get("name", ""),
+                "skill_names": sorted(
+                    str((skill or {}).get("name") or skill_id)
+                    for skill_id, skill in (((characters.get(slot_name) or {}).get("skills") or {}).items())
+                ),
+                "inventory_names": [
+                    ((state.get("items", {}) or {}).get(entry.get("item_id"), {}) or {}).get("name", "")
+                    for entry in list_inventory_items(characters.get(slot_name) or {})
+                ],
+                "resource_name": resource_name_for_character(characters.get(slot_name) or {}, world_settings),
+            }
+            for slot_name in party
+        },
+        "current_scene": {"scene_id": scene_id, "name": (scenes.get(scene_id) or {}).get("name", scene_id)},
+        "known_scenes": {sid: (scene or {}).get("name", sid) for sid, scene in scenes.items()},
+        "known_items": sorted(
+            str((item or {}).get("name") or "")
+            for item in (state.get("items") or {}).values()
+            if (item or {}).get("name")
+        )[:80],
+        "known_npcs": [
+            {
+                "name": entry.get("name"),
+                "race": entry.get("race"),
+                "status": entry.get("status"),
+                "scene_id": entry.get("scene_id"),
+            }
+            for entry in build_npc_codex_summary(state, limit=12)
+        ],
+        "known_races": sorted(
+            str((race or {}).get("name") or race_id)
+            for race_id, race in (world.get("races") or {}).items()
+        )[:40],
+        "known_beasts": sorted(
+            str((beast or {}).get("name") or beast_id)
+            for beast_id, beast in (world.get("beast_types") or {}).items()
+        )[:40],
+        "known_elements": sorted(
+            str((element or {}).get("name") or element_id)
+            for element_id, element in (world.get("elements") or {}).items()
+        )[:24],
+        "source_text": source_text,
+    }
+    return json.dumps(payload, ensure_ascii=False)
+
+
 def normalize_extractor_output_patch(payload: Any) -> Dict[str, Any]:
     candidate = payload.get("patch") if isinstance(payload, dict) and "patch" in payload else payload
     return normalize_patch_semantics(candidate)
@@ -399,8 +481,14 @@ def call_canon_extractor(
     safe_candidates, review_candidates, reject_candidates = split_candidates(classified_candidates)
     append_extraction_quarantine(state, review_candidates + reject_candidates)
     llm_patch = blank_patch()
-    if canon_extractor_mode() != CANON_EXTRACTOR_MODE_HEURISTIC_ONLY:
-        context_packet = build_extractor_context_packet(campaign, state, actor, action_type, source_text, source=source)
+    mode = canon_extractor_mode()
+    if mode != CANON_EXTRACTOR_MODE_HEURISTIC_ONLY:
+        packet_builder = (
+            build_compact_extractor_context_packet
+            if mode == CANON_EXTRACTOR_MODE_COMPACT
+            else build_extractor_context_packet
+        )
+        context_packet = packet_builder(campaign, state, actor, action_type, source_text, source=source)
         user_prompt = (
             "STATE_PACKET(JSON):\n"
             + context_packet

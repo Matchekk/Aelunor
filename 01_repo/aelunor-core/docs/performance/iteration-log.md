@@ -105,6 +105,38 @@ Quarantäne und additive Patch-Merges bleiben vollständig erhalten.
 - Ersparnis: ~29–35 s pro Turn, 2 LLM-Calls weniger, plus Wegfall einer aktiven
   Halluzinationsquelle. Heuristik, Quarantäne und Patch-Merge unverändert.
 - Tests: volle Suite 758 passed, 1 skipped.
+- Commit: 751a445.
+
+---
+
+## Iteration 2 — Compact Canon Packet (2026-06-12)
+
+**Hypothese:** Kompaktes Packet (Szene, Akteur, Namenslisten, Delta-Text) statt Voll-State
+reicht für Canon-Extraktion und macht den LLM-Pfad wieder nutzbar.
+
+**Änderung:** `build_compact_extractor_context_packet()` in extractor.py, aktiv bei
+`AELUNOR_CANON_EXTRACTOR_MODE=compact`. Schnitt: nur aktive Party (Skill-/Item-NAMEN statt
+Voll-Profile), aktuelle Szene + Szenenliste, NPC-Top-12 (Name/Rasse/Status/Szene),
+Rassen/Bestien/Elemente als Namenslisten, keine Codex-known_facts, keine Element-Relationen,
+kein Voll-NPC-Codex.
+
+**Offline-A/B (identischer State, canon-reicher Synthetik-Text mit Item-Fund,
+NPC-Auftritt, Skill-Levelup):**
+- Packet: **3 595 Zeichen ≈ 1,2k Tokens** (full: 100 122 Zeichen ≈ 33,4k) → keine Truncation.
+- Qualität: compact extrahiert korrekt `inventory_add: ["Eisendolch mit Moosgravur"]`,
+  `skill_level_up: Moosgriff`, NPC „Mara Weidenruf" — heuristic_only findet auf demselben
+  Text nichts. Aber auch Rauschen: halluziniertes `equip_set` (Runenschwert/Kurzschwert),
+  fehlgenutzte Schema-Sektionen (items_new/plotpoints als Charakter-Objekte).
+- Latenz: **25,3 s/Call mit num_ctx 8192; 25,5–28,2 s mit 32k** → kein Reload-Effekt,
+  der Treiber ist die schema-erzwungene Generierung: CANON_EXTRACTOR_SCHEMA verlangt das
+  komplette Patch-Skelett, das Modell füllt jede Sektion mit Boilerplate (~25 s Decoding).
+- Bei 2 Calls/Turn wären das ~50 s — schlechter als der full-Modus der Baseline.
+
+**Entscheidung: PARK.** KEEP-Kriterium (≤5–8 s extra) um Faktor 3–5 verfehlt.
+heuristic_only bleibt Default. Compact bleibt flag-gated als Basis für eine spätere
+Iteration „schlankes Extractor-Schema" (das volle Patch-Schema ist der eigentliche
+Kostentreiber, nicht das Packet). Kein Default-Verhalten geändert.
+
 
 
 
