@@ -75,6 +75,7 @@ def build_turn_system_prompt(
     attribute_prompt_hints: str,
     combat_scaling_context: Dict[str, Any],
     min_story_chars: int,
+    max_story_chars: int,
 ) -> str:
     return (
         system_prompt_base
@@ -117,5 +118,10 @@ def build_turn_system_prompt(
         + f"\nCOMBAT-SKALIERUNG: actor_score={combat_scaling_context.get('actor_score')} threat_score={combat_scaling_context.get('threat_score')} pressure={combat_scaling_context.get('pressure')} ratio={combat_scaling_context.get('ratio')} weighted_ratio={combat_scaling_context.get('weighted_ratio')} element_factor={combat_scaling_context.get('element_factor')}."
         + "\nEs gibt keine Würfel, keine DCs und keine Roll-Requests. requests darf nur clarify, choice oder none enthalten."
         + "\nStandard für requests ist none. choice ist nur erlaubt, wenn der Spieler ausdrücklich Optionen verlangt hat; clarify nur, wenn eine Information wirklich fehlt."
-        + f"\nDie story muss mindestens {min_story_chars} Zeichen enthalten."
+        + "\n\nAUSGABE-BUDGET (bindend):"
+        + "\n- Die story besteht aus 2–4 Absätzen mit je klarer Funktion: (1) direkte, sichtbare Konsequenz der Spieleraktion, (2) Sinnes-/Atmosphäre- oder Weltreaktion, (3) eine neue relevante Information, Spannung oder Zustandsänderung, (4) optional ein kurzer Ausblick/Cliffhanger ohne Entscheidungsfrage."
+        + f"\n- Ziel-Länge der story: {min_story_chars}–{max_story_chars} Zeichen. Bei kleiner oder rein prüfender Aktion bleib im unteren Bereich, bei komplexer Szene höchstens {max_story_chars} Zeichen. Überschreite {max_story_chars} Zeichen nicht."
+        + "\n- Schreibe DICHT statt lang: keine Wiederholung bekannter Fakten, keine Aufzählung mehrerer NPC-Reaktionen wenn der Spieler nur die Umgebung untersucht, keine redundanten Wiederhol-Sätze, keine künstliche Verlängerung. Lieber dicht und vollständig als lang und ausschweifend."
+        + "\n- Schließe die story als vollständige, abgeschlossene Prosa ab, BEVOR das JSON-Objekt endet. Erzeuge niemals abgeschnittenen Text oder unvollständiges JSON."
+        + "\n- Halte den patch knapp: nur tatsächlich in dieser Szene geänderte Felder, keine wiederholten, aufgeblähten oder spekulativen Einträge. Schließe das JSON sauber ab und erzeuge keinen Endlos-Output."
     )

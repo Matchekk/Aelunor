@@ -1447,6 +1447,7 @@ def _create_turn_record_impl(
         attribute_prompt_hints=attribute_prompt_hints,
         combat_scaling_context=combat_scaling_context,
         min_story_chars=min_story_chars,
+        max_story_chars=max_story_chars,
     )
     prompt_payload: Dict[str, Any] = {
         "system": system_prompt,

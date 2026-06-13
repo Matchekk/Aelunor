@@ -1,0 +1,84 @@
+{
+  "label": "output_budget_baseline",
+  "campaign_id": "camp_c02276e6d5",
+  "turns_requested": 6,
+  "turns_completed": 4,
+  "errors": [
+    "turn 4: TurnFlowError: Die KI-Antwort passte nicht zum erwarteten Datenformat.",
+    "turn 6: TurnFlowError: Die KI-Antwort passte nicht zum erwarteten Datenformat."
+  ],
+  "turn_times_s": [
+    107.6,
+    68.6,
+    54.4,
+    172.6
+  ],
+  "total_avg_s": 100.8,
+  "total_median_s": 88.1,
+  "best_s": 54.4,
+  "worst_s": 172.6,
+  "resources": {
+    "vram_mb_peak": 5849.0,
+    "gpu_pct_avg": 76.5
+  },
+  "env": {
+    "OLLAMA_MODEL": "",
+    "OLLAMA_NUM_CTX": "",
+    "OLLAMA_NARRATOR_MODEL": "",
+    "OLLAMA_NARRATOR_NUM_CTX": "",
+    "OLLAMA_EXTRACTOR_MODEL": "",
+    "OLLAMA_EXTRACTOR_NUM_CTX": "",
+    "OLLAMA_REPAIR_MODEL": "",
+    "OLLAMA_REPAIR_NUM_CTX": "",
+    "AELUNOR_CANON_EXTRACTOR_MODE": ""
+  },
+  "phase_breakdown": {
+    "finalize_state_memory": {
+      "avg_s": 12.1,
+      "max_s": 13.0,
+      "turns_with_calls": 4,
+      "avg_prompt_tokens": 7483,
+      "max_prompt_tokens": 7549
+    },
+    "narrator": {
+      "avg_s": 64.5,
+      "max_s": 129.3,
+      "turns_with_calls": 4,
+      "avg_prompt_tokens": 23215,
+      "max_prompt_tokens": 23538
+    },
+    "npc_extractor": {
+      "avg_s": 12.9,
+      "max_s": 14.4,
+      "turns_with_calls": 4,
+      "avg_prompt_tokens": 1108,
+      "max_prompt_tokens": 1159
+    },
+    "story_length_guard": {
+      "avg_s": 14.3,
+      "max_s": 15.7,
+      "turns_with_calls": 3,
+      "avg_prompt_tokens": 815,
+      "max_prompt_tokens": 832
+    },
+    "_turn_total": {
+      "avg_s": 100.3,
+      "turns": 4
+    }
+  },
+  "state_digest": {
+    "meta_turn": 21,
+    "items_total": 14,
+    "npc_codex_total": 2,
+    "scenes_total": 2,
+    "slot1_scene": "",
+    "slot1_inventory_count": null,
+    "slot1_skills": [
+      "skill_moosgriff",
+      "skill_slot_1"
+    ],
+    "slot1_hp": null,
+    "slot1_xp": null,
+    "quarantine_count": 0
+  }
+}

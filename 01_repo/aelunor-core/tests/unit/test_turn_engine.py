@@ -690,6 +690,7 @@ class TurnEngineTests(unittest.TestCase):
                 "element_factor": 1.0,
             },
             min_story_chars=900,
+            max_story_chars=2200,
         )
 
         self.assertTrue(system_prompt.startswith("BASE\n\nACTION_TYPE-HINWEIS:"))
@@ -698,7 +699,10 @@ class TurnEngineTests(unittest.TestCase):
         self.assertIn("INTENT-FIRST ist bindend", system_prompt)
         self.assertIn("ELEMENTSYSTEM ist bindend", system_prompt)
         self.assertIn("actor_score=12 threat_score=8 pressure=normal", system_prompt)
-        self.assertIn("Die story muss mindestens 900 Zeichen enthalten.", system_prompt)
+        # Output-Budget-Block ersetzt die alte nackte Minimum-Regel.
+        self.assertIn("AUSGABE-BUDGET", system_prompt)
+        self.assertIn("Ziel-Länge der story: 900–2200 Zeichen", system_prompt)
+        self.assertIn("Überschreite 2200 Zeichen nicht", system_prompt)
 
     def test_build_turn_attribute_context_uses_actor_and_world_settings(self) -> None:
         seen = {}

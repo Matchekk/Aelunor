@@ -235,7 +235,7 @@ def build_pacing_instruction_block(
         )
     lines.extend(
         [
-            "- Die story muss mindestens min_story_chars Zeichen haben.",
+            "- Halte die story im Bereich min_story_chars bis max_story_chars Zeichen, überschreite max_story_chars nicht und schließe sie vollständig ab.",
             "- Wiederhole keine vorherigen Absätze.",
             "- Große Progressionssprünge (Ascension, Rank-Sprung, neue A/S-Skills) sind nur auf Milestone-Turns erlaubt.",
         ]
