@@ -131,3 +131,16 @@ modellunabhängige** Maßnahme, die den Output strukturell bündelt. 1870 ≪ ll
 - **Phase 6:** 6-Turn-Benchmark vs Baseline. KEEP wenn 0 Schema-Fails, keine A/B-Fragen, Qualität ≤0.3
   schlechter, narrator_s ≥15 % oder total ≥10 % schneller, weniger Guard, Output stabil im Zielbereich.
 - **Phase 7 (optional):** llama.cpp Re-Test — ob Output-Budget die Runaway-Truncation behebt.
+
+
+## Guard-Kalibrierung (Folge-Loop, Integration-Branch) — PARK
+
+Der dokumentierte Hebel „max_story_chars-Schwelle anheben" wurde getestet:
+- **V1 (Cap 2200→2600):** backfired — der Narrator füllt den größeren Cap (narrator-Tokens max 1870→**2774**),
+  Guard stieg 67 %→**83 %**. REVERT.
+- **V3 (Guard-Toleranz 1.2, Prompt-Cap bleibt 2200, Guard-Schwelle 2640):** Tokens blieben eng (1881<2500),
+  Guard 67 %→**50 %**, aber das **<25 %-Ziel verfehlt** und finale Stories länger (Ø 2306). REVERT.
+
+**Erkenntnis:** Die Guard-Frequenz ist **inhärent** — dichte ~2300-Zeichen-Prosa ist die natürliche
+Narrator-Länge. <25 % nur durch noch längere Stories oder Narrator-Kürzen (verboten) erreichbar.
+⇒ **Guard-Kalibrierung PARK; v1-Contract bleibt der KEEP** (Guard ~67 % als korrekter Fallback akzeptiert).

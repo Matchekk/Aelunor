@@ -1,0 +1,91 @@
+{
+  "label": "output_budget_guard_tol",
+  "campaign_id": "camp_c02276e6d5",
+  "turns_requested": 6,
+  "turns_completed": 6,
+  "errors": [],
+  "turn_times_s": [
+    69.9,
+    92.1,
+    101.8,
+    68.6,
+    54.8,
+    98.7
+  ],
+  "total_avg_s": 81.0,
+  "total_median_s": 81.0,
+  "best_s": 54.8,
+  "worst_s": 101.8,
+  "resources": {
+    "vram_mb_peak": 5844.0,
+    "gpu_pct_avg": 72.9
+  },
+  "env": {
+    "OLLAMA_MODEL": "",
+    "OLLAMA_NUM_CTX": "",
+    "OLLAMA_NARRATOR_MODEL": "",
+    "OLLAMA_NARRATOR_NUM_CTX": "",
+    "OLLAMA_EXTRACTOR_MODEL": "",
+    "OLLAMA_EXTRACTOR_NUM_CTX": "",
+    "OLLAMA_REPAIR_MODEL": "",
+    "OLLAMA_REPAIR_NUM_CTX": "",
+    "AELUNOR_CANON_EXTRACTOR_MODE": ""
+  },
+  "phase_breakdown": {
+    "finalize_state_memory": {
+      "avg_s": 13.2,
+      "max_s": 14.4,
+      "turns_with_calls": 6,
+      "avg_prompt_tokens": 7700,
+      "max_prompt_tokens": 7858
+    },
+    "narrator": {
+      "avg_s": 43.8,
+      "max_s": 74.4,
+      "turns_with_calls": 6,
+      "avg_prompt_tokens": 23983,
+      "max_prompt_tokens": 24936
+    },
+    "npc_extractor": {
+      "avg_s": 13.3,
+      "max_s": 15.2,
+      "turns_with_calls": 6,
+      "avg_prompt_tokens": 1190,
+      "max_prompt_tokens": 1253
+    },
+    "progression": {
+      "avg_s": 17.3,
+      "max_s": 17.3,
+      "turns_with_calls": 1,
+      "avg_prompt_tokens": 277,
+      "max_prompt_tokens": 277
+    },
+    "story_length_guard": {
+      "avg_s": 14.5,
+      "max_s": 15.8,
+      "turns_with_calls": 3,
+      "avg_prompt_tokens": 865,
+      "max_prompt_tokens": 991
+    },
+    "_turn_total": {
+      "avg_s": 80.5,
+      "turns": 6
+    }
+  },
+  "state_digest": {
+    "meta_turn": 23,
+    "items_total": 13,
+    "npc_codex_total": 2,
+    "scenes_total": 2,
+    "slot1_scene": "node_siedlung_elaenor",
+    "slot1_inventory_count": null,
+    "slot1_skills": [
+      "skill_lichtlanze",
+      "skill_moosgriff",
+      "skill_slot_1"
+    ],
+    "slot1_hp": null,
+    "slot1_xp": null,
+    "quarantine_count": 0
+  }
+}

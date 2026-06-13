@@ -352,3 +352,33 @@ Prompt-Layout (stabiler Prefix), FA/KV-Settings, ggf. Output-Längenbudget.
 
 
 
+
+---
+
+## Integration-Slice (2026-06-13) — Branch `perf/integrate-it6-output-budget`
+
+Sauberer Review-/Merge-Stand: **it6-Performance-Basis + Narrator-Output-Budget v1**, linear auf main
+(`c4d30d4`). Enthält bewusst **NICHT**: llama.cpp-Provider, Deferred Extraction, Canon-compact-Default,
+num_ctx-Senkung, FA/KV-q-Tuning, v2-Soft-Target — diese bleiben experimentell/PARK auf eigenen Branches.
+
+Enthaltene KEEPs:
+- it6 (Commits 751a445…1396f34): Canon heuristic_only default, Compress ohne Vollkontext, Context-Packet
+  <24k Tokens, Progression-Gate compact, NPC-Trigger, Memory-Intervall (Opt-in). Ø ~61.2s, 0 Fails.
+- Output-Budget-Contract v1 (82e05fa, 09f017f): AUSGABE-BUDGET-Block (2–4 Absätze, Cap-Direktive,
+  „Story vor JSON-Ende abschließen", „Patch knapp"). narrator −25.7 %, Runaway 9589→1870 tok, Schema-Fails 2→0.
+
+### Guard-Kalibrierung (Aufgabe C) — getestet → **PARK**
+
+Zwei Varianten (6 Turns, gleiche heiße Session, Referenz output_budget_v1: guard 67 %, ntmax 1870, total 83.2s):
+
+| Variante | guard % | narrator tok max | total | Befund |
+|---|---:|---:|---:|---|
+| V1: max_story_chars 2200→2600 | **83 %** | **2774** | 97.1s | REVERT — Modell füllt den größeren Cap → längerer Output + MEHR Guard, ntmax >2500. |
+| V3: Guard-Toleranz 1.2 (Prompt-Cap 2200, Schwelle 2640) | 50 % | 1881 | 81.0s | Tokens eng (gut), Guard 67→50 %, aber <25 %-Ziel verfehlt, finale Stories länger (Ø 2306). |
+
+**Entscheidung: PARK.** Beide verfehlen <25 %. Erkenntnis: die Guard-Frequenz ist **inhärent** — der Narrator
+schreibt von Natur aus dichte ~2300-Zeichen-Stories. Cap anheben → er schreibt länger (V1 backfired);
+Guard-Toleranz → halbiert die Rate nur und verlängert die Stories (V3). Guard <25 % nur durch noch längere
+Stories oder Narrator-Kürzen (verboten). ⇒ Beide reverted; Integration-Branch bleibt sauber it6 + Output-Budget
+v1. Der v1-Contract liefert die Hauptgewinne (narrator −25.7 %, Runaway eliminiert, 0 Schema-Fails); Guard ~67 %
+als korrekter Fallback akzeptiert (keine Qualitäts-/Stabilitätsregression).

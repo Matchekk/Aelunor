@@ -29,3 +29,14 @@ Hinweis: diese Session lief heiß (GPU-Contention) → absolute Zeiten höher al
 Kerngewinn: **Runaway eliminiert** (9589→1870 Tokens), 2→0 Schema-Fails, narrator −25.7 %, Story dichter
 (2–4 Absätze, keine A/B-Fragen, vollständig) bei erhaltener Länge. Offen: Guard-Häufigkeit (Hebel:
 max_story_chars-Schwelle anheben). llama.cpp-Truncation strukturell adressiert (Phase 7).
+
+
+### Guard-Kalibrierung (Integration-Branch perf/integrate-it6-output-budget) — PARK
+
+| Lauf | max_story_chars | Guard-Toleranz | story_guard | narrator tok max | total Ø | Entscheidung |
+|---|---:|---:|---:|---:|---:|---|
+| output_budget_v1 (Ref) | 2200 | 1.0 | 67 % | 1870 | 83.2s | KEEP (Contract) |
+| output_budget_guard2600 | 2600 | 1.0 | 83 % | 2774 | 97.1s | REVERT (Cap gefüllt) |
+| output_budget_guard_tol | 2200 | 1.2 | 50 % | 1881 | 81.0s | REVERT (verfehlt <25 %, Stories länger) |
+
+Guard-Frequenz inhärent → PARK; Integration-Branch bleibt it6 + Output-Budget v1.
