@@ -82,6 +82,44 @@ KEEP-Kriterien außer der Guard-Häufigkeit.
 gelegentlich noch den 2200-Cap → der Guard komprimiert nach (finale story_chars 1599–2170 sind
 post-guard). Hebel für v2: weicheren Ziel-Korridor (~1800) mit Headroom unter dem 2200-Guard-Schwellwert.
 
+## Phase (v2) — Soft-Target-Headroom → **REVERTED (keine Verbesserung)**
+
+Versuch: Ziel-Korridor auf „Richtwert ~1650, Reserve unter 2200" gesenkt, um den Guard zu reduzieren.
+`output_budget_v2` (6 Turns): gm story_chars Ø 1854 (v1: 1917) — kaum kürzer; story_guard **5/6** (v1 4/6) —
+**nicht besser**; Timing 101s vs 83s = reine Session-Varianz (Narrator schwankte 47.9↔64.0s, gleiche
+GPU-Contention-Noise wie die ganze Session). Stories weiter 2–4 Absätze, keine A/B-Fragen, vollständig.
+**Befund:** Der „Richtwert"-Nudge zieht die Länge nicht zuverlässig runter — dichte 3–4-Absatz-Dark-Fantasy-
+Prosa landet von Natur aus ~1900 Zeichen. ⇒ **v2 verworfen, v1 bleibt KEEP** (Stop-Regel: keine Iteration
+ohne echte Verbesserung).
+
+**Verbleibender Hebel für Guard <20 % (dokumentiert, nicht umgesetzt):** Nicht den Narrator kürzer
+zwingen, sondern den **Guard-Schwellwert `max_story_chars` an die natürliche gute Länge anheben**
+(z. B. 2200→~2600). Dann liegt die dichte ~1900–2200-Prosa zuverlässig unter dem Schwellwert und der
+Guard wird zur Ausnahme, ohne Qualität zu opfern. Separat zu testen.
+
+## Entscheidung Loop: **KEEP (v1, committed 82e05fa)**
+
+Narrator −25.7 %, total −17.5 %, Runaway eliminiert (9589→1870 tok), 0 statt 2 Schema-Fails, 2–4-Absatz-
+Struktur, keine A/B-Fragen, vollständige Enden, Länge/Dichte erhalten. Erfüllt alle KEEP-Kriterien außer
+Guard-Häufigkeit (offener Hebel oben). **Erfolg im Sinne des Loop-Ziels: kontrolliert, vollständig, dichter
+— nicht bloß kürzer.**
+
+## Phase 7 — llama.cpp Re-Test (direkte Probe, gemma-3n-E4B-Q4_K_M :8088)
+
+Direkter Server-Probe mit vs ohne Budget-System-Instruktion (json_schema, gleicher großer Kontext):
+- **mit Budget:** completion_tokens **322**, finish=stop, **valides vollständiges JSON**, story 870 Zeichen, 4.7s.
+- **ohne Budget:** 735 Tokens, valide, 695 Zeichen, 8.5s.
+
+Beide hier sauber (das vereinfachte Schema reproduziert den Original-Runaway nicht; der entstand am vollen
+RESPONSE_SCHEMA). Die Budget-Variante ist klar tighter. **Zusammen mit der Ollama-Voll-Schema-Evidenz**
+(Output gedeckelt auf ≤1870 statt 9589 Tokens) ist belegt: Das Budget ist eine **prompt-seitige,
+modellunabhängige** Maßnahme, die den Output strukturell bündelt. 1870 ≪ llama.cpps 6144-Cap ⇒ die
+**max_tokens-Truncation, die zu llama.cpps PARK führte, ist strukturell adressiert.**
+
+**Empfehlung:** llama.cpp aus PARK **neu bewerten, sobald der Budget-Contract aktiv ist** — ein voller
+`llama_cpp_openai`-Provider-Re-Benchmark (4–6 echte Turns) ist der verbleibende Bestätigungsschritt
+(gehört in den Runtime-Track, Provider liegt auf `perf/deferred-extraction-fast-visible-turn`).
+
 ## Plan
 
 - **Phase 2/3 Contract:** Output-Budget-Block im System-Prompt — 2–4 Absätze mit klarer Funktion

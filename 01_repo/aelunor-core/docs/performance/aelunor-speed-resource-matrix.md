@@ -14,3 +14,18 @@ Ollama lokal. Jeder Lauf startet vom identischen Kampagnenstand.
 | 4 | 8dba807 | Prompt-Waste raus → <24k Tokens, Klippe beendet | compact meta/combat/plotpoints/recent_turns im CONTEXT_PACKET | 3–4 | 55.7 | 13.6 (2×, 768 Tokens) | 0 | 12.4 | 12.7 | 88.2 | 91.5 | **54.6** | 115.2 | **23322** | 23730 | — | — | 7793 MB | — | — | 73 % | **0 Fails, 0 Fallbacks, 4/4 echte Stories** | klar über Baseline | **KEEP** |
 | 5 | 02d104c | Memory muss nicht jeden Turn laufen | AELUNOR_MEMORY_SUMMARY_INTERVAL (Lauf mit 2) | 2.5–3.5 | 56.8 | 13.9 (1×) | 0 | 13.6 | 9.8 (1 von 3) | 84.0 | 86.5 | 76.1 | 89.4 | 23440 | 24033 | — | — | 7799 MB | — | — | 72 % | 1/4 Fail (Progression-Gate-Truncation, → It. 6 gefixt) | Stories echt | **KEEP** (Opt-in) |
 | 6 | 02d104c | NPC-Call nur bei NPC-Signal; Progression-Gate-Packet truncated | npc_extractor_should_run() + Progression-Gate auf compact packet | 2.5–3.5 | **35.5** | 12.7 (2×) | 0 | 13.0 | 11.4 (2 von 4) | **61.2** | 61.0 | **56.0** | 66.7 | 23141 | 23660 | — | — | 7794 MB | — | — | 72 % | **0 Fails, 4/4 echte Stories, 1 Retry gesamt** | konsistent, NPC-Codex stabil | **KEEP** |
+
+## Narrator-Output-Budget (Branch perf/narrator-output-budget, off it6)
+
+Hinweis: diese Session lief heiß (GPU-Contention) → absolute Zeiten höher als it6 61.2s; relevant ist der
+**A/B-Vergleich Baseline vs Contract in derselben Session**. Beide Läufe = Ollama default, 6 Turns, defer aus.
+
+| Lauf | Total Ø | Narrator Ø | Narrator resp_tok (avg/max) | gm story_chars Ø | Story-Guard | Schema-Fails | Entscheidung |
+|---|---:|---:|---:|---:|---:|---:|---|
+| output_budget_baseline | 100.8s | 64.5s | 3017 / **9589 (Runaway)** | 1948 | 75 % | 2 | Baseline |
+| **output_budget_v1** | **83.2s** (−17.5%) | **47.9s** (−25.7%) | 1364 / **1870** | 1917 | 67 % | **0** | **KEEP (82e05fa)** |
+| output_budget_v2 (soft-target) | 101.3s | 64.0s | 1276 / 2086 | 1854 | 5/6 | 0 | REVERT (keine Verbesserung, Session-Noise) |
+
+Kerngewinn: **Runaway eliminiert** (9589→1870 Tokens), 2→0 Schema-Fails, narrator −25.7 %, Story dichter
+(2–4 Absätze, keine A/B-Fragen, vollständig) bei erhaltener Länge. Offen: Guard-Häufigkeit (Hebel:
+max_story_chars-Schwelle anheben). llama.cpp-Truncation strukturell adressiert (Phase 7).
