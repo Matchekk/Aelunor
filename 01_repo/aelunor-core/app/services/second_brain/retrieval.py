@@ -142,10 +142,17 @@ def maybe_brain_context_block(
     *,
     campaigns_dir: str | None = None,
     embedder=None,
-    token_budget: int = 1800,
+    token_budget: int = 1200,
+    limit: int = 8,
 ) -> str:
     """Flag-gated integration entry for the turn pipeline. Returns the block or
-    ``""``. Never raises — retrieval must not break a turn."""
+    ``""``. Never raises — retrieval must not break a turn.
+
+    Iteration 1: budget tightened to 1200 tokens / 8 cards (was 1800/10) — the
+    A/B benchmark showed the block cost ~+889 narrator prompt tokens with no
+    continuity gain and a slight redundancy rise, so the block is bounded
+    smaller to keep the prompt lean.
+    """
     if not second_brain_enabled():
         return ""
     try:
@@ -166,6 +173,7 @@ def maybe_brain_context_block(
             player_action,
             campaigns_dir=campaigns_dir,
             embedder=embedder,
+            limit=limit,
             token_budget=token_budget,
             skip_names=_skip_names(working_state, actor, scene_id),
         )
