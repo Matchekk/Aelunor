@@ -1982,6 +1982,19 @@ def _create_turn_record_impl(
         campaign.setdefault("turns", []).append(turn_record)
         remember_recent_story(campaign)
         rebuild_memory_summary(campaign)
+    # Campaign Second Brain (flag-gated, default off). Deterministic, never an
+    # LLM call, and never allowed to break the turn — maybe_record_turn swallows
+    # all errors. Lazy import keeps the off-path zero-cost.
+    from app.config.feature_flags import second_brain_enabled
+
+    if second_brain_enabled():
+        with profile_phase("second_brain_write"):
+            try:
+                from app.services.second_brain.write_hook import maybe_record_turn
+
+                maybe_record_turn(campaign, turn_record)
+            except Exception:
+                pass
     return turn_record
 
 def find_turn(campaign: Dict[str, Any], turn_id: str) -> Dict[str, Any]:
