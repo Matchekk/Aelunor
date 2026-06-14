@@ -32,6 +32,10 @@ class LlamaCppSettings:
     num_ctx: int
     max_tokens: int
     seed: Optional[int]
+    # Anti-Repetition: llama.cpp default repeat_penalty ist 1.0 (keine Strafe).
+    # Ohne diese Werte laufen Retry-/Repair-Calls in Wiederholungs-Runaways.
+    repeat_penalty: float = 1.18
+    repeat_last_n: int = 192
 
 
 class LlamaCppOpenAIAdapter:
@@ -75,19 +79,27 @@ class LlamaCppOpenAIAdapter:
         format_schema: Optional[Dict[str, Any]] = None,
         timeout: Optional[int] = None,
         temperature: Optional[float] = None,
-        repeat_penalty: Optional[float] = None,  # OpenAI-API kennt das nicht direkt -> ignoriert
+        repeat_penalty: Optional[float] = None,  # llama.cpp-native Extension auf /v1/chat/completions
         num_ctx: Optional[int] = None,           # serverseitig per -c gesetzt -> nur Profiling
         model: Optional[str] = None,
     ) -> str:
         request_timeout = max(30, int(timeout or self.settings.timeout_sec))
         request_model = (model or "").strip() or self.settings.model
         temp = self.settings.temperature if temperature is None else temperature
+        # repeat_penalty / repeat_last_n sind llama.cpp-native Sampler-Felder, die
+        # der OpenAI-kompatible llama-server aus dem Request liest. Ohne sie greift
+        # der Server-Default 1.0 (keine Strafe) -> Retry-/Repair-Runaways.
+        effective_repeat_penalty = (
+            self.settings.repeat_penalty if repeat_penalty is None else float(repeat_penalty)
+        )
         base_payload: Dict[str, Any] = {
             "model": request_model,
             "stream": False,
             "temperature": temp,
             "max_tokens": self.settings.max_tokens,
             "seed": self.request_seed(),
+            "repeat_penalty": effective_repeat_penalty,
+            "repeat_last_n": self.settings.repeat_last_n,
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},

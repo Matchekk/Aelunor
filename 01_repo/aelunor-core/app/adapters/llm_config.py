@@ -53,6 +53,14 @@ ANTHROPIC_ADAPTER = AnthropicAdapter(
 LLAMA_CPP_BASE_URL = os.getenv("LLAMA_CPP_BASE_URL", "http://127.0.0.1:8088/v1").rstrip("/")
 LLAMA_CPP_MODEL = os.getenv("LLAMA_CPP_MODEL", "gemma-3n-e4b").strip()
 LLAMA_CPP_MAX_TOKENS = int(os.getenv("LLAMA_CPP_MAX_TOKENS", "6144"))
+# Anti-Repetition-Sampler: llama.cpp default = 1.0 (KEINE Strafe) -> gemma-3n
+# laeuft auf Retry-/Repair-Calls in Wiederholungs-Runaways und sprengt das
+# Token-Budget (finish_reason=length) -> ungueltiges JSON. Wir spiegeln Ollamas
+# Werte, damit der llama.cpp-Provider dieselbe Retry-Stabilitaet bekommt.
+from app.adapters.ollama_config import OLLAMA_REPEAT_LAST_N, OLLAMA_REPEAT_PENALTY
+
+LLAMA_CPP_REPEAT_PENALTY = float(os.getenv("LLAMA_CPP_REPEAT_PENALTY", str(OLLAMA_REPEAT_PENALTY)))
+LLAMA_CPP_REPEAT_LAST_N = int(os.getenv("LLAMA_CPP_REPEAT_LAST_N", str(OLLAMA_REPEAT_LAST_N)))
 
 LLAMA_CPP_ADAPTER = LlamaCppOpenAIAdapter(
     LlamaCppSettings(
@@ -63,6 +71,8 @@ LLAMA_CPP_ADAPTER = LlamaCppOpenAIAdapter(
         num_ctx=OLLAMA_NUM_CTX,
         max_tokens=LLAMA_CPP_MAX_TOKENS,
         seed=OLLAMA_SEED,
+        repeat_penalty=LLAMA_CPP_REPEAT_PENALTY,
+        repeat_last_n=LLAMA_CPP_REPEAT_LAST_N,
     )
 )
 
