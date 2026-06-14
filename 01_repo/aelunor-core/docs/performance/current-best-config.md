@@ -1,5 +1,14 @@
 # Current Best Config
 
+> **Stabiler main-Stand (Merge 2026-06-14):** `main` enthält jetzt die **It6-Perf-Basis + Output-Budget v1**
+> (Fast-Forward von `perf/integrate-it6-output-budget`). Keine Deferred-Defaults, kein llama.cpp-Default,
+> keine experimentellen Runtime-Settings. Die zwei Perf-Experimente bleiben als Branches erhalten und sind
+> **NICHT in main**:
+> - **Deferred Extraction** (`perf/deferred-extraction-fast-visible-turn`): sicher, Default off, Barriere
+>   getestet — Kandidat für spätere Wiederaufnahme.
+> - **llama.cpp Runtime** (`perf/it10-deferred-llamacpp-stability`): −65 % schneller, aber **PARK** wegen
+>   sporadischem Format-/Repair-Fail (1/4).
+
 Stand: nach Iteration 6. Ø Turn-Zeit **61.2 s** (Baseline ~110 s, −44 %),
 0 harte Fails, 4/4 echte Stories auf der 28-Turn-Benchmark-Kampagne.
 
