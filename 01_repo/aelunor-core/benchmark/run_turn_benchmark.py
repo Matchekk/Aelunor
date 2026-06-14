@@ -112,8 +112,9 @@ def main() -> int:
     )
     parser.add_argument(
         "--provider",
-        default="ollama",
-        help="LLM provider: ollama | llama_cpp_openai (sets AELUNOR_LLM_PROVIDER).",
+        default="llama_cpp_openai",
+        help="LLM provider (sets AELUNOR_LLM_PROVIDER). Default llama_cpp_openai "
+             "(matches the app default); pass 'ollama' for the legacy provider.",
     )
     parser.add_argument(
         "--llama-cpp-url",

@@ -43,22 +43,26 @@ URLs:
 - `http://localhost:8080` leitet auf `/v1` weiter
 - `http://localhost:8080/api/llm/status` fuer LLM-Status (zeigt aktiven Provider)
 
-## LLM-Provider (lokal Ollama)
+## LLM-Provider (lokal llama.cpp)
 
-Lokales Ollama ist der Standard fuer den GM. Cloud-Provider werden nicht
-automatisch als Fallback genutzt; Anthropic/Claude ist nur aktiv, wenn
-`LLM_PROVIDER=anthropic` explizit gesetzt wird.
+Lokales **llama.cpp ist seit 2026-06-14 der Standard** fuer den GM (schneller +
+stabil nach dem `repeat_penalty`-Fix). Ollama ist Legacy/Fallback und muss
+explizit gewaehlt werden. Cloud-Provider werden nicht automatisch genutzt;
+Anthropic/Claude ist nur aktiv, wenn `LLM_PROVIDER=anthropic` explizit gesetzt wird.
 
-Auswahl per `LLM_PROVIDER`:
+Auswahl per `AELUNOR_LLM_PROVIDER` (Vorrang) bzw. `LLM_PROVIDER`:
 
-- `ollama` (Default): nur lokal.
-- `auto`: Kompatibilitaetsalias fuer `ollama`, ebenfalls nur lokal.
-- `anthropic`: nur Cloud (Claude).
+- `llama_cpp_openai` (**Default**): lokaler llama-server (siehe
+  `docs/performance/llamacpp-opt-in-stability.md`). Kein stiller Fallback — ist der
+  Server nicht erreichbar, bricht der Turn mit klarer Fehlermeldung ab.
+- `auto`: Kompatibilitaetsalias, zeigt jetzt auf llama.cpp.
+- `ollama`: Legacy/Fallback, nur lokal — explizit setzen.
+- `anthropic`: nur Cloud (Claude), nie Default.
 
 Relevante Umgebungsvariablen:
 
 ```powershell
-$env:LLM_PROVIDER="ollama"          # ollama | auto | anthropic
+$env:AELUNOR_LLM_PROVIDER="ollama"  # leer=Default llama_cpp_openai | ollama | auto | anthropic
 $env:OLLAMA_MODEL="gemma4:12b"
 $env:ANTHROPIC_API_KEY="<dein-key>" # bzw. systemweit gesetzt; wird automatisch gelesen
 $env:ANTHROPIC_MODEL="claude-opus-4-8"   # optional; z. B. claude-sonnet-4-6 fuer guenstiger
