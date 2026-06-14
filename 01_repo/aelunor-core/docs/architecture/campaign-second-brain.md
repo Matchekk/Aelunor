@@ -1,8 +1,11 @@
 # Campaign Second Brain — Architecture & Integration Seam
 
-Status: **integration in progress** (behind feature flag `AELUNOR_SECOND_BRAIN`,
-default **off**). Builds on the exploratory prototype in
-`app/services/second_brain/` (branch `feat/campaign-second-brain`).
+Status: **MVP wired end-to-end behind feature flag `AELUNOR_SECOND_BRAIN`
+(default off).** Seed → deterministic write hook → bounded retrieval are live
+in the turn pipeline; a read-only debug API exposes counts. Offline latency +
+token-budget guards are green in CI. The narrator-quality A/B benchmark (local
+Ollama) and Ollama embeddings (Phase 7) are still pending. Branch
+`feat/campaign-second-brain`, **not merged to main**.
 
 ## What it is (and is not)
 
@@ -108,9 +111,29 @@ facts/entities **without any LLM call**:
 - Stop/PARK if: save corruption, campaign mixing, > 2000 brain tokens without
   continuity gain, any new blocking LLM call, or 3 failed variants.
 
-## Phase plan
+## Phase status
 
-1. ✅ Architecture review + this doc. 2. Per-campaign storage path + `brain_meta`.
-3. First-run seed. 4. Deterministic write hook. 5. Retrieval + context section.
-6. Benchmark off/on (local Ollama). 7. Ollama embedding backfill (only if 6
-stable). 8. Minimal debug API. 9. Docs + KEEP/PARK/REVERT report.
+1. ✅ Architecture review + this doc (`78beab3`).
+2. ✅ Per-campaign storage path + `brain_meta`/`SCHEMA_VERSION`, safe open (`78beab3`).
+3. ✅ Deterministic first-run seed (`956e464`).
+4. ✅ Deterministic post-turn write hook, wired in `turn_engine` finalize (`20f4117`).
+5. ✅ Retrieval + `RELEVANT_CAMPAIGN_BRAIN` block, wired in `consistency_context` (`1094819`).
+6. ◑ Benchmark: offline latency/token guards green in CI; **A/B/C/D LLM run pending local Ollama** (`fc3e36b`, see `docs/performance/second-brain-benchmark.md`).
+7. ⏸ Ollama embedding backfill — deferred until Phase 6 LLM run confirms the integration is stable. Hash embedding stays the MVP.
+8. ✅ Minimal read-only debug API `GET /api/campaigns/{id}/brain` (`67d8150`).
+9. ✅ Docs + report (this update).
+
+Modules: `models.py`, `store.py`, `locator.py`, `embeddings.py`, `ingest.py`,
+`recall.py`, `consolidation.py`, `seed.py`, `write_hook.py`, `retrieval.py`,
+`debug.py`, `service.py`. ~60 unit tests across
+`tests/unit/test_second_brain_*.py`; full suite 807 passed.
+
+## KEEP / PARK / REVERT (preliminary)
+
+**KEEP the foundation, flag default off.** The integration is safe by
+construction (every brain path swallows errors; the turn never fails; no new
+blocking LLM call; per-campaign isolation), bounded (≤2000-token block, write
+<250 ms, retrieval <100 ms verified offline), and zero-impact when off. The
+final KEEP/PARK call on *quality* needs the local-Ollama A/B run: keep if
+continuity ≥ stable and the narrator prompt does not grow uncontrollably; PARK
+if the prompt grows without a continuity gain.

@@ -6,9 +6,24 @@ the RAG slice rebuilds a read-only, in-memory, lexical context every turn,
 the Second Brain *remembers*: it persists structured knowledge, recalls it
 semantically, links it as a graph, and consolidates it over time.
 
-> Status: prototype. The public surface may still move. Offline-first and
-> deterministic by default so it stays fully unit-testable
-> (`tests/unit/test_second_brain_service.py`).
+> Status: **MVP wired into the live turn pipeline behind
+> `AELUNOR_SECOND_BRAIN` (default off)**, branch `feat/campaign-second-brain`,
+> not merged to main. Offline-first and deterministic by default so it stays
+> fully unit-testable. See `docs/architecture/campaign-second-brain.md` for the
+> integration seam and phase status, and
+> `docs/performance/second-brain-benchmark.md` for the benchmark recipe.
+
+## Live integration (flag-gated, default off)
+
+| Hook | Module | Where it fires |
+|---|---|---|
+| First-run **seed** | `seed.py` | on the first turn (via the write hook), deterministic from existing campaign state |
+| Post-turn **write** | `write_hook.maybe_record_turn` | `turn_engine` finalize block (~1979); event card + entities + edges + facts; never fails the turn |
+| Pre-narrator **retrieval** | `retrieval.maybe_brain_context_block` | `turn_engine` `consistency_context` merge (~1425); bounded `[RELEVANT_CAMPAIGN_BRAIN]` block next to the RAG block |
+| **Debug API** | `debug.brain_overview` + `routers/brain.py` | `GET /api/campaigns/{id}/brain` (counts/meta only) |
+| **Storage** | `locator.open_campaign_brain` | `campaigns/<id>/brain/brain.sqlite`, per-campaign, safe-open |
+
+With the flag off, all hooks are no-ops and turn behavior is unchanged.
 
 ## The four pillars
 

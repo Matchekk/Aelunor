@@ -8,6 +8,12 @@
 >   getestet — Kandidat für spätere Wiederaufnahme.
 > - **llama.cpp Runtime** (`perf/it10-deferred-llamacpp-stability`): −65 % schneller, aber **PARK** wegen
 >   sporadischem Format-/Repair-Fail (1/4).
+> - **Campaign Second Brain MVP** (`feat/campaign-second-brain`): campaign-scoped Weltgedächtnis
+>   (`campaigns/<id>/brain/brain.sqlite`), end-to-end in die Turn-Pipeline verdrahtet hinter
+>   `AELUNOR_SECOND_BRAIN` (**Default off**). Deterministischer Seed/Write/Retrieval, kein neuer blocking
+>   LLM-Call, Offline-Latenz-Guards grün (write <250 ms, retrieval <100 ms), `[RELEVANT_CAMPAIGN_BRAIN]`
+>   ≤2000 Tokens. **Nicht in main.** Offen: A/B-LLM-Benchmark (lokales Ollama) + Ollama-Embeddings.
+>   Siehe `docs/architecture/campaign-second-brain.md`.
 
 Stand: nach Iteration 6. Ø Turn-Zeit **61.2 s** (Baseline ~110 s, −44 %),
 0 harte Fails, 4/4 echte Stories auf der 28-Turn-Benchmark-Kampagne.
