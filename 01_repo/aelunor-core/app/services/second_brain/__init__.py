@@ -31,6 +31,7 @@ from .locator import (
 )
 from .models import KnowledgeEdge, KnowledgeNode, RecallQuery, RecallResult
 from .recall import recall
+from .retrieval import get_relevant_brain_context, maybe_brain_context_block
 from .seed import seed_brain_from_state, seed_campaign_brain
 from .service import SecondBrain
 from .write_hook import maybe_record_turn, record_turn
@@ -60,4 +61,6 @@ __all__ = [
     "seed_campaign_brain",
     "record_turn",
     "maybe_record_turn",
+    "get_relevant_brain_context",
+    "maybe_brain_context_block",
 ]
