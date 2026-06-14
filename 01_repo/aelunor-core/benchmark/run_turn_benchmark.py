@@ -106,6 +106,11 @@ def main() -> int:
     parser.add_argument("--action-type", default="do")
     parser.add_argument("--ollama-url", default="http://localhost:11434")
     parser.add_argument(
+        "--second-brain",
+        action="store_true",
+        help="Set AELUNOR_SECOND_BRAIN=1 for this run (variant B/C/D).",
+    )
+    parser.add_argument(
         "--provider",
         default="ollama",
         help="LLM provider: ollama | llama_cpp_openai (sets AELUNOR_LLM_PROVIDER).",
@@ -133,6 +138,8 @@ def main() -> int:
     os.environ["AELUNOR_PROFILE_TURNS"] = "1"
     os.environ["AELUNOR_PROFILE_PATH"] = str(profile_path)
     os.environ["OLLAMA_URL"] = args.ollama_url
+    # Campaign Second Brain variant toggle (default off; --second-brain for B/C/D).
+    os.environ["AELUNOR_SECOND_BRAIN"] = "1" if args.second_brain else os.environ.get("AELUNOR_SECOND_BRAIN", "")
     # LLM provider selection (read at import by app.adapters.llm_config).
     os.environ["AELUNOR_LLM_PROVIDER"] = args.provider
     if args.provider in ("llama_cpp_openai", "llama_cpp", "llamacpp"):
@@ -199,10 +206,12 @@ def main() -> int:
                 "OLLAMA_MODEL", "OLLAMA_NUM_CTX", "OLLAMA_NARRATOR_MODEL", "OLLAMA_NARRATOR_NUM_CTX",
                 "OLLAMA_EXTRACTOR_MODEL", "OLLAMA_EXTRACTOR_NUM_CTX", "OLLAMA_REPAIR_MODEL",
                 "OLLAMA_REPAIR_NUM_CTX", "AELUNOR_CANON_EXTRACTOR_MODE",
+                "AELUNOR_SECOND_BRAIN", "AELUNOR_MEMORY_SUMMARY_INTERVAL",
                 "AELUNOR_LLM_PROVIDER", "LLAMA_CPP_MODEL", "LLAMA_CPP_BASE_URL",
             )
         },
         "phase_breakdown": aggregate_profiles(profile_path),
+        "brain_digest": brain_digest(campaign_id),
         "state_digest": state_digest(campaign),
     }
     summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -257,7 +266,7 @@ def aggregate_profiles(profile_path: Path) -> dict:
             prompt_tokens.setdefault(phase, []).append(int(call.get("prompt_tokens") or 0))
         for phase, seconds in per_phase.items():
             phase_calls.setdefault(phase, []).append(seconds)
-        # Non-LLM phase timings (e.g. story guard, retrieval, persistence).
+        # Non-LLM phase timings (e.g. second_brain_write/retrieval, story guard).
         for entry in report.get("phases") or []:
             name = str(entry.get("name") or "")
             if name:
@@ -286,6 +295,29 @@ def aggregate_profiles(profile_path: Path) -> dict:
             for name, values in sorted(nonllm_phases.items())
         }
     return breakdown
+
+
+def brain_digest(campaign_id: str) -> dict:
+    """Counts from the campaign's brain.sqlite, if one exists. Offline-safe."""
+    try:
+        from app.services.second_brain import open_campaign_brain
+
+        brain = open_campaign_brain(campaign_id, create=False)
+        if brain is None:
+            return {"enabled": False}
+        try:
+            counts = brain.store.counts(campaign_id)
+            return {
+                "enabled": True,
+                "counts": counts,
+                "last_processed_turn": brain.store.get_meta("last_processed_turn_number"),
+                "schema_version": brain.store.schema_version,
+                "failed_jobs": brain.store.get_meta("failed_jobs"),
+            }
+        finally:
+            brain.store.close()
+    except Exception as exc:  # noqa: BLE001
+        return {"enabled": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
 if __name__ == "__main__":

@@ -1422,9 +1422,28 @@ def _create_turn_record_impl(
         content=content,
         trace_ctx=trace_ctx,
     )
+    # Campaign Second Brain recall (flag-gated, default off). Read-only,
+    # deterministic, bounded; never an LLM call and never breaks the turn.
+    brain_prompt_block = ""
+    from app.config.feature_flags import second_brain_enabled
+
+    if second_brain_enabled():
+        with profile_phase("second_brain_retrieval"):
+            try:
+                from app.services.second_brain.retrieval import maybe_brain_context_block
+
+                brain_prompt_block = maybe_brain_context_block(
+                    context_campaign, working_state, actor, content
+                )
+            except Exception:
+                brain_prompt_block = ""
     consistency_context = "\n\n".join(
         block
-        for block in (world_character_context["combined_text"], rag_prompt_block)
+        for block in (
+            world_character_context["combined_text"],
+            rag_prompt_block,
+            brain_prompt_block,
+        )
         if str(block or "").strip()
     )
     user_prompt, actor_display, actor_resolution_hint = build_turn_user_prompt(
@@ -1982,6 +2001,19 @@ def _create_turn_record_impl(
         campaign.setdefault("turns", []).append(turn_record)
         remember_recent_story(campaign)
         rebuild_memory_summary(campaign)
+    # Campaign Second Brain (flag-gated, default off). Deterministic, never an
+    # LLM call, and never allowed to break the turn — maybe_record_turn swallows
+    # all errors. Lazy import keeps the off-path zero-cost.
+    from app.config.feature_flags import second_brain_enabled
+
+    if second_brain_enabled():
+        with profile_phase("second_brain_write"):
+            try:
+                from app.services.second_brain.write_hook import maybe_record_turn
+
+                maybe_record_turn(campaign, turn_record)
+            except Exception:
+                pass
     return turn_record
 
 def find_turn(campaign: Dict[str, Any], turn_id: str) -> Dict[str, Any]:
