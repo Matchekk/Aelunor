@@ -31,6 +31,7 @@ from .locator import (
 )
 from .models import KnowledgeEdge, KnowledgeNode, RecallQuery, RecallResult
 from .recall import recall
+from .seed import seed_brain_from_state, seed_campaign_brain
 from .service import SecondBrain
 from .store import SCHEMA_VERSION, SecondBrainStore
 
@@ -54,4 +55,6 @@ __all__ = [
     "brain_path_for_campaign",
     "brain_dir_for_campaign",
     "is_safe_campaign_id",
+    "seed_brain_from_state",
+    "seed_campaign_brain",
 ]
