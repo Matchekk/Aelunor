@@ -18,7 +18,14 @@ from typing import Iterable
 
 from .models import KnowledgeEdge, KnowledgeNode
 
+# Bump when the on-disk schema changes in a non-backward-compatible way.
+SCHEMA_VERSION = 1
+
 _SCHEMA = """
+CREATE TABLE IF NOT EXISTS brain_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT
+);
 CREATE TABLE IF NOT EXISTS knowledge_node (
     id            TEXT NOT NULL,
     campaign_id   TEXT NOT NULL,
@@ -64,14 +71,77 @@ def _loads_embedding(raw: str | None) -> tuple[float, ...] | None:
 class SecondBrainStore:
     """Campaign-scoped persistence for knowledge nodes and edges."""
 
-    def __init__(self, path: str = ":memory:") -> None:
+    def __init__(self, path: str = ":memory:", *, wal: bool = False) -> None:
         self._conn = sqlite3.connect(path)
         self._conn.row_factory = sqlite3.Row
+        # WAL helps concurrent readers on a real file; skip for :memory: where
+        # it is meaningless. Opt-in so tests stay simple and deterministic.
+        if wal and path != ":memory:":
+            try:
+                self._conn.execute("PRAGMA journal_mode=WAL")
+            except sqlite3.Error:
+                pass
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
+        # Stamp the schema version once, on first creation.
+        if self.get_meta("schema_version") is None:
+            self.set_meta("schema_version", str(SCHEMA_VERSION))
 
     def close(self) -> None:
         self._conn.close()
+
+    # -- meta --------------------------------------------------------------
+    def get_meta(self, key: str) -> str | None:
+        row = self._conn.execute(
+            "SELECT value FROM brain_meta WHERE key=?", (key,)
+        ).fetchone()
+        return row["value"] if row else None
+
+    def set_meta(self, key: str, value: str) -> None:
+        self._conn.execute(
+            "INSERT INTO brain_meta (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, str(value)),
+        )
+        self._conn.commit()
+
+    def all_meta(self) -> dict[str, str]:
+        return {
+            r["key"]: r["value"]
+            for r in self._conn.execute("SELECT key, value FROM brain_meta")
+        }
+
+    @property
+    def schema_version(self) -> int:
+        try:
+            return int(self.get_meta("schema_version") or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    def note_failed_job(self, detail: str = "") -> None:
+        """Increment a small failure counter for the debug API. Never raises."""
+        try:
+            current = int(self.get_meta("failed_jobs") or 0)
+        except (TypeError, ValueError):
+            current = 0
+        self.set_meta("failed_jobs", str(current + 1))
+        if detail:
+            self.set_meta("last_failure", detail[:200])
+
+    def counts(self, campaign_id: str) -> dict[str, int]:
+        """Per-campaign counts for the debug API. By node kind plus edges."""
+        out: dict[str, int] = {}
+        for row in self._conn.execute(
+            "SELECT kind, COUNT(*) AS c FROM knowledge_node "
+            "WHERE campaign_id=? GROUP BY kind",
+            (campaign_id,),
+        ):
+            out[row["kind"]] = row["c"]
+        out["edges"] = self._conn.execute(
+            "SELECT COUNT(*) AS c FROM knowledge_edge WHERE campaign_id=?",
+            (campaign_id,),
+        ).fetchone()["c"]
+        return out
 
     # -- writes ------------------------------------------------------------
     def upsert_nodes(self, nodes: Iterable[KnowledgeNode]) -> int:

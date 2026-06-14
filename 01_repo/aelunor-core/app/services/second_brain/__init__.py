@@ -23,14 +23,21 @@ from .embeddings import (
     cosine_similarity,
 )
 from .ingest import build_knowledge_from_state
+from .locator import (
+    brain_dir_for_campaign,
+    brain_path_for_campaign,
+    is_safe_campaign_id,
+    open_campaign_brain,
+)
 from .models import KnowledgeEdge, KnowledgeNode, RecallQuery, RecallResult
 from .recall import recall
 from .service import SecondBrain
-from .store import SecondBrainStore
+from .store import SCHEMA_VERSION, SecondBrainStore
 
 __all__ = [
     "SecondBrain",
     "SecondBrainStore",
+    "SCHEMA_VERSION",
     "KnowledgeNode",
     "KnowledgeEdge",
     "RecallQuery",
@@ -43,4 +50,8 @@ __all__ = [
     "recall",
     "decay_salience",
     "consolidate_turns",
+    "open_campaign_brain",
+    "brain_path_for_campaign",
+    "brain_dir_for_campaign",
+    "is_safe_campaign_id",
 ]
