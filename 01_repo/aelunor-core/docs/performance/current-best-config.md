@@ -1,24 +1,34 @@
 # Current Best Config
 
-> **PR `fix/llamacpp-opt-in-stability` (Stand 2026-06-14, nicht in main):**
-> - **Default bleibt Ollama.** `LLM_PROVIDER` / `AELUNOR_LLM_PROVIDER` default `ollama`; der Default-/Flag-off-Pfad
->   ist unverändert.
-> - **llama.cpp bleibt opt-in** (`AELUNOR_LLM_PROVIDER=llama_cpp_openai`) — kein Default-Wechsel.
-> - Der **`repeat_penalty`-Fix** (Adapter sendet jetzt `repeat_penalty=1.18` / `repeat_last_n=192`) macht den
->   opt-in Provider deutlich stabiler: der dominante 1/4-**Stage-D-Runaway ist eliminiert (0/80 Turns)**,
->   zusätzlich ~60 % niedrigere Avg-Latenz. Restrisiko: ~1.25 % Turn-1-Truncation (andere Klasse) → llama.cpp
->   bleibt opt-in, nicht default-on.
-> - **Keine Second-Brain-Änderung in diesem PR** (SB-Foundation ist ein separater PR; hier nur llama.cpp +
->   Diagnose-Tooling). Details: `docs/performance/llamacpp-opt-in-stability.md`.
+> **Aktueller Stand (2026-06-14). `main` enthält:**
+> - **It6-Perf-Basis + Output-Budget v1**.
+> - **llama.cpp opt-in Provider + `repeat_penalty`-Fix** (PR #59 gemerged): Adapter sendet
+>   `repeat_penalty=1.18` / `repeat_last_n=192` → dominanter 1/4-**Stage-D-Runaway eliminiert (0/80 Turns)**,
+>   ~60 % niedrigere Avg-Latenz. Details: `docs/performance/llamacpp-opt-in-stability.md`.
+> - **Second Brain Foundation — gemerged, aber `AELUNOR_SECOND_BRAIN` default OFF** (PR
+>   `feature/second-brain-foundation-pr`): campaign-scoped Weltgedächtnis (`campaigns/<id>/brain/brain.sqlite`),
+>   Seed → Write-Hook → bounded Retrieval (`[RELEVANT_CAMPAIGN_BRAIN]`-Block, ~1200 Tok / 8 Cards). Flag-off =
+>   No-op, Verhalten unverändert. Latenz/Tokens vernachlässigbar (write <20 ms, retrieval ~0 ms, Prompt-Tokens
+>   flach). Details: `docs/performance/second-brain-benchmark.md`.
+>
+> **Empfohlener Default bleibt Ollama.** `LLM_PROVIDER` / `AELUNOR_LLM_PROVIDER` default `ollama`,
+> `AELUNOR_SECOND_BRAIN` default leer (off). Opt-in: `AELUNOR_LLM_PROVIDER=llama_cpp_openai` (schneller, stabil)
+> und/oder `AELUNOR_SECOND_BRAIN=1` (Weltgedächtnis).
+>
+> **Second Brain Foundation = KEEP. `default-on` bleibt PARK**, bis ein **plot-referenzierender
+> Continuity-Benchmark** (referenziert alte Entitäten/Threads) den Kontinuitätsnutzen ohne Qualitäts-/
+> Token-Regression nachweist. Kein Deferred, keine Embedding-Downloads, keine externe Vector-DB (SQLite),
+> keine `semantic_mentions` gemerged.
 
 > **Stabiler main-Stand (Merge 2026-06-14):** `main` enthält jetzt die **It6-Perf-Basis + Output-Budget v1**
 > (Fast-Forward von `perf/integrate-it6-output-budget`). Keine Deferred-Defaults, kein llama.cpp-Default,
-> keine experimentellen Runtime-Settings. Die zwei Perf-Experimente bleiben als Branches erhalten und sind
+> keine experimentellen Runtime-Settings. Diese Experimente bleiben als Branches erhalten und sind
 > **NICHT in main**:
 > - **Deferred Extraction** (`perf/deferred-extraction-fast-visible-turn`): sicher, Default off, Barriere
 >   getestet — Kandidat für spätere Wiederaufnahme.
-> - **llama.cpp Runtime** (`perf/it10-deferred-llamacpp-stability`): −65 % schneller, aber **PARK** wegen
->   sporadischem Format-/Repair-Fail (1/4).
+> - **Deferred + llama.cpp Kombi** (`perf/it10-deferred-llamacpp-stability`): PARK — nicht mit der Foundation
+>   gemischt. (Der saubere llama.cpp opt-in Provider + `repeat_penalty`-Fix ist hingegen via PR #59 in main,
+>   s.o.)
 
 Stand: nach Iteration 6. Ø Turn-Zeit **61.2 s** (Baseline ~110 s, −44 %),
 0 harte Fails, 4/4 echte Stories auf der 28-Turn-Benchmark-Kampagne.
