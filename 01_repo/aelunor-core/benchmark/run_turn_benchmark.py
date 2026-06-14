@@ -110,6 +110,17 @@ def main() -> int:
         action="store_true",
         help="Set AELUNOR_SECOND_BRAIN=1 for this run (variant B/C/D).",
     )
+    parser.add_argument(
+        "--provider",
+        default="ollama",
+        help="LLM provider: ollama | llama_cpp_openai (sets AELUNOR_LLM_PROVIDER).",
+    )
+    parser.add_argument(
+        "--llama-cpp-url",
+        default="http://127.0.0.1:8088/v1",
+        help="llama.cpp OpenAI base URL (used when --provider llama_cpp_openai).",
+    )
+    parser.add_argument("--llama-cpp-model", default="gemma-3n-e4b")
     args = parser.parse_args()
 
     campaign_src = Path(args.campaign_src)
@@ -129,6 +140,11 @@ def main() -> int:
     os.environ["OLLAMA_URL"] = args.ollama_url
     # Campaign Second Brain variant toggle (default off; --second-brain for B/C/D).
     os.environ["AELUNOR_SECOND_BRAIN"] = "1" if args.second_brain else os.environ.get("AELUNOR_SECOND_BRAIN", "")
+    # LLM provider selection (read at import by app.adapters.llm_config).
+    os.environ["AELUNOR_LLM_PROVIDER"] = args.provider
+    if args.provider in ("llama_cpp_openai", "llama_cpp", "llamacpp"):
+        os.environ["LLAMA_CPP_BASE_URL"] = args.llama_cpp_url
+        os.environ["LLAMA_CPP_MODEL"] = args.llama_cpp_model
     if profile_path.exists():
         profile_path.unlink()
 
@@ -191,6 +207,7 @@ def main() -> int:
                 "OLLAMA_EXTRACTOR_MODEL", "OLLAMA_EXTRACTOR_NUM_CTX", "OLLAMA_REPAIR_MODEL",
                 "OLLAMA_REPAIR_NUM_CTX", "AELUNOR_CANON_EXTRACTOR_MODE",
                 "AELUNOR_SECOND_BRAIN", "AELUNOR_MEMORY_SUMMARY_INTERVAL",
+                "AELUNOR_LLM_PROVIDER", "LLAMA_CPP_MODEL", "LLAMA_CPP_BASE_URL",
             )
         },
         "phase_breakdown": aggregate_profiles(profile_path),
