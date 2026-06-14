@@ -68,8 +68,23 @@ class LlamaCppOpenAIAdapter:
             "error": error,
         }
 
+    def _unreachable_message(self, exc: Exception) -> str:
+        return (
+            "llama.cpp provider selected but LLAMA_CPP_BASE_URL is not reachable: "
+            f"{self.settings.base_url} ({type(exc).__name__}: {exc}).\n"
+            "Aelunor does NOT silently fall back to Ollama — start the llama.cpp server, e.g.:\n"
+            "  llama-server.exe -m <gguf> --host 127.0.0.1 --port 8088 -c 32768 -ngl 99 -fa on\n"
+            f"Config: LLAMA_CPP_BASE_URL={self.settings.base_url}  LLAMA_CPP_MODEL={self.settings.model}\n"
+            "Or select the legacy provider explicitly: AELUNOR_LLM_PROVIDER=ollama"
+        )
+
     def _post_chat(self, payload: Dict[str, Any], timeout: int) -> requests.Response:
-        return requests.post(f"{self.settings.base_url}/chat/completions", json=payload, timeout=timeout)
+        try:
+            return requests.post(f"{self.settings.base_url}/chat/completions", json=payload, timeout=timeout)
+        except requests.exceptions.RequestException as exc:
+            # No silent fallback: surface an actionable error instead of a raw
+            # transport stack trace (and never quietly switch to Ollama).
+            raise RuntimeError(self._unreachable_message(exc)) from exc
 
     def chat(
         self,

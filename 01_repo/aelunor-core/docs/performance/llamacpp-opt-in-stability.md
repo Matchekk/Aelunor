@@ -1,8 +1,29 @@
-# llama.cpp opt-in Provider — Stabilität (repeat_penalty-Fix)
+# llama.cpp Provider — Stabilität (repeat_penalty-Fix)
 
-Scope dieses PR: **nur** der opt-in llama.cpp-Provider + Diagnose-Tooling + `repeat_penalty`-Fix.
-**Keine Second-Brain-Änderung, kein Deferred, kein Default-Wechsel.** Default bleibt Ollama.
+> **Update (2026-06-14): llama.cpp ist jetzt der Standard-Provider** (`chore/default-llamacpp-runtime`).
+> Der hier dokumentierte Stabilitäts-Fix (PR #59) hat den Provider produktionsreif gemacht; daraufhin wurde
+> er zum Default. Ollama ist jetzt Legacy/Fallback (explizit via `AELUNOR_LLM_PROVIDER=ollama`).
+> **Kein stiller Fallback:** ist llama.cpp gewählt, aber der Server nicht erreichbar, bricht der Turn mit
+> einer klaren Fehlermeldung ab (LLAMA_CPP_BASE_URL/MODEL + Startkommando) statt heimlich auf Ollama
+> zurückzufallen.
+
+Scope (ursprünglicher PR #59): der llama.cpp-Provider + Diagnose-Tooling + `repeat_penalty`-Fix.
 Rohdaten/Responses bleiben lokal in gitignored `benchmark/perf_results/` — hier nur Aggregate.
+
+## Startkommandos (Windows PowerShell)
+```powershell
+# 1) Ollama-Modell stoppen, damit VRAM frei ist
+ollama stop gemma4:e4b
+# 2) llama.cpp Server starten
+D:\Aelunor\08_experiments\llama_cpp\bin\llama-server.exe `
+  -m D:\Aelunor\08_experiments\llama_cpp\models\gemma-3n-E4B-it-Q4_K_M.gguf `
+  --host 127.0.0.1 --port 8088 -c 32768 -ngl 99 -fa on
+# 3) Aelunor nutzt jetzt standardmäßig llama.cpp (keine Env nötig). Optional:
+$env:LLAMA_CPP_BASE_URL="http://127.0.0.1:8088/v1"
+$env:LLAMA_CPP_MODEL="gemma-3n-e4b"
+# 4) Ollama explizit (Legacy/Fallback):
+$env:AELUNOR_LLM_PROVIDER="ollama"
+```
 
 ## Problem
 Der experimentelle, OpenAI-kompatible llama.cpp-Provider war früher ~−60 % schneller als Ollama, hatte
