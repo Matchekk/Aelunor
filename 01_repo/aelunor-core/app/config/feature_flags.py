@@ -1,6 +1,7 @@
 import os
 
 ENABLED_ENV_VALUES = {"1", "true", "yes", "on"}
+DISABLED_ENV_VALUES = {"0", "false", "no", "off"}
 
 
 def env_flag_enabled(name: str, default: str = "false") -> bool:
@@ -12,10 +13,18 @@ ENABLE_LEGACY_SHADOW_WRITEBACK = env_flag_enabled("ENABLE_LEGACY_SHADOW_WRITEBAC
 
 
 def second_brain_enabled() -> bool:
-    """Campaign Second Brain master switch (AELUNOR_SECOND_BRAIN). Default OFF.
+    """Campaign Second Brain master switch (AELUNOR_SECOND_BRAIN). Default ON.
 
-    Read at call time (not import time) so tests and benchmarks can toggle it
-    per process without re-importing. When off, the brain write/retrieval hooks
-    are complete no-ops and turn behavior is unchanged.
+    Second Brain is part of the default fast runtime (llama.cpp + Second Brain).
+    Read at call time (not import time) so tests/benchmarks can toggle it per
+    process without re-importing.
+
+    Escape hatch: set ``AELUNOR_SECOND_BRAIN`` to ``0`` / ``false`` / ``off`` /
+    ``no`` to turn it off. Unset (or any other value) means ON. When off, the
+    brain write/retrieval hooks are complete no-ops and turn behavior is
+    unchanged. Brain errors never break the turn (hooks swallow them).
     """
-    return env_flag_enabled("AELUNOR_SECOND_BRAIN")
+    raw = os.getenv("AELUNOR_SECOND_BRAIN")
+    if raw is None or raw.strip() == "":
+        return True
+    return raw.strip().lower() not in DISABLED_ENV_VALUES

@@ -96,8 +96,8 @@ def test_plotpoint_update_demotes_resolved_thread():
     assert after.salience < before.salience
 
 
-def test_maybe_record_turn_off_by_default(tmp_path, monkeypatch):
-    monkeypatch.delenv("AELUNOR_SECOND_BRAIN", raising=False)
+def test_maybe_record_turn_off_when_disabled(tmp_path, monkeypatch):
+    monkeypatch.setenv("AELUNOR_SECOND_BRAIN", "0")  # explicit off (default is now ON)
     assert maybe_record_turn(_campaign(), _turn_record(), campaigns_dir=str(tmp_path)) is None
     # No brain file created when the flag is off.
     assert not (tmp_path / "camp_wh01" / "brain" / "brain.sqlite").exists()

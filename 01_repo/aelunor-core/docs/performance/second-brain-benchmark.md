@@ -1,5 +1,13 @@
 # Second Brain — Benchmark (off / on)
 
+> **Update 2026-06-15 — Second Brain is now ON by default** as part of the
+> fastest stable runtime (llama.cpp + Second Brain, ~32.6 s/Turn, 0/10 fails;
+> write ~15 ms, retrieval ~0 ms, prompt tokens flat). The "PARK default-on" /
+> "do not enable by default" statements below are **historic** — the product
+> decision flipped the default to ON (escape hatch `AELUNOR_SECOND_BRAIN=0`).
+> A plot-referencing continuity benchmark remains the next validation target,
+> not a merge blocker.
+
 How to measure the Campaign Second Brain against the stable baseline, and what
 the offline guards already prove. Goal: the brain must **unburden** the
 narrator (continuity ≥ stable, narrator prompt not growing uncontrollably),

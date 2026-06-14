@@ -97,8 +97,8 @@ def test_render_empty_when_nothing_fits():
     assert render_brain_block([], token_budget=1800) == ""
 
 
-def test_maybe_block_off_by_default(tmp_path, monkeypatch):
-    monkeypatch.delenv("AELUNOR_SECOND_BRAIN", raising=False)
+def test_maybe_block_off_when_disabled(tmp_path, monkeypatch):
+    monkeypatch.setenv("AELUNOR_SECOND_BRAIN", "0")  # explicit off (default is now ON)
     cid = _seed_brain(tmp_path)
     campaign = {"campaign_meta": {"campaign_id": cid}}
     state = {"characters": {"slot_1": {"bio": {"name": "Kael"}, "scene_id": "loc-harbor"}}}

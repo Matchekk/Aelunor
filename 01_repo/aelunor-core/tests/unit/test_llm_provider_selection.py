@@ -2,6 +2,7 @@ import unittest
 
 from app.adapters import llm_config
 from app.adapters.anthropic_adapter import AnthropicAdapter, AnthropicSettings, FallbackLLMAdapter
+from app.adapters.llama_cpp_adapter import LlamaCppOpenAIAdapter
 from app.adapters.llm import OllamaAdapter
 
 
@@ -41,10 +42,33 @@ class LLMProviderSelectionTests(unittest.TestCase):
     def test_explicit_providers_select_expected_adapter(self) -> None:
         self.assertIsInstance(llm_config.select_llm_adapter("ollama"), OllamaAdapter)
         self.assertIsInstance(llm_config.select_llm_adapter("anthropic"), AnthropicAdapter)
+        self.assertIsInstance(llm_config.select_llm_adapter("llama_cpp_openai"), LlamaCppOpenAIAdapter)
 
-    def test_auto_stays_local_even_when_anthropic_key_exists(self) -> None:
-        adapter = llm_config.select_llm_adapter("auto")
-        self.assertIsInstance(adapter, OllamaAdapter)
+    def test_default_provider_is_llama_cpp(self) -> None:
+        # No env -> llama.cpp is the new default (Ollama is legacy/opt-in).
+        self.assertEqual(llm_config.resolve_provider({}), "llama_cpp_openai")
+        self.assertIsInstance(
+            llm_config.select_llm_adapter(llm_config.resolve_provider({})),
+            LlamaCppOpenAIAdapter,
+        )
+
+    def test_ollama_only_when_explicit(self) -> None:
+        self.assertEqual(llm_config.resolve_provider({"AELUNOR_LLM_PROVIDER": "ollama"}), "ollama")
+        self.assertEqual(llm_config.resolve_provider({"LLM_PROVIDER": "ollama"}), "ollama")
+
+    def test_aelunor_env_takes_precedence(self) -> None:
+        resolved = llm_config.resolve_provider(
+            {"AELUNOR_LLM_PROVIDER": "ollama", "LLM_PROVIDER": "anthropic"}
+        )
+        self.assertEqual(resolved, "ollama")
+
+    def test_auto_maps_to_llama_cpp(self) -> None:
+        # 'auto' is a compatibility alias and now resolves to llama.cpp, not Ollama.
+        self.assertIsInstance(llm_config.select_llm_adapter("auto"), LlamaCppOpenAIAdapter)
+
+    def test_unknown_provider_raises_no_silent_ollama_fallback(self) -> None:
+        with self.assertRaises(ValueError):
+            llm_config.select_llm_adapter("definitely-not-a-provider")
 
     def test_fallback_routes_to_cloud_when_local_fails(self) -> None:
         primary, cloud = _BoomPrimary(), _StubCloud()

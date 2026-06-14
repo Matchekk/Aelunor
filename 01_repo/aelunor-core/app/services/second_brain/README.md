@@ -6,14 +6,17 @@ the RAG slice rebuilds a read-only, in-memory, lexical context every turn,
 the Second Brain *remembers*: it persists structured knowledge, recalls it
 semantically, links it as a graph, and consolidates it over time.
 
-> Status: **MVP wired into the live turn pipeline behind
-> `AELUNOR_SECOND_BRAIN` (default off)**, branch `feat/campaign-second-brain`,
-> not merged to main. Offline-first and deterministic by default so it stays
-> fully unit-testable. See `docs/architecture/campaign-second-brain.md` for the
-> integration seam and phase status, and
+> Status (2026-06-15): **Merged to main and part of the default fast runtime
+> (llama.cpp + Second Brain). `AELUNOR_SECOND_BRAIN` is ON by default** — set it
+> to `0`/`false`/`off` to disable (off-path = no-op). Offline-first and
+> deterministic so it stays fully unit-testable. See
+> `docs/architecture/campaign-second-brain.md` for the integration seam and
 > `docs/performance/second-brain-benchmark.md` for the benchmark recipe.
+>
+> Historic: started as an MVP behind a default-OFF flag (PR #60); default flipped
+> to ON in `chore/default-fast-runtime-llamacpp-second-brain`.
 
-## Live integration (flag-gated, default off)
+## Live integration (flag-gated, default ON; escape hatch `AELUNOR_SECOND_BRAIN=0`)
 
 | Hook | Module | Where it fires |
 |---|---|---|
@@ -23,13 +26,15 @@ semantically, links it as a graph, and consolidates it over time.
 | **Debug API** | `debug.brain_overview` + `routers/brain.py` | `GET /api/campaigns/{id}/brain` (counts/meta only) |
 | **Storage** | `locator.open_campaign_brain` | `campaigns/<id>/brain/brain.sqlite`, per-campaign, safe-open |
 
-With the flag off, all hooks are no-ops and turn behavior is unchanged.
+With the flag explicitly off (`AELUNOR_SECOND_BRAIN=0`), all hooks are no-ops and turn behavior is unchanged.
 
 **Tuning (from the local A/B benchmark):** retrieval budget is **1200 tokens /
 8 cards** (It1, down from 1800/10 — block cost +889 → ~+390 narrator tokens);
 the seed caps open-threads to 8 and skips resolved ones (It7 — DB bloat 30 → 7).
-Benchmark verdict: safe + cheap, but continuity benefit unproven by the
-neutral-action harness → **PARK "default on", KEEP foundation flag-off**. See
+Benchmark: safe + cheap (write ~15 ms, retrieval ~0 ms, prompt tokens flat).
+**Product decision (2026-06-15): Second Brain is now the default** as part of the
+fastest stable runtime (llama.cpp + Second Brain ~32.6 s/Turn). A plot-referencing
+continuity benchmark remains the next validation/optimization target. See
 `docs/performance/second-brain-benchmark.md`.
 
 ## The four pillars
