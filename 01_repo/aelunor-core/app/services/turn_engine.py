@@ -1428,14 +1428,15 @@ def _create_turn_record_impl(
     from app.config.feature_flags import second_brain_enabled
 
     if second_brain_enabled():
-        try:
-            from app.services.second_brain.retrieval import maybe_brain_context_block
+        with profile_phase("second_brain_retrieval"):
+            try:
+                from app.services.second_brain.retrieval import maybe_brain_context_block
 
-            brain_prompt_block = maybe_brain_context_block(
-                context_campaign, working_state, actor, content
-            )
-        except Exception:
-            brain_prompt_block = ""
+                brain_prompt_block = maybe_brain_context_block(
+                    context_campaign, working_state, actor, content
+                )
+            except Exception:
+                brain_prompt_block = ""
     consistency_context = "\n\n".join(
         block
         for block in (

@@ -105,6 +105,11 @@ def main() -> int:
     parser.add_argument("--campaign-src", default=str(DEFAULT_CAMPAIGN_SRC))
     parser.add_argument("--action-type", default="do")
     parser.add_argument("--ollama-url", default="http://localhost:11434")
+    parser.add_argument(
+        "--second-brain",
+        action="store_true",
+        help="Set AELUNOR_SECOND_BRAIN=1 for this run (variant B/C/D).",
+    )
     args = parser.parse_args()
 
     campaign_src = Path(args.campaign_src)
@@ -122,6 +127,8 @@ def main() -> int:
     os.environ["AELUNOR_PROFILE_TURNS"] = "1"
     os.environ["AELUNOR_PROFILE_PATH"] = str(profile_path)
     os.environ["OLLAMA_URL"] = args.ollama_url
+    # Campaign Second Brain variant toggle (default off; --second-brain for B/C/D).
+    os.environ["AELUNOR_SECOND_BRAIN"] = "1" if args.second_brain else os.environ.get("AELUNOR_SECOND_BRAIN", "")
     if profile_path.exists():
         profile_path.unlink()
 
@@ -183,9 +190,11 @@ def main() -> int:
                 "OLLAMA_MODEL", "OLLAMA_NUM_CTX", "OLLAMA_NARRATOR_MODEL", "OLLAMA_NARRATOR_NUM_CTX",
                 "OLLAMA_EXTRACTOR_MODEL", "OLLAMA_EXTRACTOR_NUM_CTX", "OLLAMA_REPAIR_MODEL",
                 "OLLAMA_REPAIR_NUM_CTX", "AELUNOR_CANON_EXTRACTOR_MODE",
+                "AELUNOR_SECOND_BRAIN", "AELUNOR_MEMORY_SUMMARY_INTERVAL",
             )
         },
         "phase_breakdown": aggregate_profiles(profile_path),
+        "brain_digest": brain_digest(campaign_id),
         "state_digest": state_digest(campaign),
     }
     summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -222,6 +231,7 @@ def aggregate_profiles(profile_path: Path) -> dict:
         return {}
     phase_calls: dict[str, list[float]] = {}
     prompt_tokens: dict[str, list[int]] = {}
+    nonllm_phases: dict[str, list[float]] = {}
     schema_fails = 0
     totals: list[float] = []
     for line in profile_path.read_text(encoding="utf-8").splitlines():
@@ -239,6 +249,11 @@ def aggregate_profiles(profile_path: Path) -> dict:
             prompt_tokens.setdefault(phase, []).append(int(call.get("prompt_tokens") or 0))
         for phase, seconds in per_phase.items():
             phase_calls.setdefault(phase, []).append(seconds)
+        # Non-LLM phase timings (e.g. second_brain_write/retrieval, story guard).
+        for entry in report.get("phases") or []:
+            name = str(entry.get("name") or "")
+            if name:
+                nonllm_phases.setdefault(name, []).append(float(entry.get("s") or 0))
     breakdown = {
         phase: {
             "avg_s": round(statistics.mean(values), 1),
@@ -253,7 +268,39 @@ def aggregate_profiles(profile_path: Path) -> dict:
         "avg_s": round(statistics.mean(totals), 1) if totals else 0,
         "turns": len(totals),
     }
+    if nonllm_phases:
+        breakdown["_phase_timings"] = {
+            name: {
+                "avg_ms": round(statistics.mean(values) * 1000, 1),
+                "max_ms": round(max(values) * 1000, 1),
+                "turns": len(values),
+            }
+            for name, values in sorted(nonllm_phases.items())
+        }
     return breakdown
+
+
+def brain_digest(campaign_id: str) -> dict:
+    """Counts from the campaign's brain.sqlite, if one exists. Offline-safe."""
+    try:
+        from app.services.second_brain import open_campaign_brain
+
+        brain = open_campaign_brain(campaign_id, create=False)
+        if brain is None:
+            return {"enabled": False}
+        try:
+            counts = brain.store.counts(campaign_id)
+            return {
+                "enabled": True,
+                "counts": counts,
+                "last_processed_turn": brain.store.get_meta("last_processed_turn_number"),
+                "schema_version": brain.store.schema_version,
+                "failed_jobs": brain.store.get_meta("failed_jobs"),
+            }
+        finally:
+            brain.store.close()
+    except Exception as exc:  # noqa: BLE001
+        return {"enabled": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
 if __name__ == "__main__":
