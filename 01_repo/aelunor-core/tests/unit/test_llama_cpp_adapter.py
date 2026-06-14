@@ -32,11 +32,13 @@ class _FakeResp:
         return self._payload
 
 
-def test_default_provider_stays_ollama_and_llama_cpp_selectable():
+def test_provider_aliases_select_llama_cpp_and_ollama_explicit():
     from app.adapters import llm_config as c
+    # llama.cpp is the default runtime; Ollama remains selectable explicitly.
     assert c.select_llm_adapter("ollama").__class__.__name__ == "OllamaAdapter"
     assert c.select_llm_adapter("llama_cpp_openai").__class__.__name__ == "LlamaCppOpenAIAdapter"
     assert c.select_llm_adapter("llamacpp").__class__.__name__ == "LlamaCppOpenAIAdapter"
+    assert c.DEFAULT_LLM_PROVIDER == "llama_cpp_openai"
 
 
 def test_chat_plain_sends_openai_payload():

@@ -37,7 +37,7 @@ def _populate(tmp_path, cid="camp_dbg01", turns=3):
 
 
 def test_overview_flag_off_is_disabled(tmp_path, monkeypatch):
-    monkeypatch.delenv("AELUNOR_SECOND_BRAIN", raising=False)
+    monkeypatch.setenv("AELUNOR_SECOND_BRAIN", "0")  # explicit off (default is now ON)
     cid = _populate(tmp_path)
     ov = brain_overview(cid, campaigns_dir=str(tmp_path))
     assert ov["enabled"] is False

@@ -1,28 +1,47 @@
 # Current Best Config
 
-> **Aktueller Stand (2026-06-14). `main` enthält:**
-> - **It6-Perf-Basis + Output-Budget v1**.
-> - **llama.cpp opt-in Provider + `repeat_penalty`-Fix** (PR #59 gemerged): Adapter sendet
->   `repeat_penalty=1.18` / `repeat_last_n=192` → dominanter 1/4-**Stage-D-Runaway eliminiert (0/80 Turns)**,
->   ~60 % niedrigere Avg-Latenz. Details: `docs/performance/llamacpp-opt-in-stability.md`.
-> - **Second Brain Foundation — gemerged, aber `AELUNOR_SECOND_BRAIN` default OFF** (PR
->   `feature/second-brain-foundation-pr`): campaign-scoped Weltgedächtnis (`campaigns/<id>/brain/brain.sqlite`),
->   Seed → Write-Hook → bounded Retrieval (`[RELEVANT_CAMPAIGN_BRAIN]`-Block, ~1200 Tok / 8 Cards). Flag-off =
->   No-op, Verhalten unverändert. Latenz/Tokens vernachlässigbar (write <20 ms, retrieval ~0 ms, Prompt-Tokens
->   flach). Details: `docs/performance/second-brain-benchmark.md`.
+> **Standard-Runtime ist jetzt: llama.cpp + Second Brain (Stand 2026-06-15).**
+> Die schnellste getestete stabile Variante ist der neue Default (~**32.6 s/Turn**, 0/10 Fails,
+> brain_write ~15 ms, brain_retrieval ~0 ms, Prompt-Tokens flach).
+> - **llama.cpp ist der Standard-Provider** (`llama_cpp_openai`). Ohne Env wählt `llm_config.py` automatisch
+>   llama.cpp; `auto` ist ein Alias für llama.cpp. (Stabil nach PR #59: `repeat_penalty`-Fix → 1/4-Stage-D-Runaway
+>   eliminiert, 0/80 Turns, ~60 % schneller.)
+> - **Second Brain ist Standard (default ON)**, aber abschaltbar: `AELUNOR_SECOND_BRAIN=0` (bzw.
+>   `false`/`off`/`no`). Off-Path = No-op; Brain-Fehler brechen den Turn nie; keine Cross-Campaign-Memory.
+> - **Ollama ist Legacy/Fallback** und muss **explizit** gesetzt werden: `AELUNOR_LLM_PROVIDER=ollama`
+>   oder `LLM_PROVIDER=ollama`. `AELUNOR_LLM_PROVIDER` hat Vorrang vor `LLM_PROVIDER`. `anthropic` (Cloud)
+>   ist nie Default, nur explizit.
+> - **Kein stiller Fallback:** Ist llama.cpp gewählt, aber der Server nicht erreichbar, bricht der Turn mit
+>   einer klaren Fehlermeldung (LLAMA_CPP_BASE_URL/MODEL + Start-Hinweis) ab — Aelunor wird **nicht heimlich
+>   langsam** durch automatisches Zurückfallen auf Ollama. Unbekannter Provider → klarer Fehler.
+> - **PARK / nicht im Standard:** Deferred, `semantic_mentions`, Embedding-Downloads, externe Vector-DB.
+>   Details: `docs/performance/llamacpp-opt-in-stability.md`, `docs/performance/second-brain-benchmark.md`.
 >
-> **Empfohlener Default bleibt Ollama.** `LLM_PROVIDER` / `AELUNOR_LLM_PROVIDER` default `ollama`,
-> `AELUNOR_SECOND_BRAIN` default leer (off). Opt-in: `AELUNOR_LLM_PROVIDER=llama_cpp_openai` (schneller, stabil)
-> und/oder `AELUNOR_SECOND_BRAIN=1` (Weltgedächtnis).
+> **Start (Windows PowerShell) — neuer Standard llama.cpp + Second Brain:**
+> ```powershell
+> # 1) Ollama-Modell stoppen, damit VRAM frei ist
+> ollama stop gemma4:e4b
 >
-> **Second Brain Foundation = KEEP. `default-on` bleibt PARK**, bis ein **plot-referenzierender
-> Continuity-Benchmark** (referenziert alte Entitäten/Threads) den Kontinuitätsnutzen ohne Qualitäts-/
-> Token-Regression nachweist. Kein Deferred, keine Embedding-Downloads, keine externe Vector-DB (SQLite),
-> keine `semantic_mentions` gemerged.
+> # 2) llama.cpp Server starten
+> D:\Aelunor\08_experiments\llama_cpp\bin\llama-server.exe `
+>   -m D:\Aelunor\08_experiments\llama_cpp\models\gemma-3n-E4B-it-Q4_K_M.gguf `
+>   --host 127.0.0.1 --port 8088 -c 32768 -ngl 99 -fa on
+>
+> # 3) Aelunor nutzt standardmäßig llama.cpp + Second Brain (keine Env nötig). Optional:
+> $env:LLAMA_CPP_BASE_URL="http://127.0.0.1:8088/v1"
+> $env:LLAMA_CPP_MODEL="gemma-3n-e4b"
+>
+> # 4) Legacy-Fallback explizit:
+> $env:AELUNOR_LLM_PROVIDER="ollama"
+>
+> # 5) Second Brain explizit ausschalten:
+> $env:AELUNOR_SECOND_BRAIN="0"
+> ```
+> Hinweis: Docker-Compose-Deployment setzt `LLM_PROVIDER` weiterhin explizit (dort läuft kein llama-server).
 
-> **Stabiler main-Stand (Merge 2026-06-14):** `main` enthält jetzt die **It6-Perf-Basis + Output-Budget v1**
-> (Fast-Forward von `perf/integrate-it6-output-budget`). Keine Deferred-Defaults, kein llama.cpp-Default,
-> keine experimentellen Runtime-Settings. Diese Experimente bleiben als Branches erhalten und sind
+> **Historie — stabiler main-Stand (Merge 2026-06-14):** `main` startete mit **It6-Perf-Basis + Output-Budget v1**
+> (Fast-Forward von `perf/integrate-it6-output-budget`), Default damals Ollama. Inzwischen ist llama.cpp der
+> Default (s.o.). Keine Deferred-Defaults. Diese Experimente bleiben als Branches erhalten und sind
 > **NICHT in main**:
 > - **Deferred Extraction** (`perf/deferred-extraction-fast-visible-turn`): sicher, Default off, Barriere
 >   getestet — Kandidat für spätere Wiederaufnahme.

@@ -69,7 +69,7 @@ def test_seed_is_idempotent():
 
 
 def test_seed_campaign_brain_disabled_when_flag_off(tmp_path, monkeypatch):
-    monkeypatch.delenv("AELUNOR_SECOND_BRAIN", raising=False)
+    monkeypatch.setenv("AELUNOR_SECOND_BRAIN", "0")  # explicit off (default is now ON)
     assert seed_campaign_brain(_campaign(), campaigns_dir=str(tmp_path)) is None
 
 

@@ -108,12 +108,18 @@ def main() -> int:
     parser.add_argument(
         "--second-brain",
         action="store_true",
-        help="Set AELUNOR_SECOND_BRAIN=1 for this run (variant B/C/D).",
+        help="Force Second Brain ON (AELUNOR_SECOND_BRAIN=1). It is ON by default now.",
+    )
+    parser.add_argument(
+        "--no-second-brain",
+        action="store_true",
+        help="Disable Second Brain for this run (AELUNOR_SECOND_BRAIN=0).",
     )
     parser.add_argument(
         "--provider",
-        default="ollama",
-        help="LLM provider: ollama | llama_cpp_openai (sets AELUNOR_LLM_PROVIDER).",
+        default="llama_cpp_openai",
+        help="LLM provider (sets AELUNOR_LLM_PROVIDER). Default llama_cpp_openai "
+             "(matches the app default); pass 'ollama' for the legacy provider.",
     )
     parser.add_argument(
         "--llama-cpp-url",
@@ -138,8 +144,12 @@ def main() -> int:
     os.environ["AELUNOR_PROFILE_TURNS"] = "1"
     os.environ["AELUNOR_PROFILE_PATH"] = str(profile_path)
     os.environ["OLLAMA_URL"] = args.ollama_url
-    # Campaign Second Brain variant toggle (default off; --second-brain for B/C/D).
-    os.environ["AELUNOR_SECOND_BRAIN"] = "1" if args.second_brain else os.environ.get("AELUNOR_SECOND_BRAIN", "")
+    # Second Brain is ON by default now. Only touch the env when explicitly
+    # forced on/off, so a flagless run exercises the real app default (ON).
+    if args.no_second_brain:
+        os.environ["AELUNOR_SECOND_BRAIN"] = "0"
+    elif args.second_brain:
+        os.environ["AELUNOR_SECOND_BRAIN"] = "1"
     # LLM provider selection (read at import by app.adapters.llm_config).
     os.environ["AELUNOR_LLM_PROVIDER"] = args.provider
     if args.provider in ("llama_cpp_openai", "llama_cpp", "llamacpp"):
@@ -188,9 +198,16 @@ def main() -> int:
 
     resources = sampler.stop()
 
+    from app.adapters.llm_config import resolve_provider
+    from app.config.feature_flags import second_brain_enabled
+
     summary = {
         "label": args.label,
         "campaign_id": campaign_id,
+        "active_provider": resolve_provider(),
+        "second_brain_enabled": second_brain_enabled(),
+        "llama_cpp_base_url": os.environ.get("LLAMA_CPP_BASE_URL", ""),
+        "llama_cpp_model": os.environ.get("LLAMA_CPP_MODEL", ""),
         "turns_requested": args.turns,
         "turns_completed": len(turn_times),
         "errors": errors,

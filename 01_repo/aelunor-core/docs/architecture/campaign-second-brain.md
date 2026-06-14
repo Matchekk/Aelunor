@@ -1,11 +1,17 @@
 # Campaign Second Brain — Architecture & Integration Seam
 
-Status: **MVP wired end-to-end behind feature flag `AELUNOR_SECOND_BRAIN`
-(default off).** Seed → deterministic write hook → bounded retrieval are live
-in the turn pipeline; a read-only debug API exposes counts. Offline latency +
-token-budget guards are green in CI. The narrator-quality A/B benchmark (local
-Ollama) and Ollama embeddings (Phase 7) are still pending. Branch
-`feat/campaign-second-brain`, **not merged to main**.
+Status (2026-06-15): **Merged to main and part of the default fast runtime
+(llama.cpp + Second Brain).** `AELUNOR_SECOND_BRAIN` is **ON by default**; set
+it to `0`/`false`/`off` to disable (off-path = no-op, turn behavior unchanged).
+Seed → deterministic write hook → bounded retrieval are live in the turn
+pipeline; a read-only debug API exposes counts. Offline latency + token-budget
+guards are green in CI. Optional Ollama embeddings remain PARK — the live path
+uses the offline deterministic hash embedder (no model download, no vector DB).
+
+> Historic note: this started as an MVP behind a default-OFF flag on branch
+> `feat/campaign-second-brain` (PR #60). The default was flipped to ON in
+> `chore/default-fast-runtime-llamacpp-second-brain` once llama.cpp + Second
+> Brain was the fastest known stable runtime.
 
 ## What it is (and is not)
 
@@ -49,7 +55,8 @@ All wiring is gated by `AELUNOR_SECOND_BRAIN` and degrades to a no-op when off.
    sibling dir next to the existing single-file `CAMPAIGNS_DIR/<id>.json`
    (`app/core/paths.py:15`, `app/repositories/campaign_repository.py:34`).
 2. **Feature flag** — `app/config/feature_flags.py` via
-   `env_flag_enabled("AELUNOR_SECOND_BRAIN")` (idiomatic, default off).
+   `second_brain_enabled()` (`AELUNOR_SECOND_BRAIN`, **default ON**; escape hatch
+   `0`/`false`/`off`).
 3. **Write hook (deterministic)** — post-turn success window in
    `_create_turn_record_impl`, `turn_engine.py` ~1979–1984: after
    `campaign["state"] = state_after` and `normalize_npc_codex_state`, before
@@ -129,6 +136,12 @@ Modules: `models.py`, `store.py`, `locator.py`, `embeddings.py`, `ingest.py`,
 `tests/unit/test_second_brain_*.py`; full suite 807 passed.
 
 ## KEEP / PARK / REVERT (after local A/B benchmark)
+
+> **Superseded (2026-06-15):** the "PARK enable-by-default" call below was
+> reversed by product decision — Second Brain is now ON by default as part of the
+> fastest stable runtime (llama.cpp + Second Brain). The continuity benchmark is
+> the next validation/optimization target, not a merge blocker. The analysis
+> below is kept as historic rationale.
 
 **KEEP the foundation, flag default off. PARK the "enable by default" call.**
 The local-Ollama A/B/C benchmark (gemma4:e4b, 6+6+10 turns) confirmed the
