@@ -25,6 +25,13 @@ semantically, links it as a graph, and consolidates it over time.
 
 With the flag off, all hooks are no-ops and turn behavior is unchanged.
 
+**Tuning (from the local A/B benchmark):** retrieval budget is **1200 tokens /
+8 cards** (It1, down from 1800/10 — block cost +889 → ~+390 narrator tokens);
+the seed caps open-threads to 8 and skips resolved ones (It7 — DB bloat 30 → 7).
+Benchmark verdict: safe + cheap, but continuity benefit unproven by the
+neutral-action harness → **PARK "default on", KEEP foundation flag-off**. See
+`docs/performance/second-brain-benchmark.md`.
+
 ## The four pillars
 
 | Pillar | Where | What it does |

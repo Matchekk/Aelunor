@@ -87,9 +87,61 @@ uncontrollably · quality/continuity ≥ stable · no new blocking LLM call.
 If the prompt grows without a continuity gain → **PARK**, do not inflate
 further.
 
-## Status
+## Results — local Ollama run (gemma4:e4b, ctx 32768, mem-interval 2)
 
-- Offline latency + token-budget guards: **green** (CI).
-- Full A/B/C/D LLM run: **pending local Ollama** (run the commands above; paste
-  the `*_summary.json` numbers back to fill the KEEP/PARK/REVERT decision in
-  `docs/architecture/campaign-second-brain.md` and `current-best-config.md`).
+Real turns via `run_turn_benchmark.py` on a copy of campaign `camp_c02276e6d5`
+(each run reseeds from the identical copy → A/B fair). Analyzed with
+`analyze_second_brain_results.py`.
+
+| metric | A off (6t) | B on (6t) | C on (10t) | It1 on (6t) | It7 on (6t) |
+|---|---:|---:|---:|---:|---:|
+| turns completed / errors | 6 / 0 | 6 / 0 | 10 / 0 | 6 / 0 | 6 / 0 |
+| total avg s | 85.9 | 84.2 | 77.6 | 67.7 | 68.6 |
+| narrator avg prompt_tokens | 23901 | 24790 | 25923 | 24293 | 24484 |
+| narrator max prompt_tokens | 24625 | 25884 | 28081 | 24986 | 25695 |
+| **brain_context_tokens (≈ vs A)** | — | **+889** | +2022 | **+392** | +583 |
+| brain write ms (avg/max) | — | 20 / 60 | 15 / 60 | 18 / 60 | 20 / 60 |
+| brain retrieval ms (avg/max) | — | <1 | <1 | <1 | <1 |
+| inter-turn repetition (avg) | 0.174 | 0.199 | 0.212 | 0.207 | 0.209 |
+| A/B-question turns | 0 | 1 | 0 | 0 | 0 |
+| brain open_threads (DB) | — | 30 | 30 | 24 | **7** |
+
+Note: total/narrator seconds vary run-to-run with model load state — treat as
+noise, not a brain effect (write+retrieval are <60 ms / <1 ms, i.e. negligible
+vs ~50 s narrator).
+
+### Optimization iterations
+
+| It | Change | brain_ctx tok | repetition | write/retr ms | open_threads | Decision |
+|---|---|---:|---:|---|---:|---|
+| — | B baseline (budget 1800/10) | +889 | 0.199 | 20 / <1 | 30 | — |
+| 1 | retrieval budget → 1200 tok / 8 cards | **+392** | 0.207 | 18 / <1 | 24 | **KEEP** (cost −56%, 0 fails, no regression) |
+| 7 | cap seeded open_threads (≤8, skip resolved) | +583¹ | 0.209 | 20 / <1 | **7** | **KEEP** (DB bloat −71%, long-campaign hygiene; token delta is run noise) |
+
+¹ It7 token figure is run-to-run noise — the 8-card cap (It1) already bounds the
+block; It7's win is DB cleanliness, not tokens.
+
+## Findings & limits
+
+- **Safe**: 0 turn fails / no save corruption / no campaign mixing across all
+  runs; flag off = byte-identical behavior (no-op).
+- **Latency negligible**: brain write ≤60 ms, retrieval <1 ms — far under the
+  250 ms / 100 ms budgets.
+- **Cost controlled**: the block adds ~+390 narrator prompt tokens after It1
+  (down from +889), well under the 2000 budget.
+- **Continuity benefit NOT proven**: the harness uses scene-neutral actions
+  ("look around", "move carefully") that never reference past NPCs/quests, so
+  the Second Brain's recall value cannot manifest or be measured here. On short
+  campaigns the seed largely duplicates static state already in the context
+  packet. Inter-turn repetition is flat-to-slightly-higher with the brain on,
+  showing no continuity *gain* in this test (nor a real regression).
+
+## Decision
+
+**KEEP the foundation, flag default OFF. PARK the "enable by default" call.**
+The integration is safe, cheap, and bloat-capped, but its core value
+(continuity from recalling dropped-out facts) is unproven by a neutral-action
+benchmark. To prove or refute value, the next run needs **plot-referencing
+actions over a long campaign** (player asks about a past NPC / returns to an
+old location / follows up an earlier clue). Do not enable by default or merge
+to main until that test shows continuity ≥ stable with the prompt staying lean.

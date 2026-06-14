@@ -128,12 +128,41 @@ Modules: `models.py`, `store.py`, `locator.py`, `embeddings.py`, `ingest.py`,
 `debug.py`, `service.py`. ~60 unit tests across
 `tests/unit/test_second_brain_*.py`; full suite 807 passed.
 
-## KEEP / PARK / REVERT (preliminary)
+## KEEP / PARK / REVERT (after local A/B benchmark)
 
-**KEEP the foundation, flag default off.** The integration is safe by
-construction (every brain path swallows errors; the turn never fails; no new
-blocking LLM call; per-campaign isolation), bounded (≤2000-token block, write
-<250 ms, retrieval <100 ms verified offline), and zero-impact when off. The
-final KEEP/PARK call on *quality* needs the local-Ollama A/B run: keep if
-continuity ≥ stable and the narrator prompt does not grow uncontrollably; PARK
-if the prompt grows without a continuity gain.
+**KEEP the foundation, flag default off. PARK the "enable by default" call.**
+The local-Ollama A/B/C benchmark (gemma4:e4b, 6+6+10 turns) confirmed the
+integration is safe (0 turn fails, no save corruption, no campaign mixing,
+flag-off = no-op), latency-negligible (brain write ≤60 ms, retrieval <1 ms),
+and — after optimization — cheap (block ≈ +390 narrator prompt tokens, down
+from +889; DB open-thread bloat capped 30 → 7). But the **continuity benefit is
+unproven**: the benchmark's scene-neutral actions never reference past entities,
+so recall value cannot manifest, and on short campaigns the seed duplicates
+static state already in the context packet. Do **not** enable by default or
+merge to main until a **plot-referencing long-campaign benchmark** shows
+continuity ≥ stable with a lean prompt. Full numbers + iteration table:
+`docs/performance/second-brain-benchmark.md`.
+
+## Hidden Semantic Mentions — feasibility (analysis only, not built)
+
+Idea: the narrator emits a small structured sidecar (≤8 items, each
+`{surface, type, action, canonical_name, importance}`) so entity extraction is
+more reliable, with **no visible `(Item)` tags** in `gm_text` and **no extra
+LLM call**. Findings:
+
+- Narrator response schema lives in `app/prompts.json:3-209`; the **root is
+  strict (`additionalProperties: false`)** and enforced as an Ollama grammar
+  (`app/services/llm/client.py` `call_ollama_schema`). Adding a field is a
+  schema change with a **real format-fail risk on gemma4:e4b** (which already
+  has intermittent JSON fails).
+- Recommended shape: an optional top-level `semantic_metadata` (sibling to
+  `story`/`patch`/`requests`, *not* a state mutation), or reuse `events_add`.
+  Thread-through: `turn/output_normalization` → `turn/records.build_turn_record_payload`
+  → `second_brain/write_hook.record_turn` (new entity/edge creation, like
+  `items_new`/`npc_updates`).
+- No-visible-tag instruction belongs in `TURN_RESPONSE_JSON_CONTRACT`
+  (`app/prompts/system_prompts.py`) + the system prompt `WICHTIG` block.
+- **Verdict:** feasible but riskier than the deterministic write path; ship as a
+  separate, default-off flag `AELUNOR_SEMANTIC_MENTIONS` *after* the continuity
+  benchmark, with acceptance gates: 0 schema-fail regression, 0 visible tag
+  leaks, measurably better entity detection.

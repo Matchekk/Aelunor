@@ -10,10 +10,13 @@
 >   sporadischem Format-/Repair-Fail (1/4).
 > - **Campaign Second Brain MVP** (`feat/campaign-second-brain`): campaign-scoped Weltgedächtnis
 >   (`campaigns/<id>/brain/brain.sqlite`), end-to-end in die Turn-Pipeline verdrahtet hinter
->   `AELUNOR_SECOND_BRAIN` (**Default off**). Deterministischer Seed/Write/Retrieval, kein neuer blocking
->   LLM-Call, Offline-Latenz-Guards grün (write <250 ms, retrieval <100 ms), `[RELEVANT_CAMPAIGN_BRAIN]`
->   ≤2000 Tokens. **Nicht in main.** Offen: A/B-LLM-Benchmark (lokales Ollama) + Ollama-Embeddings.
->   Siehe `docs/architecture/campaign-second-brain.md`.
+>   `AELUNOR_SECOND_BRAIN` (**Default off**). Lokaler A/B/C-Benchmark (gemma4:e4b, 6+6+10 Turns) gefahren:
+>   **sicher** (0 Turn-Fails, keine Save-Korruption/Vermischung, flag-off = No-op), **Latenz vernachlässigbar**
+>   (write ≤60 ms, retrieval <1 ms), **Kosten optimiert** (It1: Block +889 → ~+390 Tokens; It7: Seed-Bloat
+>   30 → 7 open_threads). **ABER Kontinuitätsnutzen unbewiesen** (neutraler Benchmark referenziert keine
+>   alten Entitäten) → **PARK für „default on", KEEP-Foundation flag-off**. **Nicht in main.** Nächster
+>   Schritt: plot-referenzierender Langzeit-Benchmark; optional `semantic_metadata`-Sidecar +
+>   Ollama-Embeddings. Siehe `docs/performance/second-brain-benchmark.md` + `docs/architecture/campaign-second-brain.md`.
 
 Stand: nach Iteration 6. Ø Turn-Zeit **61.2 s** (Baseline ~110 s, −44 %),
 0 harte Fails, 4/4 echte Stories auf der 28-Turn-Benchmark-Kampagne.
