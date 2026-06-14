@@ -16,6 +16,7 @@ README.md. This is a prototype slice; the public surface may still move.
 from __future__ import annotations
 
 from .consolidation import consolidate_turns, decay_salience
+from .debug import brain_overview
 from .embeddings import (
     DeterministicHashEmbedding,
     EmbeddingPort,
@@ -63,4 +64,5 @@ __all__ = [
     "maybe_record_turn",
     "get_relevant_brain_context",
     "maybe_brain_context_block",
+    "brain_overview",
 ]

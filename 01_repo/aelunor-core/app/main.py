@@ -202,7 +202,9 @@ from app.dependencies.factories import (
 from app.helpers import setup_helpers
 from app.repositories.campaign_repository import CampaignRepository
 from app.routers import boards as boards_router_module
+from app.routers import brain as brain_router_module
 from app.routers import campaigns as campaigns_router_module
+from app.services.second_brain import debug as second_brain_debug
 from app.routers import claim as claim_router_module
 from app.routers import context as context_router_module
 from app.routers import llm as llm_router_module
@@ -503,6 +505,11 @@ app.include_router(
         context_service_dependencies=context_service_dependencies,
         rag_context_preview_model=RagContextPreviewIn,
         rag_context_preview_dependencies=rag_context_preview_dependencies,
+    )
+)
+app.include_router(
+    brain_router_module.build_brain_router(
+        brain_overview=second_brain_debug.brain_overview,
     )
 )
 app.include_router(
