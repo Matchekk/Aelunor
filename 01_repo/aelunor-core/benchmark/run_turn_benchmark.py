@@ -105,6 +105,17 @@ def main() -> int:
     parser.add_argument("--campaign-src", default=str(DEFAULT_CAMPAIGN_SRC))
     parser.add_argument("--action-type", default="do")
     parser.add_argument("--ollama-url", default="http://localhost:11434")
+    parser.add_argument(
+        "--provider",
+        default="ollama",
+        help="LLM provider: ollama | llama_cpp_openai (sets AELUNOR_LLM_PROVIDER).",
+    )
+    parser.add_argument(
+        "--llama-cpp-url",
+        default="http://127.0.0.1:8088/v1",
+        help="llama.cpp OpenAI base URL (used when --provider llama_cpp_openai).",
+    )
+    parser.add_argument("--llama-cpp-model", default="gemma-3n-e4b")
     args = parser.parse_args()
 
     campaign_src = Path(args.campaign_src)
@@ -122,6 +133,11 @@ def main() -> int:
     os.environ["AELUNOR_PROFILE_TURNS"] = "1"
     os.environ["AELUNOR_PROFILE_PATH"] = str(profile_path)
     os.environ["OLLAMA_URL"] = args.ollama_url
+    # LLM provider selection (read at import by app.adapters.llm_config).
+    os.environ["AELUNOR_LLM_PROVIDER"] = args.provider
+    if args.provider in ("llama_cpp_openai", "llama_cpp", "llamacpp"):
+        os.environ["LLAMA_CPP_BASE_URL"] = args.llama_cpp_url
+        os.environ["LLAMA_CPP_MODEL"] = args.llama_cpp_model
     if profile_path.exists():
         profile_path.unlink()
 
@@ -183,6 +199,7 @@ def main() -> int:
                 "OLLAMA_MODEL", "OLLAMA_NUM_CTX", "OLLAMA_NARRATOR_MODEL", "OLLAMA_NARRATOR_NUM_CTX",
                 "OLLAMA_EXTRACTOR_MODEL", "OLLAMA_EXTRACTOR_NUM_CTX", "OLLAMA_REPAIR_MODEL",
                 "OLLAMA_REPAIR_NUM_CTX", "AELUNOR_CANON_EXTRACTOR_MODE",
+                "AELUNOR_LLM_PROVIDER", "LLAMA_CPP_MODEL", "LLAMA_CPP_BASE_URL",
             )
         },
         "phase_breakdown": aggregate_profiles(profile_path),
@@ -222,6 +239,7 @@ def aggregate_profiles(profile_path: Path) -> dict:
         return {}
     phase_calls: dict[str, list[float]] = {}
     prompt_tokens: dict[str, list[int]] = {}
+    nonllm_phases: dict[str, list[float]] = {}
     schema_fails = 0
     totals: list[float] = []
     for line in profile_path.read_text(encoding="utf-8").splitlines():
@@ -239,6 +257,11 @@ def aggregate_profiles(profile_path: Path) -> dict:
             prompt_tokens.setdefault(phase, []).append(int(call.get("prompt_tokens") or 0))
         for phase, seconds in per_phase.items():
             phase_calls.setdefault(phase, []).append(seconds)
+        # Non-LLM phase timings (e.g. story guard, retrieval, persistence).
+        for entry in report.get("phases") or []:
+            name = str(entry.get("name") or "")
+            if name:
+                nonllm_phases.setdefault(name, []).append(float(entry.get("s") or 0))
     breakdown = {
         phase: {
             "avg_s": round(statistics.mean(values), 1),
@@ -253,6 +276,15 @@ def aggregate_profiles(profile_path: Path) -> dict:
         "avg_s": round(statistics.mean(totals), 1) if totals else 0,
         "turns": len(totals),
     }
+    if nonllm_phases:
+        breakdown["_phase_timings"] = {
+            name: {
+                "avg_ms": round(statistics.mean(values) * 1000, 1),
+                "max_ms": round(max(values) * 1000, 1),
+                "turns": len(values),
+            }
+            for name, values in sorted(nonllm_phases.items())
+        }
     return breakdown
 
 

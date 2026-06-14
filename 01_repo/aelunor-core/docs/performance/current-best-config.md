@@ -1,5 +1,16 @@
 # Current Best Config
 
+> **PR `fix/llamacpp-opt-in-stability` (Stand 2026-06-14, nicht in main):**
+> - **Default bleibt Ollama.** `LLM_PROVIDER` / `AELUNOR_LLM_PROVIDER` default `ollama`; der Default-/Flag-off-Pfad
+>   ist unverändert.
+> - **llama.cpp bleibt opt-in** (`AELUNOR_LLM_PROVIDER=llama_cpp_openai`) — kein Default-Wechsel.
+> - Der **`repeat_penalty`-Fix** (Adapter sendet jetzt `repeat_penalty=1.18` / `repeat_last_n=192`) macht den
+>   opt-in Provider deutlich stabiler: der dominante 1/4-**Stage-D-Runaway ist eliminiert (0/80 Turns)**,
+>   zusätzlich ~60 % niedrigere Avg-Latenz. Restrisiko: ~1.25 % Turn-1-Truncation (andere Klasse) → llama.cpp
+>   bleibt opt-in, nicht default-on.
+> - **Keine Second-Brain-Änderung in diesem PR** (SB-Foundation ist ein separater PR; hier nur llama.cpp +
+>   Diagnose-Tooling). Details: `docs/performance/llamacpp-opt-in-stability.md`.
+
 > **Stabiler main-Stand (Merge 2026-06-14):** `main` enthält jetzt die **It6-Perf-Basis + Output-Budget v1**
 > (Fast-Forward von `perf/integrate-it6-output-budget`). Keine Deferred-Defaults, kein llama.cpp-Default,
 > keine experimentellen Runtime-Settings. Die zwei Perf-Experimente bleiben als Branches erhalten und sind
