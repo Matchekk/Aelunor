@@ -23,6 +23,8 @@ from .models import KnowledgeEdge, KnowledgeNode
 from .service import SecondBrain
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
+_RESOLVED_STATUS = {"resolved", "closed", "done", "superseded", "abandoned"}
+_MAX_SEED_THREADS = 8
 
 
 def _slug(value: Any) -> str:
@@ -83,11 +85,21 @@ def _item_nodes(cid: str, state: Mapping[str, Any], turn: int) -> list[Knowledge
 def _open_thread_nodes(
     cid: str, state: Mapping[str, Any], boards: Mapping[str, Any], turn: int
 ) -> list[KnowledgeNode]:
+    """Seed only genuinely-open threads, capped.
+
+    Iteration 7: the seed used to mirror every plotpoint + open_loop (30 in the
+    benchmark campaign) — most of which already live in the narrator context
+    packet, flooding the retrieval pool with low-signal duplicates. We now skip
+    resolved/closed threads and cap the seed to the most recent few; live play
+    adds new threads via the write hook.
+    """
     nodes: list[KnowledgeNode] = []
     for key, rec in _records(state.get("plotpoints")):
+        status = (_text(rec, ("status", "state")) or "open").lower()
+        if status in _RESOLVED_STATUS:
+            continue
         title = _text(rec, ("title", "name", "objective")) or key
         notes = _text(rec, ("notes", "summary", "description"))
-        status = _text(rec, ("status", "state")) or "open"
         nodes.append(
             KnowledgeNode(
                 id=f"{cid}:thread:{_slug(title)}",
@@ -119,7 +131,9 @@ def _open_thread_nodes(
                     updated_turn=turn,
                 )
             )
-    return nodes
+    # Keep the seed lean: cap to the most salient handful (live play adds more).
+    nodes.sort(key=lambda n: (-n.salience, n.id))
+    return nodes[:_MAX_SEED_THREADS]
 
 
 def _character_nodes(
