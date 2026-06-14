@@ -67,15 +67,18 @@ structured campaign state wins. `context_block()` renders a bounded
 
 ## What is real vs. stubbed in this slice
 
-- **Real & tested:** SQLite persistence (incl. file reopen), deterministic
-  embeddings + cosine, co-mention graph + neighbor expansion, salience
-  decay, turn consolidation, campaign scoping, bounded context block.
+- **Real, wired & tested:** SQLite persistence (incl. file reopen),
+  deterministic embeddings + cosine, co-mention graph + neighbor expansion,
+  salience decay, turn consolidation, campaign scoping, bounded context block.
+  **Turn Engine integration is wired** behind `AELUNOR_SECOND_BRAIN` (seed +
+  post-turn write hook + pre-narrator `[RELEVANT_CAMPAIGN_BRAIN]` block). The
+  **debug API is wired** (`GET /api/campaigns/{id}/brain`).
 - **Stubbed / runtime-only:** `OllamaEmbedding` (injected HTTP client, never
   called in tests), the LLM `SummarizerPort` (falls back to a deterministic
   digest).
-- **Not wired yet:** Turn Engine integration (the RAG block still feeds the
-  narrator), router/API endpoints, real embedding backfill, vector-DB
-  backend.
+- **Pending:** real Ollama embedding backfill, vector-DB backend, and the
+  local-Ollama A/B quality benchmark (see
+  `docs/performance/second-brain-benchmark.md`).
 
 ## Next-loop candidates
 
